@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:hrms_mobileapp_bitbyte/Screens/MD/md_dashboard.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:hrms_mobileapp_bitbyte/Screens/Superadmin/superadmin_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/superadmin_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/CEO_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/MD_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/HR_dadhborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Finance_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Admin_dashborad.dart';
@@ -13,9 +13,13 @@ import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Manager-dashborad.dart'
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/MarketingTeam_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/TL_dashborad.dart';
 import 'boom_in_widget.dart';
+import 'register_screen.dart';
 import 'constellation_background.dart';
 import 'logo_widget.dart';
 import 'theme_config.dart';
+import 'Change_Password.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Employee_dashborad.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -50,7 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   try {
     final response = await http.post(
-      Uri.parse('http://192.168.1.56:8000/api/login/'),
+      Uri.parse('http://192.168.1.54:8000/api/login/'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'email': _employeeCodeController.text.trim(),
@@ -61,6 +65,17 @@ class _LoginScreenState extends State<LoginScreen> {
     final data = jsonDecode(response.body);
 
     if (data['success'] == true) {
+  // OTC first login check
+  if (data['requires_password_change'] == true) {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => ChangePasswordScreen(
+        employeeId: data['user_id'] ?? '',
+        otc: _passwordController.text,
+      )),
+      (route) => false,
+    );
+    return;
+  }
   final role = data['role'];
   Widget dashboard;
   if (role == 'superadmin') {
@@ -91,6 +106,12 @@ class _LoginScreenState extends State<LoginScreen> {
   dashboard = MarketingTeamDashboard(email: data['email'], firstName: data['first_name'] ?? '', userId: data['user_id'] ?? '');
 } else if (role == 'tl') {
   dashboard = TLDashboard(email: data['email'], firstName: data['first_name'] ?? '', userId: data['user_id'] ?? '');
+} else if (role == 'employee') {
+  dashboard = EmployeeDashboard(
+    email: data['email'],
+    firstName: data['first_name'] ?? '',
+    userId: data['user_id'] ?? '',
+  );
 } else {
   dashboard = SuperAdminDashboard(email: data['email']);
 }
@@ -178,7 +199,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Sign in to continue to Bit Byte HRMS',
+                          'Sign in to continue to BitByte HRMS',
                           style: TextStyle(color: textSecondary, fontSize: 13),
                         ),
                         const SizedBox(height: 30),
@@ -299,6 +320,29 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Center(
+                          child: GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                            ),
+                            child: RichText(
+                              text: TextSpan(
+                                text: "New employee? ",
+                                style: TextStyle(color: textSecondary, fontSize: 13),
+                                children: const [
+                                  TextSpan(
+                                    text: 'Register Here',
+                                    style: TextStyle(
+                                      color: Color(0xFF00C6FF),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

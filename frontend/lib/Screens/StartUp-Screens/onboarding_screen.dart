@@ -5,7 +5,8 @@ import 'theme_config.dart';
 import 'constellation_background.dart';
 import 'logo_widget.dart';
 import 'boom_in_widget.dart';
-import 'signup_screen.dart';
+import 'register_screen.dart';
+import 'login_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -95,7 +96,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _navigateToSignUp() {
     Navigator.of(context).push(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => const SignUpScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final tween = Tween(begin: const Offset(1.0, 0.0), end: Offset.zero)
               .chain(CurveTween(curve: Curves.easeInOutCubic));

@@ -19,6 +19,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_shared.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_tasks_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_training_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/HR/register_employees.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
@@ -74,7 +75,8 @@ class _HrDashboardState extends State<HrDashboard> {
           final data = snapshot.data ?? {};
           final pages = [
             _HrHome(data: data, name: widget.firstName, email: widget.email, profileImage: _profileImage, onProfileTap: _pickProfileImage, onOpen: _setIndex),
-            const HrCreateEmployeeScreen(),
+            const RegisterEmployeesPage(),
+            HrEmployeesScreen(data: data),
             HrEmployeesScreen(data: data),
             HrAttendanceScreen(data: data),
             HrLeaveRequestsScreen(data: data),
@@ -404,7 +406,7 @@ class _BottomNav extends StatelessWidget {
 
 const _titles = [
   'Dashboard',
-  'Create Employee',
+  'Register Employee',
   'Employees',
   'Attendance',
   'Leave Requests',
