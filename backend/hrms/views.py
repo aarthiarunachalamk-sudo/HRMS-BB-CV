@@ -1,8 +1,14 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.utils import timezone
-from .serializers import LoginSerializer, CreateUserSerializer, MdMeetingSerializer
-from .models import User, MdMeeting
+from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer
+from .models import User, EmployeeRegistration
+import os
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+from .models import EmployeeAccount
+from .serializers import EmployeeAccountSerializer
+import random
+import string
 
 @api_view(['POST'])
 def login_view(request):
@@ -13,6 +19,19 @@ def login_view(request):
         try:
             user = User.objects.get(email=email)
             if user.check_password(password):
+                # Check if employee account exists and OTC is still active
+                try:
+                    from .models import EmployeeAccount
+                    emp_account = EmployeeAccount.objects.get(employee_email=user.email)
+                    if emp_account.otc == password:
+                        return Response({
+                            'success': True,
+                            'requires_password_change': True,
+                            'user_id': user.user_id,
+                            'email': user.email,
+                        })
+                except:
+                    pass
                 return Response({
                     'success': True,
                     'role': user.role,
@@ -56,296 +75,183 @@ def create_user_view(request):
         return Response({'success': True, 'user_id': user.user_id, 'message': f'{data["role"].upper()} created!'})
     return Response({'success': False, 'errors': serializer.errors}, status=400)
 
-
-def _dashboard_counts():
-    active_users = User.objects.filter(is_active=True)
-    total_users = User.objects.count()
-    total_active = active_users.count()
-    department_count = active_users.exclude(role__in=['superadmin', 'ceo', 'md']).values('role').distinct().count()
-    branch_count = active_users.exclude(city='').values('city').distinct().count()
-    today = timezone.localdate()
-    return {
-        'total_users': total_users,
-        'total_active': total_active,
-        'departments': department_count,
-        'branches': branch_count,
-        'pending_approvals': 0,
-        'pending_leaves': 0,
-        'open_tasks': 0,
-        'attendance': total_active,
-        'absent': max(total_users - total_active, 0),
-        'late': 0,
-        'meetings_today': MdMeeting.objects.filter(created_at__date=today).count(),
-    }
-
-
-def _users_payload():
-    payload = []
-    for user in User.objects.all().order_by('first_name', 'email'):
-        display_name = f'{user.first_name} {user.last_name}'.strip() or user.email
-        detail = user.city or user.state or user.occupation or user.get_role_display()
-        payload.append({
-            'name': display_name,
-            'subtitle': f'{user.user_id} - {user.get_role_display()}'.strip(),
-            'detail': detail,
-            'trailing': 'Active' if user.is_active else 'Inactive',
-            'email': user.email,
-            'id': user.user_id,
-            'role': user.get_role_display(),
-        })
-    return payload
-
+@api_view(['POST'])
+def register_employee_view(request):
+    serializer = EmployeeRegistrationSerializer(data=request.data)
+    if serializer.is_valid():
+        emp = serializer.save()
+        doc_fields = [
+            'doc_passport_photo', 'doc_aadhar', 'doc_pan', 'doc_bank_passbook',
+            'doc_10th', 'doc_12th', 'doc_degree', 'doc_consolidated',
+            'doc_resume', 'doc_experience_cert', 'doc_relieving', 'doc_salary_slips',
+            'doc_passport_copy', 'doc_driving', 'doc_vaccination',
+        ]
+        updated = False
+        for field in doc_fields:
+            if field in request.FILES:
+                setattr(emp, field, request.FILES[field])
+                updated = True
+        if updated:
+            emp.save()
+        return Response({'success': True, 'message': 'Registration submitted!', 'id': emp.id})
+    return Response({'success': False, 'errors': serializer.errors}, status=400)
 
 @api_view(['GET'])
-def ceo_dashboard_view(request):
-    counts = _dashboard_counts()
-    return Response({
-        'total_employees': f'{counts["total_users"]:,}',
-        'active_employees': f'{counts["total_active"]:,}',
-        'departments': f'{counts["departments"]:,}',
-        'branches': f'{counts["branches"]:,}',
-        'revenue': '0',
-        'revenue_trend': '',
-        'attendance': f'{counts["attendance"]:,}',
-        'pending_approvals': counts['pending_approvals'],
-        'payroll_cost': '0',
-    })
+def get_registered_employees_view(request):
+    employees = EmployeeRegistration.objects.all().order_by('-submitted_at')
+    serializer = EmployeeRegistrationSerializer(employees, many=True)
+    return Response({'success': True, 'employees': serializer.data})
 
 
-@api_view(['GET'])
-def superadmin_dashboard_view(request):
-    counts = _dashboard_counts()
-    return Response({
-        'total_employees': f'{counts["total_users"]:,}',
-        'total_departments': f'{counts["departments"]:,}',
-        'active_users': f'{counts["total_active"]:,}',
-        'attendance': f'{counts["attendance"]:,}',
-        'pending_leaves': counts['pending_leaves'],
-        'open_tasks': counts['open_tasks'],
-        'present': f'{counts["attendance"]:,}',
-        'absent': f'{counts["absent"]:,}',
-        'late': f'{counts["late"]:,}',
-        'users': _users_payload(),
-    })
+@api_view(['PATCH'])
+def update_employee_status_view(request, pk):
+    try:
+        emp = EmployeeRegistration.objects.get(pk=pk)
+        emp.status = request.data.get('status', emp.status)
+        emp.save()
+        return Response({'success': True, 'message': 'Status updated!'})
+    except EmployeeRegistration.DoesNotExist:
+        return Response({'success': False, 'message': 'Not found'}, status=404)
 
 
-@api_view(['GET'])
-def hr_dashboard_view(request):
-    counts = _dashboard_counts()
-    employees = _users_payload()
-    active_employees = [employee for employee in employees if employee['trailing'] == 'Active']
-    tl_creator_ids = list(User.objects.filter(role='tl').exclude(user_id='').values_list('user_id', flat=True))
-    tl_meetings = MdMeeting.objects.filter(created_by__in=tl_creator_ids)[:10]
-    hr_notifications = []
-    for meeting in tl_meetings:
-        participants = meeting.participants if isinstance(meeting.participants, list) else []
-        participant_names = ', '.join(
-            str(participant.get('title') or participant.get('name') or participant.get('email') or '').strip()
-            for participant in participants
-            if isinstance(participant, dict)
+
+def send_email(to_email, subject, html_content):
+    try:
+        sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
+        message = Mail(
+            from_email=os.getenv('EMAIL_FROM', 'noreply@bitbyte.com'),
+            to_emails=to_email,
+            subject=subject,
+            html_content=html_content,
         )
-        hr_notifications.append({
-            'title': meeting.title,
-            'subtitle': participant_names or meeting.location or meeting.meeting_type,
-            'time': meeting.time_label,
-            'date': meeting.date_label,
-            'created_by': meeting.created_by,
-            'trailing': 'TL Meeting',
-        })
-    return Response({
-        'total_employees': f'{counts["total_users"]:,}',
-        'present_today': f'{counts["total_active"]:,}',
-        'absent_today': f'{counts["absent"]:,}',
-        'on_leave': 0,
-        'late_entry': 0,
-        'wfh': 0,
-        'open_positions_count': 0,
-        'candidates_count': 0,
-        'interviews_count': 0,
-        'offers_count': 0,
-        'pending_reviews': 0,
-        'completed_reviews': 0,
-        'high_performers': 0,
-        'low_performers': 0,
-        'payroll_month': timezone.localdate().strftime('%B %Y'),
-        'payroll_processed': 0,
-        'payroll_pending': counts['total_users'],
-        'training_upcoming': 0,
-        'training_completed': 0,
-        'training_progress': 0,
-        'calendar_month': timezone.localdate().strftime('%B %Y'),
-        'calendar_day': timezone.localdate().day,
-        'interview_date': '',
-        'interview_time': '',
-        'interview_mode': '',
-        'interview_link': '',
-        'employees': employees,
-        'attendance_records': [
-            {
-                'name': employee['name'],
-                'subtitle': 'Checked in' if employee['trailing'] == 'Active' else 'Not active',
-                'time': 'Active' if employee['trailing'] == 'Active' else 'Inactive',
-            }
-            for employee in employees[:10]
-        ],
-        'leave_requests': [],
-        'open_positions': [],
-        'pipeline': [
-            {'title': 'Applied', 'subtitle': '0 Candidates'},
-            {'title': 'Screening', 'subtitle': '0 Candidates'},
-            {'title': 'Interview', 'subtitle': '0 Candidates'},
-            {'title': 'Offered', 'subtitle': '0 Candidates'},
-            {'title': 'Hired', 'subtitle': '0 Candidates'},
-        ],
-        'candidates': active_employees[:5],
-        'onboarding': [
-            {'title': 'Create Employee', 'subtitle': 'Add new employee details'},
-            {'title': 'Upload Documents', 'subtitle': 'Upload employee documents'},
-            {'title': 'Assign Department', 'subtitle': 'Select department'},
-            {'title': 'Assign Manager', 'subtitle': 'Select reporting manager'},
-            {'title': 'Generate Employee ID', 'subtitle': 'Create employee ID'},
-            {'title': 'Send Credentials', 'subtitle': 'Send login credentials'},
-        ],
-        'documents': [
-            {'title': 'Employee Documents', 'subtitle': '0 Files'},
-            {'title': 'Offer Letters', 'subtitle': '0 Files'},
-            {'title': 'Company Policies', 'subtitle': '0 Files'},
-            {'title': 'Certificates', 'subtitle': '0 Files'},
-            {'title': 'Contracts', 'subtitle': '0 Files'},
-        ],
-        'meetings': [
-            {
-                'title': meeting.title,
-                'subtitle': meeting.location or meeting.meeting_type,
-                'time': meeting.time_label,
-            }
-            for meeting in MdMeeting.objects.all()[:5]
-        ],
-        'upcoming': [
-            {
-                'title': meeting.title,
-                'subtitle': meeting.location or meeting.meeting_type,
-                'time': meeting.time_label,
-            }
-            for meeting in MdMeeting.objects.all()[:3]
-        ],
-        'notifications': hr_notifications,
-        'performers': active_employees[:5],
-        'payroll_items': [
-            {'title': 'Salary Structure', 'subtitle': 'Payroll configuration'},
-            {'title': 'Payslip Status', 'subtitle': 'Employee payslips'},
-            {'title': 'Bonus', 'subtitle': 'Bonus and incentives'},
-            {'title': 'Payroll Reports', 'subtitle': 'Payroll analytics'},
-        ],
-        'training': [],
-        'tasks': [],
-    })
-
-
-@api_view(['GET'])
-def tl_dashboard_view(request):
-    counts = _dashboard_counts()
-    today = timezone.localdate()
-    employee_users = User.objects.filter(is_active=True, role='employee').order_by('first_name', 'email')
-    team = [
-        {
-            'title': f'{user.first_name} {user.last_name}'.strip() or user.email,
-            'subtitle': user.get_role_display(),
-            'status': 'Active' if user.is_active else 'Inactive',
-            'trailing': 'Active' if user.is_active else 'Inactive',
-            'email': user.email,
-            'id': user.user_id,
-        }
-        for user in employee_users[:8]
-    ]
-    meetings = [
-        {
-            'title': meeting.title,
-            'subtitle': meeting.location or meeting.meeting_type,
-            'time': meeting.time_label,
-            'status': meeting.get_status_display(),
-        }
-        for meeting in MdMeeting.objects.all()[:8]
-    ]
-    return Response({
-        'my_tasks': counts['open_tasks'],
-        'members_count': len(team),
-        'projects_count': 0,
-        'pending_approvals': counts['pending_approvals'],
-        'tasks_done': '0',
-        'tasks_progress': 0,
-        'on_track': '0',
-        'team_progress': 0,
-        'check_in': '',
-        'location': '',
-        'accuracy': '',
-        'work_type': '',
-        'calendar_month': today.strftime('%B %Y'),
-        'calendar_day': today.day,
-        'team': team,
-        'tasks': [],
-        'projects': [],
-        'leaves': [],
-        'meetings': meetings,
-        'reports': [],
-        'approvals': [],
-        'notifications': [],
-    })
+        sg.send(message)
+    except Exception as e:
+        print(f'SendGrid error: {e}')
 
 
 @api_view(['POST'])
-def tl_meetings_view(request):
-    payload = request.data.copy()
-    created_by = payload.get('created_by', '')
-    if created_by:
-        try:
-            creator = User.objects.get(user_id=created_by)
-            payload['created_by'] = creator.user_id
-        except User.DoesNotExist:
-            try:
-                creator = User.objects.get(email=created_by)
-                payload['created_by'] = creator.user_id
-            except User.DoesNotExist:
-                pass
-    serializer = MdMeetingSerializer(data=payload)
-    if serializer.is_valid():
-        meeting = serializer.save(status=request.data.get('status', 'upcoming'))
-        return Response({'success': True, 'meeting': MdMeetingSerializer(meeting).data})
-    return Response({'success': False, 'errors': serializer.errors}, status=400)
+def verify_employee_view(request, pk):
+    try:
+        emp = EmployeeRegistration.objects.get(pk=pk)
+        emp.status = 'approved'
+        emp.save()
+        return Response({'success': True, 'message': 'Employee verified!'})
+    except EmployeeRegistration.DoesNotExist:
+        return Response({'success': False, 'message': 'Not found'}, status=404)
 
 
-@api_view(['GET'])
-def md_dashboard_view(request):
-    meetings = MdMeeting.objects.all()[:10]
-    users = User.objects.filter(is_active=True).exclude(role='md').order_by('first_name', 'email')
-    participants = []
-    for user in users:
-        display_name = f'{user.first_name} {user.last_name}'.strip() or user.email
-        participants.append({
-            'name': display_name,
-            'role': user.get_role_display(),
-            'selected': False,
+@api_view(['POST'])
+def reject_employee_view(request, pk):
+    try:
+        emp = EmployeeRegistration.objects.get(pk=pk)
+        emp.status = 'rejected'
+        emp.save()
+
+        # Send rejection email
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;border:1px solid #eee;border-radius:10px;">
+            <h2 style="color:#e53e3e;">Application Update - Bitbyte</h2>
+            <p>Dear <b>{emp.first_name} {emp.last_name}</b>,</p>
+            <p>We regret to inform you that your employment application has been <b style="color:#e53e3e;">rejected</b>.</p>
+            <p>If you have any questions, please contact our HR team.</p>
+            <br/>
+            <p>Regards,</p>
+            <p><b>Bitbyte HR Team</b></p>
+        </div>
+        """
+        send_email(emp.personal_email, 'Application Status - Bitbyte', html)
+
+        return Response({'success': True, 'message': 'Employee rejected and email sent!'})
+    except EmployeeRegistration.DoesNotExist:
+        return Response({'success': False, 'message': 'Not found'}, status=404)
+
+
+@api_view(['POST'])
+def add_employee_view(request, pk):
+    try:
+        emp = EmployeeRegistration.objects.get(pk=pk)
+
+        # Create employee account
+        account = EmployeeAccount(
+            registration=emp,
+            employee_email=request.data.get('employee_email'),
+            department=request.data.get('department'),
+            designation=request.data.get('designation'),
+            date_of_joining=request.data.get('date_of_joining'),
+            employment_type=request.data.get('employment_type'),
+            reporting_tl=request.data.get('reporting_tl', ''),
+            work_location=request.data.get('work_location', ''),
+        )
+        account.save()
+
+        # Create User account with OTC as password
+        user = User(
+            email=account.employee_email,
+            role='employee',
+            first_name=emp.first_name,
+            last_name=emp.last_name,
+            phone=emp.mobile,
+        )
+        user.set_password(account.otc)
+        user.user_id = account.employee_id
+        user.save()
+
+        # Send welcome email with OTC
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:30px;border:1px solid #eee;border-radius:10px;">
+            <h2 style="color:#4FACFE;">Welcome to Bitbyte! 🎉</h2>
+            <p>Dear <b>{emp.first_name} {emp.last_name}</b>,</p>
+            <p>Congratulations! Your employment has been confirmed.</p>
+            <div style="background:#f0f9ff;padding:20px;border-radius:8px;margin:20px 0;">
+                <h3 style="margin:0 0 10px 0;color:#2d3748;">Your Login Credentials</h3>
+                <p><b>Employee ID:</b> {account.employee_id}</p>
+                <p><b>Email:</b> {account.employee_email}</p>
+                <p><b>One Time Password (OTC):</b> <span style="font-size:20px;color:#4FACFE;font-weight:bold;">{account.otc}</span></p>
+            </div>
+            <div style="background:#f0fff4;padding:20px;border-radius:8px;margin:20px 0;">
+                <h3 style="margin:0 0 10px 0;color:#2d3748;">Employment Details</h3>
+                <p><b>Department:</b> {account.department}</p>
+                <p><b>Designation:</b> {account.designation}</p>
+                <p><b>Date of Joining:</b> {account.date_of_joining}</p>
+                <p><b>Employment Type:</b> {account.employment_type}</p>
+                <p><b>Reporting TL:</b> {account.reporting_tl or 'N/A'}</p>
+                <p><b>Work Location:</b> {account.work_location or 'N/A'}</p>
+            </div>
+            <p>Please login with your Employee ID or Email and the OTC above.</p>
+            <p>You will be asked to change your password on first login.</p>
+            <p style="color:#e53e3e;"><b>Note: This OTC is valid for first login only.</b></p>
+            <br/>
+            <p>Regards,</p>
+            <p><b>Bitbyte HR Team</b></p>
+        </div>
+        """
+        send_email(account.employee_email, 'Welcome to Bitbyte - Your Login Credentials', html)
+        # Also send to personal email
+        send_email(emp.personal_email, 'Welcome to Bitbyte - Your Login Credentials', html)
+
+        return Response({
+            'success': True,
+            'employee_id': account.employee_id,
+            'otc': account.otc,
+            'message': 'Employee added and credentials sent!'
         })
+    except EmployeeRegistration.DoesNotExist:
+        return Response({'success': False, 'message': 'Registration not found'}, status=404)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=400)        
 
-    counts = _dashboard_counts()
-    return Response({
-        'total_revenue': '0',
-        'total_employees': f'{counts["total_active"]:,}',
-        'pending_approvals': counts['pending_approvals'],
-        'meetings_today': counts['meetings_today'],
-        'meetings': MdMeetingSerializer(meetings, many=True).data,
-        'participants': participants,
-    })
+@api_view(['POST'])
+def change_password_view(request):
+    employee_id = request.data.get('employee_id')
+    otc = request.data.get('otc')
+    new_password = request.data.get('new_password')
 
-
-@api_view(['GET', 'POST'])
-def md_meetings_view(request):
-    if request.method == 'GET':
-        meetings = MdMeeting.objects.all()
-        return Response({'meetings': MdMeetingSerializer(meetings, many=True).data})
-
-    serializer = MdMeetingSerializer(data=request.data)
-    if serializer.is_valid():
-        meeting = serializer.save(status=request.data.get('status', 'upcoming'))
-        return Response({'success': True, 'meeting': MdMeetingSerializer(meeting).data})
-    return Response({'success': False, 'errors': serializer.errors}, status=400)
+    try:
+        user = User.objects.get(user_id=employee_id)
+        if not user.check_password(otc):
+            return Response({'success': False, 'message': 'Invalid OTC'}, status=400)
+        user.set_password(new_password)
+        user.save()
+        return Response({'success': True, 'message': 'Password changed!'})
+    except User.DoesNotExist:
+        return Response({'success': False, 'message': 'Employee not found'}, status=404)        
