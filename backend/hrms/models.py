@@ -130,6 +130,24 @@ class User(AbstractBaseUser):
         return self.email
 
 
+class RecruitmentJobOpening(models.Model):
+    STATUS_CHOICES = [('open', 'Open'), ('paused', 'Paused'), ('closed', 'Closed')]
+    title = models.CharField(max_length=140)
+    department = models.CharField(max_length=100)
+    location = models.CharField(max_length=120, blank=True)
+    openings = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    created_by = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title
+
+
 class EmployeeRegistration(models.Model):
     GENDER_CHOICES = [('male', 'Male'), ('female', 'Female'), ('other', 'Other')]
     MARITAL_CHOICES = [('single', 'Single'), ('married', 'Married'), ('other', 'Other')]
@@ -224,6 +242,17 @@ class EmployeeRegistration(models.Model):
     document_statuses = models.JSONField(default=dict, blank=True)
     document_review_history = models.JSONField(default=list, blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
+    applied_job = models.ForeignKey(
+        RecruitmentJobOpening,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='candidates',
+    )
+    recruitment_stage = models.CharField(max_length=30, default='applied', db_index=True)
+    interview_data = models.JSONField(default=dict, blank=True)
+    offer_data = models.JSONField(default=dict, blank=True)
+    onboarding_checklist = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return f'{self.first_name} {self.last_name}'
@@ -341,6 +370,72 @@ class TeamTask(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Project(models.Model):
+    STATUS_CHOICES = [
+        ('not_started', 'Not Started'), ('in_progress', 'In Progress'),
+        ('on_hold', 'On Hold'), ('at_risk', 'At Risk'), ('completed', 'Completed'),
+    ]
+    name = models.CharField(max_length=160)
+    code = models.CharField(max_length=40, unique=True)
+    department = models.CharField(max_length=120, blank=True)
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='not_started')
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    budget = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    spent = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    progress = models.PositiveIntegerField(default=0)
+    manager_id = models.CharField(max_length=40, blank=True)
+    manager_name = models.CharField(max_length=120, blank=True)
+    manager_email = models.EmailField(blank=True)
+    team = models.JSONField(default=list, blank=True)
+    milestones = models.JSONField(default=list, blank=True)
+    progress_history = models.JSONField(default=list, blank=True)
+    created_by = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return self.name
+
+
+class EmployeePerformance(models.Model):
+    employee_id = models.CharField(max_length=20, db_index=True)
+    period = models.CharField(max_length=40, db_index=True)
+    goals = models.JSONField(default=list, blank=True)
+    kpis = models.JSONField(default=dict, blank=True)
+    potential_score = models.DecimalField(max_digits=3, decimal_places=2, default=0)
+    performance_score = models.DecimalField(max_digits=3, decimal_places=2, default=0)
+    competency_scores = models.JSONField(default=dict, blank=True)
+    reviewer_comments = models.TextField(blank=True)
+    status = models.CharField(max_length=20, default='draft')
+    reviewed_by = models.CharField(max_length=40, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('employee_id', 'period')
+        ordering = ['-updated_at']
+
+
+class ReportSchedule(models.Model):
+    owner_user_id = models.CharField(max_length=40, db_index=True)
+    report_type = models.CharField(max_length=80)
+    filters = models.JSONField(default=dict, blank=True)
+    format = models.CharField(max_length=10, default='pdf')
+    frequency = models.CharField(max_length=30, default='once')
+    recipients = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    last_generated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
 
 class EmployeeAttendanceRecord(models.Model):

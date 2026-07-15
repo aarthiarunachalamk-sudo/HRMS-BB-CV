@@ -7,7 +7,7 @@ from django.db import IntegrityError
 from django.utils import timezone
 from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
-from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment
+from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
 from .employee_views import _leave_balance_payload
 from .payroll import generate_payroll_for_month, payslip_payload
 import os
@@ -19,8 +19,11 @@ import random
 import string
 import base64
 import re
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 import calendar
+import csv
+import io
+import json
 
 @api_view(['POST'])
 def login_view(request):
@@ -3055,6 +3058,850 @@ def ceo_leave_detail_view(request, pk):
     return Response({'success': True, 'leave': _leave_dashboard_item(leave)})
 
 
+@api_view(['GET'])
+def ceo_leave_intelligence_view(request):
+    user_id = str(request.query_params.get('user_id') or '').strip()
+    if not User.objects.filter(user_id=user_id, role='ceo', is_active=True).exists():
+        return Response(
+            {'success': False, 'message': 'Only an active CEO can view leave intelligence.'},
+            status=403,
+        )
+
+    today = timezone.localdate()
+    try:
+        year = int(request.query_params.get('year') or today.year)
+        month = int(request.query_params.get('month') or today.month)
+        month_start = date(year, month, 1)
+    except (TypeError, ValueError):
+        return Response({'success': False, 'message': 'Invalid year or month.'}, status=400)
+    month_end = date(year, month, calendar.monthrange(year, month)[1])
+
+    queryset = EmployeeLeaveRequest.objects.all().order_by('-created_at')
+    requests = [_leave_dashboard_item(item) for item in queryset[:250]]
+    month_records = list(queryset.filter(from_date__lte=month_end, to_date__gte=month_start))
+    status_counts = {
+        status: queryset.filter(status=status).count()
+        for status in ('pending', 'approved', 'rejected')
+    }
+
+    calendar_items = []
+    for leave in month_records:
+        calendar_items.append({
+            'id': leave.id,
+            'employee_id': leave.employee_id,
+            'name': _employee_name(leave.employee_id),
+            'leave_type': leave.leave_type,
+            'status': leave.status,
+            'from_date': leave.from_date.isoformat(),
+            'to_date': leave.to_date.isoformat(),
+            'days': leave.total_days,
+        })
+
+    type_totals = {}
+    for leave in queryset:
+        bucket = type_totals.setdefault(leave.leave_type or 'Other', {'count': 0, 'days': 0})
+        bucket['count'] += 1
+        bucket['days'] += leave.total_days or 0
+
+    trend = []
+    for trend_month in range(1, 13):
+        month_query = queryset.filter(from_date__year=year, from_date__month=trend_month)
+        trend.append({
+            'month': calendar.month_abbr[trend_month],
+            'approved': month_query.filter(status='approved').count(),
+            'pending': month_query.filter(status='pending').count(),
+            'rejected': month_query.filter(status='rejected').count(),
+        })
+
+    balance_totals = {}
+    accounts = list(EmployeeAccount.objects.filter(is_active=True))
+    for account in accounts:
+        for item in _leave_balance_payload(account.employee_id, account).get('types', []):
+            name = item.get('type') or 'Other'
+            bucket = balance_totals.setdefault(
+                name, {'type': name, 'available': 0.0, 'entitlement': 0.0, 'used': 0.0},
+            )
+            for key in ('available', 'entitlement', 'used'):
+                bucket[key] += float(item.get(key) or 0)
+
+    return Response({
+        'success': True,
+        'generated_at': timezone.now().isoformat(),
+        'year': year,
+        'month': month,
+        'summary': {'total': queryset.count(), **status_counts},
+        'requests': requests,
+        'calendar': calendar_items,
+        'balances': list(balance_totals.values()),
+        'types': [{'type': key, **value} for key, value in type_totals.items()],
+        'trend': trend,
+    })
+
+
+@api_view(['GET', 'POST'])
+def ceo_payroll_overview_view(request):
+    source = request.query_params if request.method == 'GET' else request.data
+    user_id = str(source.get('user_id') or '').strip()
+    if not User.objects.filter(user_id=user_id, role='ceo', is_active=True).exists():
+        return Response(
+            {'success': False, 'message': 'Only an active CEO can manage payroll.'},
+            status=403,
+        )
+
+    today = timezone.localdate()
+    try:
+        year = int(source.get('year') or today.year)
+        month = int(source.get('month') or today.month)
+        period_end = date(year, month, calendar.monthrange(year, month)[1])
+    except (TypeError, ValueError):
+        return Response({'success': False, 'message': 'Invalid payroll period.'}, status=400)
+    if month < 1 or month > 12:
+        return Response({'success': False, 'message': 'Payroll month must be between 1 and 12.'}, status=400)
+
+    process, _ = PayrollProcess.objects.get_or_create(year=year, month=month)
+    accounts = list(
+        EmployeeAccount.objects.filter(is_active=True).select_related('registration')
+    )
+    validation_date = min(today, period_end)
+    validation = _hr_payroll_validation(accounts, validation_date)
+
+    if request.method == 'POST':
+        action = str(request.data.get('action') or '').strip().lower()
+        now = timezone.now()
+        if action == 'start':
+            if process.status != 'inputs':
+                return Response({'success': False, 'message': 'Payroll processing has already started.'}, status=409)
+            process.status = 'validation'
+            process.prepared_by = user_id
+        elif action == 'validate':
+            if process.status != 'validation':
+                return Response({'success': False, 'message': 'Payroll is not at the validation stage.'}, status=409)
+            unresolved = _payroll_unresolved_count(validation, process.resolved_issues)
+            if unresolved:
+                return Response(
+                    {'success': False, 'message': f'{unresolved} payroll validation issue(s) remain.'},
+                    status=409,
+                )
+            process.status = 'calculation'
+            process.validated_at = now
+        elif action == 'calculate':
+            if process.status != 'calculation':
+                return Response({'success': False, 'message': 'Payroll must be validated before calculation.'}, status=409)
+            generate_payroll_for_month(year, month, user_id)
+            Payslip.objects.filter(year=year, month=month).update(status='draft')
+            process.status = 'approval'
+            process.calculated_at = now
+        elif action == 'publish':
+            if process.status == 'published':
+                return Response(
+                    {'success': False, 'message': 'Payroll is already published for this period.'},
+                    status=409,
+                )
+            if process.status != 'approval':
+                return Response(
+                    {'success': False, 'message': 'Payroll must be calculated before publishing.'},
+                    status=409,
+                )
+            declaration = request.data.get('declaration') is True
+            if not declaration:
+                return Response({'success': False, 'message': 'CEO declaration is required.'}, status=400)
+            payslips_to_publish = list(Payslip.objects.filter(year=year, month=month))
+            if not payslips_to_publish:
+                return Response({'success': False, 'message': 'No calculated payslips to publish.'}, status=409)
+            Payslip.objects.filter(year=year, month=month).update(status='approved')
+            process.status = 'published'
+            process.approved_at = now
+            process.published_at = now
+            process.publishing_options = {'declaration': True, 'published_by': user_id}
+        else:
+            return Response({'success': False, 'message': 'Unsupported payroll action.'}, status=400)
+        process.save()
+
+    payslips = list(
+        Payslip.objects.filter(year=year, month=month).order_by('employee_id')
+    )
+    totals = Payslip.objects.filter(year=year, month=month).aggregate(
+        gross=Sum('gross_salary'),
+        earnings=Sum('total_earnings'),
+        deductions=Sum('total_deductions'),
+        net=Sum('net_salary'),
+    )
+    earning_breakdown = {}
+    deduction_breakdown = {}
+    department_costs = {}
+    employee_items = []
+    account_lookup = {account.employee_id: account for account in accounts}
+    for payslip in payslips:
+        account = account_lookup.get(payslip.employee_id)
+        for key, value in (payslip.earnings or {}).items():
+            earning_breakdown[key] = earning_breakdown.get(key, 0) + float(value or 0)
+        for key, value in (payslip.deductions or {}).items():
+            deduction_breakdown[key] = deduction_breakdown.get(key, 0) + float(value or 0)
+        department = account.get_department_display() if account else 'Unassigned'
+        department_costs[department] = department_costs.get(department, 0) + float(payslip.net_salary)
+        item = _hr_payroll_item(payslip)
+        item['id'] = payslip.id
+        item['paid_date'] = payslip.paid_date.isoformat() if payslip.paid_date else ''
+        try:
+            pdf_url = payslip.pdf_file.url if payslip.pdf_file else ''
+        except ValueError:
+            pdf_url = ''
+        item['download_url'] = request.build_absolute_uri(pdf_url) if pdf_url.startswith('/') else pdf_url
+        employee_items.append(item)
+
+    active = len(accounts)
+    return Response({
+        'success': True,
+        'year': year,
+        'month': month,
+        'period': f'{calendar.month_name[month]} {year}',
+        'process': _payroll_process_payload(process),
+        'employees': {
+            'active': active,
+            'processed': len(payslips),
+            'pending': max(active - len(payslips), 0),
+        },
+        'totals': {key: str(value or 0) for key, value in totals.items()},
+        'earnings': [{'name': key, 'amount': value} for key, value in earning_breakdown.items()],
+        'deductions': [{'name': key, 'amount': value} for key, value in deduction_breakdown.items()],
+        'departments': [
+            {'name': key, 'amount': value}
+            for key, value in sorted(department_costs.items(), key=lambda item: item[1], reverse=True)
+        ],
+        'validation': validation,
+        'unresolved_issues': _payroll_unresolved_count(validation, process.resolved_issues),
+        'payslips': employee_items,
+    })
+
+
+@api_view(['GET'])
+def ceo_documents_view(request):
+    user_id = str(request.query_params.get('user_id') or '').strip()
+    if not User.objects.filter(user_id=user_id, role='ceo', is_active=True).exists():
+        return Response(
+            {'success': False, 'message': 'Only an active CEO can view documents.'},
+            status=403,
+        )
+
+    documents = []
+
+    def add_document(document_id, category, title, url, owner='', employee_id='', status='', created_at=''):
+        clean_url = str(url or '').strip()
+        if not clean_url:
+            return
+        if clean_url.startswith('/'):
+            clean_url = request.build_absolute_uri(clean_url)
+        extension = clean_url.split('?')[0].rsplit('.', 1)[-1].lower() if '.' in clean_url.split('?')[0] else ''
+        documents.append({
+            'id': str(document_id),
+            'category': category,
+            'title': title,
+            'url': clean_url,
+            'owner': owner,
+            'employee_id': employee_id,
+            'status': status or 'Available',
+            'extension': extension,
+            'created_at': created_at,
+        })
+
+    for registration in EmployeeRegistration.objects.all().order_by('-submitted_at'):
+        serialized = EmployeeRegistrationSerializer(registration).data
+        owner = f'{registration.first_name} {registration.last_name}'.strip() or registration.personal_email
+        account = EmployeeAccount.objects.filter(registration=registration).first()
+        employee_id = account.employee_id if account else ''
+        statuses = registration.document_statuses or {}
+        for key, label in DOCUMENT_FIELD_LABELS.items():
+            status_data = statuses.get(key, {}) if isinstance(statuses.get(key), dict) else {}
+            add_document(
+                f'employee:{registration.pk}:{key}',
+                'Employee Documents',
+                label,
+                serialized.get(key),
+                owner=owner,
+                employee_id=employee_id,
+                status=status_data.get('status') or 'Uploaded',
+                created_at=registration.submitted_at.isoformat() if registration.submitted_at else '',
+            )
+
+    for payslip in Payslip.objects.exclude(pdf_file='').order_by('-year', '-month', 'employee_id'):
+        try:
+            url = payslip.pdf_file.url if payslip.pdf_file else ''
+        except ValueError:
+            url = ''
+        add_document(
+            f'payslip:{payslip.pk}',
+            'Payslips',
+            f'Payslip - {calendar.month_name[payslip.month]} {payslip.year}',
+            url,
+            owner=_employee_name(payslip.employee_id),
+            employee_id=payslip.employee_id,
+            status=payslip.get_status_display(),
+            created_at=payslip.generated_at.isoformat() if payslip.generated_at else '',
+        )
+
+    for leave in EmployeeLeaveRequest.objects.exclude(medical_certificate='').order_by('-created_at'):
+        try:
+            url = leave.medical_certificate.url if leave.medical_certificate else ''
+        except ValueError:
+            url = ''
+        add_document(
+            f'leave:{leave.pk}',
+            'Leave Documents',
+            f'{leave.leave_type} Medical Certificate',
+            url,
+            owner=_employee_name(leave.employee_id),
+            employee_id=leave.employee_id,
+            status=leave.get_status_display(),
+            created_at=leave.created_at.isoformat() if leave.created_at else '',
+        )
+
+    for organization in OrganizationProfile.objects.filter(
+        owner_user_id=user_id,
+    ).order_by('-updated_at'):
+        for index, item in enumerate(organization.documents or []):
+            if not isinstance(item, dict):
+                continue
+            add_document(
+                f'organization:{organization.pk}:{index}',
+                'Organization Documents',
+                item.get('name') or item.get('title') or 'Organization Document',
+                item.get('url') or item.get('path') or item.get('file'),
+                owner=organization.name,
+                status=item.get('status') or 'Available',
+                created_at=item.get('uploaded_at') or organization.updated_at.isoformat(),
+            )
+
+    categories = {}
+    for item in documents:
+        categories[item['category']] = categories.get(item['category'], 0) + 1
+    return Response({
+        'success': True,
+        'total': len(documents),
+        'categories': [{'name': key, 'count': value} for key, value in categories.items()],
+        'documents': documents,
+    })
+
+
+@api_view(['GET', 'POST'])
+def ceo_hiring_pipeline_view(request):
+    source = request.query_params if request.method == 'GET' else request.data
+    user_id = str(source.get('user_id') or '').strip()
+    if not User.objects.filter(user_id=user_id, role='ceo', is_active=True).exists():
+        return Response({'success': False, 'message': 'Only an active CEO can manage hiring.'}, status=403)
+
+    if request.method == 'POST':
+        action = str(request.data.get('action') or '').strip().lower()
+        if action == 'create_job':
+            title = str(request.data.get('title') or '').strip()
+            department = str(request.data.get('department') or '').strip()
+            if not title or not department:
+                return Response({'success': False, 'message': 'Job title and department are required.'}, status=400)
+            try:
+                openings = max(int(request.data.get('openings') or 1), 1)
+            except (TypeError, ValueError):
+                return Response({'success': False, 'message': 'Openings must be a valid number.'}, status=400)
+            job = RecruitmentJobOpening.objects.create(
+                title=title,
+                department=department,
+                location=str(request.data.get('location') or '').strip(),
+                openings=openings,
+                created_by=user_id,
+            )
+            return Response({'success': True, 'message': 'Job opening created.', 'job_id': job.id})
+        candidate_id = request.data.get('candidate_id')
+        try:
+            candidate = EmployeeRegistration.objects.get(pk=candidate_id)
+        except (EmployeeRegistration.DoesNotExist, TypeError, ValueError):
+            return Response({'success': False, 'message': 'Candidate not found.'}, status=404)
+        if action == 'move_stage':
+            stage = str(request.data.get('stage') or '').strip().lower()
+            allowed = {'applied', 'screening', 'interview', 'offer', 'hired', 'rejected'}
+            if stage not in allowed:
+                return Response({'success': False, 'message': 'Invalid candidate stage.'}, status=400)
+            candidate.recruitment_stage = stage
+        elif action == 'schedule_interview':
+            candidate.interview_data = {
+                **(candidate.interview_data or {}),
+                'scheduled_at': request.data.get('scheduled_at') or '',
+                'mode': request.data.get('mode') or '',
+                'interviewers': request.data.get('interviewers') or '',
+                'status': 'scheduled',
+            }
+            candidate.recruitment_stage = 'interview'
+        elif action == 'feedback':
+            try:
+                rating = int(request.data.get('rating') or 0)
+            except (TypeError, ValueError):
+                return Response({'success': False, 'message': 'Rating must be between 1 and 5.'}, status=400)
+            if rating < 1 or rating > 5:
+                return Response({'success': False, 'message': 'Rating must be between 1 and 5.'}, status=400)
+            candidate.interview_data = {
+                **(candidate.interview_data or {}),
+                'rating': rating,
+                'feedback': request.data.get('feedback') or '',
+                'status': 'completed',
+            }
+        elif action == 'extend_offer':
+            candidate.offer_data = {
+                'offered_at': timezone.now().isoformat(),
+                'ctc': request.data.get('ctc') or '',
+                'joining_date': request.data.get('joining_date') or '',
+                'employment_type': request.data.get('employment_type') or '',
+                'location': request.data.get('location') or '',
+                'status': 'extended',
+            }
+            candidate.recruitment_stage = 'offer'
+        elif action == 'offer_status':
+            status_value = str(request.data.get('status') or '').strip().lower()
+            if status_value not in {'extended', 'accepted', 'background_check'}:
+                return Response({'success': False, 'message': 'Invalid offer status.'}, status=400)
+            candidate.offer_data = {**(candidate.offer_data or {}), 'status': status_value}
+        elif action == 'onboarding_check':
+            key = str(request.data.get('key') or '').strip()
+            checklist = dict(candidate.onboarding_checklist or {})
+            checklist[key] = request.data.get('completed') is True
+            candidate.onboarding_checklist = checklist
+            if checklist and all(checklist.values()):
+                candidate.recruitment_stage = 'hired'
+        else:
+            return Response({'success': False, 'message': 'Unsupported hiring action.'}, status=400)
+        candidate.save()
+        return Response({'success': True, 'message': 'Hiring pipeline updated.'})
+
+    jobs = list(RecruitmentJobOpening.objects.all())
+    candidates = list(EmployeeRegistration.objects.select_related('applied_job').all().order_by('-submitted_at'))
+    stage_counts = {
+        stage: sum(1 for candidate in candidates if candidate.recruitment_stage == stage)
+        for stage in ('applied', 'screening', 'interview', 'offer', 'hired', 'rejected')
+    }
+    candidate_items = [{
+        'id': item.id,
+        'name': f'{item.first_name} {item.last_name}'.strip(),
+        'email': item.personal_email,
+        'phone': mask_phone_number(item.mobile),
+        'qualification': item.qualification,
+        'experience': item.prev_experience if item.is_experienced else 'Fresher',
+        'applied_at': item.submitted_at.isoformat() if item.submitted_at else '',
+        'stage': item.recruitment_stage,
+        'job_id': item.applied_job_id,
+        'job_title': item.applied_job.title if item.applied_job else 'Unassigned Position',
+        'department': item.applied_job.department if item.applied_job else '',
+        'interview': item.interview_data or {},
+        'offer': item.offer_data or {},
+        'onboarding': item.onboarding_checklist or {},
+    } for item in candidates]
+    job_items = [{
+        'id': job.id,
+        'title': job.title,
+        'department': job.department,
+        'location': job.location,
+        'openings': job.openings,
+        'status': job.status,
+        'created_by': job.created_by,
+        'applications': sum(1 for item in candidates if item.applied_job_id == job.id),
+        'in_progress': sum(1 for item in candidates if item.applied_job_id == job.id and item.recruitment_stage not in {'hired', 'rejected'}),
+        'created_at': job.created_at.isoformat(),
+    } for job in jobs]
+    return Response({
+        'success': True,
+        'summary': {'openings': sum(job.openings for job in jobs if job.status == 'open'), 'applications': len(candidates), **stage_counts},
+        'jobs': job_items,
+        'candidates': candidate_items,
+    })
+
+
+def _project_payload(project):
+    tasks = list(TeamTask.objects.filter(project=project.name))
+    task_counts = {
+        status: sum(1 for task in tasks if task.status == status)
+        for status in ('pending', 'in_progress', 'completed')
+    }
+    return {
+        'id': project.id, 'name': project.name, 'code': project.code,
+        'department': project.department, 'description': project.description,
+        'status': project.status, 'start_date': project.start_date.isoformat() if project.start_date else '',
+        'end_date': project.end_date.isoformat() if project.end_date else '',
+        'budget': str(project.budget), 'spent': str(project.spent), 'progress': project.progress,
+        'manager_id': project.manager_id, 'manager_name': project.manager_name,
+        'manager_email': project.manager_email, 'team': project.team or [],
+        'milestones': project.milestones or [], 'progress_history': project.progress_history or [],
+        'task_counts': task_counts, 'total_tasks': len(tasks),
+        'tasks': [_ceo_project_task_payload(task) for task in tasks],
+        'updated_at': project.updated_at.isoformat(),
+    }
+
+
+def _ceo_project_task_payload(task):
+    return {
+        'id': task.id, 'title': task.title, 'project': task.project,
+        'assignee_id': task.assignee_id, 'assignee_name': task.assignee_name,
+        'assignee_email': task.assignee_email, 'priority': task.priority,
+        'due_date': task.due_date, 'description': task.description,
+        'status': task.status, 'created_at': task.created_at.isoformat(),
+    }
+
+
+@api_view(['GET', 'POST'])
+def ceo_projects_flow_view(request):
+    source = request.query_params if request.method == 'GET' else request.data
+    user_id = str(source.get('user_id') or '').strip()
+    if not User.objects.filter(user_id=user_id, role='ceo', is_active=True).exists():
+        return Response({'success': False, 'message': 'Only an active CEO can manage projects.'}, status=403)
+
+    if request.method == 'POST':
+        action = str(request.data.get('action') or '').strip().lower()
+        if action == 'create_project':
+            name = str(request.data.get('name') or '').strip()
+            code = str(request.data.get('code') or '').strip()
+            if not name or not code:
+                return Response({'success': False, 'message': 'Project name and code are required.'}, status=400)
+            if Project.objects.filter(code__iexact=code).exists():
+                return Response({'success': False, 'message': 'Project code already exists.'}, status=409)
+            try:
+                start_date = datetime.strptime(str(request.data.get('start_date') or ''), '%Y-%m-%d').date()
+                end_date = datetime.strptime(str(request.data.get('end_date') or ''), '%Y-%m-%d').date()
+                budget = float(request.data.get('budget') or 0)
+            except (TypeError, ValueError):
+                return Response({'success': False, 'message': 'Use valid dates and budget.'}, status=400)
+            project = Project.objects.create(
+                name=name, code=code, department=request.data.get('department') or '',
+                description=request.data.get('description') or '', start_date=start_date,
+                end_date=end_date, budget=budget, created_by=user_id,
+                progress_history=[{'date': timezone.localdate().isoformat(), 'progress': 0}],
+            )
+            return Response({'success': True, 'message': 'Project created.', 'project': _project_payload(project)})
+        try:
+            project = Project.objects.get(pk=request.data.get('project_id'))
+        except (Project.DoesNotExist, TypeError, ValueError):
+            return Response({'success': False, 'message': 'Project not found.'}, status=404)
+        if action == 'update_project':
+            for field in ('status', 'description', 'manager_id', 'manager_name', 'manager_email'):
+                if field in request.data:
+                    setattr(project, field, request.data.get(field) or '')
+            if 'spent' in request.data:
+                project.spent = max(float(request.data.get('spent') or 0), 0)
+        elif action == 'add_member':
+            member = request.data.get('member') if isinstance(request.data.get('member'), dict) else {}
+            if not member.get('id') or not member.get('name'):
+                return Response({'success': False, 'message': 'Member id and name are required.'}, status=400)
+            team = list(project.team or [])
+            if not any(str(item.get('id')) == str(member['id']) for item in team if isinstance(item, dict)):
+                team.append(member)
+            project.team = team
+        elif action == 'add_milestone':
+            title = str(request.data.get('title') or '').strip()
+            if not title:
+                return Response({'success': False, 'message': 'Milestone title is required.'}, status=400)
+            milestones = list(project.milestones or [])
+            milestones.append({'id': timezone.now().timestamp(), 'title': title, 'due_date': request.data.get('due_date') or '', 'progress': 0, 'status': 'pending'})
+            project.milestones = milestones
+        elif action == 'update_milestone':
+            milestone_id = str(request.data.get('milestone_id'))
+            milestones = list(project.milestones or [])
+            for milestone in milestones:
+                if str(milestone.get('id')) == milestone_id:
+                    milestone['progress'] = max(0, min(int(request.data.get('progress') or 0), 100))
+                    milestone['status'] = 'completed' if milestone['progress'] == 100 else 'in_progress'
+            project.milestones = milestones
+        elif action == 'create_task':
+            TeamTask.objects.create(
+                title=request.data.get('title') or 'Project Task', project=project.name,
+                assignee_id=request.data.get('assignee_id') or '', assignee_name=request.data.get('assignee_name') or '',
+                assignee_email=request.data.get('assignee_email') or '', priority=request.data.get('priority') or 'Medium',
+                due_date=request.data.get('due_date') or '', description=request.data.get('description') or '', created_by=user_id,
+            )
+        elif action == 'update_task':
+            try:
+                task = TeamTask.objects.get(pk=request.data.get('task_id'), project=project.name)
+            except TeamTask.DoesNotExist:
+                return Response({'success': False, 'message': 'Task not found.'}, status=404)
+            status_value = request.data.get('status')
+            if status_value not in {'pending', 'in_progress', 'completed'}:
+                return Response({'success': False, 'message': 'Invalid task status.'}, status=400)
+            task.status = status_value
+            task.save()
+        else:
+            return Response({'success': False, 'message': 'Unsupported project action.'}, status=400)
+
+        tasks = list(TeamTask.objects.filter(project=project.name))
+        if tasks:
+            project.progress = round(sum(100 if task.status == 'completed' else 50 if task.status == 'in_progress' else 0 for task in tasks) / len(tasks))
+        history = list(project.progress_history or [])
+        today_key = timezone.localdate().isoformat()
+        history = [item for item in history if item.get('date') != today_key]
+        history.append({'date': today_key, 'progress': project.progress})
+        project.progress_history = history[-24:]
+        if project.progress == 100:
+            project.status = 'completed'
+        elif project.progress > 0 and project.status == 'not_started':
+            project.status = 'in_progress'
+        project.save()
+        return Response({'success': True, 'message': 'Project updated.', 'project': _project_payload(project)})
+
+    projects = list(Project.objects.all())
+    payloads = [_project_payload(project) for project in projects]
+    return Response({
+        'success': True,
+        'summary': {
+            'total': len(projects),
+            'active': sum(1 for item in projects if item.status == 'in_progress'),
+            'completed': sum(1 for item in projects if item.status == 'completed'),
+            'on_hold': sum(1 for item in projects if item.status == 'on_hold'),
+            'at_risk': sum(1 for item in projects if item.status == 'at_risk'),
+            'average_progress': round(sum(item.progress for item in projects) / len(projects)) if projects else 0,
+        },
+        'projects': payloads,
+    })
+
+
+@api_view(['GET', 'POST'])
+def ceo_performance_matrix_view(request):
+    source = request.query_params if request.method == 'GET' else request.data
+    user_id = str(source.get('user_id') or '').strip()
+    if not User.objects.filter(user_id=user_id, role='ceo', is_active=True).exists():
+        return Response({'success': False, 'message': 'Only an active CEO can manage performance reviews.'}, status=403)
+    period = str(source.get('period') or '').strip()
+    if not period:
+        today = timezone.localdate()
+        period = f'Q{((today.month - 1) // 3) + 1} {today.year}'
+    if request.method == 'POST':
+        employee_id = str(request.data.get('employee_id') or '').strip()
+        if not EmployeeAccount.objects.filter(employee_id=employee_id, is_active=True).exists():
+            return Response({'success': False, 'message': 'Active employee not found.'}, status=404)
+        review, _ = EmployeePerformance.objects.get_or_create(employee_id=employee_id, period=period)
+        action = str(request.data.get('action') or '').strip().lower()
+        if action == 'save_goals':
+            review.goals = request.data.get('goals') if isinstance(request.data.get('goals'), list) else []
+            review.kpis = request.data.get('kpis') if isinstance(request.data.get('kpis'), dict) else {}
+        elif action in {'save_review', 'submit_review'}:
+            try:
+                potential = float(request.data.get('potential_score') or 0)
+                performance = float(request.data.get('performance_score') or 0)
+            except (TypeError, ValueError):
+                return Response({'success': False, 'message': 'Scores must be numeric.'}, status=400)
+            if not 0 <= potential <= 5 or not 0 <= performance <= 5:
+                return Response({'success': False, 'message': 'Scores must be between 0 and 5.'}, status=400)
+            review.potential_score = potential
+            review.performance_score = performance
+            review.competency_scores = request.data.get('competency_scores') if isinstance(request.data.get('competency_scores'), dict) else {}
+            review.reviewer_comments = request.data.get('reviewer_comments') or ''
+            review.reviewed_by = user_id
+            if action == 'submit_review':
+                review.status = 'submitted'
+                review.reviewed_at = timezone.now()
+        else:
+            return Response({'success': False, 'message': 'Unsupported performance action.'}, status=400)
+        review.save()
+        return Response({'success': True, 'message': 'Performance record saved.'})
+
+    accounts = list(EmployeeAccount.objects.filter(is_active=True).select_related('registration'))
+    reviews = {item.employee_id: item for item in EmployeePerformance.objects.filter(period=period)}
+    employees = []
+    for account in accounts:
+        review = reviews.get(account.employee_id)
+        employees.append({
+            'employee_id': account.employee_id, 'name': _employee_name(account.employee_id),
+            'designation': account.get_designation_display(), 'department': account.get_department_display(),
+            'email': account.employee_email, 'period': period,
+            'goals': review.goals if review else [], 'kpis': review.kpis if review else {},
+            'potential_score': float(review.potential_score) if review else 0,
+            'performance_score': float(review.performance_score) if review else 0,
+            'competency_scores': review.competency_scores if review else {},
+            'reviewer_comments': review.reviewer_comments if review else '',
+            'status': review.status if review else 'not_started',
+            'reviewed_at': review.reviewed_at.isoformat() if review and review.reviewed_at else '',
+        })
+    scored = [item for item in employees if item['performance_score'] > 0]
+    departments = {}
+    for item in scored:
+        bucket = departments.setdefault(item['department'], [])
+        bucket.append(item['performance_score'])
+    return Response({
+        'success': True, 'period': period,
+        'summary': {
+            'total_employees': len(employees), 'completed_reviews': sum(1 for item in employees if item['status'] == 'submitted'),
+            'high_performers': sum(1 for item in scored if item['performance_score'] >= 4),
+            'at_risk': sum(1 for item in scored if item['performance_score'] < 2.5),
+            'overall_score': round(sum(item['performance_score'] for item in scored) / len(scored), 2) if scored else 0,
+        },
+        'departments': [{'name': key, 'score': round(sum(values) / len(values), 2)} for key, values in departments.items()],
+        'employees': employees,
+    })
+
+
+REPORT_TYPES = [
+    {'key':'attendance','title':'Monthly Attendance Summary','category':'Attendance'},
+    {'key':'headcount','title':'Department Wise Headcount','category':'Workforce'},
+    {'key':'payroll','title':'Payroll Summary','category':'Payroll'},
+    {'key':'leave','title':'Leave Summary','category':'Leave'},
+    {'key':'demographics','title':'Employee Demographics','category':'Workforce'},
+    {'key':'performance','title':'Performance Summary','category':'Performance'},
+    {'key':'overtime','title':'Overtime Summary','category':'Attendance'},
+    {'key':'joins_exits','title':'New Joins & Exits','category':'Workforce'},
+]
+
+
+def _report_preview(report_type, filters):
+    start = datetime.strptime(filters.get('date_from') or '2000-01-01', '%Y-%m-%d').date()
+    end = datetime.strptime(filters.get('date_to') or timezone.localdate().isoformat(), '%Y-%m-%d').date()
+    department = str(filters.get('department') or 'All')
+    accounts = EmployeeAccount.objects.filter(is_active=True).select_related('registration')
+    if department != 'All': accounts = accounts.filter(department=department)
+    ids = list(accounts.values_list('employee_id', flat=True))
+    rows=[]; summary={}
+    if report_type in {'attendance','overtime'}:
+        records=EmployeeAttendanceRecord.objects.filter(employee_id__in=ids,attendance_date__range=(start,end))
+        for r in records:
+            rows.append({'Employee ID':r.employee_id,'Date':r.attendance_date.isoformat(),'Status':r.status,'Hours':r.working_hours or ''})
+        summary={'Records':len(rows),'Present':records.filter(status__icontains='present').count(),'Late':records.filter(status__icontains='late').count()}
+    elif report_type=='payroll':
+        slips=Payslip.objects.filter(employee_id__in=ids,year__gte=start.year,year__lte=end.year)
+        for p in slips: rows.append({'Employee ID':p.employee_id,'Period':f'{p.month:02d}/{p.year}','Earnings':str(p.total_earnings),'Deductions':str(p.total_deductions),'Net':str(p.net_salary)})
+        summary={'Employees':slips.values('employee_id').distinct().count(),'Net Payroll':str(slips.aggregate(v=Sum('net_salary'))['v'] or 0)}
+    elif report_type=='leave':
+        qs=EmployeeLeaveRequest.objects.filter(employee_id__in=ids,from_date__lte=end,to_date__gte=start)
+        for x in qs: rows.append({'Employee ID':x.employee_id,'Type':x.leave_type,'From':x.from_date.isoformat(),'To':x.to_date.isoformat(),'Days':x.total_days,'Status':x.status})
+        summary={'Total':qs.count(),'Approved':qs.filter(status='approved').count(),'Pending':qs.filter(status='pending').count()}
+    elif report_type=='performance':
+        qs=EmployeePerformance.objects.filter(employee_id__in=ids)
+        for x in qs: rows.append({'Employee ID':x.employee_id,'Period':x.period,'Performance':str(x.performance_score),'Potential':str(x.potential_score),'Status':x.status})
+        summary={'Reviews':qs.count(),'Submitted':qs.filter(status='submitted').count()}
+    else:
+        for a in accounts: rows.append({'Employee ID':a.employee_id,'Name':_employee_name(a.employee_id),'Department':a.get_department_display(),'Designation':a.get_designation_display(),'Joined':a.date_of_joining.isoformat()})
+        summary={'Employees':len(rows),'Departments':len(set(row['Department'] for row in rows))}
+    return {'summary':summary,'rows':rows,'total_records':len(rows)}
+
+
+@api_view(['GET','POST'])
+def ceo_reports_flow_view(request):
+    source=request.query_params if request.method=='GET' else request.data
+    user_id=str(source.get('user_id') or '').strip()
+    if not User.objects.filter(user_id=user_id,role='ceo',is_active=True).exists(): return Response({'success':False,'message':'Only an active CEO can access reports.'},status=403)
+    if request.method=='POST':
+        action=str(request.data.get('action') or '')
+        report_type=str(request.data.get('report_type') or '')
+        if report_type not in {item['key'] for item in REPORT_TYPES}: return Response({'success':False,'message':'Invalid report type.'},status=400)
+        filters=request.data.get('filters') if isinstance(request.data.get('filters'),dict) else {}
+        try: preview=_report_preview(report_type,filters)
+        except ValueError: return Response({'success':False,'message':'Use valid YYYY-MM-DD report dates.'},status=400)
+        if action=='preview': return Response({'success':True,'report_type':report_type,'filters':filters,'generated_at':timezone.now().isoformat(),**preview})
+        if action=='schedule':
+            schedule=ReportSchedule.objects.create(owner_user_id=user_id,report_type=report_type,filters=filters,format=request.data.get('format') or 'pdf',frequency=request.data.get('frequency') or 'monthly',recipients=request.data.get('recipients') if isinstance(request.data.get('recipients'),list) else [])
+            return Response({'success':True,'message':'Report schedule saved.','schedule_id':schedule.id})
+        return Response({'success':False,'message':'Unsupported report action.'},status=400)
+    return Response({'success':True,'templates':REPORT_TYPES,'employees':EmployeeAccount.objects.filter(is_active=True).count(),'departments':list(EmployeeAccount.objects.filter(is_active=True).values_list('department',flat=True).distinct()),'recent_reports':[{'id':x.id,'report_type':x.report_type,'format':x.format,'frequency':x.frequency,'created_at':x.created_at.isoformat()} for x in ReportSchedule.objects.filter(owner_user_id=user_id)[:10]]})
+
+
+def _audit_queryset(filters):
+    qs = AppNotification.objects.all()
+    query = str(filters.get('search') or '').strip()
+    user = str(filters.get('user') or '').strip()
+    modules = filters.get('modules') if isinstance(filters.get('modules'), list) else []
+    severities = filters.get('severities') if isinstance(filters.get('severities'), list) else []
+    if query:
+        qs = qs.filter(Q(title__icontains=query) | Q(message__icontains=query) |
+                       Q(module__icontains=query) | Q(reference_id__icontains=query))
+    if user and user != 'All':
+        qs = qs.filter(Q(recipient_user_id=user) | Q(recipient_role=user))
+    if modules and 'All' not in modules: qs = qs.filter(module__in=modules)
+    if severities and 'All' not in severities: qs = qs.filter(notification_type__in=severities)
+    try:
+        if filters.get('date_from'):
+            qs = qs.filter(created_at__date__gte=datetime.strptime(filters['date_from'], '%Y-%m-%d').date())
+        if filters.get('date_to'):
+            qs = qs.filter(created_at__date__lte=datetime.strptime(filters['date_to'], '%Y-%m-%d').date())
+    except (TypeError, ValueError):
+        raise ValueError('Use valid YYYY-MM-DD audit dates.')
+    return qs
+
+
+def _audit_payload(item):
+    user = User.objects.filter(user_id=item.recipient_user_id).first()
+    return {
+        'id': item.id, 'event_id': f'LOG-{item.created_at:%Y%m%d}-{item.id:06d}',
+        'title': item.title, 'description': item.message, 'module': item.module or 'system',
+        'severity': item.notification_type, 'reference_id': item.reference_id,
+        'user_id': item.recipient_user_id or item.recipient_role or 'System',
+        'user_name': (f'{user.first_name} {user.last_name}'.strip() if user else '') or
+                     item.recipient_user_id or item.recipient_role or 'System',
+        'user_email': user.email if user else '', 'role': user.role if user else item.recipient_role,
+        'is_read': item.is_read, 'created_at': item.created_at.isoformat(),
+    }
+
+
+def _simple_audit_pdf(rows):
+    # Dependency-free, valid one-page PDF. Long reports remain available as CSV/XLS/JSON.
+    lines = ['BitByte HRMS - CEO Audit Report', '']
+    for row in rows[:45]:
+        text = f"{row['created_at'][:19]} | {row['severity']} | {row['module']} | {row['title']}"
+        lines.append(text[:105])
+    stream = ['BT', '/F1 9 Tf', '40 800 Td']
+    for index, line in enumerate(lines):
+        safe = line.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+        if index: stream.append('0 -16 Td')
+        stream.append(f'({safe}) Tj')
+    stream.append('ET')
+    body = '\n'.join(stream).encode('latin-1', 'replace')
+    objects = [b'<< /Type /Catalog /Pages 2 0 R >>', b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+               b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+               b'<< /Length %d >>\nstream\n' % len(body) + body + b'\nendstream',
+               b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>']
+    pdf = bytearray(b'%PDF-1.4\n'); offsets = [0]
+    for number, obj in enumerate(objects, 1):
+        offsets.append(len(pdf)); pdf.extend(f'{number} 0 obj\n'.encode() + obj + b'\nendobj\n')
+    xref = len(pdf); pdf.extend(f'xref\n0 {len(objects)+1}\n0000000000 65535 f \n'.encode())
+    for offset in offsets[1:]: pdf.extend(f'{offset:010d} 00000 n \n'.encode())
+    pdf.extend(f'trailer << /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF'.encode())
+    return bytes(pdf)
+
+
+@api_view(['GET', 'POST'])
+def ceo_audit_flow_view(request):
+    source = request.query_params if request.method == 'GET' else request.data
+    user_id = str(source.get('user_id') or '').strip()
+    ceo = User.objects.filter(user_id=user_id, role='ceo', is_active=True).first()
+    if not ceo:
+        return Response({'success': False, 'message': 'Only an active CEO can access audit logs.'}, status=403)
+    filters = source.get('filters') if isinstance(source.get('filters'), dict) else {}
+    if request.method == 'GET':
+        filters = {key: source.get(key) for key in ('search', 'user', 'date_from', 'date_to') if source.get(key)}
+        filters['modules'] = source.getlist('module') if hasattr(source, 'getlist') else []
+        filters['severities'] = source.getlist('severity') if hasattr(source, 'getlist') else []
+    try: qs = _audit_queryset(filters)
+    except ValueError as exc: return Response({'success': False, 'message': str(exc)}, status=400)
+    total = qs.count()
+    rows = [_audit_payload(item) for item in qs[:500]]
+    if request.method == 'POST' and source.get('action') == 'export':
+        export_format = str(source.get('format') or 'pdf').lower()
+        include = source.get('include') if isinstance(source.get('include'), list) else []
+        if export_format == 'pdf': data, mime, ext = _simple_audit_pdf(rows), 'application/pdf', 'pdf'
+        elif export_format == 'json': data, mime, ext = json.dumps(rows, indent=2).encode(), 'application/json', 'json'
+        else:
+            output = io.StringIO(); fields = list(rows[0].keys()) if rows else ['message']
+            writer = csv.DictWriter(output, fieldnames=fields); writer.writeheader(); writer.writerows(rows)
+            data = output.getvalue().encode('utf-8-sig')
+            mime, ext = ('application/vnd.ms-excel', 'xls') if export_format in {'excel', 'xlsx'} else ('text/csv', 'csv')
+        if not os.getenv('SENDGRID_API_KEY'):
+            return Response({'success': False, 'message': 'Email delivery is not configured on the backend.'}, status=503)
+        filename = f'audit_report_{timezone.localdate().isoformat()}.{ext}'
+        message = Mail(from_email=os.getenv('EMAIL_FROM', 'noreply@bitbyte.com'), to_emails=ceo.email,
+                       subject='BitByte HRMS Audit Report',
+                       html_content=f'<p>Your requested audit report is attached.</p><p><b>Events:</b> {total}</p>')
+        message.attachment = Attachment(FileContent(base64.b64encode(data).decode('ascii')), FileName(filename),
+                                        FileType(mime), Disposition('attachment'))
+        try: SendGridAPIClient(os.getenv('SENDGRID_API_KEY')).send(message)
+        except Exception: return Response({'success': False, 'message': 'The email provider could not deliver the report.'}, status=502)
+        return Response({'success': True, 'message': f'Audit report sent to {ceo.email}.', 'email': ceo.email})
+    module_counts = list(qs.values('module').annotate(count=Count('id')).order_by('-count'))
+    return Response({'success': True, 'summary': {'total_events': total,
+        'users': qs.exclude(recipient_user_id='').values('recipient_user_id').distinct().count(),
+        'modules': len(module_counts), 'critical_events': qs.filter(notification_type='error').count()},
+        'module_counts': module_counts, 'logs': rows,
+        'users': list(User.objects.filter(is_active=True).values('user_id', 'first_name', 'last_name', 'role')),
+        'modules': list(AppNotification.objects.exclude(module='').values_list('module', flat=True).distinct()),
+        'email': ceo.email, 'applied_filters': filters})
+
+
 @api_view(['POST'])
 def ceo_approval_decision_view(request, pk):
     decision = request.data.get('status')
@@ -3065,7 +3912,12 @@ def ceo_approval_decision_view(request, pk):
     except EmployeeLeaveRequest.DoesNotExist:
         return Response({'success': False, 'message': 'Leave request not found.'}, status=404)
 
-    reviewer = request.data.get('reviewed_by') or request.data.get('user_id') or 'CEO'
+    reviewer = str(request.data.get('reviewed_by') or request.data.get('user_id') or '').strip()
+    if not User.objects.filter(user_id=reviewer, role='ceo', is_active=True).exists():
+        return Response(
+            {'success': False, 'message': 'Only an active CEO can decide this leave request.'},
+            status=403,
+        )
     now = timezone.now()
     leave.status = decision
     leave.hr_status = decision

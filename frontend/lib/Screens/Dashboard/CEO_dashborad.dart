@@ -7,6 +7,13 @@ import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_approval_category_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_leave_intelligence_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_payroll_overview_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_document_center_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_hiring_pipeline_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_projects_flow_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_performance_matrix_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_reports_flow_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/create_admins.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
@@ -576,24 +583,16 @@ class _CeoDashboardState extends State<CeoDashboard> {
           ),
         ),
         onBudget: () =>
-            _openPage(_CeoPayrollOverviewPage(userId: widget.userId)),
+            _openPage(CeoPayrollOverviewScreen(userId: widget.userId)),
         onNotifications: () =>
             _openPage(_CeoAuditLogsPage(userId: widget.userId)),
-        onMeetings: () => _openPage(_CeoProjectsPage(userId: widget.userId)),
+        onMeetings: () =>
+            _openPage(CeoProjectsFlowScreen(userId: widget.userId)),
         onLeave: () => _openPage(
-          CeoApprovalCategoryScreen(
-            category: 'leave',
-            title: 'Leave Intelligence',
-            userId: widget.userId,
-          ),
+          CeoLeaveIntelligenceScreen(userId: widget.userId),
         ),
-        onHiring: () => _openPage(
-          CeoApprovalCategoryScreen(
-            category: 'hiring',
-            title: 'Hiring Pipeline',
-            userId: widget.userId,
-          ),
-        ),
+        onHiring: () =>
+            _openPage(CeoHiringPipelineScreen(userId: widget.userId)),
         onDepartment: () => _openPage(
           _DepartmentOverviewFlowPage(
             userId: widget.userId,
@@ -601,9 +600,12 @@ class _CeoDashboardState extends State<CeoDashboard> {
           ),
         ),
         onPerformance: () =>
-            _openPage(_CeoPerformanceMatrixPage(userId: widget.userId)),
+            _openPage(CeoPerformanceMatrixScreen(userId: widget.userId)),
         onBranch: () => _openPage(_CeoAiInsightsPage(userId: widget.userId)),
-        onReports: () => _openPage(_ReportsView(userId: widget.userId)),
+        onReports: () =>
+            _openPage(CeoReportsFlowScreen(userId: widget.userId)),
+        onDocuments: () =>
+            _openPage(CeoDocumentCenterScreen(userId: widget.userId)),
         onAnalytics: () => _openPage(
           _AttendanceIntelligenceFlowPage(
             userId: widget.userId,
@@ -2804,6 +2806,16 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
     );
   }
 
+  void _selectDate(DateTime selected) {
+    final normalized = DateTime(selected.year, selected.month, selected.day);
+    if (DateUtils.isSameDay(normalized, _date)) return;
+    setState(() {
+      _date = normalized;
+      _filter = 'all';
+      _load();
+    });
+  }
+
   Future<void> _pickDate() async {
     final selected = await showDatePicker(
       context: context,
@@ -2812,10 +2824,7 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
       lastDate: DateTime.now(),
     );
     if (selected == null || !mounted) return;
-    setState(() {
-      _date = selected;
-      _load();
-    });
+    _selectDate(selected);
   }
 
   @override
@@ -2832,9 +2841,15 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
     child: FutureBuilder<Map<String, dynamic>>(
       future: _future,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: CircularProgressIndicator(color: _CeoDashboardState._cyan),
+          );
+        }
+        if (snapshot.hasError || snapshot.data?['success'] != true) {
+          return _CeoLoadError(
+            message: 'Unable to load attendance for $_isoDate.',
+            onRetry: () => setState(_load),
           );
         }
         final data = snapshot.data!;
@@ -2854,6 +2869,27 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 9),
               child: Column(
                 children: [
+                  _GlassCard(
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: Theme.of(context).colorScheme.copyWith(
+                          primary: _CeoDashboardState._cyan,
+                          onPrimary: const Color(0xFF001321),
+                          surface: Colors.transparent,
+                          onSurface: ThemeConfig.getTextPrimary(context),
+                        ),
+                      ),
+                      child: CalendarDatePicker(
+                        initialDate: _date,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                        currentDate: DateTime.now(),
+                        onDateChanged: _selectDate,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   _AttendanceDateBanner(
                     data: {
                       'date_from': data['selected_date'],
@@ -2902,8 +2938,31 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 2, 14, 8),
+              child: Row(
+                children: [
+                  Text(
+                    'Results for $_isoDate',
+                    style: _CeoText.titleFor(context, 11),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${employees.length} employees',
+                    style: _CeoText.mutedFor(context, 9),
+                  ),
+                ],
+              ),
+            ),
             Expanded(
-              child: ListView.builder(
+              child: employees.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No attendance results for this date.',
+                        style: _CeoText.mutedFor(context, 11),
+                      ),
+                    )
+                  : ListView.builder(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
                 itemCount: employees.length,
                 itemBuilder: (context, index) {
@@ -2922,7 +2981,7 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
                     ),
                   );
                 },
-              ),
+                    ),
             ),
           ],
         );
@@ -3450,6 +3509,9 @@ class _AttendanceExportFlowPageState extends State<_AttendanceExportFlowPage> {
   late Map<String, dynamic> _data;
   late DateTimeRange _range;
   String _format = 'PDF';
+  String _department = 'All';
+  String _location = 'All';
+  String _employmentType = 'All';
   bool _exporting = false;
   bool _loadingDates = false;
 
@@ -3467,10 +3529,35 @@ class _AttendanceExportFlowPageState extends State<_AttendanceExportFlowPage> {
 
   List<Map<String, dynamic>> get _employees {
     final all = _mapList(_data['employees']);
-    if (widget.employeeId == null) return all;
-    return all
-        .where((item) => _displayText(item['id']) == widget.employeeId)
-        .toList();
+    return all.where((item) {
+      if (widget.employeeId != null &&
+          _displayText(item['id']) != widget.employeeId) {
+        return false;
+      }
+      if (_department != 'All' &&
+          _displayText(item['department_label']) != _department) {
+        return false;
+      }
+      if (_location != 'All' &&
+          _displayText(item['work_location']) != _location) {
+        return false;
+      }
+      if (_employmentType != 'All' &&
+          _displayText(item['employment_type']) != _employmentType) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  List<String> _filterOptions(String key) {
+    final values = _mapList(_data['employees'])
+        .map((item) => _displayText(item[key]))
+        .where((value) => value.isNotEmpty && value != '-')
+        .toSet()
+        .toList()
+      ..sort();
+    return ['All', ...values];
   }
 
   String _iso(DateTime date) =>
@@ -3646,6 +3733,7 @@ class _AttendanceExportFlowPageState extends State<_AttendanceExportFlowPage> {
                           'Late & Absent Analysis',
                           'Department Attendance',
                           'Employee Attendance',
+                          'Custom Report',
                         ]
                         .map(
                           (type) => ChoiceChip(
@@ -3655,6 +3743,35 @@ class _AttendanceExportFlowPageState extends State<_AttendanceExportFlowPage> {
                           ),
                         )
                         .toList(),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Filters', style: _CeoText.titleFor(context, 12)),
+              const SizedBox(height: 8),
+              _AttendanceExportFilter(
+                label: 'Department',
+                value: _department,
+                options: _filterOptions('department_label'),
+                onChanged: (value) => setState(() => _department = value),
+              ),
+              _AttendanceExportFilter(
+                label: 'Location',
+                value: _location,
+                options: _filterOptions('work_location'),
+                onChanged: (value) => setState(() => _location = value),
+              ),
+              _AttendanceExportFilter(
+                label: 'Employment Type',
+                value: _employmentType,
+                options: _filterOptions('employment_type'),
+                onChanged: (value) =>
+                    setState(() => _employmentType = value),
               ),
             ],
           ),
@@ -3749,6 +3866,42 @@ class _AttendanceExportFlowPageState extends State<_AttendanceExportFlowPage> {
         ),
       ],
     ),
+  );
+}
+
+class _AttendanceExportFilter extends StatelessWidget {
+  final String label;
+  final String value;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+
+  const _AttendanceExportFilter({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => DropdownButtonFormField<String>(
+    value: options.contains(value) ? value : 'All',
+    isExpanded: true,
+    dropdownColor: _CeoDashboardState._card,
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: _CeoText.mutedFor(context, 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      enabledBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: _CeoDashboardState._border),
+      ),
+    ),
+    style: _CeoText.titleFor(context, 10),
+    items: options
+        .map((option) => DropdownMenuItem(value: option, child: Text(option)))
+        .toList(),
+    onChanged: (selected) {
+      if (selected != null) onChanged(selected);
+    },
   );
 }
 
@@ -4513,6 +4666,7 @@ class _MoreView extends StatelessWidget {
   final VoidCallback onPerformance;
   final VoidCallback onBranch;
   final VoidCallback onReports;
+  final VoidCallback onDocuments;
   final VoidCallback onAnalytics;
   final VoidCallback onLogout;
 
@@ -4528,6 +4682,7 @@ class _MoreView extends StatelessWidget {
     required this.onPerformance,
     required this.onBranch,
     required this.onReports,
+    required this.onDocuments,
     required this.onAnalytics,
     required this.onLogout,
   });
@@ -4552,6 +4707,7 @@ class _MoreView extends StatelessWidget {
       _MoreGridItem(Icons.work_rounded, 'Projects', onMeetings),
       _MoreGridItem(Icons.speed_rounded, 'Performance\nMatrix', onPerformance),
       _MoreGridItem(Icons.assessment_rounded, 'Reports', onReports),
+      _MoreGridItem(Icons.folder_copy_rounded, 'Document\nCenter', onDocuments),
       _MoreGridItem(Icons.receipt_long_rounded, 'Audit Logs', onNotifications),
       _MoreGridItem(Icons.auto_awesome_rounded, 'AI Insights', onBranch),
       _MoreGridItem(Icons.settings_rounded, 'Settings', onSettings),

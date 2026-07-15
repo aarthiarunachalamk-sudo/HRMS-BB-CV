@@ -25,6 +25,7 @@ class CeoShell extends StatelessWidget {
   final Widget? drawer;
   final Widget? bottomNavigationBar;
   final Widget? floatingActionButton;
+  final VoidCallback? onBack;
 
   const CeoShell({
     super.key,
@@ -35,6 +36,7 @@ class CeoShell extends StatelessWidget {
     this.drawer,
     this.bottomNavigationBar,
     this.floatingActionButton,
+    this.onBack,
   });
 
   @override
@@ -69,7 +71,7 @@ class CeoShell extends StatelessWidget {
                                   constraints: const BoxConstraints.tightFor(width: 42, height: 42),
                                   padding: EdgeInsets.zero,
                                   icon: Icon(Icons.arrow_back_ios_new_rounded, color: textPrimary, size: 18),
-                                  onPressed: () => Navigator.of(context).pop(),
+                                  onPressed: onBack ?? () => Navigator.of(context).pop(),
                                 )
                               : Builder(
                                   builder: (ctx) => IconButton(

@@ -42,6 +42,30 @@ class _CeoLeaveRequestScreenState extends State<CeoLeaveRequestScreen> {
 
   Future<void> _update(String status) async {
     if (_saving) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${status == 'approved' ? 'Approve' : 'Reject'} Leave'),
+        content: Text(
+          'Are you sure you want to $status this leave request? This updates the employee record immediately.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor:
+                  status == 'approved' ? CeoColors.green : Colors.redAccent,
+            ),
+            child: Text(status == 'approved' ? 'Approve' : 'Reject'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     setState(() => _saving = true);
     try {
       final result = await CeoService().updateApproval(

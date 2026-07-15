@@ -77,6 +77,118 @@ class CeoService {
     );
   }
 
+  Future<Map<String, dynamic>> fetchLeaveIntelligence(
+    String userId, {
+    required int year,
+    required int month,
+  }) => _getStrict(
+    '/leave-intelligence/?${Uri(queryParameters: {
+      'user_id': userId,
+      'year': '$year',
+      'month': '$month',
+    }).query}',
+  );
+
+  Future<Map<String, dynamic>> fetchPayrollOverview(
+    String userId, {
+    required int year,
+    required int month,
+  }) => _getStrict(
+    '/payroll-overview/?${Uri(queryParameters: {
+      'user_id': userId,
+      'year': '$year',
+      'month': '$month',
+    }).query}',
+  );
+
+  Future<Map<String, dynamic>> updatePayrollOverview(
+    String userId, {
+    required int year,
+    required int month,
+    required String action,
+    bool declaration = false,
+  }) => _postWithResponse('/payroll-overview/', {
+    'user_id': userId,
+    'year': year,
+    'month': month,
+    'action': action,
+    'declaration': declaration,
+  });
+
+  Future<Map<String, dynamic>> fetchDocuments(String userId) =>
+      _getStrict('/documents/?user_id=${Uri.encodeQueryComponent(userId)}');
+
+  Future<Map<String, dynamic>> fetchHiringPipeline(String userId) =>
+      _getStrict('/hiring-pipeline/?user_id=${Uri.encodeQueryComponent(userId)}');
+
+  Future<Map<String, dynamic>> updateHiringPipeline(
+    String userId,
+    String action,
+    Map<String, dynamic> fields,
+  ) => _postWithResponse('/hiring-pipeline/', {
+    'user_id': userId,
+    'action': action,
+    ...fields,
+  });
+
+  Future<Map<String, dynamic>> fetchProjectsFlow(String userId) =>
+      _getStrict('/projects-flow/?user_id=${Uri.encodeQueryComponent(userId)}');
+
+  Future<Map<String, dynamic>> updateProjectsFlow(
+    String userId,
+    String action,
+    Map<String, dynamic> fields,
+  ) => _postWithResponse('/projects-flow/', {
+    'user_id': userId,
+    'action': action,
+    ...fields,
+  });
+
+  Future<Map<String, dynamic>> fetchPerformanceMatrix(String userId, String period) =>
+      _getStrict('/performance-matrix/?${Uri(queryParameters: {'user_id': userId, 'period': period}).query}');
+
+  Future<Map<String, dynamic>> updatePerformanceMatrix(
+    String userId, String period, String action, Map<String, dynamic> fields,
+  ) => _postWithResponse('/performance-matrix/', {'user_id': userId, 'period': period, 'action': action, ...fields});
+
+  Future<Map<String,dynamic>> fetchReportsFlow(String userId)=>_getStrict('/reports-flow/?user_id=${Uri.encodeQueryComponent(userId)}');
+  Future<Map<String,dynamic>> updateReportsFlow(String userId,String action,Map<String,dynamic> fields)=>_postWithResponse('/reports-flow/',{'user_id':userId,'action':action,...fields});
+
+  Future<Map<String, dynamic>> fetchAuditFlow(
+    String userId,
+    Map<String, dynamic> filters,
+  ) {
+    final query = <String, String>{'user_id': userId};
+    for (final entry in filters.entries) {
+      if (entry.value is String && '${entry.value}'.isNotEmpty) {
+        query[entry.key] = '${entry.value}';
+      }
+    }
+    final modules = (filters['modules'] as List?) ?? const [];
+    final severities = (filters['severities'] as List?) ?? const [];
+    var path = '/audit-flow/?${Uri(queryParameters: query).query}';
+    for (final value in modules) {
+      path += '&module=${Uri.encodeQueryComponent('$value')}';
+    }
+    for (final value in severities) {
+      path += '&severity=${Uri.encodeQueryComponent('$value')}';
+    }
+    return _getStrict(path);
+  }
+
+  Future<Map<String, dynamic>> emailAuditReport(
+    String userId,
+    Map<String, dynamic> filters,
+    String format,
+    List<String> include,
+  ) => _postWithResponse('/audit-flow/', {
+    'user_id': userId,
+    'action': 'export',
+    'filters': filters,
+    'format': format,
+    'include': include,
+  });
+
   Future<Map<String, dynamic>> fetchNotifications(String userId) =>
       _get('/notifications/?user_id=$userId');
 
