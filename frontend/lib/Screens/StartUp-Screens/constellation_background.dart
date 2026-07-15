@@ -7,6 +7,12 @@ class ConstellationBackground extends StatefulWidget {
   final Color accentColor;
   final bool isClumsy;
 
+  static const List<Color> bitByteGradient = [
+    Color(0xFF10C7F4),
+    Color(0xFF3EDC81),
+    Color(0xFF1C8BFF),
+  ];
+
   const ConstellationBackground({
     super.key,
     required this.child,
@@ -115,9 +121,7 @@ class _ConstellationBackgroundState extends State<ConstellationBackground>
     final bgStart = ThemeConfig.getBgStart(context);
     final bgEnd = ThemeConfig.getBgEnd(context);
     
-    // Use user-defined colors for painter nodes and lines:
-    // Light Mode: #147893, Dark Mode: #084B8C
-    final Color painterColor = ThemeConfig.getPainterColor(context);
+    final colors = ConstellationBackground.bitByteGradient;
 
     return Container(
       decoration: BoxDecoration(
@@ -138,7 +142,12 @@ class _ConstellationBackgroundState extends State<ConstellationBackground>
               height: 400,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: painterColor.withAlpha(isDark ? 10 : 35),
+                gradient: RadialGradient(
+                  colors: [
+                    colors.first.withAlpha(isDark ? 14 : 42),
+                    colors[1].withAlpha(0),
+                  ],
+                ),
               ),
             ),
           ),
@@ -150,7 +159,12 @@ class _ConstellationBackgroundState extends State<ConstellationBackground>
               height: 500,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: painterColor.withAlpha(isDark ? 8 : 25),
+                gradient: RadialGradient(
+                  colors: [
+                    colors[1].withAlpha(isDark ? 12 : 34),
+                    colors.last.withAlpha(0),
+                  ],
+                ),
               ),
             ),
           ),
@@ -159,7 +173,7 @@ class _ConstellationBackgroundState extends State<ConstellationBackground>
             child: CustomPaint(
               painter: _ConstellationPainter(
                 particles: _particles,
-                painterColor: painterColor,
+                colors: colors,
                 isDark: isDark,
                 isClumsy: widget.isClumsy,
               ),
@@ -187,22 +201,20 @@ class _Particle {
 
 class _ConstellationPainter extends CustomPainter {
   final List<_Particle> particles;
-  final Color painterColor;
+  final List<Color> colors;
   final bool isDark;
   final bool isClumsy;
 
   _ConstellationPainter({
     required this.particles,
-    required this.painterColor,
+    required this.colors,
     required this.isDark,
     required this.isClumsy,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint nodePaint = Paint()
-      ..color = painterColor.withAlpha(isDark ? 160 : 210)
-      ..style = PaintingStyle.fill;
+    final Paint nodePaint = Paint()..style = PaintingStyle.fill;
 
     final Paint linePaint = Paint()
       ..style = PaintingStyle.stroke
@@ -220,29 +232,44 @@ class _ConstellationPainter extends CustomPainter {
           // Faint lines, slightly higher contrast in clumsy and light modes
           final int maxAlpha = isClumsy ? (isDark ? 55 : 85) : (isDark ? 38 : 65);
           final int alpha = (opacity * maxAlpha).toInt();
-          linePaint.color = painterColor.withAlpha(alpha);
+          linePaint.shader = LinearGradient(
+            colors: [
+              _particleColor(i).withAlpha(alpha),
+              _particleColor(j).withAlpha(alpha),
+            ],
+          ).createShader(Rect.fromPoints(
+            particles[i].position,
+            particles[j].position,
+          ));
           canvas.drawLine(
             particles[i].position,
             particles[j].position,
             linePaint,
           );
+          linePaint.shader = null;
         }
       }
     }
 
     // Draw nodes
-    for (var particle in particles) {
+    for (int index = 0; index < particles.length; index++) {
+      final particle = particles[index];
+      final particleColor = _particleColor(index);
       // Add subtle glow around nodes
       final Paint glowPaint = Paint()
-        ..color = painterColor.withAlpha(isDark ? 40 : 80)
+        ..color = particleColor.withAlpha(isDark ? 45 : 90)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
       canvas.drawCircle(particle.position, particle.radius * 2.2, glowPaint);
       
       // Core particle
-      nodePaint.color = isDark ? Colors.white.withAlpha(180) : const Color(0xFF0F172A).withAlpha(190);
+      nodePaint.color = isDark
+          ? particleColor.withAlpha(220)
+          : particleColor.withAlpha(210);
       canvas.drawCircle(particle.position, particle.radius, nodePaint);
     }
   }
+
+  Color _particleColor(int index) => colors[index % colors.length];
 
   @override
   bool shouldRepaint(covariant _ConstellationPainter oldDelegate) {

@@ -1,6 +1,7 @@
 export 'hr_attendance_screen.dart';
 export 'hr_create_employee_screen.dart';
 export 'hr_dashboard.dart';
+export 'hr_document_verification_flow_screen.dart';
 export 'hr_documents_screen.dart';
 export 'hr_employees_screen.dart';
 export 'hr_leave_requests_screen.dart';

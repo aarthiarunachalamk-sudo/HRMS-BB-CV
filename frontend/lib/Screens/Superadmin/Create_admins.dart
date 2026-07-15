@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/constellation_background.dart';
+import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class CreateAdminsPage extends StatefulWidget {
   const CreateAdminsPage({super.key});
@@ -72,7 +74,7 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.1.56:8000/api/create-user/'),
+        ApiConfig.uri('/create-user/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'first_name': _firstNameController.text.trim(),
@@ -195,7 +197,7 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                             border: Border.all(color: cardBorder),
                           ),
                           child: DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
+                            child: AppDropdownButton<String>(
                               value: _selectedRole,
                               isExpanded: true,
                               dropdownColor: cardBg,
@@ -236,7 +238,7 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                                     border: Border.all(color: cardBorder),
                                   ),
                                   child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<String>(
+                                    child: AppDropdownButton<String>(
                                       value: _selectedCountryCode,
                                       dropdownColor: isDark ? const Color(0xFF0A121E) : Colors.white,
                                       style: TextStyle(color: textPrimary, fontSize: 13),

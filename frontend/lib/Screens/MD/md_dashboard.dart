@@ -1,12 +1,15 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:image_picker/image_picker.dart';
+
+import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 
 import 'md_models.dart';
 import 'md_service.dart';
@@ -459,8 +462,7 @@ class _MdIdentityHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Good ${colors.isDark ? 'Evening' : 'Morning'},', style: TextStyle(color: colors.muted, fontSize: 12)),
-                    const SizedBox(height: 3),
+                    Text('Good ${colors.isDark ? 'Evening' : 'Morning'},', style: TextStyle(color: colors.muted, fontSize: 12)),                    const SizedBox(height: 3),
                     Text(
                       displayName,
                       maxLines: 1,
@@ -516,7 +518,7 @@ class _RoleSelector extends StatelessWidget {
         border: Border.all(color: colors.border),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<_DashboardRole>(
+        child: AppDropdownButton<_DashboardRole>(
           value: selectedRole,
           isExpanded: true,
           dropdownColor: colors.surface,
@@ -1185,33 +1187,127 @@ class _MdDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayName = name.trim().isEmpty ? 'MD' : name.trim();
     return Drawer(
+      width: MediaQuery.of(context).size.width * 0.86,
       backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
+      ),
       child: SafeArea(
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(children: [
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+          child: Column(children: [
+            // ── Logo + close ──────────────────────────────────
+            Row(children: [
               const BitByteLogo(compact: true),
-              const SizedBox(width: 10),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(name.trim().isEmpty ? 'MD' : name.trim(), overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.text, fontSize: 15, fontWeight: FontWeight.w900)),
-                Text(email, overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.muted, fontSize: 11)),
-              ])),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text('HRMS',
+                    style: TextStyle(
+                        color: colors.text, fontSize: 22, fontWeight: FontWeight.w800)),
+              ),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: Icon(Icons.close_rounded, color: colors.muted, size: 26),
+              ),
             ]),
-          ),
-          Divider(color: colors.border),
-          Expanded(
-            child: ListView(children: [
-              _MdDrawerTile(colors: colors, icon: Icons.dashboard_rounded, title: 'Dashboard', onTap: () => select(_MdStep.dashboard)),
-              _MdDrawerTile(colors: colors, icon: Icons.event_note_rounded, title: 'Schedule Meeting', onTap: () => select(_MdStep.meetings)),
-              _MdDrawerTile(colors: colors, icon: Icons.list_alt_rounded, title: 'Meeting List', onTap: () => select(_MdStep.list)),
-              _MdDrawerTile(colors: colors, icon: Icons.calendar_month_rounded, title: 'Calendar', onTap: () => select(_MdStep.calendar)),
+            const SizedBox(height: 20),
+
+            // ── Profile section ───────────────────────────────
+            Row(children: [
+              Container(
+                width: 72,
+                height: 72,
+                padding: const EdgeInsets.all(2.5),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [colors.primary, colors.success, const Color(0xFF8B5CFF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: CircleAvatar(
+                  backgroundColor: colors.isDark
+                      ? const Color(0xFF0A2238)
+                      : const Color(0xFFEEF6FF),
+                  child: Icon(Icons.business_center_rounded,
+                      color: colors.primary, size: 30),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: colors.text,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text('Managing Director',
+                      style: TextStyle(
+                          color: colors.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(email,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: colors.muted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600)),
+                ]),
+              ),
             ]),
-          ),
-          Divider(color: colors.border),
-          ListTile(leading: const Icon(Icons.logout_rounded, color: Colors.redAccent), title: const Text('Logout', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w800)), onTap: logout),
-        ]),
+            const SizedBox(height: 18),
+            Divider(color: colors.border),
+            const SizedBox(height: 4),
+
+            // ── Nav items ─────────────────────────────────────
+            Expanded(
+              child: ListView(padding: EdgeInsets.zero, children: [
+                _MdDrawerTile(
+                    colors: colors,
+                    icon: Icons.dashboard_rounded,
+                    title: 'Dashboard',
+                    onTap: () => select(_MdStep.dashboard)),
+                _MdDrawerTile(
+                    colors: colors,
+                    icon: Icons.event_note_rounded,
+                    title: 'Schedule Meeting',
+                    onTap: () => select(_MdStep.meetings)),
+                _MdDrawerTile(
+                    colors: colors,
+                    icon: Icons.list_alt_rounded,
+                    title: 'Meeting List',
+                    onTap: () => select(_MdStep.list)),
+                _MdDrawerTile(
+                    colors: colors,
+                    icon: Icons.calendar_month_rounded,
+                    title: 'Calendar',
+                    onTap: () => select(_MdStep.calendar)),
+              ]),
+            ),
+            Divider(color: colors.border),
+
+            // ── Logout ────────────────────────────────────────
+            ListTile(
+              dense: true,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              leading: const Icon(Icons.logout_rounded,
+                  color: Colors.redAccent, size: 20),
+              title: const Text('Logout',
+                  style: TextStyle(
+                      color: Colors.redAccent, fontWeight: FontWeight.w800)),
+              onTap: logout,
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -1227,7 +1323,20 @@ class _MdDrawerTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(leading: Icon(icon, color: colors.primary), title: Text(title, style: TextStyle(color: colors.text, fontWeight: FontWeight.w800)), onTap: onTap);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: ListTile(
+        dense: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        leading: Icon(icon, color: colors.primary, size: 20),
+        title: Text(title,
+            style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w700,
+                fontSize: 14)),
+        onTap: onTap,
+      ),
+    );
   }
 }
 

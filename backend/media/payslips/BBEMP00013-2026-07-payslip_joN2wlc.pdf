@@ -1,0 +1,78 @@
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj
+4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+5 0 obj << /Length 931 >> stream
+BT
+/F1 12 Tf
+50 790 Td
+(BitByte HRMS Payslip) Tj
+0 -18 Td
+(Employee: naveen kumar) Tj
+0 -18 Td
+(Employee ID: BBEMP00013) Tj
+0 -18 Td
+(Pay Period: July 2026) Tj
+0 -18 Td
+(Working Days: 23) Tj
+0 -18 Td
+(Paid Days: 4) Tj
+0 -18 Td
+(LOP Days: 19) Tj
+0 -18 Td
+() Tj
+0 -18 Td
+(Earnings) Tj
+0 -18 Td
+(Basic Salary: Rs 40000.00) Tj
+0 -18 Td
+(HRA: Rs 0.00) Tj
+0 -18 Td
+(Conveyance Allowance: Rs 0.00) Tj
+0 -18 Td
+(Medical Allowance: Rs 0.00) Tj
+0 -18 Td
+(Special Allowance: Rs 8000.00) Tj
+0 -18 Td
+(Other Allowance: Rs 0.00) Tj
+0 -18 Td
+(Overtime: Rs 0.00) Tj
+0 -18 Td
+() Tj
+0 -18 Td
+(Deductions) Tj
+0 -18 Td
+(PF: Rs 0.00) Tj
+0 -18 Td
+(ESI: Rs 0.00) Tj
+0 -18 Td
+(Professional Tax: Rs 0.00) Tj
+0 -18 Td
+(TDS: Rs 2000.00) Tj
+0 -18 Td
+(LOP Deduction: Rs 39652.17) Tj
+0 -18 Td
+(Other Deduction: Rs 0.00) Tj
+0 -18 Td
+() Tj
+0 -18 Td
+(Gross Salary: Rs 48000.00) Tj
+0 -18 Td
+(Total Deductions: Rs 41652.17) Tj
+0 -18 Td
+(Net Salary: Rs 6347.83) Tj
+ET
+endstream endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+1293
+%%EOF

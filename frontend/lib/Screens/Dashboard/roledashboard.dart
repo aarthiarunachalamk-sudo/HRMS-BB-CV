@@ -1,6 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Admin_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/CEO_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Employee_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Finance_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/HR_dadhborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/ITTeam_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/MD_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Manager-dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/MarketingTeam_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/TL_dashborad.dart';
 
 class RoleDashboard extends StatefulWidget {
   const RoleDashboard({super.key});
@@ -13,59 +24,105 @@ class _RoleDashboardState extends State<RoleDashboard> {
   int _selectedRoleIndex = 0;
   int _selectedTabIndex = 0;
   bool _rememberLastRole = true;
+  late String _clockLabel;
+  Timer? _clockTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _clockLabel = _formatClock(DateTime.now());
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _clockLabel = _formatClock(DateTime.now()));
+    });
+  }
+
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  static String _formatClock(DateTime now) {
+    final h = now.hour % 12 == 0 ? 12 : now.hour % 12;
+    final m = now.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
 
   final List<_RoleOption> _roles = const [
     _RoleOption(
+      key: 'admin',
+      title: 'Admin',
+      subtitle: 'Admin Operations',
+      icon: Icons.admin_panel_settings_outlined,
+      accent: Color(0xFF38BDF8),
+    ),
+    _RoleOption(
+      key: 'ceo',
       title: 'CEO',
       subtitle: 'Chief Executive',
       icon: Icons.workspace_premium_outlined,
       accent: Color(0xFF4B8DFF),
     ),
     _RoleOption(
-      title: 'HR',
-      subtitle: 'Human Resources',
-      icon: Icons.badge_outlined,
-      accent: Color(0xFF8B5CF6),
-    ),
-    _RoleOption(
-      title: 'Finance',
-      subtitle: 'Accounts & Payroll',
-      icon: Icons.account_balance_wallet_outlined,
-      accent: Color(0xFFF59E0B),
-    ),
-    _RoleOption(
-      title: 'Manager',
-      subtitle: 'Team Manager',
-      icon: Icons.manage_accounts_outlined,
-      accent: Color(0xFF0EA5E9),
-    ),
-    _RoleOption(
-      title: 'Employee',
-      subtitle: 'Staff Member',
-      icon: Icons.person_outline_rounded,
-      accent: Color(0xFF22C55E),
-    ),
-    _RoleOption(
-      title: 'Team Lead',
-      subtitle: 'TL',
-      icon: Icons.groups_2_outlined,
-      accent: Color(0xFFEC4899),
-    ),
-    _RoleOption(
+      key: 'md',
       title: 'MD',
       subtitle: 'Managing Director',
       icon: Icons.business_center_outlined,
       accent: Color(0xFF7C3AED),
     ),
     _RoleOption(
+      key: 'director',
       title: 'Director',
-      subtitle: 'DIR',
+      subtitle: 'Leadership',
       icon: Icons.apartment_outlined,
+      accent: Color(0xFF06B6D4),
+    ),
+    _RoleOption(
+      key: 'hr',
+      title: 'HR',
+      subtitle: 'Human Resources',
+      icon: Icons.badge_outlined,
+      accent: Color(0xFF8B5CF6),
+    ),
+    _RoleOption(
+      key: 'tl',
+      title: 'Team Lead',
+      subtitle: 'TL',
+      icon: Icons.groups_2_outlined,
+      accent: Color(0xFFEC4899),
+    ),
+    _RoleOption(
+      key: 'employee',
+      title: 'Employee',
+      subtitle: 'Staff Member',
+      icon: Icons.person_outline_rounded,
+      accent: Color(0xFF22C55E),
+    ),
+    _RoleOption(
+      key: 'finance',
+      title: 'Finance',
+      subtitle: 'Accounts & Payroll',
+      icon: Icons.account_balance_wallet_outlined,
+      accent: Color(0xFFF59E0B),
+    ),
+    _RoleOption(
+      key: 'manager',
+      title: 'Manager',
+      subtitle: 'Team Manager',
+      icon: Icons.manage_accounts_outlined,
+      accent: Color(0xFF0EA5E9),
+    ),
+    _RoleOption(
+      key: 'marketing',
+      title: 'Marketing',
+      subtitle: 'Marketing Team',
+      icon: Icons.campaign_outlined,
       accent: Color(0xFF14B8A6),
     ),
   ];
 
   final _RoleOption _itDepartment = const _RoleOption(
+    key: 'it',
     title: 'IT Department',
     subtitle: 'Technology & Infrastructure',
     icon: Icons.dns_outlined,
@@ -80,12 +137,36 @@ class _RoleDashboardState extends State<RoleDashboard> {
   }
 
   void _openSelectedDashboard() {
-    final role = _roles[_selectedRoleIndex];
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${role.title} dashboard selected'),
-        behavior: SnackBarBehavior.floating,
-      ),
+    _openDashboard(_roles[_selectedRoleIndex]);
+  }
+
+  void _openDashboard(_RoleOption role) {
+    // RoleDashboard is a dev-only role-switcher screen.
+    // It is not reachable from real login — real login routes directly
+    // to the appropriate dashboard with live user data.
+    // Passing empty strings here causes each dashboard to show its
+    // loading/empty state rather than any fake names or IDs.
+    const email = '';
+    const firstName = '';
+    const userId = '';
+
+    final Widget dashboard = switch (role.key) {
+      'admin' => AdminDashboard(email: email, firstName: firstName, userId: userId),
+      'ceo' => CeoDashboard(email: email, firstName: firstName, userId: userId),
+      'md' => MdDashboard(email: email, firstName: firstName, userId: userId),
+      'director' => MdDashboard(email: email, firstName: firstName, userId: userId),
+      'hr' => HrDashboard(email: email, firstName: firstName, userId: userId),
+      'tl' => TLDashboard(email: email, firstName: firstName, userId: userId),
+      'employee' => EmployeeDashboard(email: email, firstName: firstName, userId: userId),
+      'finance' => FinanceDashboard(email: email, firstName: firstName, userId: userId),
+      'manager' => ManagerDashboard(email: email, firstName: firstName, userId: userId),
+      'it' => ITTeamDashboard(email: email, firstName: firstName, userId: userId),
+      'marketing' => MarketingTeamDashboard(email: email, firstName: firstName, userId: userId),
+      _ => EmployeeDashboard(email: email, firstName: firstName, userId: userId),
+    };
+
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => dashboard),
     );
   }
 
@@ -117,14 +198,7 @@ class _RoleDashboardState extends State<RoleDashboard> {
                         role: _itDepartment,
                         colors: colors,
                         isSelected: false,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('IT Department selected'),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
+                        onTap: () => _openDashboard(_itDepartment),
                       ),
                       const SizedBox(height: 20),
                       _buildRememberCard(colors),
@@ -146,7 +220,7 @@ class _RoleDashboardState extends State<RoleDashboard> {
     return Row(
       children: [
         Text(
-          '9:41',
+          _clockLabel,
           style: TextStyle(
             color: colors.title,
             fontSize: 16,
@@ -583,12 +657,14 @@ class _RoleIconBadge extends StatelessWidget {
 }
 
 class _RoleOption {
+  final String key;
   final String title;
   final String subtitle;
   final IconData icon;
   final Color accent;
 
   const _RoleOption({
+    required this.key,
     required this.title,
     required this.subtitle,
     required this.icon,

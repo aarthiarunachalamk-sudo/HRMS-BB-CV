@@ -46,7 +46,7 @@ class HrPalette {
         border: Color(0xFF1C405A),
         text: Color(0xFFF8FAFC),
         muted: Color(0xFF93A9BC),
-        primary: Color(0xFF7C4DFF),
+        primary: Color(0xFF00C6FF),
         success: Color(0xFF22C55E),
         danger: Color(0xFFEF4444),
         warning: Color(0xFFF59E0B),
@@ -63,7 +63,7 @@ class HrPalette {
       border: Color(0xFFE1E8F3),
       text: Color(0xFF0F172A),
       muted: Color(0xFF64748B),
-      primary: Color(0xFF0B6BFF),
+      primary: Color(0xFF0072FF),
       success: Color(0xFF16A34A),
       danger: Color(0xFFDC2626),
       warning: Color(0xFFF59E0B),
@@ -101,24 +101,33 @@ class HrMetricCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
-  const HrMetricCard({super.key, required this.title, required this.value, required this.icon, required this.color});
+  const HrMetricCard({super.key, required this.title, required this.value, required this.icon, required this.color, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
-    return HrCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Icon(icon, color: color, size: 22),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontSize: 20, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 3),
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.muted, fontSize: 11, fontWeight: FontWeight.w700)),
-          ]),
-        ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: HrCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Icon(icon, color: color, size: 22),
+              if (onTap != null)
+                Icon(Icons.arrow_forward_ios_rounded, color: color.withAlpha(120), size: 11),
+            ]),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontSize: 20, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 3),
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.muted, fontSize: 11, fontWeight: FontWeight.w700)),
+            ]),
+          ],
+        ),
       ),
     );
   }
@@ -130,14 +139,15 @@ class HrListTile extends StatelessWidget {
   final String subtitle;
   final String? trailing;
   final Color? color;
+  final VoidCallback? onTap;
 
-  const HrListTile({super.key, required this.icon, required this.title, required this.subtitle, this.trailing, this.color});
+  const HrListTile({super.key, required this.icon, required this.title, required this.subtitle, this.trailing, this.color, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
     final accent = color ?? c.primary;
-    return HrCard(
+    final tile = HrCard(
       padding: const EdgeInsets.all(10),
       child: Row(
         children: [
@@ -153,6 +163,8 @@ class HrListTile extends StatelessWidget {
         ],
       ),
     );
+    if (onTap == null) return tile;
+    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(8), child: tile);
   }
 }
 

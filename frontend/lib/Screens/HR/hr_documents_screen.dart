@@ -19,7 +19,16 @@ class HrDocumentsScreen extends StatelessWidget {
               child: HrListTile(icon: Icons.folder_rounded, title: '${item['title']}', subtitle: '${item['subtitle']}', color: c.warning),
             )),
         const SizedBox(height: 8),
-        ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(48)), onPressed: () {}, icon: const Icon(Icons.upload_rounded), label: const Text('Upload')),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(48)),
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Document upload is not available yet.')),
+            );
+          },
+          icon: const Icon(Icons.upload_rounded),
+          label: const Text('Upload'),
+        ),
       ],
     );
   }

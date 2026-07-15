@@ -44,7 +44,7 @@ class TlPalette {
         border: Color(0xFF1C405A),
         text: Color(0xFFF8FAFC),
         muted: Color(0xFF93A9BC),
-        primary: Color(0xFF7C4DFF),
+        primary: Color(0xFF00C6FF),
         success: Color(0xFF22C55E),
         danger: Color(0xFFEF4444),
         warning: Color(0xFFF59E0B),
@@ -60,7 +60,7 @@ class TlPalette {
       border: Color(0xFFE1E8F3),
       text: Color(0xFF0F172A),
       muted: Color(0xFF64748B),
-      primary: Color(0xFF165DFF),
+      primary: Color(0xFF0072FF),
       success: Color(0xFF16A34A),
       danger: Color(0xFFDC2626),
       warning: Color(0xFFF59E0B),
@@ -84,14 +84,14 @@ class TlCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: c.border),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(c.isDark ? 45 : 10), blurRadius: 14, offset: const Offset(0, 8))],
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(c.isDark ? 28 : 8), blurRadius: 10, offset: const Offset(0, 5))],
       ),
       child: child,
     );
     if (onTap == null) return card;
-    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(8), child: card);
+    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(10), child: card);
   }
 }
 

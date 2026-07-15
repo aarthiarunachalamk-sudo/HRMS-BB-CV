@@ -8,15 +8,21 @@ class SaTaskManagementScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = SaPalette.of(context);
     const tasks = [['System Update', 'Admin', 'High'], ['Data Migration', 'IT Team', 'High'], ['Employee Onboarding', 'HR Team', 'Medium'], ['Payroll Review', 'Finance Team', 'Medium'], ['Performance Review', 'HR Team', 'Medium'], ['UI/UX Enhancement', 'Design Team', 'Low']];
+    void showUnavailable() {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Task creation is not available yet.')),
+      );
+    }
+
     return SaScreen(
       title: 'Task Management',
-      floatingActionButton: FloatingActionButton(backgroundColor: c.primary, foregroundColor: Colors.white, onPressed: () {}, child: const Icon(Icons.add_rounded)),
+      floatingActionButton: FloatingActionButton(backgroundColor: c.primary, foregroundColor: Colors.white, onPressed: showUnavailable, child: const Icon(Icons.add_rounded)),
       child: saList([
         Row(children: [Expanded(child: Text('Kanban', textAlign: TextAlign.center, style: TextStyle(color: c.primary, fontWeight: FontWeight.w900))), Expanded(child: Text('List', textAlign: TextAlign.center, style: TextStyle(color: c.muted, fontWeight: FontWeight.w800))), Expanded(child: Text('Calendar', textAlign: TextAlign.center, style: TextStyle(color: c.muted, fontWeight: FontWeight.w800)))]),
         const SizedBox(height: 12),
         GridView.count(crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.65, children: tasks.map((task) => _Task(task[0], task[1], task[2])).toList()),
         const SizedBox(height: 12),
-        SizedBox(height: 48, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white), onPressed: () {}, icon: const Icon(Icons.add_rounded), label: const Text('Create Task'))),
+        SizedBox(height: 48, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white), onPressed: showUnavailable, icon: const Icon(Icons.add_rounded), label: const Text('Create Task'))),
       ]),
     );
   }

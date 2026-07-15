@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'hr_shared.dart';
 
 class HrCreateEmployeeScreen extends StatefulWidget {
@@ -44,7 +46,7 @@ class _HrCreateEmployeeScreenState extends State<HrCreateEmployeeScreen> {
     setState(() => _loading = true);
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.1.56:8000/api/create-user/'),
+        ApiConfig.uri('/create-user/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'first_name': _firstName.text.trim(),
@@ -99,7 +101,7 @@ class _HrCreateEmployeeScreenState extends State<HrCreateEmployeeScreen> {
               _Field(label: 'Email', controller: _email, keyboardType: TextInputType.emailAddress),
               _Field(label: 'Phone', controller: _phone, keyboardType: TextInputType.phone),
               _Field(label: 'DOB', controller: _dob, hint: 'YYYY-MM-DD'),
-              DropdownButtonFormField<String>(
+              AppDropdownButtonFormField<String>(
                 value: _gender,
                 decoration: _decoration(context, 'Gender'),
                 dropdownColor: c.surface,

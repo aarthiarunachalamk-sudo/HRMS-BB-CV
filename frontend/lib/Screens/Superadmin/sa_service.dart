@@ -1,16 +1,26 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class SaService {
-  static const String baseUrl = 'http://192.168.1.56:8000/api/superadmin';
+  static const String _base = '${ApiConfig.baseUrl}/superadmin';
 
-  Future<Map<String, dynamic>> fetchDashboard() async {
-    final response = await http.get(Uri.parse('$baseUrl/dashboard/'));
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) return Map<String, dynamic>.from(decoded);
-    }
-    throw Exception('Superadmin API failed with status ${response.statusCode}');
+  Future<Map<String, dynamic>> fetchDashboard() => _get('/dashboard/');
+
+  Future<Map<String, dynamic>> fetchNotifications() =>
+      _get('/notifications/');
+
+  Future<Map<String, dynamic>> _get(String path) async {
+    try {
+      final res = await http
+          .get(Uri.parse('$_base$path'))
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+    return {};
   }
 }

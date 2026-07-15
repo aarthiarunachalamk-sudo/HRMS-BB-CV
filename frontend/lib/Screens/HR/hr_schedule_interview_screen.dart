@@ -22,7 +22,15 @@ class HrScheduleInterviewScreen extends StatelessWidget {
           _Field(label: 'Location / Link', value: '${data['interview_link'] ?? ''}', icon: Icons.link_rounded),
         ])),
         const SizedBox(height: 16),
-        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(48)), onPressed: () {}, child: const Text('Schedule Interview')),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(48)),
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Interview scheduling is not available yet.')),
+            );
+          },
+          child: const Text('Schedule Interview'),
+        ),
       ],
     );
   }

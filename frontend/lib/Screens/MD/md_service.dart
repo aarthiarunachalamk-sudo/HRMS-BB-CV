@@ -1,10 +1,11 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'md_models.dart';
 
 class MdService {
-  static const String _baseUrl = 'http://192.168.1.56:8000/api/md';
+  static const String _baseUrl = '${ApiConfig.baseUrl}/md';
 
   Future<MdDashboardData> fetchDashboard(String userId) async {
     final response = await http.get(Uri.parse('$_baseUrl/dashboard/?user_id=$userId'));

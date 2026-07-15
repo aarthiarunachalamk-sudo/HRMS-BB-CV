@@ -13,7 +13,16 @@ class CeoMeetingsScreen extends StatelessWidget {
     return CeoShell(
       title: 'Meetings',
       trailing: const Icon(Icons.more_vert_rounded, color: CeoColors.muted),
-      floatingActionButton: FloatingActionButton(backgroundColor: CeoColors.purple, foregroundColor: Colors.white, onPressed: () {}, child: const Icon(Icons.add_rounded)),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: CeoColors.purple,
+        foregroundColor: Colors.white,
+        onPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Meeting creation is not available yet.')),
+          );
+        },
+        child: const Icon(Icons.add_rounded),
+      ),
       child: CeoFutureBody(
         future: CeoService().fetchMeetings(userId),
         builder: (data) => pageList([

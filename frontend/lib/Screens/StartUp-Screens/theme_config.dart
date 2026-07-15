@@ -14,9 +14,9 @@ class ThemeConfig {
 
   // Core Text Colors
   static Color getTextPrimary(BuildContext context) =>
-      isDark(context) ? Colors.white : const Color(0xFF0F172A);
+      isDark(context) ? Colors.white : const Color(0xFF1F3654);
   static Color getTextSecondary(BuildContext context) =>
-      isDark(context) ? const Color(0xFF8E9CAE) : const Color(0xFF475569);
+      isDark(context) ? const Color(0xFF8E9CAE) : const Color(0xFF607086);
   static Color getTextMuted(BuildContext context) =>
       isDark(context) ? const Color(0xFF5A6A80) : const Color(0xFF94A3B8);
 
@@ -92,7 +92,7 @@ class ThemeConfig {
       fontSize: size,
       fontWeight: weight,
       color: getTextPrimary(context),
-      letterSpacing: -0.5,
+      letterSpacing: 0,
     );
   }
 

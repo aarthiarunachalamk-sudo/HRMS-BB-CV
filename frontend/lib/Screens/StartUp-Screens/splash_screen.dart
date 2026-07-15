@@ -14,19 +14,25 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   late final VideoPlayerController _controller;
+  Timer? _startupTimer;
   Timer? _fallbackTimer;
   bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.asset('assets/videos/splash_screen.mp4')
+    _startupTimer = Timer(const Duration(seconds: 4), _goNext);
+    _controller = VideoPlayerController.asset('assets/videos/SplashScreen.mp4')
       ..initialize().then((_) {
-        if (!mounted) return;
+        if (!mounted || _navigated) return;
         setState(() {});
         final duration = _controller.value.duration;
         if (duration > Duration.zero) {
-          _fallbackTimer = Timer(duration + const Duration(milliseconds: 700), _goNext);
+          _startupTimer?.cancel();
+          _fallbackTimer = Timer(
+            duration + const Duration(milliseconds: 700),
+            _goNext,
+          );
         } else {
           _fallbackTimer = Timer(const Duration(seconds: 10), _goNext);
         }
@@ -52,6 +58,7 @@ class _SplashScreenState extends State<SplashScreen> {
   void _goNext() {
     if (_navigated || !mounted) return;
     _navigated = true;
+    _startupTimer?.cancel();
     _fallbackTimer?.cancel();
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
@@ -66,6 +73,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   void dispose() {
+    _startupTimer?.cancel();
     _fallbackTimer?.cancel();
     _controller.removeListener(_handleVideoProgress);
     _controller.dispose();
@@ -88,7 +96,41 @@ class _SplashScreenState extends State<SplashScreen> {
                     child: VideoPlayer(_controller),
                   ),
                 )
-              : const ColoredBox(color: Colors.black),
+              : const _SplashFallback(),
+        ),
+      ),
+    );
+  }
+}
+
+class _SplashFallback extends StatelessWidget {
+  const _SplashFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF071426),
+            Color(0xFF02050A),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/logo.png', width: 96, height: 96),
+            const SizedBox(height: 18),
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2.4),
+            ),
+          ],
         ),
       ),
     );

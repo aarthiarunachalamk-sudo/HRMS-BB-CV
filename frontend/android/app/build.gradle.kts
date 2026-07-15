@@ -14,6 +14,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    // Suppress unchecked/unsafe warnings from third-party plugin sources
+    tasks.withType<JavaCompile>().configureEach {
+        options.compilerArgs.add("-Xlint:-unchecked")
+        options.compilerArgs.add("-Xlint:-deprecation")
+    }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.hrms_mobileapp_bitbyte"

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
+import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:http/http.dart' as http;
+import 'dart:async';
 import 'dart:convert';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/superadmin_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/CEO_dashborad.dart';
@@ -19,7 +21,7 @@ import 'logo_widget.dart';
 import 'theme_config.dart';
 import 'Change_Password.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Employee_dashborad.dart';
-
+import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,6 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _rememberMe = true;
+  bool _isLoggingIn = false;
 
   @override
   void dispose() {
@@ -44,99 +47,185 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _toggleBrightnessMode() {
     final currentMode = MyApp.themeNotifier.value;
-    MyApp.themeNotifier.value =
-        currentMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    MyApp.themeNotifier.value = currentMode == ThemeMode.dark
+        ? ThemeMode.light
+        : ThemeMode.dark;
     setState(() {});
   }
 
   Future<void> _submitLogin() async {
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
+    if (_isLoggingIn) return;
 
-  try {
-    final response = await http.post(
-      Uri.parse('http://192.168.1.54:8000/api/login/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': _employeeCodeController.text.trim(),
-        'password': _passwordController.text,
-      }),
-    );
+    setState(() => _isLoggingIn = true);
 
-    final data = jsonDecode(response.body);
+    try {
+      final response = await http
+          .post(
+            ApiConfig.uri('/login/'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': _employeeCodeController.text.trim(),
+              'password': _passwordController.text,
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
 
-    if (data['success'] == true) {
-  // OTC first login check
-  if (data['requires_password_change'] == true) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => ChangePasswordScreen(
-        employeeId: data['user_id'] ?? '',
-        otc: _passwordController.text,
-      )),
-      (route) => false,
-    );
-    return;
+      final data = jsonDecode(response.body);
+      if (!mounted) return;
+
+      if (data['success'] == true) {
+        // OTC first login check
+        if (data['requires_password_change'] == true) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => ChangePasswordScreen(
+                employeeId: data['user_id'] ?? '',
+                otc: _passwordController.text,
+              ),
+            ),
+            (route) => false,
+          );
+          return;
+        }
+        final role = _normalizeRole(data['role']);
+        Widget dashboard;
+        if (role == 'superadmin' || role == 'super_admin') {
+          dashboard = SuperAdminDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'ceo') {
+          dashboard = CeoDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'md' || role == 'director') {
+          dashboard = MdDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'hr' || role == 'hr_manager') {
+          dashboard = HrDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'finance') {
+          dashboard = FinanceDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'admin' || role == 'administrator') {
+          dashboard = AdminDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'it' ||
+            role == 'it_team' ||
+            role == 'it_department') {
+          dashboard = ITTeamDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'manager') {
+          dashboard = ManagerDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'marketing') {
+          dashboard = MarketingTeamDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'tl' || role == 'teamlead' || role == 'team_lead') {
+          dashboard = TLDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'employee') {
+          dashboard = EmployeeDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else {
+          dashboard = SuperAdminDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        }
+
+        dashboard = LoginGreetingGate(
+          name: '${data['first_name'] ?? ''}',
+          role: role,
+          child: dashboard,
+        );
+
+        _employeeCodeController.clear();
+        _passwordController.clear();
+
+        Navigator.of(context).push(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => dashboard,
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
+            transitionDuration: const Duration(milliseconds: 550),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? 'Login failed')),
+        );
+      }
+    } on TimeoutException {
+      if (!mounted) return;
+      _showServerUnavailable();
+    } on http.ClientException {
+      if (!mounted) return;
+      _showServerUnavailable();
+    } catch (_) {
+      if (!mounted) return;
+      _showServerUnavailable();
+    } finally {
+      if (mounted) setState(() => _isLoggingIn = false);
+    }
   }
-  final role = data['role'];
-  Widget dashboard;
-  if (role == 'superadmin') {
-    dashboard = SuperAdminDashboard(email: data['email']);
-  } else if (role == 'ceo') {
-    dashboard = CeoDashboard(
-      email: data['email'],
-      firstName: data['first_name'] ?? '',
-      userId: data['user_id'] ?? '',
-    );
-  } else if (role == 'md') {
-    dashboard = MdDashboard(
-      email: data['email'],
-      firstName: data['first_name'] ?? '',
-      userId: data['user_id'] ?? '',
-    );
-  } else if (role == 'hr') {
-  dashboard = HrDashboard(email: data['email'], firstName: data['first_name'] ?? '', userId: data['user_id'] ?? '');
-} else if (role == 'finance') {
-  dashboard = FinanceDashboard(email: data['email'], firstName: data['first_name'] ?? '', userId: data['user_id'] ?? '');
-} else if (role == 'admin') {
-  dashboard = AdminDashboard(email: data['email'], firstName: data['first_name'] ?? '', userId: data['user_id'] ?? '');
-} else if (role == 'it') {
-  dashboard = ITTeamDashboard(email: data['email'], firstName: data['first_name'] ?? '', userId: data['user_id'] ?? '');
-} else if (role == 'manager') {
-  dashboard = ManagerDashboard(email: data['email'], firstName: data['first_name'] ?? '', userId: data['user_id'] ?? '');
-} else if (role == 'marketing') {
-  dashboard = MarketingTeamDashboard(email: data['email'], firstName: data['first_name'] ?? '', userId: data['user_id'] ?? '');
-} else if (role == 'tl') {
-  dashboard = TLDashboard(email: data['email'], firstName: data['first_name'] ?? '', userId: data['user_id'] ?? '');
-} else if (role == 'employee') {
-  dashboard = EmployeeDashboard(
-    email: data['email'],
-    firstName: data['first_name'] ?? '',
-    userId: data['user_id'] ?? '',
-  );
-} else {
-  dashboard = SuperAdminDashboard(email: data['email']);
-}
 
- Navigator.of(context).pushAndRemoveUntil(
-    PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => dashboard,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
-      transitionDuration: const Duration(milliseconds: 550),
-    ),
-    (route) => false,
-  );
-} else {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(data['message'] ?? 'Login failed')),
-  );
-}
-  } catch (e) {
+  void _showServerUnavailable() {
+    final localOnly = ApiConfig.usesPrivateNetworkAddress;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Server error! Backend running ah check pannunga')),
+      SnackBar(
+        content: Text(
+          localOnly
+              ? 'The HRMS server is configured for a local network. Connect to the office network or install a build configured with the public HTTPS server.'
+              : 'Unable to reach the HRMS server. Check your internet connection and try again.',
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFFB42318),
+        duration: const Duration(seconds: 6),
+      ),
     );
   }
-}
+
+  String _normalizeRole(Object? value) {
+    return '${value ?? ''}'.trim().toLowerCase().replaceAll(
+      RegExp(r'[\s-]+'),
+      '_',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,8 +269,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               Center(
                 child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 50),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 50,
+                  ),
                   child: Form(
                     key: _formKey,
                     child: Column(
@@ -213,8 +304,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: BoxDecoration(
                               color: cardBg,
                               borderRadius: BorderRadius.circular(24),
-                              border:
-                                  Border.all(color: cardBorder, width: 1.5),
+                              border: Border.all(color: cardBorder, width: 1.5),
                               boxShadow: ThemeConfig.getPremiumShadow(context),
                             ),
                             child: Column(
@@ -230,8 +320,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   textSecondary: textSecondary,
                                   cardBorder: cardBorder,
                                   validator: (value) {
-                                    if (value == null ||
-                                        value.trim().isEmpty) {
+                                    if (value == null || value.trim().isEmpty) {
                                       return 'Please enter employee code';
                                     }
                                     return null;
@@ -260,8 +349,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                           width: 1.5,
                                         ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
                                         ),
                                         onChanged: (value) {
                                           setState(() {
@@ -291,7 +381,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(height: 24),
                                 GestureDetector(
-                                  onTap: _submitLogin,
+                                  onTap: _isLoggingIn ? null : _submitLogin,
                                   child: Container(
                                     width: double.infinity,
                                     height: 54,
@@ -307,15 +397,27 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                       ],
                                     ),
-                                    child: const Center(
-                                      child: Text(
-                                        'Login',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                    child: Center(
+                                      child: _isLoggingIn
+                                          ? const SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.4,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation(
+                                                      Colors.white,
+                                                    ),
+                                              ),
+                                            )
+                                          : const Text(
+                                              'Login',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                     ),
                                   ),
                                 ),
@@ -327,12 +429,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         Center(
                           child: GestureDetector(
                             onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                              MaterialPageRoute(
+                                builder: (_) => const RegisterScreen(),
+                              ),
                             ),
                             child: RichText(
                               text: TextSpan(
                                 text: "New employee? ",
-                                style: TextStyle(color: textSecondary, fontSize: 13),
+                                style: TextStyle(
+                                  color: textSecondary,
+                                  fontSize: 13,
+                                ),
                                 children: const [
                                   TextSpan(
                                     text: 'Register Here',
@@ -389,13 +496,14 @@ class _LoginScreenState extends State<LoginScreen> {
       validator: validator,
       decoration: InputDecoration(
         filled: true,
-        fillColor:
-            isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9),
+        fillColor: isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9),
         hintText: placeholder,
         hintStyle: TextStyle(color: textSecondary.withAlpha(102), fontSize: 14),
         prefixIcon: Icon(icon, color: const Color(0xFF4FACFE), size: 18),
-        contentPadding:
-            const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 16,
+          horizontal: 20,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
@@ -439,8 +547,7 @@ class _LoginScreenState extends State<LoginScreen> {
       },
       decoration: InputDecoration(
         filled: true,
-        fillColor:
-            isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9),
+        fillColor: isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9),
         hintText: 'Enter password',
         hintStyle: TextStyle(color: textSecondary.withAlpha(102), fontSize: 14),
         prefixIcon: const Icon(
@@ -462,8 +569,10 @@ class _LoginScreenState extends State<LoginScreen> {
             });
           },
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 16,
+          horizontal: 20,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
