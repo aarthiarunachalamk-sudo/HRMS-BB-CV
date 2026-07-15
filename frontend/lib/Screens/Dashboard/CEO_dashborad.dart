@@ -14,6 +14,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_hiring_pipeline_screen.da
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_projects_flow_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_performance_matrix_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_reports_flow_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_audit_flow_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/create_admins.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
@@ -578,14 +579,14 @@ class _CeoDashboardState extends State<CeoDashboard> {
               ),
             ),
             onOpenAudit: () =>
-                _openPage(_CeoAuditLogsPage(userId: widget.userId)),
+                _openPage(CeoAuditFlowScreen(userId: widget.userId)),
             onLogout: () => _openPage(_LogoutConfirmPage(onLogout: _logout)),
           ),
         ),
         onBudget: () =>
             _openPage(CeoPayrollOverviewScreen(userId: widget.userId)),
         onNotifications: () =>
-            _openPage(_CeoAuditLogsPage(userId: widget.userId)),
+            _openPage(CeoAuditFlowScreen(userId: widget.userId)),
         onMeetings: () =>
             _openPage(CeoProjectsFlowScreen(userId: widget.userId)),
         onLeave: () => _openPage(

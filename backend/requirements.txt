@@ -13,9 +13,11 @@ django-cors-headers==4.9.0
 djangorestframework==3.17.1
 fastapi==0.138.0
 greenlet==3.5.2
+gunicorn==26.0.0
 h11==0.16.0
 idna==3.18
 MarkupSafe==3.0.3
+packaging==26.2
 psycopg==3.3.4
 psycopg-binary==3.3.4
 psycopg2-binary==2.9.12

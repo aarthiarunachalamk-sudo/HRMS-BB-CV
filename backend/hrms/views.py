@@ -3833,7 +3833,7 @@ def _simple_audit_pdf(rows):
     # Dependency-free, valid one-page PDF. Long reports remain available as CSV/XLS/JSON.
     lines = ['BitByte HRMS - CEO Audit Report', '']
     for row in rows[:45]:
-        text = f"{row['created_at'][:19]} | {row['severity']} | {row['module']} | {row['title']}"
+        text = f"{str(row.get('created_at', ''))[:19]} | {row.get('severity', '')} | {row.get('module', '')} | {row.get('title', '')}"
         lines.append(text[:105])
     stream = ['BT', '/F1 9 Tf', '40 800 Td']
     for index, line in enumerate(lines):
@@ -3874,11 +3874,17 @@ def ceo_audit_flow_view(request):
     if request.method == 'POST' and source.get('action') == 'export':
         export_format = str(source.get('format') or 'pdf').lower()
         include = source.get('include') if isinstance(source.get('include'), list) else []
-        if export_format == 'pdf': data, mime, ext = _simple_audit_pdf(rows), 'application/pdf', 'pdf'
-        elif export_format == 'json': data, mime, ext = json.dumps(rows, indent=2).encode(), 'application/json', 'json'
+        allowed_fields = {'id', 'event_id', 'created_at'}
+        if 'Event Summary' in include: allowed_fields.update({'title', 'description', 'severity', 'module'})
+        if 'Timeline' in include: allowed_fields.add('created_at')
+        if 'User Details' in include: allowed_fields.update({'user_id', 'user_name', 'user_email', 'role'})
+        if 'Change Details' in include: allowed_fields.update({'reference_id', 'is_read'})
+        export_rows = [{key: value for key, value in row.items() if key in allowed_fields} for row in rows]
+        if export_format == 'pdf': data, mime, ext = _simple_audit_pdf(export_rows), 'application/pdf', 'pdf'
+        elif export_format == 'json': data, mime, ext = json.dumps(export_rows, indent=2).encode(), 'application/json', 'json'
         else:
-            output = io.StringIO(); fields = list(rows[0].keys()) if rows else ['message']
-            writer = csv.DictWriter(output, fieldnames=fields); writer.writeheader(); writer.writerows(rows)
+            output = io.StringIO(); fields = list(export_rows[0].keys()) if export_rows else ['message']
+            writer = csv.DictWriter(output, fieldnames=fields); writer.writeheader(); writer.writerows(export_rows)
             data = output.getvalue().encode('utf-8-sig')
             mime, ext = ('application/vnd.ms-excel', 'xls') if export_format in {'excel', 'xlsx'} else ('text/csv', 'csv')
         if not os.getenv('SENDGRID_API_KEY'):

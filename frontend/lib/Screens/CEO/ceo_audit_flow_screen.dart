@@ -73,7 +73,7 @@ class _CeoAuditFlowScreenState extends State<CeoAuditFlowScreen> {
   @override
   Widget build(BuildContext context) {
     return CeoShell(
-      title: const ['Audit Dashboard', 'Activity Timeline', 'Filters', 'Log Details', 'Export Audit Report'][_page],
+      title: ['Audit Dashboard', 'Activity Timeline', 'Filters', 'Log Details', 'Export Audit Report'][_page],
       onBack: _page == 0 ? null : () => setState(() => _page = _page == 3 ? 1 : _page - 1),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _page == 0 ? 0 : 3,
@@ -130,9 +130,9 @@ class _CeoAuditFlowScreenState extends State<CeoAuditFlowScreen> {
       ]),
       CeoMetricGrid(cards: [
         CeoMetric('Total Events', '${summary['total_events'] ?? 0}', 'Selected period', Icons.receipt_long, CeoColors.cyan),
-        CeoMetric('Users', '${summary['users'] ?? 0}', 'Active in logs', Icons.people, CeoColors.blue),
+        CeoMetric('Users', '${summary['users'] ?? 0}', 'Active in logs', Icons.people, CeoColors.purple),
         CeoMetric('Modules', '${summary['modules'] ?? 0}', 'With activity', Icons.hub_outlined, CeoColors.green),
-        CeoMetric('Critical Events', '${summary['critical_events'] ?? 0}', 'Requires review', Icons.warning_amber, CeoColors.red),
+        CeoMetric('Critical Events', '${summary['critical_events'] ?? 0}', 'Requires review', Icons.warning_amber, CeoColors.pink),
       ]),
       const SizedBox(height: 14),
       title('Top Modules', 14),
