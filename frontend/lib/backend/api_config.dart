@@ -3,7 +3,7 @@ class ApiConfig {
   /// --dart-define=API_BASE_URL=https://api.example.com/api
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://hrms-bitbyte-mobileapp.onrender.com',
+    defaultValue: 'http://hrms-bitbyte-mobileapp.onrender.com/api',
   );
 
   static Uri uri(String path) => Uri.parse('$baseUrl$path');
