@@ -3880,6 +3880,10 @@ def ceo_audit_flow_view(request):
         if 'User Details' in include: allowed_fields.update({'user_id', 'user_name', 'user_email', 'role'})
         if 'Change Details' in include: allowed_fields.update({'reference_id', 'is_read'})
         export_rows = [{key: value for key, value in row.items() if key in allowed_fields} for row in rows]
+        for index, export_row in enumerate(export_rows):
+            if 'IP & Location' in include: export_row['IP & Location'] = 'Not captured by this event'
+            if 'Device Information' in include: export_row['Device Information'] = 'Not captured by this event'
+            if 'Notes & Comments' in include: export_row['Notes & Comments'] = rows[index].get('description', '')
         if export_format == 'pdf': data, mime, ext = _simple_audit_pdf(export_rows), 'application/pdf', 'pdf'
         elif export_format == 'json': data, mime, ext = json.dumps(export_rows, indent=2).encode(), 'application/json', 'json'
         else:
