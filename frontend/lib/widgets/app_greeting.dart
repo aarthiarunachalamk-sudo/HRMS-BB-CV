@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 
 class AppGreetingData {
   final String label;
@@ -152,6 +153,11 @@ class _GreetingDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final greeting = AppGreeting.current();
     final displayName = name.trim().isEmpty ? role : name.trim();
+    final isDark = ThemeConfig.isDark(context);
+    final cardBg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
+    final text = ThemeConfig.getTextPrimary(context);
+    final muted = ThemeConfig.getTextSecondary(context);
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 28),
@@ -160,8 +166,8 @@ class _GreetingDialog extends StatelessWidget {
         child: Container(
           constraints: const BoxConstraints(maxWidth: 360),
           decoration: BoxDecoration(
-            color: const Color(0xFF07172A),
-            border: Border.all(color: const Color(0xFF183A5A)),
+            color: cardBg,
+            border: Border.all(color: border),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -173,14 +179,16 @@ class _GreetingDialog extends StatelessWidget {
                   alignment: Alignment.center,
                   children: [
                     Positioned.fill(
-                      child: CustomPaint(painter: _ConfettiPainter()),
+                      child: CustomPaint(painter: AppConfettiPainter()),
                     ),
                     Container(
                       width: 94,
                       height: 94,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFF0A2035),
+                        color: isDark
+                            ? const Color(0xFF0A2035)
+                            : greeting.accent.withAlpha(22),
                         border: Border.all(color: greeting.accent, width: 2.5),
                         boxShadow: [
                           BoxShadow(
@@ -197,8 +205,8 @@ class _GreetingDialog extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             greeting.shortLabel,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: text,
                               fontSize: 11,
                               fontWeight: FontWeight.w900,
                             ),
@@ -226,8 +234,8 @@ class _GreetingDialog extends StatelessWidget {
                     Text(
                       displayName,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: text,
                         fontSize: 19,
                         fontWeight: FontWeight.w800,
                       ),
@@ -236,8 +244,8 @@ class _GreetingDialog extends StatelessWidget {
                     Text(
                       'Welcome back to your ${AppGreeting.roleLabel(role)} dashboard.',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Color(0xFF91A8BE),
+                      style: TextStyle(
+                        color: muted,
                         fontSize: 12,
                         height: 1.4,
                       ),
@@ -272,7 +280,126 @@ class _GreetingDialog extends StatelessWidget {
   }
 }
 
-class _ConfettiPainter extends CustomPainter {
+class AppCelebrationDialog extends StatelessWidget {
+  final String title;
+  final String message;
+  final IconData icon;
+  final Color accent;
+  final String buttonLabel;
+
+  const AppCelebrationDialog({
+    super.key,
+    required this.title,
+    required this.message,
+    this.icon = Icons.check_rounded,
+    this.accent = const Color(0xFF13D989),
+    this.buttonLabel = 'OK',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
+    final text = ThemeConfig.getTextPrimary(context);
+    final muted = ThemeConfig.getTextSecondary(context);
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 360),
+          decoration: BoxDecoration(
+            color: cardBg,
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 132,
+                width: double.infinity,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned.fill(
+                      child: CustomPaint(painter: AppConfettiPainter()),
+                    ),
+                    Container(
+                      width: 74,
+                      height: 74,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: accent.withAlpha(28),
+                        border: Border.all(color: accent, width: 2.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: accent.withValues(alpha: 0.40),
+                            blurRadius: 24,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Icon(icon, color: accent, size: 42),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: Column(
+                  children: [
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: text,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: muted,
+                        fontSize: 13,
+                        height: 1.45,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: accent,
+                          foregroundColor: const Color(0xFF061321),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          buttonLabel,
+                          style: const TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppConfettiPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     const colors = [

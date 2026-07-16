@@ -2097,7 +2097,9 @@ class _AccrualFooterRow extends StatelessWidget {
           child: _AccrualCard(
             icon: Icons.calendar_today_rounded,
             title: 'Next Accrual',
-            value: '+${_formatOneDecimal(overview.nextAccrualDays)} Days on\n${_displayShortDate(overview.nextAccrualDate)}',
+            value: overview.nextAccrualDate == null
+                ? 'No data available'
+                : '+${_formatOneDecimal(overview.nextAccrualDays)} Days on\n${_displayShortDate(overview.nextAccrualDate!)}',
             valueColor: const Color(0xFF148F62),
             backgroundColor: const Color(0xFFEAF6FF),
             accentColor: const Color(0xFF3A8DDE),
@@ -2108,7 +2110,9 @@ class _AccrualFooterRow extends StatelessWidget {
           child: _AccrualCard(
             icon: Icons.sync_rounded,
             title: 'Accrual Frequency',
-            value: overview.accrualFrequency,
+            value: overview.accrualFrequency.trim().isEmpty
+                ? 'No data available'
+                : overview.accrualFrequency,
             valueColor: const Color(0xFF6D43D9),
             backgroundColor: const Color(0xFFF1EAFF),
             accentColor: const Color(0xFF8B5CFF),
@@ -2641,7 +2645,7 @@ class _LeaveBalanceOverview {
   final double pendingApproval;
   final double carryForward;
   final double nextAccrualDays;
-  final DateTime nextAccrualDate;
+  final DateTime? nextAccrualDate;
   final String accrualFrequency;
   final List<_LeaveTypeBalance> types;
 
@@ -2678,37 +2682,28 @@ class _LeaveBalanceOverview {
         usedThisYear: _doubleFrom(source['used_this_year']),
         pendingApproval: _doubleFrom(source['pending_approval']),
         carryForward: _doubleFrom(source['carry_forward']),
-        nextAccrualDays: _doubleFrom(source['next_accrual_days'], fallback: 1.5),
+        nextAccrualDays: _doubleFrom(source['next_accrual_days']),
         nextAccrualDate:
             _parseIsoDate('${source['next_accrual_date'] ?? ''}') ??
             _nextAccrualDate(DateTime.now()),
         accrualFrequency:
-            '${source['accrual_frequency'] ?? 'Monthly (1.5 Days / Month)'}',
-        types: types.isEmpty ? _fallbackLeaveTypes(profile, records) : types,
+            '${source['accrual_frequency'] ?? ''}',
+        types: types,
       );
     }
 
-    final types = _fallbackLeaveTypes(profile, records);
-    final totalEntitlement = types.fold<double>(
-      0,
-      (sum, item) => sum + item.entitlement,
-    );
-    final accrued = types.fold<double>(0, (sum, item) => sum + item.accrued);
-    final used = types.fold<double>(0, (sum, item) => sum + item.used);
-    final pending = types.fold<double>(0, (sum, item) => sum + item.pending);
-    final available = types.fold<double>(0, (sum, item) => sum + item.available);
     return _LeaveBalanceOverview(
       fiscalYear: _currentFiscalYear(),
-      totalEntitlement: totalEntitlement,
-      totalAvailable: available,
-      accruedThisYear: accrued,
-      usedThisYear: used,
-      pendingApproval: pending,
+      totalEntitlement: 0,
+      totalAvailable: 0,
+      accruedThisYear: 0,
+      usedThisYear: 0,
+      pendingApproval: 0,
       carryForward: 0,
-      nextAccrualDays: 1.5,
-      nextAccrualDate: _nextAccrualDate(DateTime.now()),
-      accrualFrequency: 'Monthly (1.5 Days / Month)',
-      types: types,
+      nextAccrualDays: 0,
+      nextAccrualDate: null,
+      accrualFrequency: '',
+      types: const [],
     );
   }
 }
@@ -2851,44 +2846,6 @@ String _leavePolicyNote(String leaveType, int? allowance, int lopDays) {
     return 'Annual Leave has 12 days per annum and follows monthly accrual.';
   }
   return '$leaveType has $allowance days per annum and lapses at the end of the calendar year.';
-}
-
-List<_LeaveTypeBalance> _fallbackLeaveTypes(
-  Map<String, dynamic> profile,
-  List<Map<String, dynamic>> records,
-) {
-  final joiningDate = _profileJoiningDate(profile);
-  final now = DateTime.now();
-  return [
-    _fallbackTypeBalance('Annual Leave', records, joiningDate, now),
-    _fallbackTypeBalance('Sick Leave', records, joiningDate, now),
-    _fallbackTypeBalance('Casual Leave', records, joiningDate, now),
-    _fallbackTypeBalance('Comp-Off', records, joiningDate, now),
-  ];
-}
-
-_LeaveTypeBalance _fallbackTypeBalance(
-  String title,
-  List<Map<String, dynamic>> records,
-  DateTime? joiningDate,
-  DateTime asOf,
-) {
-  final balance = _calculateAccruedBalance(
-    leaveType: title,
-    records: records,
-    joiningDate: joiningDate,
-    asOf: asOf,
-  );
-  return _LeaveTypeBalance(
-    title: title,
-    entitlement: balance.annualAllowance,
-    accrued: balance.accruedDays,
-    used: balance.approvedDays,
-    pending: balance.pendingDays,
-    available: balance.availableDays,
-    icon: _leaveTypeIcon(title, ''),
-    color: _leaveTypeColor(title),
-  );
 }
 
 double _doubleFrom(Object? value, {double fallback = 0}) {

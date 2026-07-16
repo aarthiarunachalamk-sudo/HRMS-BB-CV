@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 
 import 'employee_attendance_history_screen.dart';
 import 'employee_models.dart';
@@ -47,6 +48,8 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = ThemeConfig.getTextPrimary(context);
+    final textSecondary = ThemeConfig.getTextSecondary(context);
     final attendance = widget.data.attendance;
     final checkIn = '${attendance['check_in'] ?? '--:--'}';
     final checkOut = '${attendance['check_out'] ?? '--:--'}';
@@ -77,14 +80,22 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "Today's Attendance",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            style: TextStyle(
+              color: textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             date,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 18),
           Center(
@@ -110,7 +121,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
                   const SizedBox(height: 8),
                   Text(
                     centerTimeLabel,
-                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                    style: TextStyle(fontSize: 12, color: textSecondary),
                   ),
                   Text(
                     centerTimeValue,
@@ -303,7 +314,10 @@ class _AttendanceMetric extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 10, color: Colors.white70),
+          style: TextStyle(
+            fontSize: 10,
+            color: ThemeConfig.getTextSecondary(context),
+          ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -330,6 +344,10 @@ class _HistoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
+    final text = ThemeConfig.getTextPrimary(context);
+    final muted = ThemeConfig.getTextSecondary(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -337,19 +355,23 @@ class _HistoryTile extends StatelessWidget {
         height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: const Color(0xFF061B2D),
+          color: cardBg,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withAlpha(24)),
+          border: Border.all(color: border),
         ),
-        child: const Row(
+        child: Row(
           children: [
             Expanded(
               child: Text(
                 'Attendance History',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: text,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: Colors.white70),
+            Icon(Icons.chevron_right_rounded, color: muted),
           ],
         ),
       ),
@@ -376,6 +398,10 @@ class _PendingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
+    final text = ThemeConfig.getTextPrimary(context);
+    final muted = ThemeConfig.getTextSecondary(context);
     late final String title;
     late final String body;
     if (_isCheckIn) {
@@ -393,9 +419,9 @@ class _PendingCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF061B2D),
+        color: cardBg,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withAlpha(28)),
+        border: Border.all(color: border),
       ),
       child: Column(
         children: [
@@ -418,7 +444,8 @@ class _PendingCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
+                    color: text,
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
@@ -430,7 +457,7 @@ class _PendingCard extends StatelessWidget {
           Text(
             body,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12, color: Colors.white70),
+            style: TextStyle(fontSize: 12, color: muted),
           ),
           const SizedBox(height: 16),
           Row(

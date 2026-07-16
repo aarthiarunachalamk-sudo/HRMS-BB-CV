@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 
 import 'employee_shared.dart';
 
@@ -431,8 +432,10 @@ class _OvertimeScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bg = ThemeConfig.getBgStart(context);
+    final text = ThemeConfig.getTextPrimary(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF001426),
+      backgroundColor: bg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
@@ -452,7 +455,8 @@ class _OvertimeScaffold extends StatelessWidget {
                     ),
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
+                        color: text,
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
                       ),

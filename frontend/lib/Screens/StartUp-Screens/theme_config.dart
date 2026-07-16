@@ -16,15 +16,15 @@ class ThemeConfig {
   static Color getTextPrimary(BuildContext context) =>
       isDark(context) ? Colors.white : const Color(0xFF1F3654);
   static Color getTextSecondary(BuildContext context) =>
-      isDark(context) ? const Color(0xFF8E9CAE) : const Color(0xFF607086);
+      isDark(context) ? const Color(0xFF8E9CAE) : const Color(0xFF475569);
   static Color getTextMuted(BuildContext context) =>
-      isDark(context) ? const Color(0xFF5A6A80) : const Color(0xFF94A3B8);
+      isDark(context) ? const Color(0xFF5A6A80) : const Color(0xFF64748B);
 
   // Card Styles
   static Color getCardBg(BuildContext context) =>
       isDark(context) ? const Color(0xFF0F1B2E) : Colors.white;
   static Color getCardBorder(BuildContext context) =>
-      isDark(context) ? const Color(0xFF1E2E44) : const Color(0xFFE2E8F0);
+      isDark(context) ? const Color(0xFF1E2E44) : const Color(0xFFD7E1EE);
 
   // Network Painter Colors
   static const Color lightPainterColor = Color(0xFF147893); // Hex #147893

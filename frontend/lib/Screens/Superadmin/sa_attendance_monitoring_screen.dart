@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'sa_service.dart';
 import 'sa_shared.dart';
 
 class SaAttendanceMonitoringScreen extends StatelessWidget {
@@ -10,13 +11,73 @@ class SaAttendanceMonitoringScreen extends StatelessWidget {
     return SaScreen(
       title: 'Attendance Monitoring',
       trailing: Icon(Icons.calendar_month_rounded, color: c.text),
-      child: saList([
-        SaCard(child: Column(children: [const SizedBox(height: 10), SizedBox(width: 136, height: 136, child: Stack(alignment: Alignment.center, children: [CircularProgressIndicator(value: 0.85, strokeWidth: 14, color: c.primary, backgroundColor: c.border), Column(mainAxisSize: MainAxisSize.min, children: [saTitle(context, '85%', 28), saMuted(context, 'Total Attendance', 11)])])), const SizedBox(height: 16), _Legend('Present', '1,002 (85%)', c.primary), _Legend('Absent', '120 (10%)', c.danger), _Legend('Late', '66 (5.3%)', c.warning), _Legend('On Leave', '48 (3.8%)', c.purple)])),
-        const SizedBox(height: 12),
-        SaMetricGrid(metrics: [SaMetric('Live Tracking', '123', Icons.location_on_outlined, c.teal), SaMetric('Selfie Verified', '1,021', Icons.groups_2_outlined, c.blue), SaMetric('Location Verified', '1,251', Icons.pin_drop_outlined, c.primary), SaMetric('Overtime', '21', Icons.timer_outlined, c.purple)]),
-      ]),
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: SaService().fetchDashboard(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return Center(child: CircularProgressIndicator(color: c.primary));
+          }
+          final data = snapshot.data ?? {};
+          final attendance = Map<String, dynamic>.from(
+            (data['attendance_detail'] as Map?) ?? const {},
+          );
+          final total = int.tryParse('${attendance['total'] ?? 0}') ?? 0;
+          if (total == 0) {
+            return saList([_empty(context, c)]);
+          }
+          final present = int.tryParse('${attendance['present'] ?? 0}') ?? 0;
+          final absent = int.tryParse('${attendance['absent'] ?? 0}') ?? 0;
+          final late = int.tryParse('${attendance['late'] ?? 0}') ?? 0;
+          final percent = total == 0 ? 0.0 : present / total;
+          return saList([
+            SaCard(
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: 136,
+                    height: 136,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          value: percent.clamp(0, 1).toDouble(),
+                          strokeWidth: 14,
+                          color: c.primary,
+                          backgroundColor: c.border,
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            saTitle(context, '${(percent * 100).round()}%', 28),
+                            saMuted(context, 'Total Attendance', 11),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _Legend('Present', '$present', c.primary),
+                  _Legend('Absent', '$absent', c.danger),
+                  _Legend('Late', '$late', c.warning),
+                ],
+              ),
+            ),
+          ]);
+        },
+      ),
     );
   }
+
+  Widget _empty(BuildContext context, SaPalette c) => SaCard(
+    child: Center(
+      child: Text(
+        'No attendance data found in backend.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: c.muted, fontWeight: FontWeight.w800),
+      ),
+    ),
+  );
 }
 
 class _Legend extends StatelessWidget {

@@ -4,10 +4,123 @@ import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class CeoService {
   static const String _base = '${ApiConfig.baseUrl}/ceo';
+  static const Duration _timeout = Duration(seconds: 60);
+  static const Duration _cacheTtl = Duration(seconds: 45);
+  static final Map<String, _CeoCacheEntry> _cache = {};
+  static final Map<String, Future<Map<String, dynamic>>> _inFlight = {};
 
   // ── Dashboard ─────────────────────────────────────────────
+  Future<Map<String, dynamic>> fetchHomeDashboard(String userId) async {
+    final key = 'home:$userId';
+    final cached = _cache[key];
+    if (cached != null && !cached.isExpired) return cached.data;
+    final running = _inFlight[key];
+    if (running != null) return running;
+    try {
+      final future = _fetchFastHome(userId).then((data) {
+        final resolved = data;
+        _cache[key] = _CeoCacheEntry(resolved, DateTime.now().add(_cacheTtl));
+        _inFlight.remove(key);
+        return resolved;
+      }).catchError((error) {
+        _inFlight.remove(key);
+        throw error;
+      });
+      _inFlight[key] = future;
+      return await future;
+    } catch (error) {
+      return _emptyHomeDashboard(userId, 'CEO backend unavailable: $error');
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchFastHome(String userId) async {
+    try {
+      return await _getStrictWithTimeout(
+        '/home/?user_id=$userId',
+        const Duration(seconds: 25),
+      );
+    } catch (_) {
+      return _getStrictWithTimeout(
+        '/dashboard/?user_id=$userId',
+        _timeout,
+      );
+    }
+  }
+
+  Map<String, dynamic> _emptyHomeDashboard(String userId, String message) => {
+        'success': false,
+        'message': message,
+        'profile': {
+          'id': userId,
+          'name': 'CEO',
+          'role': 'ceo',
+          'role_label': 'CEO',
+        },
+        'attendance_health': {
+          'score': 0,
+          'label': 'No Data',
+          'trend': 0,
+          'trend_label': '+0%',
+          'total_members': 0,
+          'joined_this_month': 0,
+          'present_today': 0,
+          'on_leave_today': 0,
+          'weekly_scores': const <int>[],
+        },
+        'total_employees': 0,
+        'active_employees': 0,
+        'departments': 0,
+        'branches': 0,
+        'attendance': 0,
+        'pending_approvals': 0,
+        'payroll_cost': 'Rs. 0',
+        'expenses': 'Rs. 0',
+        'net_profit': 'Rs. 0',
+        'workforce_today': {
+          'present': 0,
+          'absent': 0,
+          'late_entry': 0,
+          'wfh': 0,
+          'hybrid': 0,
+          'onsite': 0,
+        },
+        'absent_today': 0,
+        'late_entry': 0,
+        'wfh': 0,
+        'hybrid': 0,
+        'onsite': 0,
+        'role_counts': const <Map<String, dynamic>>[],
+        'role_members': const <Map<String, dynamic>>[],
+        'employee_categories': const <Map<String, dynamic>>[],
+        'recent_members': const <Map<String, dynamic>>[],
+        'active_employee_list': const <Map<String, dynamic>>[],
+        'approvals_summary': const <Map<String, dynamic>>[],
+        'project_overview': {
+          'active': 0,
+          'completed': 0,
+          'delayed': 0,
+          'at_risk': 0,
+        },
+        'project_items': const <Map<String, dynamic>>[],
+        'critical_alerts': const <Map<String, dynamic>>[],
+        'revenue': 'Rs. 0',
+        'revenue_amount': 0,
+        'revenue_trend': '+0%',
+        'revenue_bars': const <int>[],
+        'revenue_months': const <String>[],
+        'monthly_revenue': const <Map<String, dynamic>>[],
+      };
+
   Future<Map<String, dynamic>> fetchDashboard(String userId) =>
-      _getStrict('/dashboard/?user_id=$userId');
+      _cachedGetStrict('dashboard:$userId', '/dashboard/?user_id=$userId');
+
+  Future<Map<String, dynamic>> fetchProfile(String userId) async {
+    try {
+      return await _cachedGetStrict('profile:$userId', '/profile/?user_id=$userId');
+    } catch (_) {
+      return fetchDashboard(userId);
+    }
+  }
 
   Future<Map<String, dynamic>> fetchOrganization(String userId) =>
       _getStrict('/organization/?user_id=$userId');
@@ -38,8 +151,42 @@ class CeoService {
     String category,
     String userId, {
     bool history = false,
-  }) =>
-      _get('/approval-categories/$category/?user_id=$userId&history=$history');
+  }) async {
+    final path = '/approval-categories/$category/?user_id=$userId&history=$history';
+    final data = await _get(path);
+    if (data['success'] == true) return data;
+
+    if (category == 'leave') {
+      final approvals = await fetchApprovals(userId);
+      final key = history ? 'history' : 'approvals';
+      final items = approvals[key] is List ? approvals[key] as List : const [];
+      return {
+        'success': true,
+        'category': {
+          'key': 'leave',
+          'title': 'Leave Approval',
+          'count': items.length,
+          'priority': items.isEmpty ? 'Clear' : 'High',
+        },
+        'history': history,
+        'items': items,
+        'message': 'Loaded leave approvals from fallback endpoint.',
+      };
+    }
+
+    return {
+      'success': true,
+      'category': {
+        'key': category,
+        'title': category,
+        'count': 0,
+        'priority': 'Clear',
+      },
+      'history': history,
+      'items': const <Map<String, dynamic>>[],
+      'message': 'No approval data returned by backend.',
+    };
+  }
 
   Future<Map<String, dynamic>> fetchLeaveDetail(int leaveId) =>
       _get('/leave-detail/$leaveId/');
@@ -199,7 +346,21 @@ class CeoService {
 
   // ── Meetings ──────────────────────────────────────────────
   Future<Map<String, dynamic>> fetchMeetings(String userId) =>
-      _get('/meetings/?user_id=$userId');
+      _cachedGet('meetings:$userId', '/meetings/?user_id=$userId');
+
+  Future<Map<String, dynamic>> scheduleMeeting(
+    String userId,
+    Map<String, dynamic> fields,
+  ) => _postWithResponse('/meetings/', {
+        'user_id': userId,
+        ...fields,
+      }).then((result) {
+        if (result['success'] == true) {
+          _cache.remove('meetings:$userId');
+          _inFlight.remove('meetings:$userId');
+        }
+        return result;
+      });
 
   // ── Budget ────────────────────────────────────────────────
   Future<Map<String, dynamic>> fetchBudget(String userId) =>
@@ -228,7 +389,7 @@ class CeoService {
     try {
       final res = await http
           .get(Uri.parse('$_base$path'))
-          .timeout(const Duration(seconds: 45));
+          .timeout(_timeout);
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final decoded = jsonDecode(res.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -240,7 +401,7 @@ class CeoService {
   Future<Map<String, dynamic>> _getStrict(String path) async {
     final res = await http
         .get(Uri.parse('$_base$path'))
-        .timeout(const Duration(seconds: 45));
+        .timeout(_timeout);
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception('Backend returned ${res.statusCode}: ${res.body}');
     }
@@ -248,6 +409,59 @@ class CeoService {
     final decoded = jsonDecode(res.body);
     if (decoded is Map) return Map<String, dynamic>.from(decoded);
     throw Exception('Backend returned invalid dashboard data');
+  }
+
+  Future<Map<String, dynamic>> _getStrictWithTimeout(
+    String path,
+    Duration timeout,
+  ) async {
+    final res = await http.get(Uri.parse('$_base$path')).timeout(timeout);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('Backend returned ${res.statusCode}: ${res.body}');
+    }
+    final decoded = jsonDecode(res.body);
+    if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    throw Exception('Backend returned invalid data');
+  }
+
+  Future<Map<String, dynamic>> _cachedGet(String key, String path) {
+    final cached = _cache[key];
+    if (cached != null && !cached.isExpired) {
+      return Future.value(cached.data);
+    }
+    final running = _inFlight[key];
+    if (running != null) return running;
+    final future = _get(path).then((data) {
+      if (data.isNotEmpty) {
+        _cache[key] = _CeoCacheEntry(data, DateTime.now().add(_cacheTtl));
+      }
+      _inFlight.remove(key);
+      return data;
+    }).catchError((error) {
+      _inFlight.remove(key);
+      throw error;
+    });
+    _inFlight[key] = future;
+    return future;
+  }
+
+  Future<Map<String, dynamic>> _cachedGetStrict(String key, String path) {
+    final cached = _cache[key];
+    if (cached != null && !cached.isExpired) {
+      return Future.value(cached.data);
+    }
+    final running = _inFlight[key];
+    if (running != null) return running;
+    final future = _getStrict(path).then((data) {
+      _cache[key] = _CeoCacheEntry(data, DateTime.now().add(_cacheTtl));
+      _inFlight.remove(key);
+      return data;
+    }).catchError((error) {
+      _inFlight.remove(key);
+      throw error;
+    });
+    _inFlight[key] = future;
+    return future;
   }
 
   Future<Map<String, dynamic>> _post(
@@ -261,7 +475,7 @@ class CeoService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 45));
+          .timeout(_timeout);
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final decoded = jsonDecode(res.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -281,7 +495,7 @@ class CeoService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(body),
           )
-          .timeout(const Duration(seconds: 45));
+          .timeout(_timeout);
       final decoded = jsonDecode(res.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
     } catch (error) {
@@ -289,4 +503,14 @@ class CeoService {
     }
     return {'success': false, 'message': 'Invalid server response.'};
   }
+
+}
+
+class _CeoCacheEntry {
+  final Map<String, dynamic> data;
+  final DateTime expiresAt;
+
+  const _CeoCacheEntry(this.data, this.expiresAt);
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
 }

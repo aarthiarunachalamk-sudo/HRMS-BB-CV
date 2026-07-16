@@ -157,7 +157,12 @@ class CeoFutureBody extends StatelessWidget {
       future: future,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(child: muted('Backend data unavailable', 12));
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: muted('Backend data unavailable\n${snapshot.error}', 12),
+            ),
+          );
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator(color: CeoColors.cyan));

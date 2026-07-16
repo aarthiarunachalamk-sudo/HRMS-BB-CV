@@ -111,7 +111,7 @@ class _AdminPayslipGenerationScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: PayslipColors.background,
+      backgroundColor: PayslipColors.pageBackground(context),
       appBar: AppBar(title: const Text('Generate Payslip')),
       body: ListView(
         padding: const EdgeInsets.all(14),
@@ -120,9 +120,12 @@ class _AdminPayslipGenerationScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Payroll Period',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: PayslipColors.primaryText(context),
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 OutlinedButton.icon(

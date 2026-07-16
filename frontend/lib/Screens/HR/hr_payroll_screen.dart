@@ -210,7 +210,11 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
       HrCard(child: Row(children: [Icon(Icons.verified_user_outlined, color: c.success, size: 34), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Payroll Check', style: TextStyle(color: c.text, fontSize: 13, fontWeight: FontWeight.w900)), Text('Salary matches available attendance and policy data.', style: TextStyle(color: c.muted, fontSize: 9))])), Icon(Icons.chevron_right_rounded, color: c.muted)])),
       const SizedBox(height: 12),
       Row(children: [
-        Expanded(child: OutlinedButton.icon(onPressed: () {}, icon: const Icon(Icons.save_outlined), label: const Text('Save Adjustment'))),
+        Expanded(child: OutlinedButton.icon(onPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Salary adjustment saving is not connected yet.')),
+          );
+        }, icon: const Icon(Icons.save_outlined), label: const Text('Save Adjustment'))),
         const SizedBox(width: 8),
         Expanded(child: ElevatedButton.icon(onPressed: () => _advance('approve', 3), style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white), icon: const Icon(Icons.check_circle_outline_rounded), label: const Text('Confirm Employee'))),
       ]),
@@ -253,7 +257,11 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
           const SizedBox(height: 4),
           Text('$_total payslips generated successfully', style: TextStyle(color: c.muted, fontSize: 10)),
           const SizedBox(height: 14),
-          Row(children: [Expanded(child: OutlinedButton(onPressed: () {}, child: const Text('Download Report'))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { widget.onChanged(); setState(() => _stage = 0); }, style: ElevatedButton.styleFrom(backgroundColor: c.success, foregroundColor: Colors.white), child: const Text('Done')))]),
+          Row(children: [Expanded(child: OutlinedButton(onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Payroll report download is not connected yet.')),
+            );
+          }, child: const Text('Download Report'))), const SizedBox(width: 8), Expanded(child: ElevatedButton(onPressed: () { widget.onChanged(); setState(() => _stage = 0); }, style: ElevatedButton.styleFrom(backgroundColor: c.success, foregroundColor: Colors.white), child: const Text('Done')))]),
         ])),
     ]);
   }

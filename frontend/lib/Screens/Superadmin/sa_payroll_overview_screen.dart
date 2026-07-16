@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'sa_service.dart';
 import 'sa_shared.dart';
 
 class SaPayrollOverviewScreen extends StatelessWidget {
@@ -9,32 +10,58 @@ class SaPayrollOverviewScreen extends StatelessWidget {
     final c = SaPalette.of(context);
     return SaScreen(
       title: 'Payroll Overview',
-      child: saList([
-        SaMetricGrid(metrics: [SaMetric('Payroll Processed', r'$125,000', Icons.payments_outlined, c.success), SaMetric('Pending Payroll', r'$32,500', Icons.pending_actions_outlined, c.danger), SaMetric('Employees Paid', '1,156', Icons.groups_rounded, c.warning), SaMetric('Average Salary', r'$4,850', Icons.account_balance_wallet_outlined, c.blue)]),
-        const SizedBox(height: 14),
-        SaCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [saTitle(context, 'Payroll Trend', 14), const SizedBox(height: 14), SizedBox(height: 130, child: CustomPaint(painter: _LinePainter(c)))])),
-        const SizedBox(height: 12),
-        SaCard(child: Center(child: Text('View Payroll Report', style: TextStyle(color: c.primary, fontWeight: FontWeight.w900)))),
-      ]),
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: SaService().fetchDashboard(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return Center(child: CircularProgressIndicator(color: c.primary));
+          }
+          final payroll = Map<String, dynamic>.from(
+            (snapshot.data?['payroll'] as Map?) ?? const {},
+          );
+          final metrics = [
+            SaMetric(
+              'Payroll Processed',
+              'Rs. ${payroll['processed'] ?? 0}',
+              Icons.payments_outlined,
+              c.success,
+            ),
+            SaMetric(
+              'Pending Payroll',
+              '${payroll['pending'] ?? 0}',
+              Icons.pending_actions_outlined,
+              c.danger,
+            ),
+            SaMetric(
+              'Employees Paid',
+              '${payroll['employees_paid'] ?? 0}',
+              Icons.groups_rounded,
+              c.warning,
+            ),
+            SaMetric(
+              'Average Salary',
+              'Rs. ${payroll['average_salary'] ?? 0}',
+              Icons.account_balance_wallet_outlined,
+              c.blue,
+            ),
+          ];
+          final hasData = '${payroll['processed'] ?? 0}' != '0' ||
+              '${payroll['employees_paid'] ?? 0}' != '0';
+          return saList([
+            if (hasData) SaMetricGrid(metrics: metrics) else _empty(context, c),
+          ]);
+        },
+      ),
     );
   }
-}
 
-class _LinePainter extends CustomPainter {
-  final SaPalette colors;
-  const _LinePainter(this.colors);
-  @override
-  void paint(Canvas canvas, Size size) {
-    const values = [0.35, 0.48, 0.72, 0.44, 0.38, 0.58, 0.78, 0.68, 0.92];
-    final path = Path();
-    for (var i = 0; i < values.length; i++) {
-      final x = size.width * i / (values.length - 1);
-      final y = size.height - size.height * values[i];
-      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
-    }
-    canvas.drawPath(path, Paint()..color = colors.primary.withAlpha(45)..strokeWidth = 8..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
-    canvas.drawPath(path, Paint()..color = colors.primary..strokeWidth = 2.5..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
-  }
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  Widget _empty(BuildContext context, SaPalette c) => SaCard(
+        child: Center(
+          child: Text(
+            'No payroll data found in backend.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: c.muted, fontWeight: FontWeight.w800),
+          ),
+        ),
+      );
 }

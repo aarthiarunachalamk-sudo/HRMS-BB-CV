@@ -15,6 +15,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_projects_flow_screen.dart
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_performance_matrix_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_reports_flow_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_audit_flow_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_local_documents.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/create_admins.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
@@ -46,9 +47,11 @@ class CeoDashboard extends StatefulWidget {
 
 class _CeoDashboardState extends State<CeoDashboard> {
   int _selectedIndex = 0;
+  final List<int> _tabHistory = <int>[];
   String _dashboardRole = 'CEO';
   int _dashboardRefreshTick = 0;
   File? _profileImage;
+  late Future<Map<String, dynamic>> _drawerProfileFuture;
 
   static const Color _card = Color(0xFF0F1B2E);
   static const Color _cardAlt = Color(0xFF0A121E);
@@ -70,9 +73,14 @@ class _CeoDashboardState extends State<CeoDashboard> {
   @override
   void initState() {
     super.initState();
+    _drawerProfileFuture = CeoService().fetchProfile(widget.userId);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showPendingMemberCreationPopup();
     });
+  }
+
+  void _refreshDrawerProfile() {
+    _drawerProfileFuture = CeoService().fetchProfile(widget.userId);
   }
 
   Future<void> _showPendingMemberCreationPopup() async {
@@ -103,26 +111,15 @@ class _CeoDashboardState extends State<CeoDashboard> {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.check_circle_rounded, color: _green, size: 44),
-        title: Text(
-          _displayText(latest['title'], fallback: 'Team Member Created'),
-          textAlign: TextAlign.center,
-        ),
-        content: Text(
-          additionalCount > 0
-              ? '$message\n\n$additionalCount more team member creation '
-                    '${additionalCount == 1 ? 'notification' : 'notifications'}.'
-              : message,
-          textAlign: TextAlign.center,
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('OK'),
-          ),
-        ],
+      builder: (dialogContext) => AppCelebrationDialog(
+        title: _displayText(latest['title'], fallback: 'Team Member Created'),
+        message: additionalCount > 0
+            ? '$message\n\n$additionalCount more team member creation '
+                  '${additionalCount == 1 ? 'notification' : 'notifications'}.'
+            : message,
+        icon: Icons.check_rounded,
+        accent: _green,
+        buttonLabel: 'OK',
       ),
     );
 
@@ -148,8 +145,30 @@ class _CeoDashboardState extends State<CeoDashboard> {
     if (!mounted || result != true) return;
     setState(() {
       _selectedIndex = 0;
+      _tabHistory.clear();
       _dashboardRefreshTick++;
+      _refreshDrawerProfile();
     });
+  }
+
+  void _selectTab(int index, {bool remember = true}) {
+    if (index == _selectedIndex) return;
+    setState(() {
+      if (remember) _tabHistory.add(_selectedIndex);
+      _selectedIndex = index;
+    });
+  }
+
+  void _handleSystemBack() {
+    if (_tabHistory.isNotEmpty) {
+      setState(() => _selectedIndex = _tabHistory.removeLast());
+      return;
+    }
+    if (_selectedIndex != 0) {
+      setState(() => _selectedIndex = 0);
+      return;
+    }
+    SystemNavigator.pop();
   }
 
   void _switchRole(String role) {
@@ -189,7 +208,6 @@ class _CeoDashboardState extends State<CeoDashboard> {
     final cardBorder = ThemeConfig.getCardBorder(context);
     final textPrimary = ThemeConfig.getTextPrimary(context);
     final textSecondary = ThemeConfig.getTextSecondary(context);
-    final name = widget.firstName.isEmpty ? 'CEO' : widget.firstName;
 
     return Drawer(
       width: MediaQuery.of(context).size.width * 0.86,
@@ -230,82 +248,21 @@ class _CeoDashboardState extends State<CeoDashboard> {
               const SizedBox(height: 20),
 
               // â”€â”€ Profile section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: _pickProfileImage,
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      padding: const EdgeInsets.all(2.5),
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            Color(0xFF00C6FF),
-                            Color(0xFF13D989),
-                            Color(0xFF9F3BFF),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: CircleAvatar(
-                        backgroundColor: isDark
-                            ? const Color(0xFF0A3359)
-                            : const Color(0xFFEAF7FF),
-                        backgroundImage: _profileImage != null
-                            ? FileImage(_profileImage!)
-                            : null,
-                        child: _profileImage == null
-                            ? Icon(
-                                Icons.person_rounded,
-                                color: const Color(0xFF00C6FF),
-                                size: 30,
-                              )
-                            : null,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: textPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Chief Executive Officer',
-                          style: TextStyle(
-                            color: const Color(0xFF00C6FF),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.userId,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              FutureBuilder<Map<String, dynamic>>(
+                future: _drawerProfileFuture,
+                builder: (context, snapshot) {
+                  final profile = _stringMap(snapshot.data?['profile']);
+                  return _drawerProfileHeader(
+                    context,
+                    profile: profile,
+                    fallbackName: widget.firstName.isEmpty ? 'CEO' : widget.firstName,
+                    fallbackEmail: widget.email,
+                    fallbackUserId: widget.userId,
+                    isDark: isDark,
+                    textPrimary: textPrimary,
+                    textSecondary: textSecondary,
+                  );
+                },
               ),
               const SizedBox(height: 18),
               Divider(color: cardBorder),
@@ -325,9 +282,9 @@ class _CeoDashboardState extends State<CeoDashboard> {
                         Navigator.pop(context);
                         _openPage(
                           _ProfileSettingsPage(
-                            firstName: widget.firstName,
-                            email: widget.email,
                             userId: widget.userId,
+                            fallbackName: widget.firstName,
+                            fallbackEmail: widget.email,
                             onLogout: () => _openPage(
                               _LogoutConfirmPage(onLogout: _logout),
                             ),
@@ -374,7 +331,7 @@ class _CeoDashboardState extends State<CeoDashboard> {
                     _drawerItem(
                       context,
                       Icons.apartment_rounded,
-                      'Department Attendence Performance',
+                      'Department Attendance Performance',
                       false,
                       () {
                         Navigator.pop(context);
@@ -425,30 +382,42 @@ class _CeoDashboardState extends State<CeoDashboard> {
               Divider(color: cardBorder),
 
               // â”€â”€ Theme toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              ListTile(
-                dense: true,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                leading: Icon(
-                  isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                  color: const Color(0xFF00C6FF),
-                  size: 20,
-                ),
-                title: Text(
-                  isDark ? 'Light Mode' : 'Dark Mode',
-                  style: TextStyle(
-                    color: textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  MyApp.themeNotifier.value =
-                      MyApp.themeNotifier.value == ThemeMode.dark
-                      ? ThemeMode.light
-                      : ThemeMode.dark;
-                  setState(() {});
+              ValueListenableBuilder<ThemeMode>(
+                valueListenable: MyApp.themeNotifier,
+                builder: (context, _, __) {
+                  final currentlyDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  return ListTile(
+                    dense: true,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    leading: Icon(
+                      currentlyDark
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                      color: const Color(0xFF00C6FF),
+                      size: 20,
+                    ),
+                    title: Text(
+                      currentlyDark ? 'Light Mode' : 'Dark Mode',
+                      style: TextStyle(
+                        color: ThemeConfig.getTextPrimary(context),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    subtitle: Text(
+                      currentlyDark ? 'Switch to light theme' : 'Switch to dark theme',
+                      style: TextStyle(
+                        color: ThemeConfig.getTextSecondary(context),
+                        fontSize: 11,
+                      ),
+                    ),
+                    onTap: () {
+                      MyApp.themeNotifier.value =
+                          currentlyDark ? ThemeMode.light : ThemeMode.dark;
+                    },
+                  );
                 },
               ),
 
@@ -470,7 +439,10 @@ class _CeoDashboardState extends State<CeoDashboard> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                onTap: _logout,
+                onTap: () {
+                  Navigator.pop(context);
+                  _openPage(_LogoutConfirmPage(onLogout: _logout));
+                },
               ),
             ],
           ),
@@ -514,6 +486,127 @@ class _CeoDashboardState extends State<CeoDashboard> {
     );
   }
 
+  ImageProvider<Object>? _drawerProfileImageProvider(
+    File? localImage,
+    String photoUrl,
+  ) {
+    if (localImage != null) return FileImage(localImage);
+    if (photoUrl.startsWith('http')) return NetworkImage(photoUrl);
+    return null;
+  }
+
+  Widget _drawerProfileAvatar({
+    required BuildContext context,
+    required File? localImage,
+    required String photoUrl,
+    required bool isDark,
+    required VoidCallback onPickProfileImage,
+  }) {
+    final imageProvider = _drawerProfileImageProvider(localImage, photoUrl);
+    return GestureDetector(
+      onTap: onPickProfileImage,
+      child: Container(
+        width: 72,
+        height: 72,
+        padding: const EdgeInsets.all(2.5),
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(
+            colors: [Color(0xFF00C6FF), Color(0xFF13D989), Color(0xFF9F3BFF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: CircleAvatar(
+          backgroundColor: isDark
+              ? const Color(0xFF0A3359)
+              : const Color(0xFFEAF7FF),
+          backgroundImage: imageProvider,
+          child: imageProvider == null
+              ? const Icon(
+                  Icons.person_rounded,
+                  color: Color(0xFF00C6FF),
+                  size: 30,
+                )
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _drawerProfileHeader(
+    BuildContext context, {
+    required Map<String, dynamic> profile,
+    required String fallbackName,
+    required String fallbackEmail,
+    required String fallbackUserId,
+    required bool isDark,
+    required Color textPrimary,
+    required Color textSecondary,
+  }) {
+    final name = _displayText(profile['name'], fallback: fallbackName);
+    final role = _displayText(
+      profile['designation_label'],
+      fallback: _displayText(profile['role_label'], fallback: 'Chief Executive Officer'),
+    );
+    final id = _displayText(profile['id'], fallback: fallbackUserId);
+    final email = _displayText(profile['email'], fallback: fallbackEmail);
+    final subtitle = id.isNotEmpty ? id : email;
+    final photoUrl = _displayText(profile['photo_url']);
+
+    return Row(
+      children: [
+        _drawerProfileAvatar(
+          context: context,
+          localImage: _profileImage,
+          photoUrl: photoUrl,
+          isDark: isDark,
+          onPickProfileImage: _pickProfileImage,
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                role,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF00C6FF),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
@@ -526,34 +619,34 @@ class _CeoDashboardState extends State<CeoDashboard> {
         onPickProfileImage: _pickProfileImage,
         selectedRole: _dashboardRole,
         onRoleChanged: _switchRole,
-        onOpenApprovals: () => setState(() => _selectedIndex = 2),
+        onOpenApprovals: () => _selectTab(2),
         onOpenReports: () => _openPage(_ReportsView(userId: widget.userId)),
-        onOpenDirectory: () => setState(() => _selectedIndex = 1),
+        onOpenDirectory: () => _selectTab(1),
         onOpenAnalytics: () => _openPage(
           _AttendanceIntelligenceFlowPage(
             userId: widget.userId,
-            onNavigate: (index) => setState(() => _selectedIndex = index),
+            onNavigate: _selectTab,
           ),
         ),
         onOpenProfile: () => _openPage(
           _ProfileSettingsPage(
-            firstName: widget.firstName,
-            email: widget.email,
             userId: widget.userId,
+            fallbackName: widget.firstName,
+            fallbackEmail: widget.email,
             onLogout: () => _openPage(_LogoutConfirmPage(onLogout: _logout)),
           ),
         ),
         onOpenDepartment: () => _openPage(
           _DepartmentOverviewFlowPage(
             userId: widget.userId,
-            onNavigate: (index) => setState(() => _selectedIndex = index),
+            onNavigate: _selectTab,
           ),
         ),
         onOpenBranch: () =>
             _openPage(_BranchPerformanceDynamicPage(userId: widget.userId)),
         onCreateMember: () =>
             _openPage(CeoCreateAdminsPage(createdBy: widget.userId)),
-        onNavigate: (index) => setState(() => _selectedIndex = index),
+        onNavigate: _selectTab,
       ),
       _EmployeeDirectoryDynamicPage(userId: widget.userId, embedded: true),
       _ApprovalsView(userId: widget.userId),
@@ -561,7 +654,7 @@ class _CeoDashboardState extends State<CeoDashboard> {
         onOrganization: () => _openPage(
           _OrganizationDynamicPage(
             userId: widget.userId,
-            onNavigate: (index) => setState(() => _selectedIndex = index),
+            onNavigate: _selectTab,
           ),
         ),
         onSettings: () => _openPage(
@@ -571,9 +664,9 @@ class _CeoDashboardState extends State<CeoDashboard> {
             userId: widget.userId,
             onOpenProfile: () => _openPage(
               _ProfileSettingsPage(
-                firstName: widget.firstName,
-                email: widget.email,
                 userId: widget.userId,
+                fallbackName: widget.firstName,
+                fallbackEmail: widget.email,
                 onLogout: () =>
                     _openPage(_LogoutConfirmPage(onLogout: _logout)),
               ),
@@ -597,7 +690,7 @@ class _CeoDashboardState extends State<CeoDashboard> {
         onDepartment: () => _openPage(
           _DepartmentOverviewFlowPage(
             userId: widget.userId,
-            onNavigate: (index) => setState(() => _selectedIndex = index),
+            onNavigate: _selectTab,
           ),
         ),
         onPerformance: () =>
@@ -610,7 +703,7 @@ class _CeoDashboardState extends State<CeoDashboard> {
         onAnalytics: () => _openPage(
           _AttendanceIntelligenceFlowPage(
             userId: widget.userId,
-            onNavigate: (index) => setState(() => _selectedIndex = index),
+            onNavigate: _selectTab,
           ),
         ),
         onLogout: () => _openPage(_LogoutConfirmPage(onLogout: _logout)),
@@ -624,30 +717,37 @@ class _CeoDashboardState extends State<CeoDashboard> {
       '',
     ];
 
-    return _CeoShell(
-      title: titles[_selectedIndex],
-      showBack: false,
-      drawer: _buildSideDrawer(context),
-      trailing: _selectedIndex == 0
-          ? IconButton(
-              tooltip: 'Notifications',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 40, height: 42),
-              icon: const Icon(
-                Icons.notifications_none_rounded,
-                color: _cyan,
-                size: 22,
-              ),
-              onPressed: () =>
-                  _openPage(_NotificationsDynamicPage(userId: widget.userId)),
-            )
-          : null,
-      bottomNavigationBar: _BottomNavBar(
-        items: _navItems,
-        selectedIndex: _selectedIndex,
-        onChanged: (index) => setState(() => _selectedIndex = index),
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleSystemBack();
+      },
+      child: _CeoShell(
+        title: titles[_selectedIndex],
+        showBack: false,
+        drawer: _buildSideDrawer(context),
+        trailing: _selectedIndex == 0
+            ? IconButton(
+                tooltip: 'Notifications',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(width: 40, height: 42),
+                icon: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: _cyan,
+                  size: 22,
+                ),
+                onPressed: () =>
+                    _openPage(_NotificationsDynamicPage(userId: widget.userId)),
+              )
+            : null,
+        bottomNavigationBar: _BottomNavBar(
+          items: _navItems,
+          selectedIndex: _selectedIndex,
+          onChanged: _selectTab,
+        ),
+        child: pages[_selectedIndex],
       ),
-      child: pages[_selectedIndex],
     );
   }
 }
@@ -700,7 +800,7 @@ class _DashboardViewState extends State<_DashboardView> {
   @override
   void initState() {
     super.initState();
-    _dashboardFuture = CeoService().fetchDashboard(widget.userId);
+    _dashboardFuture = CeoService().fetchHomeDashboard(widget.userId);
   }
 
   @override
@@ -710,9 +810,13 @@ class _DashboardViewState extends State<_DashboardView> {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
-            child: Text(
-              'Backend data unavailable',
-              style: _CeoText.mutedFor(context, 12),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Text(
+                'Backend data unavailable\n${snapshot.error}',
+                textAlign: TextAlign.center,
+                style: _CeoText.mutedFor(context, 12),
+              ),
             ),
           );
         }
@@ -724,9 +828,13 @@ class _DashboardViewState extends State<_DashboardView> {
         final data = snapshot.data!;
         if (data['success'] != true) {
           return Center(
-            child: Text(
-              'Backend dashboard data unavailable',
-              style: _CeoText.mutedFor(context, 12),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Text(
+                'Backend dashboard data unavailable\n${data['message'] ?? data}',
+                textAlign: TextAlign.center,
+                style: _CeoText.mutedFor(context, 12),
+              ),
             ),
           );
         }
@@ -1349,14 +1457,56 @@ class _CeoRecentMembersPage extends StatefulWidget {
 
 class _CeoRecentMembersPageState extends State<_CeoRecentMembersPage> {
   final _searchController = TextEditingController();
-  late final Future<Map<String, dynamic>> _future;
+  late Future<Map<String, dynamic>> _future;
   String _filter = 'All';
   String _sort = 'Newest First';
 
   @override
   void initState() {
     super.initState();
-    _future = CeoService().fetchEmployees(widget.userId);
+    _future = _fetchCreatedMembers();
+  }
+
+  Future<Map<String, dynamic>> _fetchCreatedMembers() async {
+    Map<String, dynamic> employeesData = {};
+    Map<String, dynamic> homeData = {};
+    try {
+      employeesData = await CeoService().fetchEmployees(widget.userId);
+    } catch (_) {
+      employeesData = {};
+    }
+    try {
+      homeData = await CeoService().fetchHomeDashboard(widget.userId);
+    } catch (_) {
+      homeData = {};
+    }
+
+    final merged = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    void addAll(dynamic value) {
+      for (final member in _mapList(value)) {
+        final id = _displayText(
+          member['id'],
+          fallback: _displayText(
+            member['employee_id'],
+            fallback: _displayText(member['email']),
+          ),
+        );
+        if (id.isEmpty || seen.contains(id)) continue;
+        seen.add(id);
+        merged.add(member);
+      }
+    }
+
+    addAll(employeesData['created_members']);
+    addAll(homeData['recent_members']);
+    addAll(employeesData['active_employees']);
+
+    return {
+      ...employeesData,
+      'success': true,
+      'created_members': merged,
+    };
   }
 
   @override
@@ -1427,9 +1577,20 @@ class _CeoRecentMembersPageState extends State<_CeoRecentMembersPage> {
           members.sort((a, b) {
             final aDate = _memberCreatedAt(a);
             final bDate = _memberCreatedAt(b);
-            final result = (bDate ?? DateTime(1970)).compareTo(
+            var result = (bDate ?? DateTime(1970)).compareTo(
               aDate ?? DateTime(1970),
             );
+            if (result == 0) {
+              result = _displayText(
+                b['id'],
+                fallback: _displayText(b['email']),
+              ).compareTo(
+                _displayText(
+                  a['id'],
+                  fallback: _displayText(a['email']),
+                ),
+              );
+            }
             return _sort == 'Oldest First' ? -result : result;
           });
           final active = allMembers
@@ -1453,22 +1614,12 @@ class _CeoRecentMembersPageState extends State<_CeoRecentMembersPage> {
           for (final member in members) {
             grouped[_memberDateGroup(member)]!.add(member);
           }
+          final groupOrder = _sort == 'Oldest First'
+              ? const ['Earlier', 'This Week', 'Today']
+              : const ['Today', 'This Week', 'Earlier'];
           return ListView(
             padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
             children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: widget.onAddMember,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _CeoDashboardState._cyan,
-                    side: const BorderSide(color: _CeoDashboardState._cyan),
-                  ),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add Member'),
-                ),
-              ),
-              const SizedBox(height: 10),
               _EmployeeSearchBox(
                 controller: _searchController,
                 onChanged: (_) => setState(() {}),
@@ -1522,7 +1673,7 @@ class _CeoRecentMembersPageState extends State<_CeoRecentMembersPage> {
                     style: _CeoText.mutedFor(context, 12),
                   ),
                 ),
-              for (final group in ['Today', 'This Week', 'Earlier'])
+              for (final group in groupOrder)
                 if (grouped[group]!.isNotEmpty) ...[
                   _AlertGroupTitle(group),
                   ...grouped[group]!.map(
@@ -2563,20 +2714,20 @@ class _AttendanceIntelligenceFlowPageState
   }
 
   Future<void> _pickRange() async {
-    final selected = await showDateRangePicker(
+    final selected = await showDatePicker(
       context: context,
-      initialDateRange: _range,
+      initialDate: _range.end,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      helpText: 'Select attendance range (maximum 31 days)',
+      helpText: 'Select attendance date',
     );
     if (selected == null || !mounted) return;
-    final end = selected.end;
-    final start = selected.duration.inDays > 30
-        ? end.subtract(const Duration(days: 30))
-        : selected.start;
+    final end = DateTime(selected.year, selected.month, selected.day);
     setState(() {
-      _range = DateTimeRange(start: start, end: end);
+      _range = DateTimeRange(
+        start: end.subtract(const Duration(days: 6)),
+        end: end,
+      );
       _reload();
     });
   }
@@ -2589,7 +2740,7 @@ class _AttendanceIntelligenceFlowPageState
     title: 'Attendance Dashboard',
     onNavigate: widget.onNavigate,
     trailing: IconButton(
-      tooltip: 'Select date range',
+      tooltip: 'Select date',
       onPressed: _pickRange,
       icon: const Icon(
         Icons.calendar_month_outlined,
@@ -2614,6 +2765,7 @@ class _AttendanceIntelligenceFlowPageState
         final summary = _stringMap(data['summary']);
         final daily = _mapList(data['daily']);
         final employees = _mapList(data['employees']);
+        final hasSelectedData = _hasAttendanceData(data);
         return RefreshIndicator(
           color: _CeoDashboardState._cyan,
           onRefresh: _refresh,
@@ -2621,7 +2773,11 @@ class _AttendanceIntelligenceFlowPageState
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(14, 8, 14, 24),
             children: [
-              _AttendanceDateBanner(data: data, onTap: _pickRange),
+              _AttendanceDateBanner(
+                data: data,
+                label: 'Selected date: ${_displayText(data['selected_date'])}',
+                onTap: _pickRange,
+              ),
               const SizedBox(height: 7),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -2652,19 +2808,25 @@ class _AttendanceIntelligenceFlowPageState
                   ),
                   _AttendanceMetricData(
                     'Present',
-                    _displayText(summary['present'], fallback: '0'),
+                    hasSelectedData
+                        ? _displayText(summary['present'], fallback: '0')
+                        : '0',
                     Icons.badge_outlined,
                     _CeoDashboardState._green,
                   ),
                   _AttendanceMetricData(
                     'Late',
-                    _displayText(summary['late'], fallback: '0'),
+                    hasSelectedData
+                        ? _displayText(summary['late'], fallback: '0')
+                        : '0',
                     Icons.schedule_rounded,
                     _CeoDashboardState._gold,
                   ),
                   _AttendanceMetricData(
                     'Absent',
-                    _displayText(summary['absent'], fallback: '0'),
+                    hasSelectedData
+                        ? _displayText(summary['absent'], fallback: '0')
+                        : '0',
                     Icons.person_off_outlined,
                     Colors.redAccent,
                   ),
@@ -2680,7 +2842,9 @@ class _AttendanceIntelligenceFlowPageState
                       style: _CeoText.titleFor(context, 13),
                     ),
                     const SizedBox(height: 12),
-                    _AttendanceOverview(summary: summary),
+                    hasSelectedData
+                        ? _AttendanceOverview(summary: summary)
+                        : const _AttendanceEmptyState(),
                   ],
                 ),
               ),
@@ -2692,7 +2856,7 @@ class _AttendanceIntelligenceFlowPageState
                     Text('Trend', style: _CeoText.titleFor(context, 13)),
                     const SizedBox(height: 10),
                     _AttendanceTrendChart(
-                      daily: daily,
+                      daily: _dailyWithActualData(daily),
                       analysis: false,
                       onDateTap: (date) => _open(
                         _DailyAttendanceFlowPage(
@@ -2722,6 +2886,7 @@ class _AttendanceIntelligenceFlowPageState
                         _DailyAttendanceFlowPage(
                           userId: widget.userId,
                           onNavigate: widget.onNavigate,
+                          initialDate: _range.end,
                         ),
                       ),
                     ),
@@ -2755,6 +2920,15 @@ class _AttendanceIntelligenceFlowPageState
                   padding: const EdgeInsets.only(top: 12),
                   child: Text(
                     'No active employees were returned by the backend.',
+                    textAlign: TextAlign.center,
+                    style: _CeoText.mutedFor(context, 10),
+                  ),
+                ),
+              if (!hasSelectedData)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    'No data available',
                     textAlign: TextAlign.center,
                     style: _CeoText.mutedFor(context, 10),
                   ),
@@ -2856,6 +3030,7 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
         final data = snapshot.data!;
         final summary = _stringMap(data['summary']);
         final all = _mapList(data['employees']);
+        final hasSelectedData = _hasAttendanceData(data);
         final employees = all.where((employee) {
           final group = _displayText(employee['selected_group']);
           final matchesFilter = _filter == 'all' || group == _filter;
@@ -2864,6 +3039,56 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
                   .toLowerCase();
           return matchesFilter && haystack.contains(_query.toLowerCase());
         }).toList();
+        if (!hasSelectedData) {
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 9),
+                child: Column(
+                  children: [
+                    _GlassCard(
+                      padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
+                      child: Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: Theme.of(context).colorScheme.copyWith(
+                            primary: _CeoDashboardState._cyan,
+                            onPrimary: const Color(0xFF001321),
+                            surface: Colors.transparent,
+                            onSurface: ThemeConfig.getTextPrimary(context),
+                          ),
+                        ),
+                        child: CalendarDatePicker(
+                          initialDate: _date,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                          currentDate: DateTime.now(),
+                          onDateChanged: _selectDate,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _AttendanceDateBanner(
+                      data: {
+                        'date_from': data['selected_date'],
+                        'date_to': data['selected_date'],
+                      },
+                      onTap: _pickDate,
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    'No data available',
+                    style: _CeoText.mutedFor(context, 11),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
         return Column(
           children: [
             Padding(
@@ -2959,7 +3184,7 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
               child: employees.isEmpty
                   ? Center(
                       child: Text(
-                        'No attendance results for this date.',
+                        'No data available',
                         style: _CeoText.mutedFor(context, 11),
                       ),
                     )
@@ -3073,6 +3298,8 @@ class _LateAbsentAnalysisFlowPageState
     }
 
     final departments = _mapList(_data['departments']);
+    final dailyWithData = _dailyWithActualData(_mapList(_data['daily']));
+    final hasRangeData = dailyWithData.isNotEmpty;
     return _AttendanceFlowShell(
       title: 'Late & Absent Analysis',
       onNavigate: widget.onNavigate,
@@ -3126,15 +3353,19 @@ class _LateAbsentAnalysisFlowPageState
                   final cards = [
                     _AttendanceAnalysisMetric(
                       label: 'Late Arrivals',
-                      value: _displayText(summary['late'], fallback: '0'),
-                      percentage: percentage('late'),
+                      value: hasRangeData
+                          ? _displayText(summary['late'], fallback: '0')
+                          : '0',
+                      percentage: hasRangeData ? percentage('late') : 0,
                       color: _CeoDashboardState._gold,
                       icon: Icons.schedule_rounded,
                     ),
                     _AttendanceAnalysisMetric(
                       label: 'Absentees',
-                      value: _displayText(summary['absent'], fallback: '0'),
-                      percentage: percentage('absent'),
+                      value: hasRangeData
+                          ? _displayText(summary['absent'], fallback: '0')
+                          : '0',
+                      percentage: hasRangeData ? percentage('absent') : 0,
                       color: Colors.redAccent,
                       icon: Icons.person_off_outlined,
                     ),
@@ -3164,19 +3395,21 @@ class _LateAbsentAnalysisFlowPageState
                   children: [
                     Text('Daily Trend', style: _CeoText.titleFor(context, 13)),
                     const SizedBox(height: 12),
-                    _AttendanceTrendChart(
-                      daily: _mapList(_data['daily']),
-                      analysis: true,
-                      onDateTap: (date) => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => _DailyAttendanceFlowPage(
-                            userId: widget.userId,
-                            onNavigate: widget.onNavigate,
-                            initialDate: DateTime.tryParse(date),
-                          ),
-                        ),
-                      ),
-                    ),
+                    hasRangeData
+                        ? _AttendanceTrendChart(
+                            daily: dailyWithData,
+                            analysis: true,
+                            onDateTap: (date) => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => _DailyAttendanceFlowPage(
+                                  userId: widget.userId,
+                                  onNavigate: widget.onNavigate,
+                                  initialDate: DateTime.tryParse(date),
+                                ),
+                              ),
+                            ),
+                          )
+                        : const _AttendanceEmptyState(),
                   ],
                 ),
               ),
@@ -3190,10 +3423,13 @@ class _LateAbsentAnalysisFlowPageState
                       style: _CeoText.titleFor(context, 13),
                     ),
                     const SizedBox(height: 10),
-                    ...departments.map(
-                      (department) =>
-                          _AttendanceDepartmentRow(department: department),
-                    ),
+                    if (!hasRangeData)
+                      const _AttendanceEmptyState()
+                    else
+                      ...departments.map(
+                        (department) =>
+                            _AttendanceDepartmentRow(department: department),
+                      ),
                   ],
                 ),
               ),
@@ -3680,23 +3916,35 @@ class _AttendanceExportFlowPageState extends State<_AttendanceExportFlowPage> {
         bytes = Uint8List.fromList(utf8.encode(rows.join('\n')));
       }
       final fileName = '${safeType}_$stamp.$extension';
-      late final String savedLocation;
+      late final String savedUrl;
+      final savedLocation = 'Downloads/BitByte HRMS/$fileName';
       if (Platform.isAndroid) {
-        savedLocation =
+        savedUrl =
             await _downloadChannel.invokeMethod<String>('saveToDownloads', {
               'fileName': fileName,
               'mimeType': mimeType,
               'bytes': bytes,
             }) ??
-            'Downloads/BitByte HRMS/$fileName';
+            savedLocation;
       } else {
         final directory =
             await getDownloadsDirectory() ??
             await getApplicationDocumentsDirectory();
         final file = File('${directory.path}/$fileName');
         await file.writeAsBytes(bytes, flush: true);
-        savedLocation = file.path;
+        savedUrl = file.uri.toString();
       }
+      await CeoLocalDocuments.save(
+        userId: widget.userId,
+        title: _type,
+        category: 'Attendance Reports',
+        extension: extension,
+        url: savedUrl,
+        displayPath: savedLocation,
+        owner: widget.userId.isEmpty ? 'CEO' : widget.userId,
+        status: 'Saved',
+        direction: 'Saved',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -4092,31 +4340,65 @@ class _AttendanceOverview extends StatelessWidget {
     final percentage =
         double.tryParse(_displayText(summary['attendance_percentage'])) ?? 0;
     final chart = SizedBox(
-      width: 125,
-      height: 125,
+      width: 132,
+      height: 132,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          CircularProgressIndicator(
-            value: percentage / 100,
-            strokeWidth: 18,
-            backgroundColor: Colors.redAccent.withValues(alpha: .7),
-            color: _CeoDashboardState._green,
+          SizedBox.square(
+            dimension: 92,
+            child: CircularProgressIndicator(
+              value: (percentage / 100).clamp(0.0, 1.0),
+              strokeWidth: 20,
+              strokeCap: StrokeCap.round,
+              backgroundColor: Colors.redAccent.withValues(alpha: .72),
+              color: _CeoDashboardState._green,
+            ),
           ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '${percentage.toStringAsFixed(1)}%',
-                style: _CeoText.titleFor(context, 18),
+          Container(
+            width: 58,
+            height: 58,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: ThemeConfig.getCardBg(context),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .12),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${percentage.toStringAsFixed(1)}%',
+                      textAlign: TextAlign.center,
+                      style: _CeoText.titleFor(context, 15),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      'Present',
+                      textAlign: TextAlign.center,
+                      style: _CeoText.mutedFor(context, 7.5),
+                    ),
+                  ],
+                ),
               ),
-              Text('Present', style: _CeoText.mutedFor(context, 8)),
-            ],
+            ),
           ),
         ],
       ),
     );
     final legend = Column(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _AttendanceLegend(
           label: 'Present',
@@ -4141,15 +4423,72 @@ class _AttendanceOverview extends StatelessWidget {
           return Column(children: [chart, const SizedBox(height: 12), legend]);
         }
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             chart,
-            const SizedBox(width: 18),
+            const SizedBox(width: 22),
             Expanded(child: legend),
           ],
         );
       },
     );
   }
+}
+
+class _AttendanceEmptyState extends StatelessWidget {
+  const _AttendanceEmptyState();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 30),
+    child: Center(
+      child: Text(
+        'No data available',
+        style: _CeoText.mutedFor(context, 11),
+      ),
+    ),
+  );
+}
+
+bool _hasAttendanceData(Map<String, dynamic> data) {
+  final summary = _stringMap(data['summary']);
+  final explicit = summary['has_data'];
+  if (explicit is bool) return explicit;
+  if ('${explicit ?? ''}'.toLowerCase() == 'true') return true;
+  if ('${explicit ?? ''}'.toLowerCase() == 'false') return false;
+
+  final records = int.tryParse(_displayText(summary['records']));
+  if (records != null) return records > 0;
+
+  final selectedDate = _displayText(data['selected_date']);
+  if (selectedDate.isEmpty) return _mapList(data['employees']).isNotEmpty;
+  return _mapList(data['employees']).any(
+    (employee) => _mapList(employee['history']).any(
+      (record) =>
+          _displayText(record['date']) == selectedDate &&
+          (_displayText(record['group']) != 'absent' ||
+              _displayText(record['check_in'], fallback: '--') != '--' ||
+              _displayText(record['check_out'], fallback: '--') != '--' ||
+              _displayText(record['working_hours'], fallback: '--') != '--'),
+    ),
+  );
+}
+
+List<Map<String, dynamic>> _dailyWithActualData(
+  List<Map<String, dynamic>> daily,
+) {
+  return daily.where((item) {
+    final explicit = item['has_data'];
+    if (explicit is bool) return explicit;
+    if ('${explicit ?? ''}'.toLowerCase() == 'true') return true;
+    if ('${explicit ?? ''}'.toLowerCase() == 'false') return false;
+    final records = int.tryParse(_displayText(item['records']));
+    if (records != null) return records > 0;
+    final present = int.tryParse(_displayText(item['present'])) ?? 0;
+    final late = int.tryParse(_displayText(item['late'])) ?? 0;
+    final percentage = double.tryParse(_displayText(item['percentage'])) ?? 0;
+    return present > 0 || late > 0 || percentage > 0;
+  }).toList();
 }
 
 class _AttendanceLegend extends StatelessWidget {
@@ -6015,6 +6354,16 @@ class _DepartmentDistributionChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visible = departments.take(6).toList();
+    final actualTotal = departments.fold<int>(
+      0,
+      (sum, department) => sum + _departmentCount(department),
+    );
+    final chartTotal = actualTotal > 0 ? actualTotal : totalEmployees;
+    final visibleTotal = visible.fold<int>(
+      0,
+      (sum, department) => sum + _departmentCount(department),
+    );
+    final othersCount = math.max(0, chartTotal - visibleTotal);
     return Row(
       children: [
         SizedBox(
@@ -6025,13 +6374,17 @@ class _DepartmentDistributionChart extends StatelessWidget {
             children: [
               CustomPaint(
                 size: const Size.square(132),
-                painter: _DepartmentDonutPainter(visible),
+                painter: _DepartmentDonutPainter(
+                  departments: visible,
+                  totalEmployees: chartTotal,
+                  othersCount: othersCount,
+                ),
               ),
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '$totalEmployees',
+                    '$chartTotal',
                     style: _CeoText.titleFor(context, 21),
                   ),
                   Text('Total', style: _CeoText.mutedFor(context, 8.5)),
@@ -6043,41 +6396,30 @@ class _DepartmentDistributionChart extends StatelessWidget {
         const SizedBox(width: 14),
         Expanded(
           child: Column(
-            children: visible.map((department) {
-              final name = _departmentDisplayName(department);
-              final count = _departmentCount(department);
-              final percentage = totalEmployees == 0
-                  ? 0
-                  : ((count / totalEmployees) * 100).round();
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: _departmentColors(name).$1,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _CeoText.mutedFor(context, 8.5),
-                      ),
-                    ),
-                    Text(
-                      '$count ($percentage%)',
-                      style: _CeoText.titleFor(context, 8.5),
-                    ),
-                  ],
+            children: [
+              ...visible.map((department) {
+                final name = _departmentDisplayName(department);
+                final count = _departmentCount(department);
+                final percentage = chartTotal == 0
+                    ? 0
+                    : ((count / chartTotal) * 100).round();
+                return _DepartmentDistributionLegendRow(
+                  color: _departmentColors(name).$1,
+                  label: name,
+                  count: count,
+                  percentage: percentage,
+                );
+              }),
+              if (othersCount > 0)
+                _DepartmentDistributionLegendRow(
+                  color: _CeoDashboardState._muted,
+                  label: 'Others',
+                  count: othersCount,
+                  percentage: chartTotal == 0
+                      ? 0
+                      : ((othersCount / chartTotal) * 100).round(),
                 ),
-              );
-            }).toList(),
+            ],
           ),
         ),
       ],
@@ -6085,17 +6427,64 @@ class _DepartmentDistributionChart extends StatelessWidget {
   }
 }
 
+class _DepartmentDistributionLegendRow extends StatelessWidget {
+  final Color color;
+  final String label;
+  final int count;
+  final int percentage;
+
+  const _DepartmentDistributionLegendRow({
+    required this.color,
+    required this.label,
+    required this.count,
+    required this.percentage,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _CeoText.mutedFor(context, 8.5),
+          ),
+        ),
+        Text(
+          '$count ($percentage%)',
+          style: _CeoText.titleFor(context, 8.5),
+        ),
+      ],
+    ),
+  );
+}
+
 class _DepartmentDonutPainter extends CustomPainter {
   final List<Map<String, dynamic>> departments;
+  final int totalEmployees;
+  final int othersCount;
 
-  const _DepartmentDonutPainter(this.departments);
+  const _DepartmentDonutPainter({
+    required this.departments,
+    required this.totalEmployees,
+    required this.othersCount,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final total = departments.fold<int>(
-      0,
-      (sum, department) => sum + _departmentCount(department),
-    );
+    final total = totalEmployees;
     final rect = Offset.zero & size;
     final track = Paint()
       ..color = _CeoDashboardState._border
@@ -6104,12 +6493,22 @@ class _DepartmentDonutPainter extends CustomPainter {
     canvas.drawArc(rect.deflate(15), 0, math.pi * 2, false, track);
     if (total == 0) return;
     var start = -math.pi / 2;
-    for (final department in departments) {
-      final count = _departmentCount(department);
+    final slices = [
+      ...departments.map(
+        (department) => (
+          count: _departmentCount(department),
+          color: _departmentColors(_departmentDisplayName(department)).$1,
+        ),
+      ),
+      if (othersCount > 0)
+        (count: othersCount, color: _CeoDashboardState._muted),
+    ];
+    for (final slice in slices) {
+      final count = slice.count;
       if (count == 0) continue;
       final sweep = (count / total) * math.pi * 2;
       final paint = Paint()
-        ..color = _departmentColors(_departmentDisplayName(department)).$1
+        ..color = slice.color
         ..style = PaintingStyle.stroke
         ..strokeWidth = 22
         ..strokeCap = StrokeCap.butt;
@@ -6126,7 +6525,9 @@ class _DepartmentDonutPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _DepartmentDonutPainter oldDelegate) =>
-      oldDelegate.departments != departments;
+      oldDelegate.departments != departments ||
+      oldDelegate.totalEmployees != totalEmployees ||
+      oldDelegate.othersCount != othersCount;
 }
 
 class _DepartmentListFlowPage extends StatefulWidget {
@@ -8203,8 +8604,11 @@ class _DepartmentFlowShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const bgStart = Color(0xFF020916);
-    const bgEnd = Color(0xFF061D34);
+    final bgStart = ThemeConfig.getBgStart(context);
+    final bgEnd = ThemeConfig.getBgEnd(context);
+    final textPrimary = ThemeConfig.getTextPrimary(context);
+    final textSecondary = ThemeConfig.getTextSecondary(context);
+    final cardBg = ThemeConfig.getCardBg(context);
     return Scaffold(
       backgroundColor: bgStart,
       bottomNavigationBar: _BottomNavBar(
@@ -8216,7 +8620,7 @@ class _DepartmentFlowShell extends StatelessWidget {
         },
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [bgStart, bgEnd],
             begin: Alignment.topCenter,
@@ -8236,9 +8640,9 @@ class _DepartmentFlowShell extends StatelessWidget {
                         width: 44,
                         child: IconButton(
                           padding: EdgeInsets.zero,
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.arrow_back_ios_new_rounded,
-                            color: Colors.white,
+                            color: textPrimary,
                             size: 19,
                           ),
                           onPressed: () => Navigator.of(context).pop(),
@@ -8251,8 +8655,8 @@ class _DepartmentFlowShell extends StatelessWidget {
                                 headerTitle!,
                                 textAlign: TextAlign.center,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                style: TextStyle(
+                                  color: textPrimary,
                                   fontSize: 17,
                                   fontWeight: FontWeight.w900,
                                 ),
@@ -8268,7 +8672,7 @@ class _DepartmentFlowShell extends StatelessWidget {
                                 tooltip: 'Menu',
                                 onPressed: () => showModalBottomSheet<void>(
                                   context: context,
-                                  backgroundColor: _CeoDashboardState._card,
+                                  backgroundColor: cardBg,
                                   shape: const RoundedRectangleBorder(
                                     borderRadius: BorderRadius.vertical(
                                       top: Radius.circular(18),
@@ -8282,17 +8686,17 @@ class _DepartmentFlowShell extends StatelessWidget {
                                           Icons.apartment_rounded,
                                           color: _CeoDashboardState._cyan,
                                         ),
-                                        title: const Text(
+                                        title: Text(
                                           'Departments',
                                           style: TextStyle(
-                                            color: Colors.white,
+                                            color: textPrimary,
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
-                                        subtitle: const Text(
+                                        subtitle: Text(
                                           'Live organization department data',
                                           style: TextStyle(
-                                            color: _CeoDashboardState._muted,
+                                            color: textSecondary,
                                           ),
                                         ),
                                         onTap: () =>
@@ -8301,9 +8705,9 @@ class _DepartmentFlowShell extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                icon: const Icon(
+                                icon: Icon(
                                   Icons.menu_rounded,
-                                  color: Colors.white,
+                                  color: textPrimary,
                                   size: 24,
                                 ),
                               ),
@@ -10228,30 +10632,34 @@ class _OrganizationMenuDrawer extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Drawer(
-    backgroundColor: const Color(0xFF06182A),
-    child: SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(20),
-            child: Row(
-              children: [
-                BitByteLogo(compact: true),
-                SizedBox(width: 12),
-                Text(
-                  'CEO Navigation',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
+  Widget build(BuildContext context) {
+    final bg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
+    final text = ThemeConfig.getTextPrimary(context);
+    return Drawer(
+      backgroundColor: bg,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  const BitByteLogo(compact: true),
+                  const SizedBox(width: 12),
+                  Text(
+                    'CEO Navigation',
+                    style: TextStyle(
+                      color: text,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const Divider(color: _CeoDashboardState._border),
+            Divider(color: border),
           _OrganizationDrawerItem(
             icon: Icons.home_rounded,
             label: 'Home',
@@ -10277,6 +10685,7 @@ class _OrganizationMenuDrawer extends StatelessWidget {
       ),
     ),
   );
+  }
 }
 
 class _OrganizationDrawerItem extends StatelessWidget {
@@ -11256,6 +11665,9 @@ class _EmployeeDirectoryDynamicPage extends StatefulWidget {
 class _EmployeeDirectoryDynamicPageState
     extends State<_EmployeeDirectoryDynamicPage> {
   final _search = TextEditingController();
+  String _roleFilter = 'All';
+  String _departmentFilter = 'All';
+  String _statusFilter = 'All';
 
   @override
   void dispose() {
@@ -11276,11 +11688,22 @@ class _EmployeeDirectoryDynamicPageState
         final items = _roleMembers(snapshot.data!['role_members']);
         final query = _search.text.trim().toLowerCase();
         final employees = items.map(_employeeFromMap).where((employee) {
-          if (query.isEmpty) return true;
-          return employee.name.toLowerCase().contains(query) ||
+          final matchesQuery = query.isEmpty ||
+              employee.name.toLowerCase().contains(query) ||
               employee.role.toLowerCase().contains(query) ||
               employee.department.toLowerCase().contains(query) ||
               employee.id.toLowerCase().contains(query);
+          final matchesRole =
+              _roleFilter == 'All' || employee.role == _roleFilter;
+          final matchesDepartment =
+              _departmentFilter == 'All' ||
+              employee.department == _departmentFilter;
+          final matchesStatus =
+              _statusFilter == 'All' || employee.status == _statusFilter;
+          return matchesQuery &&
+              matchesRole &&
+              matchesDepartment &&
+              matchesStatus;
         }).toList();
         return ListView(
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
@@ -11291,6 +11714,33 @@ class _EmployeeDirectoryDynamicPageState
             ),
             const SizedBox(height: 12),
             _PeopleFilterChips(total: employees.length),
+            if (_roleFilter != 'All' ||
+                _departmentFilter != 'All' ||
+                _statusFilter != 'All') ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  if (_roleFilter != 'All')
+                    InputChip(
+                      label: Text('Role: $_roleFilter'),
+                      onDeleted: () => setState(() => _roleFilter = 'All'),
+                    ),
+                  if (_departmentFilter != 'All')
+                    InputChip(
+                      label: Text('Dept: $_departmentFilter'),
+                      onDeleted: () =>
+                          setState(() => _departmentFilter = 'All'),
+                    ),
+                  if (_statusFilter != 'All')
+                    InputChip(
+                      label: Text('Status: $_statusFilter'),
+                      onDeleted: () => setState(() => _statusFilter = 'All'),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 14),
             if (employees.isEmpty)
               _GlassCard(
@@ -11321,11 +11771,129 @@ class _EmployeeDirectoryDynamicPageState
     if (widget.embedded) return body;
     return _CeoShell(
       title: 'People Intelligence',
-      trailing: const Icon(
-        Icons.filter_list_rounded,
-        color: _CeoDashboardState._muted,
+      trailing: IconButton(
+        tooltip: 'Filter people',
+        icon: const Icon(
+          Icons.filter_list_rounded,
+          color: _CeoDashboardState._cyan,
+        ),
+        onPressed: () async {
+          final data = await CeoService().fetchEmployees(widget.userId);
+          if (!mounted) return;
+          final employees =
+              _roleMembers(data['role_members']).map(_employeeFromMap).toList();
+          await _showPeopleFilters(
+            roles: _employeeFilterOptions(employees, (e) => e.role),
+            departments: _employeeFilterOptions(employees, (e) => e.department),
+            statuses: _employeeFilterOptions(employees, (e) => e.status),
+          );
+        },
       ),
       child: body,
+    );
+  }
+
+  List<String> _employeeFilterOptions(
+    List<_Employee> employees,
+    String Function(_Employee employee) selector,
+  ) {
+    final options = <String>{
+      'All',
+      ...employees
+          .map(selector)
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty && value != '-'),
+    }.toList();
+    return options;
+  }
+
+  Future<void> _showPeopleFilters({
+    required List<String> roles,
+    required List<String> departments,
+    required List<String> statuses,
+  }) async {
+    var role = roles.contains(_roleFilter) ? _roleFilter : 'All';
+    var department = departments.contains(_departmentFilter)
+        ? _departmentFilter
+        : 'All';
+    var status = statuses.contains(_statusFilter) ? _statusFilter : 'All';
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) => ListView(
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+            children: [
+              Text('Filter People', style: _CeoText.titleFor(context, 18)),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String>(
+                value: role,
+                items: roles
+                    .map((item) =>
+                        DropdownMenuItem(value: item, child: Text(item)))
+                    .toList(),
+                onChanged: (value) => setSheetState(() => role = value ?? 'All'),
+                decoration: const InputDecoration(labelText: 'Role'),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: department,
+                items: departments
+                    .map((item) =>
+                        DropdownMenuItem(value: item, child: Text(item)))
+                    .toList(),
+                onChanged: (value) =>
+                    setSheetState(() => department = value ?? 'All'),
+                decoration: const InputDecoration(labelText: 'Department'),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: status,
+                items: statuses
+                    .map((item) =>
+                        DropdownMenuItem(value: item, child: Text(item)))
+                    .toList(),
+                onChanged: (value) =>
+                    setSheetState(() => status = value ?? 'All'),
+                decoration: const InputDecoration(labelText: 'Status'),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        setState(() {
+                          _roleFilter = 'All';
+                          _departmentFilter = 'All';
+                          _statusFilter = 'All';
+                        });
+                        Navigator.pop(sheetContext);
+                      },
+                      child: const Text('Reset'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () {
+                        setState(() {
+                          _roleFilter = role;
+                          _departmentFilter = department;
+                          _statusFilter = status;
+                        });
+                        Navigator.pop(sheetContext);
+                      },
+                      child: const Text('Apply'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -11398,10 +11966,17 @@ class _EmployeeProfilePageState extends State<_EmployeeProfilePage> {
   }
 }
 
-class _NotificationsDynamicPage extends StatelessWidget {
+class _NotificationsDynamicPage extends StatefulWidget {
   final String userId;
 
   const _NotificationsDynamicPage({required this.userId});
+
+  @override
+  State<_NotificationsDynamicPage> createState() => _NotificationsDynamicPageState();
+}
+
+class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
+  bool _unreadOnly = false;
 
   @override
   Widget build(BuildContext context) {
@@ -11412,7 +11987,7 @@ class _NotificationsDynamicPage extends StatelessWidget {
         color: _CeoDashboardState._muted,
       ),
       child: FutureBuilder<Map<String, dynamic>>(
-        future: CeoService().fetchNotifications(userId),
+        future: CeoService().fetchNotifications(widget.userId),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(
@@ -11422,21 +11997,37 @@ class _NotificationsDynamicPage extends StatelessWidget {
           final items = snapshot.data!['notifications'] is List
               ? snapshot.data!['notifications'] as List
               : const [];
+          final filteredItems = _unreadOnly
+              ? items.where((item) {
+                  final map = item is Map
+                      ? Map<String, dynamic>.from(item)
+                      : <String, dynamic>{};
+                  return map['is_read'] != true;
+                }).toList()
+              : items;
           return ListView(
             padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
             children: [
-              const _SegmentTabs(left: 'All', right: 'Unread'),
+              _SegmentTabs(
+                left: 'All',
+                right: 'Unread',
+                rightActive: _unreadOnly,
+                onLeftTap: () => setState(() => _unreadOnly = false),
+                onRightTap: () => setState(() => _unreadOnly = true),
+              ),
               const SizedBox(height: 16),
-              if (items.isEmpty)
+              if (filteredItems.isEmpty)
                 _GlassCard(
                   child: Center(
                     child: Text(
-                      'No notifications found',
+                      _unreadOnly
+                          ? 'No unread notifications found'
+                          : 'No notifications found',
                       style: _CeoText.mutedFor(context, 12),
                     ),
                   ),
                 ),
-              ...items.map((item) {
+              ...filteredItems.map((item) {
                 final map = item is Map
                     ? Map<String, dynamic>.from(item)
                     : <String, dynamic>{};
@@ -11465,7 +12056,7 @@ class _NotificationsDynamicPage extends StatelessWidget {
                                 map['category_title'],
                                 fallback: 'Approval',
                               ),
-                              userId: userId,
+                              userId: widget.userId,
                             ),
                           ),
                         )
@@ -11480,21 +12071,281 @@ class _NotificationsDynamicPage extends StatelessWidget {
   }
 }
 
-class _MeetingsDynamicPage extends StatelessWidget {
+class _MeetingsDynamicPage extends StatefulWidget {
   final String userId;
 
   const _MeetingsDynamicPage({required this.userId});
 
   @override
+  State<_MeetingsDynamicPage> createState() => _MeetingsDynamicPageState();
+}
+
+class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
+  late Future<Map<String, dynamic>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    _future = CeoService().fetchMeetings(widget.userId);
+  }
+
+  String _dateLabel(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
+
+  String _timeLabel(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  List<Map<String, dynamic>> _participantOptions(Map<String, dynamic> data) {
+    final raw =
+        data['available_participants'] is List
+            ? data['available_participants'] as List
+            : data['participants'] is List
+                ? data['participants'] as List
+                : const [];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) => _displayText(item['id']).isNotEmpty)
+        .toList();
+  }
+
+  Future<void> _openSchedule(Map<String, dynamic> data) async {
+    final options = _participantOptions(data);
+    if (options.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No users are available under this CEO.')),
+      );
+      return;
+    }
+
+    final titleController = TextEditingController();
+    final durationController = TextEditingController(text: '30 minutes');
+    final linkController = TextEditingController();
+    final descriptionController = TextEditingController();
+    DateTime selectedDate = DateTime.now();
+    TimeOfDay selectedTime = TimeOfDay.now();
+    String platform = 'Online';
+    final selectedIds = <String>{};
+
+    final payload = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            Future<void> pickDate() async {
+              final picked = await showDatePicker(
+                context: sheetContext,
+                initialDate: selectedDate,
+                firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+              );
+              if (picked != null) setSheetState(() => selectedDate = picked);
+            }
+
+            Future<void> pickTime() async {
+              final picked = await showTimePicker(
+                context: sheetContext,
+                initialTime: selectedTime,
+              );
+              if (picked != null) setSheetState(() => selectedTime = picked);
+            }
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.88,
+              maxChildSize: 0.94,
+              minChildSize: 0.55,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                  ),
+                  child: ListView(
+                    controller: scrollController,
+                    padding: EdgeInsets.fromLTRB(
+                      18,
+                      18,
+                      18,
+                      18 + MediaQuery.of(context).viewInsets.bottom,
+                    ),
+                    children: [
+                      Text('Schedule Meeting', style: _CeoText.titleFor(context, 18)),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: titleController,
+                        decoration: const InputDecoration(labelText: 'Meeting title'),
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<String>(
+                        value: platform,
+                        items: const ['Online', 'Google Meet', 'Zoom', 'Microsoft Teams', 'Office']
+                            .map((item) => DropdownMenuItem(value: item, child: Text(item)))
+                            .toList(),
+                        onChanged: (value) =>
+                            setSheetState(() => platform = value ?? platform),
+                        decoration: const InputDecoration(labelText: 'Meeting type'),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: pickDate,
+                              icon: const Icon(Icons.calendar_month_rounded),
+                              label: Text(_dateLabel(selectedDate)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: pickTime,
+                              icon: const Icon(Icons.schedule_rounded),
+                              label: Text(_timeLabel(selectedTime)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: durationController,
+                        decoration: const InputDecoration(labelText: 'Duration'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: linkController,
+                        decoration: const InputDecoration(
+                          labelText: 'Meeting link / location',
+                          hintText: 'Leave empty to auto-create online link',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: descriptionController,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: const InputDecoration(labelText: 'Description'),
+                      ),
+                      const SizedBox(height: 16),
+                      Text('Scheduled users', style: _CeoText.titleFor(context, 13)),
+                      const SizedBox(height: 8),
+                      ...options.map((person) {
+                        final id = _displayText(person['id']);
+                        final checked = selectedIds.contains(id);
+                        return CheckboxListTile(
+                          value: checked,
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: _CeoDashboardState._cyan,
+                          title: Text(_displayText(person['name'], fallback: id)),
+                          subtitle: Text(
+                            [
+                              _displayText(person['role_label'], fallback: _displayText(person['role'])),
+                              _displayText(person['department']),
+                            ].where((value) => value.isNotEmpty).join(' • '),
+                          ),
+                          onChanged: (value) {
+                            setSheetState(() {
+                              if (value == true) {
+                                selectedIds.add(id);
+                              } else {
+                                selectedIds.remove(id);
+                              }
+                            });
+                          },
+                        );
+                      }),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: () {
+                          final title = titleController.text.trim();
+                          if (title.isEmpty || selectedIds.isEmpty) {
+                            ScaffoldMessenger.of(sheetContext).showSnackBar(
+                              const SnackBar(
+                                content: Text('Enter title and select at least one user.'),
+                              ),
+                            );
+                            return;
+                          }
+                          Navigator.pop(sheetContext, {
+                            'title': title,
+                            'platform': platform,
+                            'meeting_platform': platform,
+                            'meeting_type': platform,
+                            'meeting_link': linkController.text.trim(),
+                            'location': linkController.text.trim(),
+                            'date_label': _dateLabel(selectedDate),
+                            'time_label': _timeLabel(selectedTime),
+                            'duration': durationController.text.trim(),
+                            'description': descriptionController.text.trim(),
+                            'participants': options
+                                .where((person) => selectedIds.contains(_displayText(person['id'])))
+                                .toList(),
+                          });
+                        },
+                        icon: const Icon(Icons.notifications_active_rounded),
+                        label: const Text('Schedule & Notify Users'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+
+    titleController.dispose();
+    durationController.dispose();
+    linkController.dispose();
+    descriptionController.dispose();
+
+    if (payload == null) return;
+    final result = await CeoService().scheduleMeeting(widget.userId, payload);
+    if (!mounted) return;
+    if (result['success'] == true) {
+      setState(_load);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Meeting scheduled. ${result['notified_to'] ?? 0} user(s) notified.',
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${result['message'] ?? 'Unable to schedule meeting.'}')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return _CeoShell(
       title: 'Meetings',
-      trailing: const Icon(
-        Icons.more_vert_rounded,
-        color: _CeoDashboardState._muted,
+      trailing: IconButton(
+        tooltip: 'Schedule meeting',
+        icon: const Icon(Icons.add_circle_rounded),
+        color: _CeoDashboardState._cyan,
+        onPressed: () async {
+          final data = await _future;
+          if (!mounted) return;
+          await _openSchedule(data);
+        },
       ),
       child: FutureBuilder<Map<String, dynamic>>(
-        future: CeoService().fetchMeetings(userId),
+        future: _future,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(
@@ -11539,88 +12390,154 @@ class _MeetingsDynamicPage extends StatelessWidget {
   }
 }
 
-class _ProfileSettingsPage extends StatelessWidget {
-  final String firstName;
-  final String email;
+class _ProfileSettingsPage extends StatefulWidget {
   final String userId;
+  final String fallbackName;
+  final String fallbackEmail;
   final VoidCallback onLogout;
 
   const _ProfileSettingsPage({
-    required this.firstName,
-    required this.email,
     required this.userId,
+    required this.fallbackName,
+    required this.fallbackEmail,
     required this.onLogout,
   });
+
+  @override
+  State<_ProfileSettingsPage> createState() => _ProfileSettingsPageState();
+}
+
+class _ProfileSettingsPageState extends State<_ProfileSettingsPage> {
+  late Future<Map<String, dynamic>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    _future = CeoService().fetchProfile(widget.userId);
+  }
+
+  void _retry() {
+    setState(_load);
+  }
 
   @override
   Widget build(BuildContext context) {
     return _CeoShell(
       title: 'Profile & Settings',
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
-        children: [
-          _ProfileHeader(
-            firstName: firstName.isEmpty ? 'CEO' : firstName,
-            email: userId.isEmpty ? email : userId,
-            role: 'Chief Executive Officer',
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return _buildProfile(context, const <String, dynamic>{}, loading: true);
+          }
+          if (snapshot.hasError) {
+            return _buildProfile(
+              context,
+              const <String, dynamic>{},
+              warning: 'Backend profile is unavailable. Showing login profile.',
+            );
+          }
+          final data = snapshot.data ?? const <String, dynamic>{};
+          final profile = _stringMap(data['profile']);
+          return _buildProfile(context, profile);
+        },
+      ),
+    );
+  }
+
+  Widget _buildProfile(
+    BuildContext context,
+    Map<String, dynamic> profile, {
+    bool loading = false,
+    String warning = '',
+  }) {
+    final name = _displayText(
+      profile['name'],
+      fallback: widget.fallbackName.isEmpty ? 'CEO' : widget.fallbackName,
+    );
+    final role = _displayText(
+      profile['designation_label'],
+      fallback: _displayText(profile['role_label'], fallback: 'Chief Executive Officer'),
+    );
+    final id = _displayText(profile['id'], fallback: widget.userId);
+    final email = _displayText(profile['email'], fallback: widget.fallbackEmail);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+      children: [
+        if (loading) ...[
+          const LinearProgressIndicator(
+            color: _CeoDashboardState._cyan,
+            backgroundColor: Colors.transparent,
+            minHeight: 2,
           ),
-          const SizedBox(height: 16),
-          const _SettingsGroup(
-            title: 'Profile',
-            children: [
-              _SettingsRow(
-                Icons.person_outline_rounded,
-                'Personal Information',
-                null,
-              ),
-              _SettingsRow(
-                Icons.business_center_outlined,
-                'Organization Info',
-                null,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const _SettingsGroup(
-            title: 'Security',
-            children: [
-              _SettingsRow(Icons.lock_outline_rounded, 'Change Password', null),
-              _SettingsRow(Icons.fingerprint_rounded, 'Biometric Login', 'On'),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const _SettingsGroup(
-            title: 'Preferences',
-            children: [
-              _SettingsRow(Icons.language_rounded, 'Language', 'English'),
-              _SettingsRow(Icons.dark_mode_outlined, 'Theme', 'Dark'),
-              _SettingsRow(
-                Icons.notifications_none_rounded,
-                'Notification Settings',
-                null,
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            height: 50,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFBE1622),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: onLogout,
-              child: const Text(
-                'Logout',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
+          const SizedBox(height: 12),
+        ],
+        if (warning.isNotEmpty) ...[
+          _GlassCard(
+            child: Text(
+              warning,
+              style: _CeoText.mutedFor(context, 12),
             ),
           ),
+          const SizedBox(height: 12),
         ],
-      ),
+        _ProfileHeader(
+          firstName: name,
+          email: id.isEmpty ? email : id,
+          role: role,
+          imageUrl: _displayText(profile['photo_url']),
+        ),
+        const SizedBox(height: 16),
+        _SettingsGroup(
+          title: loading ? 'Backend Profile (loading...)' : 'Backend Profile',
+          children: [
+            _SettingsRow(Icons.badge_outlined, 'Employee ID', id),
+            _SettingsRow(Icons.mail_outline_rounded, 'Email', email),
+            _SettingsRow(Icons.phone_outlined, 'Phone', _displayText(profile['phone'], fallback: '-')),
+            _SettingsRow(Icons.work_outline_rounded, 'Role', role),
+            _SettingsRow(Icons.location_city_outlined, 'Location', _displayText(profile['address'], fallback: '-')),
+            _SettingsRow(Icons.verified_user_outlined, 'Status', _displayText(profile['status'], fallback: '-')),
+          ],
+        ),
+        const SizedBox(height: 14),
+        ValueListenableBuilder<ThemeMode>(
+          valueListenable: MyApp.themeNotifier,
+          builder: (context, mode, _) => _SettingsGroup(
+            title: 'Preferences',
+            children: [
+              const _SettingsRow(Icons.language_rounded, 'Language', 'English'),
+              _SettingsRow(
+                mode == ThemeMode.dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                'Theme',
+                mode == ThemeMode.dark ? 'Dark' : 'Light',
+              ),
+              const _SettingsRow(Icons.notifications_none_rounded, 'Notification Settings', 'Backend'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        SizedBox(
+          height: 50,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFBE1622),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: widget.onLogout,
+            child: const Text(
+              'Logout',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -11721,9 +12638,9 @@ class _CeoShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const bgStart = Color(0xFF020916);
-    const bgEnd = Color(0xFF061D34);
-    const textPrimary = Colors.white;
+    final bgStart = ThemeConfig.getBgStart(context);
+    final bgEnd = ThemeConfig.getBgEnd(context);
+    final textPrimary = ThemeConfig.getTextPrimary(context);
 
     return Scaffold(
       backgroundColor: bgStart,
@@ -11853,7 +12770,7 @@ class _ThemeToggleButton extends StatelessWidget {
           tooltip: isDark ? 'Light theme' : 'Dark theme',
           icon: Icon(
             isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-            color: Colors.white,
+            color: ThemeConfig.getTextPrimary(context),
             size: 20,
           ),
           onPressed: () {
@@ -13032,7 +13949,7 @@ class _DepartmentPerformanceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = _displayText(item['label'], fallback: 'Department');
     final count = _departmentCount(item);
-    final performance = _departmentPerformance(item);
+    final strength = _departmentStrength(item);
     final colors = _departmentColors(title);
     return Column(
       children: [
@@ -13075,7 +13992,7 @@ class _DepartmentPerformanceRow extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '$performance%',
+                          '$strength%',
                           style: _CeoText.titleFor(context, 18),
                         ),
                       ],
@@ -13097,7 +14014,7 @@ class _DepartmentPerformanceRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 11),
                     _DepartmentProgressBar(
-                      value: performance / 100,
+                      value: strength / 100,
                       colors: colors,
                     ),
                   ],
@@ -13147,6 +14064,7 @@ class _DepartmentViewAllButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final labelColor = ThemeConfig.getTextPrimary(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(1.2),
@@ -13157,22 +14075,22 @@ class _DepartmentViewAllButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(11),
       ),
       child: Material(
-        color: _CeoDashboardState._cardAlt,
+        color: ThemeConfig.getCardBg(context),
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(10),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 13),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 13),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.apartment_rounded, color: _CeoDashboardState._cyan),
-                SizedBox(width: 9),
+                const Icon(Icons.apartment_rounded, color: _CeoDashboardState._cyan),
+                const SizedBox(width: 9),
                 Text(
                   'View All Departments',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: labelColor,
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
                   ),
@@ -14152,8 +15070,8 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const cardBg = Color(0xF2071A2D);
-    const cardBorder = Color(0xFF123A5C);
+    final cardBg = ThemeConfig.getCardBg(context);
+    final cardBorder = ThemeConfig.getCardBorder(context);
 
     final card = Container(
       width: double.infinity,
@@ -14164,7 +15082,9 @@ class _GlassCard extends StatelessWidget {
         border: Border.all(color: cardBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.30),
+            color: Colors.black.withOpacity(
+              ThemeConfig.isDark(context) ? 0.30 : 0.08,
+            ),
             blurRadius: 18,
             offset: const Offset(0, 10),
           ),
@@ -14257,22 +15177,24 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
         height: 70,
         decoration: BoxDecoration(
-          color: _CeoDashboardState._cardAlt,
+          color: cardBg,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _CeoDashboardState._border),
+          border: Border.all(color: border),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: _CeoDashboardState._cyan, size: 22),
             const SizedBox(height: 6),
-            FittedBox(child: Text(label, style: _CeoText.muted(10))),
+            FittedBox(child: Text(label, style: _CeoText.mutedFor(context, 10))),
           ],
         ),
       ),
@@ -14883,12 +15805,24 @@ class _DecisionButton extends StatelessWidget {
   final Color color;
   final IconData icon;
   final bool outlined;
+  final VoidCallback? onPressed;
   const _DecisionButton(
     this.label,
     this.color,
     this.icon, {
     this.outlined = false,
+    this.onPressed,
   });
+
+  void _handlePressed(BuildContext context) {
+    if (onPressed != null) {
+      onPressed!();
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$label flow is not connected for this item.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14918,7 +15852,7 @@ class _DecisionButton extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              onPressed: () {},
+              onPressed: () => _handlePressed(context),
               icon: Icon(icon, size: 18),
               label: Text(label),
             )
@@ -14932,7 +15866,7 @@ class _DecisionButton extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              onPressed: () {},
+              onPressed: () => _handlePressed(context),
               icon: Icon(icon, size: 18),
               label: Text(label),
             ),
@@ -15583,7 +16517,15 @@ class _SettingsRow extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(child: Text(label, style: _CeoText.titleFor(context, 13))),
           if (value != null)
-            Text(value!, style: _CeoText.mutedFor(context, 11)),
+            Flexible(
+              child: Text(
+                value!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: _CeoText.mutedFor(context, 11),
+              ),
+            ),
           const SizedBox(width: 6),
           const Icon(
             Icons.chevron_right_rounded,
@@ -15907,10 +16849,12 @@ class _GradientButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final List<Color> colors;
+  final VoidCallback? onPressed;
   const _GradientButton({
     required this.label,
     required this.icon,
     required this.colors,
+    this.onPressed,
   });
 
   @override
@@ -15922,7 +16866,12 @@ class _GradientButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: TextButton.icon(
-        onPressed: () {},
+        onPressed: onPressed ??
+            () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$label is not available for this report.')),
+              );
+            },
         icon: Icon(icon, color: Colors.white, size: 18),
         label: FittedBox(
           child: Text(
@@ -16137,12 +17086,12 @@ class _CeoText {
   );
 
   static TextStyle titleFor(BuildContext context, double size) => TextStyle(
-    color: Colors.white,
+    color: ThemeConfig.getTextPrimary(context),
     fontSize: size,
     fontWeight: FontWeight.w800,
   );
   static TextStyle mutedFor(BuildContext context, double size) => TextStyle(
-    color: _CeoDashboardState._muted,
+    color: ThemeConfig.getTextSecondary(context),
     fontSize: size,
     fontWeight: FontWeight.w500,
   );

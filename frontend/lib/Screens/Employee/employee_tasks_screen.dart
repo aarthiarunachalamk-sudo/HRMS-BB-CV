@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 
 import 'employee_models.dart';
@@ -41,7 +41,7 @@ class EmployeeTasksScreen extends StatelessWidget {
           ...data.tasks.map((item) => EmployeeListTile(
                 icon: Icons.task_alt_rounded,
                 title: '${item['title'] ?? ''}',
-                subtitle: '${item['project'] ?? 'General'}  •  Due ${item['due'] ?? '-'}  •  ${item['status'] ?? ''}',
+                subtitle: '${_taskProject(item)}  •  Due ${item['due'] ?? '-'}  •  ${item['status'] ?? ''}',
                 trailing: '${item['priority'] ?? ''}',
                 color: employeeStatusColor('${item['priority'] ?? ''}'),
                 onTap: () => _showDetails(context, item),
@@ -81,7 +81,7 @@ class EmployeeTasksScreen extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 16),
-            EmployeeInfoRow('Project', '${task['project'] ?? 'General'}'),
+            EmployeeInfoRow('Project', _taskProject(task)),
             EmployeeInfoRow('Due Date', '${task['due'] ?? '-'}'),
             EmployeeInfoRow('Status', '${task['status'] ?? 'Pending'}'),
             if ('${task['assigned_by'] ?? ''}'.isNotEmpty) EmployeeInfoRow('Assigned By', '${task['assigned_by']}'),
@@ -111,6 +111,11 @@ class EmployeeTasksScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _taskProject(Map<String, dynamic> task) {
+    final project = '${task['project'] ?? ''}'.trim();
+    return project.isEmpty ? 'No project selected' : project;
   }
 
   Future<void> _complete(BuildContext context, Map<String, dynamic> task) async {

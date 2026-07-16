@@ -120,6 +120,11 @@ class MyApp extends StatelessWidget {
     final isDark = brightness == Brightness.dark;
     final text = isDark ? Colors.white : const Color(0xFF1F3654);
     final muted = isDark ? const Color(0xFF8E9CAE) : const Color(0xFF607086);
+    final fill = isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9);
+    final surface = isDark ? card : Colors.white;
+    const primary = Color(0xFF0072FF);
+    final onPrimary = Colors.white;
+    final outline = isDark ? const Color(0xFF1E2E44) : const Color(0xFFD8E1EC);
     final textTheme = _appTextTheme(text, muted);
 
     return ThemeData(
@@ -129,11 +134,23 @@ class MyApp extends StatelessWidget {
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xFF0072FF),
         brightness: brightness,
+      ).copyWith(
+        primary: primary,
+        onPrimary: onPrimary,
+        surface: surface,
+        onSurface: text,
+        secondary: const Color(0xFF00C6FF),
+        onSecondary: onPrimary,
+        outline: outline,
+        error: const Color(0xFFEF4444),
+        onError: Colors.white,
       ),
       useMaterial3: true,
       fontFamily: _fontFamily,
       textTheme: textTheme,
       primaryTextTheme: textTheme,
+      iconTheme: IconThemeData(color: text),
+      dividerTheme: DividerThemeData(color: outline, thickness: 1),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         foregroundColor: text,
@@ -145,19 +162,130 @@ class MyApp extends StatelessWidget {
         titleTextStyle: textTheme.titleMedium,
         subtitleTextStyle: textTheme.bodySmall,
         iconColor: muted,
+        textColor: text,
+        selectedColor: primary,
+        selectedTileColor: primary.withAlpha(isDark ? 30 : 18),
       ),
       inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: fill,
         labelStyle: textTheme.bodyMedium,
         hintStyle: textTheme.bodyMedium,
+        prefixIconColor: muted,
+        suffixIconColor: muted,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: outline),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: primary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFFEF4444)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+        ),
+      ),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        textStyle: textTheme.bodyLarge,
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: fill,
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: outline),
+          ),
+        ),
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(surface),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: surface,
+        titleTextStyle: textTheme.titleLarge,
+        contentTextStyle: textTheme.bodyMedium,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: isDark ? const Color(0xFF0F1B2E) : const Color(0xFF1F3654),
+        contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
+        actionTextColor: const Color(0xFF00C6FF),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: fill,
+        selectedColor: primary.withAlpha(isDark ? 55 : 35),
+        disabledColor: isDark ? const Color(0xFF1E2E44) : const Color(0xFFE2E8F0),
+        labelStyle: textTheme.labelMedium!.copyWith(color: text),
+        secondaryLabelStyle: textTheme.labelMedium!.copyWith(color: text),
+        side: BorderSide(color: outline),
+        iconTheme: IconThemeData(color: muted),
+        checkmarkColor: primary,
+        brightness: brightness,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: primary,
+        unselectedLabelColor: muted,
+        indicatorColor: primary,
+      ),
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: surface,
+        selectedItemColor: primary,
+        unselectedItemColor: muted,
+        selectedLabelStyle: textTheme.labelSmall,
+        unselectedLabelStyle: textTheme.labelSmall,
+        type: BottomNavigationBarType.fixed,
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: surface,
+        indicatorColor: primary.withAlpha(isDark ? 45 : 28),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          return IconThemeData(
+            color: states.contains(WidgetState.selected) ? primary : muted,
+          );
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          return textTheme.labelSmall!.copyWith(
+            color: states.contains(WidgetState.selected) ? primary : muted,
+          );
+        }),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(textStyle: textTheme.labelLarge),
+        style: TextButton.styleFrom(
+          foregroundColor: primary,
+          textStyle: textTheme.labelLarge,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: onPrimary,
+          disabledBackgroundColor:
+              isDark ? const Color(0xFF1E2E44) : const Color(0xFFE2E8F0),
+          disabledForegroundColor: muted,
+          textStyle: textTheme.labelLarge,
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(textStyle: textTheme.labelLarge),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: onPrimary,
+          disabledBackgroundColor:
+              isDark ? const Color(0xFF1E2E44) : const Color(0xFFE2E8F0),
+          disabledForegroundColor: muted,
+          textStyle: textTheme.labelLarge,
+        ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(textStyle: textTheme.labelLarge),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: text,
+          side: BorderSide(color: outline),
+          textStyle: textTheme.labelLarge,
+        ),
       ),
     );
   }

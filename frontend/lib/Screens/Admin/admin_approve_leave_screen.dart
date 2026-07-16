@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'admin_palette.dart';
+import 'admin_service.dart';
 import 'admin_widgets.dart';
 import 'admin_success_screen.dart';
 
@@ -52,7 +53,7 @@ class AdminApproveLeaveScreen extends StatelessWidget {
             Divider(color: c.border, height: 1),
             AdminInfoRow('Total Days', leave['days'] ?? ''),
             Divider(color: c.border, height: 1),
-            const AdminInfoRow('Reason', 'Personal Work'),
+            AdminInfoRow('Reason', leave['reason']?.isNotEmpty == true ? leave['reason']! : 'N/A'),
             Divider(color: c.border, height: 1),
             AdminInfoRow('Status', status,
                 valueColor: isPending ? c.orange : (status == 'Approved' ? c.green : c.red)),
@@ -90,9 +91,23 @@ class AdminApproveLeaveScreen extends StatelessWidget {
     );
   }
 
-  void _respond(BuildContext context, String decision) {
+  Future<void> _respond(BuildContext context, String decision) async {
     final name = leave['name'] ?? 'Employee';
     final isApproved = decision == 'Approved';
+    final leaveId = leave['id'] ?? '';
+    if (leaveId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Leave request id is missing.')),
+      );
+      return;
+    }
+    final response = await AdminService().approveLeave(leaveId, decision);
+    if (response['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${response['message'] ?? 'Leave update failed.'}')),
+      );
+      return;
+    }
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => AdminSuccessScreen(
         message: isApproved ? 'Leave Approved\nSuccessfully!' : 'Leave Rejected',

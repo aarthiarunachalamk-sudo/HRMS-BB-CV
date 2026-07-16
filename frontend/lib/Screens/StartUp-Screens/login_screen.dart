@@ -22,6 +22,7 @@ import 'theme_config.dart';
 import 'Change_Password.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Employee_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/meeting_notification_gate.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -60,18 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoggingIn = true);
 
     try {
-      final response = await http
-          .post(
-            ApiConfig.uri('/login/'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'email': _employeeCodeController.text.trim(),
-              'password': _passwordController.text,
-            }),
-          )
-          .timeout(const Duration(seconds: 45));
-
-      final data = jsonDecode(response.body);
+      final data = await _loginRequest();
       if (!mounted) return;
 
       if (data['success'] == true) {
@@ -166,6 +156,12 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
 
+        dashboard = MeetingNotificationGate(
+          userId: '${data['user_id'] ?? ''}',
+          role: role,
+          child: dashboard,
+        );
+
         dashboard = LoginGreetingGate(
           name: '${data['first_name'] ?? ''}',
           role: role,
@@ -175,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _employeeCodeController.clear();
         _passwordController.clear();
 
-        Navigator.of(context).push(
+        Navigator.of(context).pushAndRemoveUntil(
           PageRouteBuilder(
             pageBuilder: (context, animation, secondaryAnimation) => dashboard,
             transitionsBuilder:
@@ -184,6 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
             transitionDuration: const Duration(milliseconds: 550),
           ),
+          (route) => false,
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -204,14 +201,41 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<Map<String, dynamic>> _loginRequest() async {
+    final payload = {
+      'email': _employeeCodeController.text.trim(),
+      'password': _passwordController.text,
+    };
+    final urls = <Uri>[
+      ApiConfig.uri('/login/'),
+      if (ApiConfig.usesPrivateNetworkAddress) ApiConfig.publicUri('/login/'),
+    ];
+
+    Object? lastError;
+    for (final url in urls) {
+      try {
+        final response = await http
+            .post(
+              url,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 60));
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+        lastError = 'Invalid response from $url';
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw Exception(lastError ?? 'Unable to reach login API');
+  }
+
   void _showServerUnavailable() {
-    final localOnly = ApiConfig.usesPrivateNetworkAddress;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          localOnly
-              ? 'The HRMS server is configured for a local network. Connect to the office network or install a build configured with the public HTTPS server.'
-              : 'Unable to reach the HRMS server. Check your internet connection and try again.',
+          'Unable to reach the HRMS server.\nConfigured API: ${ApiConfig.baseUrl}',
         ),
         behavior: SnackBarBehavior.floating,
         backgroundColor: const Color(0xFFB42318),

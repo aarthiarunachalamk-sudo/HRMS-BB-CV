@@ -5,37 +5,44 @@ import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class HrService {
   static const String baseUrl = '${ApiConfig.baseUrl}/hr';
+  static const Duration _timeout = Duration(seconds: 60);
 
   Future<Map<String, dynamic>> fetchDashboard(String userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/dashboard/?user_id=$userId'));
+    final response = await http
+        .get(Uri.parse('$baseUrl/dashboard/?user_id=$userId'))
+        .timeout(_timeout);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
     }
-    throw Exception('HR API failed with status ${response.statusCode}');
+    throw Exception(_payrollError(response, 'HR dashboard API failed'));
   }
 
   Future<void> updateLeaveRequest(int leaveId, String status, String userId) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/leave-requests/$leaveId/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'status': status, 'user_id': userId, 'reviewed_by': userId}),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/leave-requests/$leaveId/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'status': status, 'user_id': userId, 'reviewed_by': userId}),
+        )
+        .timeout(_timeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Leave approval failed with status ${response.statusCode}');
     }
   }
 
   Future<Map<String, dynamic>> generatePayroll(String userId, DateTime month) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/payroll/generate/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'user_id': userId,
-        'year': month.year,
-        'month': month.month,
-      }),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/payroll/generate/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'user_id': userId,
+            'year': month.year,
+            'month': month.month,
+          }),
+        )
+        .timeout(_timeout);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -51,11 +58,13 @@ class HrService {
   }
 
   Future<Map<String, dynamic>> fetchPayrollProcess(DateTime month) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/payroll/process/').replace(
-        queryParameters: {'year': '${month.year}', 'month': '${month.month}'},
-      ),
-    );
+    final response = await http
+        .get(
+          Uri.parse('$baseUrl/payroll/process/').replace(
+            queryParameters: {'year': '${month.year}', 'month': '${month.month}'},
+          ),
+        )
+        .timeout(_timeout);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -70,18 +79,20 @@ class HrService {
     String? issueId,
     Map<String, dynamic>? options,
   }) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/payroll/process/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'user_id': userId,
-        'year': month.year,
-        'month': month.month,
-        'action': action,
-        if (issueId != null) 'issue_id': issueId,
-        if (options != null) 'options': options,
-      }),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/payroll/process/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'user_id': userId,
+            'year': month.year,
+            'month': month.month,
+            'action': action,
+            if (issueId != null) 'issue_id': issueId,
+            if (options != null) 'options': options,
+          }),
+        )
+        .timeout(_timeout);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);

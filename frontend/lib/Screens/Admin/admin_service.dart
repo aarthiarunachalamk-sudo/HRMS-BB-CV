@@ -44,13 +44,14 @@ class AdminService {
   Future<Map<String, dynamic>> createEmployee(Map<String, dynamic> data) =>
       _post('/employees/create/', data);
 
+  Future<Map<String, dynamic>> createTask(Map<String, dynamic> data) =>
+      _post('/tasks/', data);
+
   Future<Map<String, dynamic>> _get(String path) async {
     try {
       final response = await http.get(Uri.parse('$baseUrl$path'));
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) return Map<String, dynamic>.from(decoded);
-      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
     } catch (_) {}
     return {};
   }
@@ -62,10 +63,8 @@ class AdminService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),
       );
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) return Map<String, dynamic>.from(decoded);
-      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
     } catch (_) {}
     return {};
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'sa_service.dart';
 import 'sa_shared.dart';
 
 class SaTaskManagementScreen extends StatelessWidget {
@@ -7,36 +8,58 @@ class SaTaskManagementScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = SaPalette.of(context);
-    const tasks = [['System Update', 'Admin', 'High'], ['Data Migration', 'IT Team', 'High'], ['Employee Onboarding', 'HR Team', 'Medium'], ['Payroll Review', 'Finance Team', 'Medium'], ['Performance Review', 'HR Team', 'Medium'], ['UI/UX Enhancement', 'Design Team', 'Low']];
-    void showUnavailable() {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task creation is not available yet.')),
-      );
-    }
-
     return SaScreen(
       title: 'Task Management',
-      floatingActionButton: FloatingActionButton(backgroundColor: c.primary, foregroundColor: Colors.white, onPressed: showUnavailable, child: const Icon(Icons.add_rounded)),
-      child: saList([
-        Row(children: [Expanded(child: Text('Kanban', textAlign: TextAlign.center, style: TextStyle(color: c.primary, fontWeight: FontWeight.w900))), Expanded(child: Text('List', textAlign: TextAlign.center, style: TextStyle(color: c.muted, fontWeight: FontWeight.w800))), Expanded(child: Text('Calendar', textAlign: TextAlign.center, style: TextStyle(color: c.muted, fontWeight: FontWeight.w800)))]),
-        const SizedBox(height: 12),
-        GridView.count(crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.65, children: tasks.map((task) => _Task(task[0], task[1], task[2])).toList()),
-        const SizedBox(height: 12),
-        SizedBox(height: 48, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white), onPressed: showUnavailable, icon: const Icon(Icons.add_rounded), label: const Text('Create Task'))),
-      ]),
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: SaService().fetchDashboard(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return Center(child: CircularProgressIndicator(color: c.primary));
+          }
+          final tasks = ((snapshot.data?['tasks'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          return saList([
+            Row(
+              children: [
+                Expanded(child: Text('Kanban', textAlign: TextAlign.center, style: TextStyle(color: c.primary, fontWeight: FontWeight.w900))),
+                Expanded(child: Text('List', textAlign: TextAlign.center, style: TextStyle(color: c.muted, fontWeight: FontWeight.w800))),
+                Expanded(child: Text('Calendar', textAlign: TextAlign.center, style: TextStyle(color: c.muted, fontWeight: FontWeight.w800))),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (tasks.isEmpty)
+              _empty(context, c)
+            else
+              ...tasks.map(
+                (task) => SaInfoTile(
+                  icon: Icons.task_alt_rounded,
+                  title: '${task['title'] ?? 'Task'}',
+                  subtitle: '${task['assignee'] ?? ''} • ${task['project'] ?? ''}',
+                  trailing: '${task['status'] ?? ''}',
+                  color: _priorityColor(c, '${task['priority'] ?? ''}'),
+                ),
+              ),
+          ]);
+        },
+      ),
     );
   }
-}
 
-class _Task extends StatelessWidget {
-  final String title;
-  final String team;
-  final String priority;
-  const _Task(this.title, this.team, this.priority);
-  @override
-  Widget build(BuildContext context) {
-    final c = SaPalette.of(context);
-    final color = priority == 'High' ? c.danger : priority == 'Medium' ? c.warning : c.success;
-    return SaCard(color: c.row, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [saTitle(context, title, 12), const SizedBox(height: 4), Text(priority, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900)), const Spacer(), saMuted(context, team, 11)]));
+  Color _priorityColor(SaPalette c, String priority) {
+    if (priority.toLowerCase() == 'high' || priority.toLowerCase() == 'urgent') return c.danger;
+    if (priority.toLowerCase() == 'medium') return c.warning;
+    return c.success;
   }
+
+  Widget _empty(BuildContext context, SaPalette c) => SaCard(
+        child: Center(
+          child: Text(
+            'No task data found in backend.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: c.muted, fontWeight: FontWeight.w800),
+          ),
+        ),
+      );
 }

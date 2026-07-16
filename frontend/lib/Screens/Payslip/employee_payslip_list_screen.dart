@@ -20,7 +20,7 @@ class EmployeePayslipListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: PayslipColors.background,
+      backgroundColor: PayslipColors.pageBackground(context),
       appBar: AppBar(title: const Text('Payslips')),
       body: StreamBuilder(
         stream: repository.releasedPayslipsForEmployee(employeeId),
@@ -48,12 +48,12 @@ class EmployeePayslipListScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${data['payrollMonth']}/${data['payrollYear']}', style: const TextStyle(fontWeight: FontWeight.w900, color: PayslipColors.text)),
-                          Text('${data['status'] ?? ''}', style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                          Text('${data['payrollMonth']}/${data['payrollYear']}', style: TextStyle(fontWeight: FontWeight.w900, color: PayslipColors.primaryText(context))),
+                          Text('${data['status'] ?? ''}', style: TextStyle(color: PayslipColors.secondaryText(context), fontSize: 12)),
                         ],
                       ),
                     ),
-                    Text(money(data['netPay']), style: const TextStyle(fontWeight: FontWeight.w900, color: PayslipColors.secondaryNavy)),
+                    Text(money(data['netPay']), style: TextStyle(fontWeight: FontWeight.w900, color: PayslipColors.strongText(context))),
                     IconButton(
                       icon: const Icon(Icons.download_rounded),
                       onPressed: () => _download(context, data),

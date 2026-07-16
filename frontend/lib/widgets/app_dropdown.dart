@@ -55,7 +55,14 @@ Future<T?> _showAppDropdownMenu<T>({
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Expanded(child: item.child),
+            Expanded(
+              child: DefaultTextStyle.merge(
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+                child: item.child,
+              ),
+            ),
             if (selected) ...[
               const SizedBox(width: 10),
               Icon(
@@ -132,6 +139,10 @@ class AppDropdownButton<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final menuItems = items ?? <DropdownMenuItem<T>>[];
     final enabled = onChanged != null && menuItems.isNotEmpty;
+    final effectiveStyle = style ??
+        Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+            );
     final selected = _selectedChild<T>(
       context: context,
       value: value,
@@ -171,7 +182,7 @@ class AppDropdownButton<T> extends StatelessWidget {
                   child: Align(
                     alignment: alignment,
                     child: DefaultTextStyle.merge(
-                      style: style,
+                      style: effectiveStyle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       child: selected,
@@ -182,7 +193,7 @@ class AppDropdownButton<T> extends StatelessWidget {
                 Align(
                   alignment: alignment,
                   child: DefaultTextStyle.merge(
-                    style: style,
+                    style: effectiveStyle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     child: selected,
@@ -190,9 +201,10 @@ class AppDropdownButton<T> extends StatelessWidget {
                 ),
               const SizedBox(width: 8),
               icon ??
-                  const Icon(
+                  Icon(
                     Icons.keyboard_arrow_down_rounded,
                     size: 20,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
             ],
           ),
@@ -252,6 +264,10 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final menuItems = items ?? <DropdownMenuItem<T>>[];
     final currentValue = value ?? initialValue;
+    final effectiveStyle = style ??
+        Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+            );
     return FormField<T>(
       key: ValueKey<Object?>('app-dropdown-$currentValue-${menuItems.length}'),
       initialValue: currentValue,
@@ -302,7 +318,7 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
                       child: Align(
                         alignment: alignment,
                         child: DefaultTextStyle.merge(
-                          style: style,
+                          style: effectiveStyle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           child: selected,
@@ -313,7 +329,7 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
                     Align(
                       alignment: alignment,
                       child: DefaultTextStyle.merge(
-                        style: style,
+                        style: effectiveStyle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         child: selected,
@@ -321,9 +337,10 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
                     ),
                   const SizedBox(width: 8),
                   icon ??
-                      const Icon(
+                      Icon(
                         Icons.keyboard_arrow_down_rounded,
                         size: 20,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                 ],
               ),

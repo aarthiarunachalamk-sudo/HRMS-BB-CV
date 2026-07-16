@@ -118,7 +118,13 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   );
 
   void _handleMobileBack() {
-    Navigator.of(context).pushAndRemoveUntil(
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+
+    navigator.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
     );

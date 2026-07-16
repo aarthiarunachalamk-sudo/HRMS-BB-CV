@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 
 import 'ceo_service.dart';
 import 'ceo_widgets.dart';
@@ -29,10 +30,12 @@ class CeoHomeScreen extends StatelessWidget {
       builder: (data) => pageList([
         Row(
           children: [
-            const CircleAvatar(
+            CircleAvatar(
               radius: 24,
-              backgroundColor: CeoColors.cardAlt,
-              child: Icon(Icons.person_rounded, color: CeoColors.cyan),
+              backgroundColor: CeoColors.cyan.withAlpha(
+                ThemeConfig.isDark(context) ? 30 : 24,
+              ),
+              child: const Icon(Icons.person_rounded, color: CeoColors.cyan),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -224,15 +227,18 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         height: 70,
         decoration: BoxDecoration(
-          color: CeoColors.cardAlt,
+          color: cardBg,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: CeoColors.border),
+          border: Border.all(color: border),
+          boxShadow: ThemeConfig.getPremiumShadow(context),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

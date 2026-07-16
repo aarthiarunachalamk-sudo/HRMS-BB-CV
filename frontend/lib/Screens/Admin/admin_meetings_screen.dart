@@ -3,7 +3,7 @@ import 'admin_palette.dart';
 import 'admin_service.dart';
 import 'admin_widgets.dart';
 
-/// Admin meetings — view-only list + calendar strip.
+/// Admin meetings: view-only list + calendar strip.
 /// Meeting creation is handled by MD / TL.
 class AdminMeetingsScreen extends StatelessWidget {
   final String userId;
@@ -27,7 +27,9 @@ class AdminMeetingsScreen extends StatelessWidget {
             const AdminSectionTitle('Today\'s Meetings'),
             if (meetings.isEmpty)
               AdminCard(
-                child: Center(child: adminMuted('No meetings scheduled today', 13, c)),
+                child: Center(
+                  child: adminMuted('No meetings scheduled today', 13, c),
+                ),
               )
             else
               ...meetings.map((m) => _MeetingTile(meeting: m, c: c)),
@@ -40,46 +42,36 @@ class AdminMeetingsScreen extends StatelessWidget {
   String _monthLabel() {
     final now = DateTime.now();
     const months = [
-      '', 'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      '',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return '${months[now.month]} ${now.year}';
   }
 
   List<Map<String, String>> _meetingRecords(Map<String, dynamic> data) {
     final raw = data['meetings'] as List? ?? [];
-    if (raw.isNotEmpty) {
-      return raw
-          .map((e) => e is Map
-              ? Map<String, String>.from(
-                  e.map((k, v) => MapEntry('$k', '$v')))
-              : <String, String>{})
-          .toList();
-    }
-    return [
-      {
-        'title': 'Monthly Review Meeting',
-        'time': '10:00 AM – 11:00 AM',
-        'location': 'Conference Room A',
-        'participants': '8',
-      },
-      {
-        'title': 'Team Standup',
-        'time': '11:30 AM – 12:00 PM',
-        'location': 'Online',
-        'participants': '12',
-      },
-      {
-        'title': 'Project Discussion',
-        'time': '02:00 PM – 03:30 PM',
-        'location': 'Board Room',
-        'participants': '6',
-      },
-    ];
+    if (raw.isEmpty) return const [];
+    return raw
+        .map((e) => e is Map
+            ? Map<String, String>.from(
+                e.map((k, v) => MapEntry('$k', '$v')),
+              )
+            : <String, String>{})
+        .toList();
   }
 }
 
-// ─── Calendar strip ───────────────────────────────────────────
 class _AdminCalendarStrip extends StatelessWidget {
   final AdminPalette c;
   const _AdminCalendarStrip({required this.c});
@@ -134,7 +126,6 @@ class _AdminCalendarStrip extends StatelessWidget {
   }
 }
 
-// ─── Meeting tile ─────────────────────────────────────────────
 class _MeetingTile extends StatelessWidget {
   final Map<String, String> meeting;
   final AdminPalette c;

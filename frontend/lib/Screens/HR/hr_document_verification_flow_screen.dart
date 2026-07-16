@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
@@ -382,6 +383,7 @@ class HrDocumentPreviewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = ThemeConfig.getTextPrimary(context);
     return _HrDarkShell(
       title: document.title,
       trailing: _StatusBadge(
@@ -553,6 +555,7 @@ class _HrFlagDocumentIssueScreenState
 
   @override
   Widget build(BuildContext context) {
+    final text = ThemeConfig.getTextPrimary(context);
     return _HrDarkShell(
       title: 'Flag Document Issue',
       child: Column(
@@ -603,8 +606,8 @@ class _HrFlagDocumentIssueScreenState
             controller: _remarkCtrl,
             maxLines: 4,
             maxLength: 250,
-            style: const TextStyle(color: Colors.white),
-            decoration: _fieldDecoration('Enter HR remark'),
+            style: TextStyle(color: text),
+            decoration: _fieldDecoration(context, 'Enter HR remark'),
           ),
           const SizedBox(height: 8),
           const _FieldLabel('Suggested Action for Employee'),
@@ -621,7 +624,7 @@ class _HrFlagDocumentIssueScreenState
               dense: true,
               title: Text(
                 item,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+                style: TextStyle(color: text, fontSize: 13),
               ),
               onChanged: (value) {
                 if (value == null) return;
@@ -1081,8 +1084,10 @@ class _HrDarkShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bg = ThemeConfig.getBgStart(context);
+    final text = ThemeConfig.getTextPrimary(context);
     return Scaffold(
-      backgroundColor: _HrDocColors.bg,
+      backgroundColor: bg,
       body: SafeArea(
         child: Column(
           children: [
@@ -1100,8 +1105,8 @@ class _HrDarkShell extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: text,
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
@@ -1150,8 +1155,10 @@ class _HrFlowScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bg = ThemeConfig.getBgStart(context);
+    final text = ThemeConfig.getTextPrimary(context);
     return Scaffold(
-      backgroundColor: _HrDocColors.bg,
+      backgroundColor: bg,
       body: SafeArea(
         child: Column(
           children: [
@@ -1169,8 +1176,8 @@ class _HrFlowScaffold extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: text,
                         fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
@@ -1214,6 +1221,8 @@ class _HrFlowBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bg = ThemeConfig.getBgEnd(context);
+    final border = ThemeConfig.getCardBorder(context);
     final items = [
       (Icons.dashboard_rounded, 'Dashboard'),
       (Icons.person_rounded, 'Details'),
@@ -1224,9 +1233,9 @@ class _HrFlowBottomNav extends StatelessWidget {
     ];
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
-      decoration: const BoxDecoration(
-        color: _HrDocColors.bgAlt,
-        border: Border(top: BorderSide(color: _HrDocColors.border)),
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border(top: BorderSide(color: border)),
       ),
       child: Row(
         children: List.generate(items.length, (i) {
@@ -1285,6 +1294,7 @@ class _FlowMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = ThemeConfig.getTextPrimary(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -1312,8 +1322,8 @@ class _FlowMetric extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: text,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -1331,16 +1341,17 @@ class _RoleProcessCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = ThemeConfig.getTextPrimary(context);
     final stages = _roleStages(employee);
     return _InfoCard(
       children: [
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
                 'Role Based Process',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: text,
                   fontSize: 15,
                   fontWeight: FontWeight.w900,
                 ),
@@ -1376,6 +1387,7 @@ class _StageDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final muted = ThemeConfig.getTextSecondary(context);
     return Column(
       children: [
         Container(
@@ -1393,8 +1405,8 @@ class _StageDot extends StatelessWidget {
           stage.role,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.white70,
+          style: TextStyle(
+            color: muted,
             fontSize: 10,
             fontWeight: FontWeight.w800,
           ),
@@ -1411,6 +1423,8 @@ class _RoleStageTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = ThemeConfig.getTextPrimary(context);
+    final muted = ThemeConfig.getTextSecondary(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -1431,8 +1445,8 @@ class _RoleStageTile extends StatelessWidget {
               children: [
                 Text(
                   stage.role,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: text,
                     fontSize: 13,
                     fontWeight: FontWeight.w900,
                   ),
@@ -1440,8 +1454,8 @@ class _RoleStageTile extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   stage.note,
-                  style: const TextStyle(
-                    color: _HrDocColors.muted,
+                  style: TextStyle(
+                    color: muted,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1995,6 +2009,8 @@ class _HistoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       child: Row(
@@ -2125,9 +2141,9 @@ class _InfoCard extends StatelessWidget {
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: _HrDocColors.surface,
+        color: cardBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _HrDocColors.border),
+        border: Border.all(color: border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2152,12 +2168,14 @@ class _InfoLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final muted = ThemeConfig.getTextSecondary(context);
+    final text = ThemeConfig.getTextPrimary(context);
     return Row(
       children: [
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(color: _HrDocColors.muted, fontSize: 12),
+            style: TextStyle(color: muted, fontSize: 12),
           ),
         ),
         if (icon != null) ...[
@@ -2171,7 +2189,7 @@ class _InfoLine extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.right,
             style: TextStyle(
-              color: valueColor,
+              color: valueColor == Colors.white ? text : valueColor,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -2195,12 +2213,15 @@ class _SelectBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
+    final text = ThemeConfig.getTextPrimary(context);
+    final muted = ThemeConfig.getTextSecondary(context);
     return AppDropdownButtonFormField<String>(
       value: value,
-      dropdownColor: _HrDocColors.surface,
-      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70),
-      style: const TextStyle(color: Colors.white, fontSize: 13),
-      decoration: _fieldDecoration(''),
+      dropdownColor: cardBg,
+      icon: Icon(Icons.keyboard_arrow_down_rounded, color: muted),
+      style: TextStyle(color: text, fontSize: 13),
+      decoration: _fieldDecoration(context, ''),
       items: items
           .map((item) => DropdownMenuItem(value: item, child: Text(item)))
           .toList(),
@@ -2212,16 +2233,20 @@ class _SelectBox extends StatelessWidget {
   }
 }
 
-InputDecoration _fieldDecoration(String hint) {
+InputDecoration _fieldDecoration(BuildContext context, String hint) {
+  final isDark = ThemeConfig.isDark(context);
+  final muted = ThemeConfig.getTextSecondary(context);
+  final fill = isDark ? _HrDocColors.bgAlt : const Color(0xFFF1F5F9);
+  final border = ThemeConfig.getCardBorder(context);
   return InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: _HrDocColors.muted, fontSize: 12),
+    hintStyle: TextStyle(color: muted, fontSize: 12),
     filled: true,
-    fillColor: _HrDocColors.bgAlt,
+    fillColor: fill,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: _HrDocColors.border),
+      borderSide: BorderSide(color: border),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
@@ -2383,6 +2408,9 @@ class _IconBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
+    final text = ThemeConfig.getTextPrimary(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
@@ -2390,11 +2418,11 @@ class _IconBox extends StatelessWidget {
         width: 42,
         height: 42,
         decoration: BoxDecoration(
-          color: _HrDocColors.surface,
+          color: cardBg,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: _HrDocColors.border),
+          border: Border.all(color: border),
         ),
-        child: Icon(icon, color: Colors.white, size: 18),
+        child: Icon(icon, color: text, size: 18),
       ),
     );
   }
@@ -2407,12 +2435,13 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final muted = ThemeConfig.getTextSecondary(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Colors.white70,
+        style: TextStyle(
+          color: muted,
           fontSize: 12,
           fontWeight: FontWeight.w800,
         ),

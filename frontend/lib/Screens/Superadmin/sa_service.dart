@@ -5,6 +5,7 @@ import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class SaService {
   static const String _base = '${ApiConfig.baseUrl}/superadmin';
+  static const Duration _timeout = Duration(seconds: 60);
 
   Future<Map<String, dynamic>> fetchDashboard() => _get('/dashboard/');
 
@@ -15,12 +16,14 @@ class SaService {
     try {
       final res = await http
           .get(Uri.parse('$_base$path'))
-          .timeout(const Duration(seconds: 15));
+          .timeout(_timeout);
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final decoded = jsonDecode(res.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
       }
-    } catch (_) {}
-    return {};
+    } catch (error) {
+      throw Exception('Superadmin backend unavailable: $error');
+    }
+    throw Exception('Superadmin backend returned invalid data.');
   }
 }

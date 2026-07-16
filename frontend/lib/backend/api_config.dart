@@ -1,12 +1,26 @@
 class ApiConfig {
+  static const String publicBaseUrl =
+      'https://hrms-bitbyte-mobileapp.onrender.com/api';
+
   /// Override at build time when a different backend is needed:
   /// --dart-define=API_BASE_URL=https://api.example.com/api
-  static const String baseUrl = String.fromEnvironment(
+  static const String configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://hrms-bitbyte-mobileapp.onrender.com/api',
+    defaultValue: publicBaseUrl,
   );
 
+  /// Render public services must be called with HTTPS from Android builds.
+  /// This also protects older run commands that used the HTTP URL.
+  static const String baseUrl =
+      configuredBaseUrl == 'http://hrms-bitbyte-mobileapp.onrender.com/api' ||
+              configuredBaseUrl ==
+                  'http://hrms-bitbyte-mobileapp.onrender.com/api/'
+          ? publicBaseUrl
+          : configuredBaseUrl;
+
   static Uri uri(String path) => Uri.parse('$baseUrl$path');
+
+  static Uri publicUri(String path) => Uri.parse('$publicBaseUrl$path');
 
   static bool get usesPrivateNetworkAddress {
     final host = Uri.tryParse(baseUrl)?.host.toLowerCase() ?? '';

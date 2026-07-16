@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 import 'employee_calendar_range.dart';
@@ -150,9 +151,10 @@ class _EmployeeAttendanceHistoryScreenState
   @override
   Widget build(BuildContext context) {
     final selectedRecord = _recordForSelection();
+    final bg = ThemeConfig.getBgStart(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF001426),
+      backgroundColor: bg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(10, 0, 10, 22),
@@ -216,6 +218,7 @@ class _HistoryHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = ThemeConfig.getTextPrimary(context);
     return SizedBox(
       height: 56,
       child: Stack(
@@ -228,10 +231,14 @@ class _HistoryHeader extends StatelessWidget {
               onTap: () => Navigator.of(context).maybePop(),
             ),
           ),
-          const Text(
+          Text(
             'Attendance History',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              color: text,
+              fontSize: 23,
+              fontWeight: FontWeight.w900,
+            ),
           ),
           Align(
             alignment: Alignment.centerRight,
@@ -254,6 +261,8 @@ class _HeaderButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
+    final text = ThemeConfig.getTextPrimary(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(9),
@@ -261,11 +270,11 @@ class _HeaderButton extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: const Color(0xFF071D34),
+          color: cardBg,
           borderRadius: BorderRadius.circular(9),
           border: Border.all(color: EmployeeColors.blue.withAlpha(90)),
         ),
-        child: Icon(icon, color: Colors.white, size: 22),
+        child: Icon(icon, color: text, size: 22),
       ),
     );
   }
@@ -279,10 +288,11 @@ class _ModeTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        color: const Color(0xFF020B20),
+        color: cardBg,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: EmployeeColors.blue.withAlpha(55)),
       ),
@@ -322,6 +332,7 @@ class _ModeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final muted = ThemeConfig.getTextSecondary(context);
     return Expanded(
       child: InkWell(
         onTap: onTap,
@@ -340,7 +351,7 @@ class _ModeTab extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? Colors.white : Colors.white70,
+              color: selected ? Colors.white : muted,
               fontSize: 18,
               fontWeight: FontWeight.w900,
             ),
@@ -359,9 +370,10 @@ class _HistoryAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = ThemeConfig.getTextPrimary(context);
     return CircleAvatar(
       radius: 28,
-      backgroundColor: Colors.white24,
+      backgroundColor: EmployeeColors.blue.withAlpha(45),
       child: CircleAvatar(
         radius: 24,
         backgroundColor: EmployeeColors.blue.withAlpha(45),
@@ -369,8 +381,8 @@ class _HistoryAvatar extends StatelessWidget {
         child: _imageProvider == null
             ? Text(
                 title.substring(0, 1).toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: text,
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
                 ),
@@ -554,11 +566,13 @@ class _DateBox extends StatelessWidget {
         date.year == selectedDate.year && date.month == selectedDate.month,
       EmployeeCalendarMode.yearly => date.year == selectedDate.year,
     };
+    final muted = ThemeConfig.getTextSecondary(context);
+    final cardBg = ThemeConfig.getCardBg(context);
     final markerColor = date.weekday == DateTime.saturday
         ? const Color(0xFFFFC928)
         : date.weekday == DateTime.sunday
         ? EmployeeColors.red
-        : Colors.white70;
+        : muted;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3),
@@ -583,7 +597,7 @@ class _DateBox extends StatelessWidget {
               decoration: BoxDecoration(
                 color: selectedForMode
                     ? EmployeeColors.blue
-                    : const Color(0xFF061B2D),
+                    : cardBg,
                 borderRadius: BorderRadius.circular(9),
                 border: Border.all(color: EmployeeColors.blue.withAlpha(45)),
                 boxShadow: selectedForMode

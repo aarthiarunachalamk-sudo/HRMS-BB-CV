@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'ceo_local_documents.dart';
 import 'ceo_service.dart';
 import 'ceo_widgets.dart';
 
@@ -24,16 +25,65 @@ class _CeoDocumentCenterScreenState extends State<CeoDocumentCenterScreen> {
     _load();
   }
 
-  void _load() => _future = CeoService().fetchDocuments(widget.userId);
+  void _load() => _future = _fetchDocuments();
+
+  Future<Map<String, dynamic>> _fetchDocuments() async {
+    final local = await CeoLocalDocuments.load(widget.userId);
+    try {
+      final remote = await CeoService().fetchDocuments(widget.userId);
+      final documents = <Map<String, dynamic>>[
+        ...local,
+        ..._maps(remote['documents']),
+      ];
+      final categories = <String>{
+        ..._maps(remote['categories']).map((item) => '${item['name']}'),
+        ...local.map((item) => '${item['category'] ?? ''}'),
+        ...local.map((item) => '${item['direction'] ?? ''}'),
+      }..removeWhere((item) => item.trim().isEmpty);
+      return {
+        ...remote,
+        'success': true,
+        'documents': documents,
+        'categories': categories.map((name) => {'name': name}).toList(),
+      };
+    } catch (_) {
+      final categories = local
+          .map((item) => '${item['category'] ?? ''}')
+          .where((item) => item.trim().isNotEmpty)
+          .toSet();
+      return {
+        'success': true,
+        'documents': local,
+        'categories': categories.map((name) => {'name': name}).toList(),
+      };
+    }
+  }
 
   Future<void> _open(Map<String, dynamic> document) async {
     final url = '${document['url'] ?? ''}'.trim();
     if (url.isEmpty) return;
     try {
-      final opened = await _channel.invokeMethod<bool>('openUrl', {'url': url});
+      final opened = await _channel.invokeMethod<bool>('openUrl', {
+        'url': url,
+        'mimeType': _mimeType('${document['extension'] ?? ''}'),
+      });
       if (opened != true && mounted) _message('Unable to open this document.');
     } on PlatformException catch (error) {
       if (mounted) _message(error.message ?? 'Unable to open this document.');
+    }
+  }
+
+  String _mimeType(String extension) {
+    switch (extension.toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'xls':
+      case 'xlsx':
+        return 'application/vnd.ms-excel';
+      case 'csv':
+        return 'text/csv';
+      default:
+        return 'application/octet-stream';
     }
   }
 
@@ -59,6 +109,7 @@ class _CeoDocumentCenterScreenState extends State<CeoDocumentCenterScreen> {
               _row('Employee ID', document['employee_id']),
               _row('Status', document['status']),
               _row('File type', '${document['extension'] ?? ''}'.toUpperCase()),
+              _row('Storage path', document['storage_path']),
               _row('Saved at', document['created_at']),
               const SizedBox(height: 14),
               SizedBox(
@@ -124,10 +175,18 @@ class _CeoDocumentCenterScreenState extends State<CeoDocumentCenterScreen> {
         }
         final data = snapshot.data!;
         final all = _maps(data['documents']);
-        final categoryNames = _maps(data['categories']).map((item) => '${item['name']}').toList();
+        final categoryNames = <String>{
+          ..._maps(data['categories']).map((item) => '${item['name']}'),
+          'Saved',
+          'Sent',
+          'Received',
+        }.where((item) => item.trim().isNotEmpty).toList();
         final filtered = all.where((document) {
-          final matchesCategory = _category == 'All' || document['category'] == _category;
-          final text = '${document['title']} ${document['owner']} ${document['employee_id']} ${document['status']}'.toLowerCase();
+          final matchesCategory = _category == 'All' ||
+              document['category'] == _category ||
+              document['status'] == _category ||
+              document['direction'] == _category;
+          final text = '${document['title']} ${document['owner']} ${document['employee_id']} ${document['status']} ${document['storage_path']}'.toLowerCase();
           return matchesCategory && text.contains(_query.toLowerCase());
         }).toList();
         return Column(children: [
@@ -186,6 +245,8 @@ class _CeoDocumentCenterScreenState extends State<CeoDocumentCenterScreen> {
                           const SizedBox(width: 11),
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             title('${document['title']}', 12),
+                            if ('${document['storage_path'] ?? ''}'.trim().isNotEmpty)
+                              muted('${document['storage_path']}', 8),
                             const SizedBox(height: 3),
                             muted('${document['owner']} • ${document['category']}', 9),
                             muted('${document['status']} • ${extension.isEmpty ? 'FILE' : extension.toUpperCase()}', 8),

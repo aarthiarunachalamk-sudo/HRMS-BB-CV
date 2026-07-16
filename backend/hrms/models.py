@@ -711,3 +711,778 @@ class OrganizationDepartment(models.Model):
 
     def __str__(self):
         return self.name
+
+
+# ---------------------------------------------------------------------------
+# HRMS module extension tables
+# Existing models above are intentionally left unchanged. The models below add
+# storage for the remaining mobile app module flows so every screen can read
+# from the live database instead of static/frontend fallback data.
+# ---------------------------------------------------------------------------
+
+
+class UserProfileSetting(models.Model):
+    THEME_CHOICES = [
+        ('system', 'System'),
+        ('light', 'Light'),
+        ('dark', 'Dark'),
+    ]
+
+    user_id = models.CharField(max_length=40, unique=True, db_index=True)
+    display_name = models.CharField(max_length=140, blank=True)
+    avatar = CloudinaryField('image', blank=True, null=True)
+    designation = models.CharField(max_length=120, blank=True)
+    department = models.CharField(max_length=120, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    alternate_email = models.EmailField(blank=True)
+    theme_mode = models.CharField(max_length=20, choices=THEME_CHOICES, default='system')
+    language = models.CharField(max_length=20, default='en')
+    timezone = models.CharField(max_length=60, default='Asia/Kolkata')
+    notification_preferences = models.JSONField(default=dict, blank=True)
+    privacy_preferences = models.JSONField(default=dict, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.display_name or self.user_id
+
+
+class DashboardWidgetSnapshot(models.Model):
+    owner_user_id = models.CharField(max_length=40, db_index=True)
+    owner_role = models.CharField(max_length=30, db_index=True)
+    module = models.CharField(max_length=80, db_index=True)
+    widget_key = models.CharField(max_length=100)
+    title = models.CharField(max_length=160)
+    value = models.CharField(max_length=80, blank=True)
+    subtitle = models.CharField(max_length=200, blank=True)
+    icon = models.CharField(max_length=80, blank=True)
+    color = models.CharField(max_length=40, blank=True)
+    filters = models.JSONField(default=dict, blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    captured_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('owner_user_id', 'owner_role', 'module', 'widget_key')
+        ordering = ['module', 'widget_key']
+
+    def __str__(self):
+        return f'{self.owner_role} - {self.title}'
+
+
+class SavedFilterView(models.Model):
+    owner_user_id = models.CharField(max_length=40, db_index=True)
+    module = models.CharField(max_length=80, db_index=True)
+    name = models.CharField(max_length=120)
+    filters = models.JSONField(default=dict, blank=True)
+    sort_by = models.CharField(max_length=80, blank=True)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('owner_user_id', 'module', 'name')
+        ordering = ['module', 'name']
+
+    def __str__(self):
+        return f'{self.module} - {self.name}'
+
+
+class WorkflowApprovalRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    module = models.CharField(max_length=80, db_index=True)
+    reference_id = models.CharField(max_length=60, db_index=True)
+    title = models.CharField(max_length=160)
+    requester_user_id = models.CharField(max_length=40, db_index=True)
+    requester_name = models.CharField(max_length=140, blank=True)
+    approver_user_id = models.CharField(max_length=40, blank=True, db_index=True)
+    approver_role = models.CharField(max_length=30, blank=True, db_index=True)
+    current_step = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    priority = models.CharField(max_length=20, default='Medium')
+    amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    payload = models.JSONField(default=dict, blank=True)
+    remarks = models.TextField(blank=True)
+    acted_by = models.CharField(max_length=40, blank=True)
+    acted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.title} ({self.status})'
+
+
+class BudgetPlan(models.Model):
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('active', 'Active'),
+        ('closed', 'Closed'),
+    ]
+
+    owner_user_id = models.CharField(max_length=40, db_index=True)
+    financial_year = models.CharField(max_length=20, db_index=True)
+    department = models.CharField(max_length=120, blank=True, db_index=True)
+    branch = models.CharField(max_length=120, blank=True, db_index=True)
+    category = models.CharField(max_length=120, blank=True)
+    allocated_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    spent_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    committed_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    currency = models.CharField(max_length=10, default='INR')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    notes = models.TextField(blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['financial_year', 'department', 'category']
+
+    def __str__(self):
+        return f'{self.financial_year} - {self.department or self.branch or self.category}'
+
+
+class BudgetTransaction(models.Model):
+    TRANSACTION_CHOICES = [
+        ('allocation', 'Allocation'),
+        ('expense', 'Expense'),
+        ('adjustment', 'Adjustment'),
+        ('refund', 'Refund'),
+    ]
+
+    budget = models.ForeignKey(BudgetPlan, on_delete=models.CASCADE, related_name='transactions')
+    transaction_type = models.CharField(max_length=30, choices=TRANSACTION_CHOICES)
+    title = models.CharField(max_length=160)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    transaction_date = models.DateField(db_index=True)
+    reference_number = models.CharField(max_length=80, blank=True)
+    vendor = models.CharField(max_length=140, blank=True)
+    attachment = models.FileField(upload_to='budget/attachments/', blank=True, null=True)
+    created_by = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-transaction_date', '-created_at']
+
+    def __str__(self):
+        return f'{self.title} - {self.amount}'
+
+
+class BranchPerformanceSnapshot(models.Model):
+    branch_name = models.CharField(max_length=140, db_index=True)
+    period = models.CharField(max_length=40, db_index=True)
+    total_employees = models.PositiveIntegerField(default=0)
+    active_employees = models.PositiveIntegerField(default=0)
+    revenue = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    expense = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    attendance_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    productivity_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    change_percent = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    payload = models.JSONField(default=dict, blank=True)
+    captured_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('branch_name', 'period')
+        ordering = ['branch_name', '-period']
+
+    def __str__(self):
+        return f'{self.branch_name} - {self.period}'
+
+
+class DepartmentPerformanceSnapshot(models.Model):
+    department = models.CharField(max_length=140, db_index=True)
+    period = models.CharField(max_length=40, db_index=True)
+    total_employees = models.PositiveIntegerField(default=0)
+    present_count = models.PositiveIntegerField(default=0)
+    absent_count = models.PositiveIntegerField(default=0)
+    late_count = models.PositiveIntegerField(default=0)
+    leave_count = models.PositiveIntegerField(default=0)
+    task_completion_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    performance_score = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    payload = models.JSONField(default=dict, blank=True)
+    captured_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('department', 'period')
+        ordering = ['department', '-period']
+
+    def __str__(self):
+        return f'{self.department} - {self.period}'
+
+
+class MeetingParticipantStatus(models.Model):
+    STATUS_CHOICES = [
+        ('invited', 'Invited'),
+        ('accepted', 'Accepted'),
+        ('declined', 'Declined'),
+        ('attended', 'Attended'),
+        ('missed', 'Missed'),
+    ]
+
+    meeting = models.ForeignKey(MdMeeting, on_delete=models.CASCADE, related_name='participant_statuses')
+    participant_user_id = models.CharField(max_length=40, db_index=True)
+    participant_name = models.CharField(max_length=140, blank=True)
+    participant_email = models.EmailField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='invited')
+    response_note = models.TextField(blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+    notification_sent = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('meeting', 'participant_user_id')
+        ordering = ['meeting', 'participant_name']
+
+    def __str__(self):
+        return f'{self.participant_user_id} - {self.meeting.title}'
+
+
+class MeetingMinute(models.Model):
+    meeting = models.ForeignKey(MdMeeting, on_delete=models.CASCADE, related_name='minutes')
+    title = models.CharField(max_length=160)
+    notes = models.TextField(blank=True)
+    action_items = models.JSONField(default=list, blank=True)
+    recorded_by = models.CharField(max_length=40, blank=True)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-recorded_at']
+
+    def __str__(self):
+        return self.title
+
+
+class TaskComment(models.Model):
+    task = models.ForeignKey(TeamTask, on_delete=models.CASCADE, related_name='comments')
+    author_user_id = models.CharField(max_length=40, db_index=True)
+    author_name = models.CharField(max_length=140, blank=True)
+    comment = models.TextField()
+    attachments = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.task_id} - {self.author_user_id}'
+
+
+class TaskChecklistItem(models.Model):
+    task = models.ForeignKey(TeamTask, on_delete=models.CASCADE, related_name='checklist_items')
+    title = models.CharField(max_length=160)
+    is_completed = models.BooleanField(default=False)
+    completed_by = models.CharField(max_length=40, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+
+    def __str__(self):
+        return self.title
+
+
+class ProjectIssue(models.Model):
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('resolved', 'Resolved'),
+        ('closed', 'Closed'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='issues')
+    title = models.CharField(max_length=180)
+    description = models.TextField(blank=True)
+    owner_user_id = models.CharField(max_length=40, blank=True)
+    priority = models.CharField(max_length=20, default='Medium')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    due_date = models.DateField(null=True, blank=True)
+    created_by = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return self.title
+
+
+class ProjectExpense(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='expenses')
+    title = models.CharField(max_length=160)
+    category = models.CharField(max_length=100, blank=True)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    expense_date = models.DateField(db_index=True)
+    vendor = models.CharField(max_length=140, blank=True)
+    receipt = models.FileField(upload_to='project_expenses/', blank=True, null=True)
+    approved_by = models.CharField(max_length=40, blank=True)
+    created_by = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-expense_date']
+
+    def __str__(self):
+        return f'{self.project.name} - {self.title}'
+
+
+class AttendanceRegularizationRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    employee_id = models.CharField(max_length=20, db_index=True)
+    attendance_date = models.DateField(db_index=True)
+    request_type = models.CharField(max_length=50, default='correction')
+    requested_check_in = models.DateTimeField(null=True, blank=True)
+    requested_check_out = models.DateTimeField(null=True, blank=True)
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    reviewed_by = models.CharField(max_length=40, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-attendance_date', '-created_at']
+
+    def __str__(self):
+        return f'{self.employee_id} - {self.attendance_date}'
+
+
+class LeaveBalanceLedger(models.Model):
+    employee_id = models.CharField(max_length=20, db_index=True)
+    leave_type = models.CharField(max_length=60, db_index=True)
+    fiscal_year = models.CharField(max_length=20, db_index=True)
+    opening_balance = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    accrued = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    used = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    pending = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    carry_forward = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    available = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    updated_by = models.CharField(max_length=40, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('employee_id', 'leave_type', 'fiscal_year')
+        ordering = ['employee_id', 'leave_type']
+
+    def __str__(self):
+        return f'{self.employee_id} - {self.leave_type} ({self.available})'
+
+
+class OvertimeRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('paid', 'Paid'),
+    ]
+
+    employee_id = models.CharField(max_length=20, db_index=True)
+    overtime_date = models.DateField(db_index=True)
+    start_time = models.DateTimeField(null=True, blank=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    total_minutes = models.PositiveIntegerField(default=0)
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    approved_by = models.CharField(max_length=40, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    payroll_month = models.PositiveIntegerField(null=True, blank=True)
+    payroll_year = models.PositiveIntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-overtime_date', '-created_at']
+
+    def __str__(self):
+        return f'{self.employee_id} - {self.overtime_date}'
+
+
+class ShiftSchedule(models.Model):
+    employee_id = models.CharField(max_length=20, db_index=True)
+    shift_date = models.DateField(db_index=True)
+    shift_name = models.CharField(max_length=80)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    work_mode = models.CharField(max_length=30, blank=True)
+    location = models.CharField(max_length=140, blank=True)
+    assigned_by = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('employee_id', 'shift_date')
+        ordering = ['shift_date', 'employee_id']
+
+    def __str__(self):
+        return f'{self.employee_id} - {self.shift_date}'
+
+
+class RecruitmentCandidatePipeline(models.Model):
+    STATUS_CHOICES = [
+        ('applied', 'Applied'),
+        ('screening', 'Screening'),
+        ('interview', 'Interview'),
+        ('offered', 'Offered'),
+        ('hired', 'Hired'),
+        ('rejected', 'Rejected'),
+    ]
+
+    job = models.ForeignKey(RecruitmentJobOpening, on_delete=models.CASCADE, related_name='pipeline_candidates')
+    candidate_name = models.CharField(max_length=140)
+    candidate_email = models.EmailField()
+    candidate_phone = models.CharField(max_length=20, blank=True)
+    resume = models.FileField(upload_to='recruitment/resumes/', blank=True, null=True)
+    source = models.CharField(max_length=80, blank=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='applied', db_index=True)
+    score = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    current_stage = models.CharField(max_length=80, blank=True)
+    notes = models.TextField(blank=True)
+    assigned_to = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return self.candidate_name
+
+
+class InterviewSchedule(models.Model):
+    candidate = models.ForeignKey(RecruitmentCandidatePipeline, on_delete=models.CASCADE, related_name='interviews')
+    interviewer_user_id = models.CharField(max_length=40, db_index=True)
+    interviewer_name = models.CharField(max_length=140, blank=True)
+    scheduled_at = models.DateTimeField(db_index=True)
+    duration_minutes = models.PositiveIntegerField(default=30)
+    mode = models.CharField(max_length=40, default='online')
+    location_or_link = models.CharField(max_length=250, blank=True)
+    status = models.CharField(max_length=30, default='scheduled')
+    feedback = models.JSONField(default=dict, blank=True)
+    created_by = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['scheduled_at']
+
+    def __str__(self):
+        return f'{self.candidate.candidate_name} - {self.scheduled_at}'
+
+
+class OnboardingTask(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('blocked', 'Blocked'),
+    ]
+
+    employee_id = models.CharField(max_length=20, db_index=True)
+    title = models.CharField(max_length=160)
+    category = models.CharField(max_length=80, blank=True)
+    owner_user_id = models.CharField(max_length=40, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    checklist = models.JSONField(default=list, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['status', 'due_date']
+
+    def __str__(self):
+        return self.title
+
+
+class DocumentRecord(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('verified', 'Verified'),
+        ('rejected', 'Rejected'),
+        ('expired', 'Expired'),
+    ]
+
+    owner_user_id = models.CharField(max_length=40, db_index=True)
+    owner_role = models.CharField(max_length=30, blank=True)
+    document_type = models.CharField(max_length=100, db_index=True)
+    document_number = models.CharField(max_length=100, blank=True)
+    file = models.FileField(upload_to='documents/', blank=True, null=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    verified_by = models.CharField(max_length=40, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    remarks = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['owner_user_id', 'document_type']
+
+    def __str__(self):
+        return f'{self.owner_user_id} - {self.document_type}'
+
+
+class AssetInventory(models.Model):
+    STATUS_CHOICES = [
+        ('available', 'Available'),
+        ('assigned', 'Assigned'),
+        ('maintenance', 'Maintenance'),
+        ('retired', 'Retired'),
+    ]
+
+    asset_code = models.CharField(max_length=60, unique=True)
+    asset_name = models.CharField(max_length=160)
+    category = models.CharField(max_length=100, blank=True)
+    serial_number = models.CharField(max_length=120, blank=True)
+    purchase_date = models.DateField(null=True, blank=True)
+    purchase_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    assigned_to = models.CharField(max_length=40, blank=True, db_index=True)
+    assigned_at = models.DateField(null=True, blank=True)
+    location = models.CharField(max_length=140, blank=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='available')
+    notes = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['asset_code']
+
+    def __str__(self):
+        return self.asset_code
+
+
+class HelpdeskTicket(models.Model):
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('resolved', 'Resolved'),
+        ('closed', 'Closed'),
+    ]
+
+    ticket_no = models.CharField(max_length=60, unique=True)
+    requester_user_id = models.CharField(max_length=40, db_index=True)
+    assigned_to = models.CharField(max_length=40, blank=True, db_index=True)
+    category = models.CharField(max_length=80, blank=True)
+    subject = models.CharField(max_length=180)
+    description = models.TextField(blank=True)
+    priority = models.CharField(max_length=20, default='Medium')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
+    attachments = models.JSONField(default=list, blank=True)
+    resolution_note = models.TextField(blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return self.ticket_no
+
+
+class TrainingProgram(models.Model):
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('scheduled', 'Scheduled'),
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    title = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    trainer = models.CharField(max_length=140, blank=True)
+    department = models.CharField(max_length=120, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    location_or_link = models.CharField(max_length=250, blank=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='draft')
+    materials = models.JSONField(default=list, blank=True)
+    created_by = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-start_date', 'title']
+
+    def __str__(self):
+        return self.title
+
+
+class TrainingEnrollment(models.Model):
+    program = models.ForeignKey(TrainingProgram, on_delete=models.CASCADE, related_name='enrollments')
+    employee_id = models.CharField(max_length=20, db_index=True)
+    status = models.CharField(max_length=30, default='enrolled')
+    progress_percent = models.PositiveIntegerField(default=0)
+    score = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    feedback = models.TextField(blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('program', 'employee_id')
+        ordering = ['program', 'employee_id']
+
+    def __str__(self):
+        return f'{self.employee_id} - {self.program.title}'
+
+
+class PerformanceReviewCycle(models.Model):
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('archived', 'Archived'),
+    ]
+
+    name = models.CharField(max_length=140)
+    period = models.CharField(max_length=40, unique=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    review_template = models.JSONField(default=dict, blank=True)
+    created_by = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return self.name
+
+
+class EmployeeGoal(models.Model):
+    STATUS_CHOICES = [
+        ('not_started', 'Not Started'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('deferred', 'Deferred'),
+    ]
+
+    employee_id = models.CharField(max_length=20, db_index=True)
+    cycle = models.ForeignKey(PerformanceReviewCycle, on_delete=models.SET_NULL, null=True, blank=True, related_name='goals')
+    title = models.CharField(max_length=180)
+    description = models.TextField(blank=True)
+    weightage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    target_value = models.CharField(max_length=80, blank=True)
+    achieved_value = models.CharField(max_length=80, blank=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='not_started')
+    manager_rating = models.DecimalField(max_digits=3, decimal_places=2, default=0)
+    employee_comment = models.TextField(blank=True)
+    manager_comment = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['employee_id', 'title']
+
+    def __str__(self):
+        return self.title
+
+
+class SalaryRevisionRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('implemented', 'Implemented'),
+    ]
+
+    employee_id = models.CharField(max_length=20, db_index=True)
+    current_ctc = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    proposed_ctc = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    effective_from = models.DateField(null=True, blank=True)
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    requested_by = models.CharField(max_length=40, blank=True)
+    approved_by = models.CharField(max_length=40, blank=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.employee_id} - {self.status}'
+
+
+class ReportExportHistory(models.Model):
+    STATUS_CHOICES = [
+        ('queued', 'Queued'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+
+    requested_by = models.CharField(max_length=40, db_index=True)
+    report_type = models.CharField(max_length=100, db_index=True)
+    filters = models.JSONField(default=dict, blank=True)
+    file_format = models.CharField(max_length=20, default='pdf')
+    file = models.FileField(upload_to='reports/exports/', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
+    error_message = models.TextField(blank=True)
+    generated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.report_type} - {self.status}'
+
+
+class Announcement(models.Model):
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+        ('archived', 'Archived'),
+    ]
+
+    title = models.CharField(max_length=180)
+    message = models.TextField()
+    target_roles = models.JSONField(default=list, blank=True)
+    target_user_ids = models.JSONField(default=list, blank=True)
+    attachment = models.FileField(upload_to='announcements/', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    publish_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.CharField(max_length=40, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-publish_at', '-created_at']
+
+    def __str__(self):
+        return self.title
+
+
+class AuditLog(models.Model):
+    actor_user_id = models.CharField(max_length=40, blank=True, db_index=True)
+    actor_role = models.CharField(max_length=30, blank=True)
+    action = models.CharField(max_length=120, db_index=True)
+    module = models.CharField(max_length=80, db_index=True)
+    reference_id = models.CharField(max_length=80, blank=True, db_index=True)
+    before = models.JSONField(default=dict, blank=True)
+    after = models.JSONField(default=dict, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.module} - {self.action}'

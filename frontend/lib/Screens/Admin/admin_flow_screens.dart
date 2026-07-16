@@ -3,18 +3,13 @@ import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 
 import 'admin_palette.dart';
+import 'admin_service.dart';
 import 'admin_success_screen.dart';
 import 'admin_widgets.dart';
 
 class AdminTasksScreen extends StatelessWidget {
-  const AdminTasksScreen({super.key});
-
-  static const _tasks = [
-    ['UI Design Review', 'Priya Sharma', 'High', '75%'],
-    ['Attendance Module', 'Michael Brown', 'Medium', '40%'],
-    ['Bug Fixing', 'John Smith', 'Low', '30%'],
-    ['API Integration', 'Sarah Johnson', 'High', '60%'],
-  ];
+  final String userId;
+  const AdminTasksScreen({super.key, required this.userId});
 
   @override
   Widget build(BuildContext context) {
@@ -27,40 +22,54 @@ class AdminTasksScreen extends StatelessWidget {
           MaterialPageRoute(builder: (_) => const AdminCreateTaskScreen()),
         ),
       ),
-      child: adminPageList([
-        _Segment(['All', 'In Progress', 'Completed'], 0, c),
-        ..._tasks.map(
-          (task) => AdminCard(
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => AdminTaskDetailsScreen(
-                  title: task[0],
-                  assignee: task[1],
-                  priority: task[2],
-                  progress: task[3],
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      adminTitle(task[0], 14, c),
-                      const SizedBox(height: 4),
-                      adminMuted(task[1], 11, c),
-                      const SizedBox(height: 5),
-                      AdminBadge(task[2], color: _priorityColor(task[2], c)),
-                    ],
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: AdminService().fetchTasks(userId),
+        builder: (context, snapshot) {
+          final tasks = _mapList(snapshot.data?['tasks']);
+          return adminPageList([
+            _Segment(['All', 'In Progress', 'Completed'], 0, c),
+            if (tasks.isEmpty)
+              AdminCard(child: Center(child: adminMuted('No tasks found', 12, c))),
+            ...tasks.map((task) {
+              final title = _text(task['title'], 'Task');
+              final assignee = _text(task['assignee'], 'Unassigned');
+              final priority = _text(task['priority'], 'Medium');
+              final progress = _taskProgress(task['status']);
+              return AdminCard(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminTaskDetailsScreen(
+                      title: title,
+                      assignee: assignee,
+                      priority: priority,
+                      progress: progress,
+                      dueDate: _text(task['due_date'], 'N/A'),
+                      description: _text(task['description'], 'No description'),
+                    ),
                   ),
                 ),
-                _RingLabel(task[3], c.primary),
-              ],
-            ),
-          ),
-        ),
-      ]),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          adminTitle(title, 14, c),
+                          const SizedBox(height: 4),
+                          adminMuted(assignee, 11, c),
+                          const SizedBox(height: 5),
+                          AdminBadge(priority, color: _priorityColor(priority, c)),
+                        ],
+                      ),
+                    ),
+                    _RingLabel(progress, c.primary),
+                  ],
+                ),
+              );
+            }),
+          ]);
+        },
+      ),
     );
   }
 }
@@ -75,8 +84,9 @@ class AdminCreateTaskScreen extends StatefulWidget {
 class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
   final _title = TextEditingController();
   final _description = TextEditingController();
-  String _assignee = 'John Smith';
+  String _assignee = '';
   String _priority = 'High';
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -88,9 +98,20 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
   @override
   Widget build(BuildContext context) {
     final c = AdminPalette.of(context);
-    return AdminShell(
-      title: 'Create Task',
-      child: adminPageList([
+    return FutureBuilder<Map<String, dynamic>>(
+      future: AdminService().fetchEmployees(''),
+      builder: (context, snapshot) {
+        final employees = _mapList(snapshot.data?['employees'])
+            .map((item) => _text(item['name']))
+            .where((name) => name.isNotEmpty)
+            .toList();
+        final assignees = employees.isEmpty ? ['Unassigned'] : employees;
+        final selectedAssignee =
+            assignees.contains(_assignee) ? _assignee : assignees.first;
+        if (_assignee != selectedAssignee) _assignee = selectedAssignee;
+        return AdminShell(
+          title: 'Create Task',
+          child: adminPageList([
         _TextFieldBlock('Task Title', _title, Icons.task_alt_rounded, c),
         _TextFieldBlock(
           'Description',
@@ -101,13 +122,8 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
         ),
         _DropdownBlock(
           label: 'Assign To',
-          value: _assignee,
-          items: const [
-            'John Smith',
-            'Priya Sharma',
-            'Michael Brown',
-            'Sarah Johnson',
-          ],
+          value: selectedAssignee,
+          items: assignees,
           icon: Icons.person_outline_rounded,
           c: c,
           onChanged: (v) => setState(() => _assignee = v),
@@ -122,20 +138,46 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
         ),
         _DateCard('Due Date', 'Select due date', c),
         AdminPrimaryButton(
-          label: 'Assign Task',
+          label: _saving ? 'Assigning...' : 'Assign Task',
           icon: Icons.send_rounded,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => AdminSuccessScreen(
-                message: 'Task Assigned\nSuccessfully!',
-                subMessage: 'Employee has been notified.',
-                actionLabel: 'View Tasks',
-                onAction: () => Navigator.of(context).pop(),
-              ),
-            ),
-          ),
+          onTap: _assignTask,
         ),
-      ]),
+          ]),
+        );
+      },
+    );
+  }
+
+  Future<void> _assignTask() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final response = await AdminService().createTask({
+      'title': _title.text.trim(),
+      'description': _description.text.trim(),
+      'assignee_name': _assignee,
+      'priority': _priority,
+      'created_by': 'admin',
+    });
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (response['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${response['message'] ?? 'Task creation failed.'}')),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AdminSuccessScreen(
+          message: 'Task Assigned\nSuccessfully!',
+          subMessage: 'Employee has been notified.',
+          actionLabel: 'View Tasks',
+          onAction: () {
+            Navigator.of(context).pop();
+            Navigator.of(context).pop();
+          },
+        ),
+      ),
     );
   }
 }
@@ -145,6 +187,8 @@ class AdminTaskDetailsScreen extends StatelessWidget {
   final String assignee;
   final String priority;
   final String progress;
+  final String dueDate;
+  final String description;
 
   const AdminTaskDetailsScreen({
     super.key,
@@ -152,6 +196,8 @@ class AdminTaskDetailsScreen extends StatelessWidget {
     required this.assignee,
     required this.priority,
     required this.progress,
+    this.dueDate = 'N/A',
+    this.description = 'No description',
   });
 
   @override
@@ -174,7 +220,7 @@ class AdminTaskDetailsScreen extends StatelessWidget {
                 valueColor: _priorityColor(priority, c),
               ),
               Divider(color: c.border),
-              const AdminInfoRow('Due Date', '24 Jun 2026'),
+              AdminInfoRow('Due Date', dueDate),
               Divider(color: c.border),
               AdminInfoRow('Progress', progress),
             ],
@@ -194,25 +240,9 @@ class AdminTaskDetailsScreen extends StatelessWidget {
                 backgroundColor: c.border,
               ),
               const SizedBox(height: 14),
-              adminMuted(
-                'Review the new UI design for the HRMS application and share feedback.',
-                12,
-                c,
-              ),
+              adminMuted(description, 12, c),
             ],
           ),
-        ),
-        AdminListTile(
-          icon: Icons.attach_file_rounded,
-          titleText: 'Attachments',
-          subtitle: '2 files',
-          color: c.primary,
-        ),
-        AdminListTile(
-          icon: Icons.comment_rounded,
-          titleText: 'Comments',
-          subtitle: '3 comments',
-          color: c.orange,
         ),
       ]),
     );
@@ -220,14 +250,8 @@ class AdminTaskDetailsScreen extends StatelessWidget {
 }
 
 class AdminAssetsScreen extends StatelessWidget {
-  const AdminAssetsScreen({super.key});
-
-  static const _assets = [
-    ['MacBook Pro', 'Laptop - IT-001', 'Assigned'],
-    ['iPhone 15', 'Mobile - MOB-001', 'Assigned'],
-    ['Dell Monitor', 'Monitor - MON-001', 'Available'],
-    ['HP Printer', 'Printer - PRN-001', 'Available'],
-  ];
+  final String userId;
+  const AdminAssetsScreen({super.key, required this.userId});
 
   @override
   Widget build(BuildContext context) {
@@ -240,30 +264,41 @@ class AdminAssetsScreen extends StatelessWidget {
           MaterialPageRoute(builder: (_) => const AdminAssignAssetScreen()),
         ),
       ),
-      child: adminPageList([
-        Row(
-          children: [
-            Expanded(child: _CountCard('Total Assets', '245', c.primary, c)),
-            const SizedBox(width: 10),
-            Expanded(child: _CountCard('Assigned', '187', c.green, c)),
-            const SizedBox(width: 10),
-            Expanded(child: _CountCard('Available', '58', c.orange, c)),
-          ],
-        ),
-        const AdminSearchBox(hint: 'Search assets...'),
-        ..._assets.map(
-          (asset) => AdminListTile(
-            icon: Icons.devices_rounded,
-            titleText: asset[0],
-            subtitle: asset[1],
-            color: asset[2] == 'Assigned' ? c.green : c.orange,
-            trailing: AdminBadge(
-              asset[2],
-              color: asset[2] == 'Assigned' ? c.green : c.orange,
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: AdminService().fetchAssets(userId),
+        builder: (context, snapshot) {
+          final assets = _mapList(snapshot.data?['assets']);
+          final assigned = assets.where((a) => _text(a['status']).toLowerCase() == 'assigned').length;
+          final available = assets.length - assigned;
+          return adminPageList([
+            Row(
+              children: [
+                Expanded(child: _CountCard('Total Assets', '${assets.length}', c.primary, c)),
+                const SizedBox(width: 10),
+                Expanded(child: _CountCard('Assigned', '$assigned', c.green, c)),
+                const SizedBox(width: 10),
+                Expanded(child: _CountCard('Available', '$available', c.orange, c)),
+              ],
             ),
-          ),
-        ),
-      ]),
+            const AdminSearchBox(hint: 'Search assets...'),
+            if (assets.isEmpty)
+              AdminCard(child: Center(child: adminMuted('No assets found', 12, c))),
+            ...assets.map((asset) {
+              final status = _text(asset['status'], 'Available');
+              return AdminListTile(
+                icon: Icons.devices_rounded,
+                titleText: _text(asset['name'], 'Asset'),
+                subtitle: _text(asset['code'], _text(asset['type'])),
+                color: status == 'Assigned' ? c.green : c.orange,
+                trailing: AdminBadge(
+                  status,
+                  color: status == 'Assigned' ? c.green : c.orange,
+                ),
+              );
+            }),
+          ]);
+        },
+      ),
     );
   }
 }
@@ -326,53 +361,53 @@ class _AdminAssignAssetScreenState extends State<AdminAssignAssetScreen> {
 }
 
 class AdminReportsScreen extends StatelessWidget {
-  const AdminReportsScreen({super.key});
+  final String userId;
+  const AdminReportsScreen({super.key, required this.userId});
 
   @override
   Widget build(BuildContext context) {
     final c = AdminPalette.of(context);
-    final reports = [
-      [
-        Icons.event_available_rounded,
-        'Attendance Report',
-        'View attendance analytics',
-        c.green,
-      ],
-      [Icons.beach_access_rounded, 'Leave Report', 'View leave summary', c.red],
-      [
-        Icons.people_rounded,
-        'Employee Report',
-        'View employee details',
-        c.primary,
-      ],
-      [Icons.task_alt_rounded, 'Task Report', 'View task progress', c.orange],
-      [Icons.devices_rounded, 'Asset Report', 'View asset summary', c.green],
-    ];
     return AdminShell(
       title: 'Reports',
-      child: adminPageList([
-        ...reports.map(
-          (item) => AdminListTile(
-            icon: item[0] as IconData,
-            titleText: item[1] as String,
-            subtitle: item[2] as String,
-            color: item[3] as Color,
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    AdminReportDetailsScreen(title: item[1] as String),
-              ),
-            ),
-          ),
-        ),
-      ]),
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: AdminService().fetchReports(userId),
+        builder: (context, snapshot) {
+          final reports = _mapList(snapshot.data?['reports']);
+          return adminPageList([
+            if (reports.isEmpty)
+              AdminCard(child: Center(child: adminMuted('No reports found', 12, c))),
+            ...reports.map((item) => AdminListTile(
+                  icon: _reportIcon(_text(item['title'])),
+                  titleText: _text(item['title'], 'Report'),
+                  subtitle: _text(item['subtitle'], 'Backend report'),
+                  color: c.primary,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AdminReportDetailsScreen(
+                        title: _text(item['title'], 'Report'),
+                        value: _text(item['value'], '0'),
+                        subtitle: _text(item['subtitle']),
+                      ),
+                    ),
+                  ),
+                )),
+          ]);
+        },
+      ),
     );
   }
 }
 
 class AdminReportDetailsScreen extends StatelessWidget {
   final String title;
-  const AdminReportDetailsScreen({super.key, this.title = 'Attendance Report'});
+  final String value;
+  final String subtitle;
+  const AdminReportDetailsScreen({
+    super.key,
+    this.title = 'Attendance Report',
+    this.value = '0',
+    this.subtitle = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -391,24 +426,30 @@ class AdminReportDetailsScreen extends StatelessWidget {
         ),
         Row(
           children: [
-            Expanded(child: _CountCard('Total Employees', '120', c.primary, c)),
+            Expanded(child: _CountCard(title, value, c.primary, c)),
             const SizedBox(width: 10),
-            Expanded(child: _CountCard('Present', '96', c.green, c)),
+            Expanded(child: _CountCard('Source', 'Backend', c.green, c)),
             const SizedBox(width: 10),
-            Expanded(child: _CountCard('Late', '18', c.red, c)),
+            Expanded(child: _CountCard('Status', 'Live', c.red, c)),
           ],
         ),
-        AdminChartCard(
-          title: 'Attendance Trend',
-          subtitle: 'This week',
-          trend: '+4%',
-          bars: const [40, 62, 50, 74, 66, 70, 75],
-          color: c.primary,
+        AdminCard(
+          child: adminMuted(
+            subtitle.isEmpty ? 'This report is loaded from the backend.' : subtitle,
+            12,
+            c,
+          ),
         ),
         AdminPrimaryButton(
           label: 'Export PDF',
           icon: Icons.picture_as_pdf_rounded,
-          onTap: () {},
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Attendance PDF export is not connected yet.'),
+              ),
+            );
+          },
         ),
       ]),
     );
@@ -416,58 +457,48 @@ class AdminReportDetailsScreen extends StatelessWidget {
 }
 
 class AdminNotificationsScreen extends StatelessWidget {
-  const AdminNotificationsScreen({super.key});
+  final String userId;
+  const AdminNotificationsScreen({super.key, required this.userId});
 
   @override
   Widget build(BuildContext context) {
     final c = AdminPalette.of(context);
     return AdminShell(
       title: 'Notifications',
-      child: adminPageList([
-        AdminListTile(
-          icon: Icons.beach_access_rounded,
-          titleText: 'Leave Request',
-          subtitle: 'Priya Sharma applied for leave - 2 min ago',
-          color: c.red,
-        ),
-        AdminListTile(
-          icon: Icons.event_rounded,
-          titleText: 'Meeting Reminder',
-          subtitle: 'Monthly review meeting at 10:00 AM',
-          color: c.primary,
-        ),
-        AdminListTile(
-          icon: Icons.warning_amber_rounded,
-          titleText: 'Attendance Alert',
-          subtitle: '3 employees were late today',
-          color: c.orange,
-        ),
-        AdminListTile(
-          icon: Icons.task_alt_rounded,
-          titleText: 'Task Update',
-          subtitle: 'UI design review task updated',
-          color: c.purple,
-        ),
-        AdminListTile(
-          icon: Icons.system_update_alt_rounded,
-          titleText: 'System Update',
-          subtitle: 'HRMS update completed',
-          color: c.green,
-        ),
-        TextButton(
-          onPressed: () {},
-          child: Text(
-            'Mark all as read',
-            style: TextStyle(color: c.primary, fontWeight: FontWeight.w800),
-          ),
-        ),
-      ]),
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: AdminService().fetchNotifications(userId),
+        builder: (context, snapshot) {
+          final notifications = _mapList(snapshot.data?['notifications']);
+          return adminPageList([
+            if (notifications.isEmpty)
+              AdminCard(child: Center(child: adminMuted('No notifications found', 12, c))),
+            ...notifications.map((item) => AdminListTile(
+                  icon: _notificationIcon(_text(item['module'])),
+                  titleText: _text(item['title'], 'Notification'),
+                  subtitle: _text(item['subtitle'], _text(item['message'])),
+                  color: _notificationColor(_text(item['type']), c),
+                )),
+            TextButton(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Notifications refreshed from backend.')),
+                );
+              },
+              child: Text(
+                'Refresh',
+                style: TextStyle(color: c.primary, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ]);
+        },
+      ),
     );
   }
 }
 
 class AdminSettingsScreen extends StatelessWidget {
-  const AdminSettingsScreen({super.key});
+  final String userId;
+  const AdminSettingsScreen({super.key, required this.userId});
 
   @override
   Widget build(BuildContext context) {
@@ -482,7 +513,7 @@ class AdminSettingsScreen extends StatelessWidget {
           color: c.primary,
           onTap: () => Navigator.of(
             context,
-          ).push(MaterialPageRoute(builder: (_) => const AdminProfileScreen())),
+          ).push(MaterialPageRoute(builder: (_) => AdminProfileScreen(userId: userId))),
         ),
         AdminListTile(
           icon: Icons.security_rounded,
@@ -501,7 +532,7 @@ class AdminSettingsScreen extends StatelessWidget {
           subtitle: 'Manage notifications',
           color: c.orange,
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const AdminNotificationsScreen()),
+            MaterialPageRoute(builder: (_) => AdminNotificationsScreen(userId: userId)),
           ),
         ),
         AdminListTile(
@@ -544,62 +575,77 @@ class AdminSettingsScreen extends StatelessWidget {
 }
 
 class AdminProfileScreen extends StatelessWidget {
-  const AdminProfileScreen({super.key});
+  final String userId;
+  const AdminProfileScreen({super.key, required this.userId});
 
   @override
   Widget build(BuildContext context) {
     final c = AdminPalette.of(context);
     return AdminShell(
       title: 'Profile',
-      child: adminPageList([
-        AdminCard(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            children: [
-              CircleAvatar(
-                radius: 42,
-                backgroundColor: c.primary.withOpacity(0.14),
-                child: Icon(
-                  Icons.admin_panel_settings_rounded,
-                  color: c.primary,
-                  size: 38,
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: AdminService().fetchProfile(userId),
+        builder: (context, snapshot) {
+          final profile = _map(snapshot.data?['profile']);
+          final name = _text(profile['name'], 'Admin');
+          return adminPageList([
+            AdminCard(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 42,
+                    backgroundColor: c.primary.withOpacity(0.14),
+                    child: Icon(
+                      Icons.admin_panel_settings_rounded,
+                      color: c.primary,
+                      size: 38,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  adminTitle(name, 18, c),
+                  adminMuted(_text(profile['email'], '-'), 12, c),
+                ],
+              ),
+            ),
+            AdminCard(
+              child: Column(
+                children: [
+                  AdminInfoRow('Mobile', _text(profile['phone'], 'N/A')),
+                  Divider(color: c.border),
+                  AdminInfoRow('Department', _text(profile['department'], 'N/A')),
+                  Divider(color: c.border),
+                  AdminInfoRow('Role', _text(profile['role'], 'Admin')),
+                  Divider(color: c.border),
+                  AdminInfoRow('Status', _text(profile['status'], 'Active')),
+                ],
+              ),
+            ),
+            AdminListTile(
+              icon: Icons.lock_reset_rounded,
+              titleText: 'Change Password',
+              subtitle: 'Update login password',
+              color: c.purple,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AdminChangePasswordScreen(),
                 ),
               ),
-              const SizedBox(height: 12),
-              adminTitle('Admin User', 18, c),
-              adminMuted('admin@company.com', 12, c),
-            ],
-          ),
-        ),
-        AdminCard(
-          child: Column(
-            children: [
-              const AdminInfoRow('Mobile', '+91 98XXXXXXX0'),
-              Divider(color: c.border),
-              const AdminInfoRow('Department', 'Administration'),
-              Divider(color: c.border),
-              const AdminInfoRow('Role', 'Super Admin'),
-            ],
-          ),
-        ),
-        AdminListTile(
-          icon: Icons.lock_reset_rounded,
-          titleText: 'Change Password',
-          subtitle: 'Update login password',
-          color: c.purple,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const AdminChangePasswordScreen(),
             ),
-          ),
-        ),
-        AdminListTile(
-          icon: Icons.history_rounded,
-          titleText: 'Activity Log',
-          subtitle: 'View recent activity',
-          color: c.orange,
-        ),
-      ]),
+            AdminListTile(
+              icon: Icons.history_rounded,
+              titleText: 'Activity Log',
+              subtitle: 'Shown through backend notifications',
+              color: c.orange,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AdminNotificationsScreen(userId: userId),
+                ),
+              ),
+            ),
+          ]);
+        },
+      ),
     );
   }
 }
@@ -961,5 +1007,67 @@ Color _priorityColor(String priority, AdminPalette c) {
       return c.orange;
     default:
       return c.green;
+  }
+}
+
+Map<String, dynamic> _map(dynamic value) =>
+    value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+
+List<Map<String, dynamic>> _mapList(dynamic value) => value is List
+    ? value.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+    : <Map<String, dynamic>>[];
+
+String _text(dynamic value, [String fallback = '']) {
+  final text = '${value ?? ''}'.trim();
+  return text.isEmpty || text == 'null' ? fallback : text;
+}
+
+String _taskProgress(dynamic status) {
+  switch (_text(status).toLowerCase()) {
+    case 'completed':
+      return '100%';
+    case 'in_progress':
+    case 'in progress':
+      return '50%';
+    default:
+      return '0%';
+  }
+}
+
+IconData _reportIcon(String title) {
+  final lower = title.toLowerCase();
+  if (lower.contains('attendance')) return Icons.event_available_rounded;
+  if (lower.contains('leave')) return Icons.beach_access_rounded;
+  if (lower.contains('employee')) return Icons.people_rounded;
+  if (lower.contains('task')) return Icons.task_alt_rounded;
+  if (lower.contains('asset')) return Icons.devices_rounded;
+  return Icons.insert_chart_outlined_rounded;
+}
+
+IconData _notificationIcon(String module) {
+  switch (module.toLowerCase()) {
+    case 'leave':
+      return Icons.beach_access_rounded;
+    case 'attendance':
+      return Icons.calendar_month_rounded;
+    case 'task':
+      return Icons.task_alt_rounded;
+    case 'meeting':
+      return Icons.event_rounded;
+    default:
+      return Icons.notifications_rounded;
+  }
+}
+
+Color _notificationColor(String type, AdminPalette c) {
+  switch (type.toLowerCase()) {
+    case 'success':
+      return c.green;
+    case 'warning':
+      return c.orange;
+    case 'error':
+      return c.red;
+    default:
+      return c.primary;
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
@@ -565,10 +566,11 @@ class _EmployeeSelfieAttendanceScreenState
 
   @override
   Widget build(BuildContext context) {
+    final bg = ThemeConfig.getBgStart(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF001426),
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF001426),
+        backgroundColor: bg,
         elevation: 0,
         centerTitle: true,
         title: Text(_successTitle),
@@ -587,6 +589,8 @@ class _EmployeeSelfieAttendanceScreenState
 
   Widget _captureBody() {
     final waitingForLocation = !_locationReady;
+    final cardBg = ThemeConfig.getCardBg(context);
+    final previewBg = Theme.of(context).colorScheme.surfaceContainerHighest;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       child: Column(
@@ -603,7 +607,7 @@ class _EmployeeSelfieAttendanceScreenState
             child: ClipRRect(
               borderRadius: BorderRadius.circular(7),
               child: Container(
-                color: const Color(0xFF182838),
+                color: previewBg,
                 child: _cameraPreview(),
               ),
             ),
@@ -613,13 +617,22 @@ class _EmployeeSelfieAttendanceScreenState
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFF061B2D),
+              color: cardBg,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _RoundIconButton(icon: Icons.flash_off_rounded, onTap: () {}),
+                _RoundIconButton(
+                  icon: Icons.flash_off_rounded,
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Flash control is not available on this camera flow.'),
+                      ),
+                    );
+                  },
+                ),
                 GestureDetector(
                   onTap: waitingForLocation ? _loadLocation : _captureSelfie,
                   child: Container(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'admin_palette.dart';
+import 'admin_service.dart';
 import 'admin_widgets.dart';
 import 'admin_success_screen.dart';
 
@@ -19,6 +20,7 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen> {
   final _designationCtrl = TextEditingController();
   String _selectedDept = 'HR';
   String _selectedRole = 'Employee';
+  bool _saving = false;
 
   static const _depts = ['HR', 'Finance', 'IT', 'Marketing', 'Operations', 'Sales'];
   static const _roles = ['Employee', 'Team Lead', 'Manager', 'HR', 'Finance'];
@@ -32,20 +34,39 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen> {
     super.dispose();
   }
 
-  void _submit() {
-    if (_formKey.currentState?.validate() ?? false) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => AdminSuccessScreen(
-            message: 'Employee Created\nSuccessfully!',
-            subMessage:
-                'Temporary credentials sent\nto ${_emailCtrl.text.trim().isEmpty ? 'employee email' : _emailCtrl.text.trim()}',
-            actionLabel: 'View Employee',
-            onAction: () => Navigator.of(context).pop(),
-          ),
-        ),
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false) || _saving) return;
+    setState(() => _saving = true);
+    final response = await AdminService().createEmployee({
+      'name': _nameCtrl.text.trim(),
+      'email': _emailCtrl.text.trim(),
+      'phone': _phoneCtrl.text.trim(),
+      'designation': _designationCtrl.text.trim(),
+      'department': _selectedDept,
+      'role': _selectedRole,
+    });
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (response['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${response['message'] ?? 'Employee creation failed.'}')),
       );
+      return;
     }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AdminSuccessScreen(
+          message: 'Employee Created\nSuccessfully!',
+          subMessage:
+              'Temporary credentials created for ${_emailCtrl.text.trim().isEmpty ? 'employee email' : _emailCtrl.text.trim()}',
+          actionLabel: 'View Employees',
+          onAction: () {
+            Navigator.of(context).pop();
+            Navigator.of(context).pop();
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -144,7 +165,7 @@ class _AdminAddEmployeeScreenState extends State<AdminAddEmployeeScreen> {
 
           const SizedBox(height: 8),
           AdminPrimaryButton(
-            label: 'Save Employee',
+            label: _saving ? 'Saving...' : 'Save Employee',
             onTap: _submit,
             icon: Icons.save_rounded,
           ),

@@ -159,7 +159,12 @@ class _TLDashboardState extends State<TLDashboard> {
               open: (item) => _openDetail(18, item),
               scheduled: _refreshDashboard,
             ),
-            _Reports(data: data, open: (item) => _openDetail(18, item)),
+            _Reports(
+              data: data,
+              open: (item) => _openDetail(18, item),
+              menu: () => _scaffoldKey.currentState?.openDrawer(),
+              theme: _toggleTheme,
+            ),
             _Approvals(
               data: data,
               userId: widget.userId,
@@ -208,7 +213,7 @@ class _TLDashboardState extends State<TLDashboard> {
               child: SafeArea(
                 child: Column(
                   children: [
-                    if (_index != 15)
+                    if (_index != 15 && _index != 11)
                       _TopBar(
                         c: c,
                         title: _titles[_index],
@@ -292,10 +297,7 @@ class _Dashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
-    final meetingNotifications = tlList(
-      data,
-      'notifications',
-    ).where(_isMeetingNotification).toList();
+    final meetings = tlList(data, 'meetings');
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
       children: [
@@ -443,22 +445,22 @@ class _Dashboard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        if (meetingNotifications.isNotEmpty) ...[
+        if (meetings.isNotEmpty) ...[
           _Section(
             title: 'Meetings',
             action: 'View All',
-            onTap: () => open(13),
+            onTap: () => open(10),
           ),
-          ...meetingNotifications.take(3).map((item) {
+          ...meetings.take(3).map((item) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: TlListTile(
                 icon: Icons.event_rounded,
-                title: '${item['title'] ?? 'Notification'}',
-                subtitle: '${item['subtitle'] ?? item['message'] ?? ''}',
-                trailing: '${item['trailing'] ?? item['time'] ?? ''}',
+                title: '${item['title'] ?? 'Meeting'}',
+                subtitle: '${item['subtitle'] ?? item['description'] ?? ''}',
+                trailing: '${item['time'] ?? item['date_label'] ?? ''}',
                 color: c.warning,
-                onTap: () => open(13),
+                onTap: () => open(10),
               ),
             );
           }),
@@ -472,7 +474,8 @@ class _Dashboard extends StatelessWidget {
         ),
         _ProgressCard(
           value: tlPercent(data, 'tasks_progress'),
-          label: '${tlText(data, 'tasks_done')} done',
+          label:
+              '${tlText(data, 'tasks_done')} done / ${tlText(data, 'tasks_total')} assigned',
         ),
         const SizedBox(height: 14),
         _Section(
@@ -482,7 +485,7 @@ class _Dashboard extends StatelessWidget {
         ),
         _ProgressCard(
           value: tlPercent(data, 'team_progress'),
-          label: '${tlText(data, 'on_track')} on track',
+          label: '${tlText(data, 'on_track')} employee(s) on track by task completion',
         ),
       ],
     );
@@ -1007,6 +1010,7 @@ class _Tasks extends StatefulWidget {
 
 class _TasksState extends State<_Tasks> {
   String _filter = 'All';
+  String _priorityFilter = 'All';
   final _search = TextEditingController();
 
   @override
@@ -1040,8 +1044,18 @@ class _TasksState extends State<_Tasks> {
           '${item['title'] ?? ''} ${item['assignee'] ?? ''} ${item['project'] ?? ''}'
               .toLowerCase()
               .contains(query);
-      return matchesTab && matchesSearch;
+      final priority = '${item['priority'] ?? item['trailing'] ?? ''}';
+      final matchesPriority =
+          _priorityFilter == 'All' ||
+          priority.toLowerCase() == _priorityFilter.toLowerCase();
+      return matchesTab && matchesSearch && matchesPriority;
     }).toList();
+    final priorities = <String>{
+      'All',
+      ...tasks
+          .map((item) => '${item['priority'] ?? item['trailing'] ?? ''}'.trim())
+          .where((value) => value.isNotEmpty),
+    }.toList();
 
     return Stack(
       children: [
@@ -1088,7 +1102,30 @@ class _TasksState extends State<_Tasks> {
                 hintStyle: TextStyle(color: c.muted),
                 prefixIcon: Icon(Icons.search_rounded, color: c.muted),
                 suffixIcon: query.isEmpty
-                    ? Icon(Icons.tune_rounded, color: c.muted)
+                    ? PopupMenuButton<String>(
+                        tooltip: 'Filter task priority',
+                        icon: Icon(Icons.tune_rounded, color: c.muted),
+                        onSelected: (value) =>
+                            setState(() => _priorityFilter = value),
+                        itemBuilder: (_) => priorities
+                            .map(
+                              (value) => PopupMenuItem(
+                                value: value,
+                                child: Row(
+                                  children: [
+                                    if (_priorityFilter == value)
+                                      Icon(Icons.check_rounded,
+                                          color: c.primary, size: 17)
+                                    else
+                                      const SizedBox(width: 17),
+                                    const SizedBox(width: 8),
+                                    Expanded(child: Text(value)),
+                                  ],
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      )
                     : IconButton(
                         onPressed: () {
                           _search.clear();
@@ -1114,6 +1151,16 @@ class _TasksState extends State<_Tasks> {
               ),
             ),
             const SizedBox(height: 10),
+            if (_priorityFilter != 'All') ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: InputChip(
+                  label: Text('Priority: $_priorityFilter'),
+                  onDeleted: () => setState(() => _priorityFilter = 'All'),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             Row(
               children: ['All', 'Assigned', 'Completed'].map((label) {
                 final selected = _filter == label;
@@ -1182,7 +1229,7 @@ class _TasksState extends State<_Tasks> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Create a task and assign it to an employee reporting to you.',
+                        'Assign a task to an employee reporting to you.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: c.muted,
@@ -1464,7 +1511,7 @@ class _Projects extends StatelessWidget {
   }
 }
 
-class _Attendance extends StatelessWidget {
+class _Attendance extends StatefulWidget {
   final Map<String, dynamic> data;
   final VoidCallback openSelfie;
   final VoidCallback openReport;
@@ -1476,25 +1523,92 @@ class _Attendance extends StatelessWidget {
   });
 
   @override
+  State<_Attendance> createState() => _AttendanceState();
+}
+
+class _AttendanceState extends State<_Attendance> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
+    final team = tlList(widget.data, 'team');
+    final query = _search.text.trim().toLowerCase();
+    final visible = team.where((item) {
+      if (query.isEmpty) return true;
+      return '${item['title'] ?? ''} ${item['id'] ?? ''} ${item['department'] ?? ''} ${item['designation'] ?? ''}'
+          .toLowerCase()
+          .contains(query);
+    }).toList();
+    final present = team.fold<int>(
+      0,
+      (sum, item) =>
+          sum + (int.tryParse('${_summary(item)['present'] ?? 0}') ?? 0),
+    );
+    final late = team.fold<int>(
+      0,
+      (sum, item) => sum + (int.tryParse('${_summary(item)['late'] ?? 0}') ?? 0),
+    );
+    final absent = team.fold<int>(
+      0,
+      (sum, item) =>
+          sum + (int.tryParse('${_summary(item)['absent'] ?? 0}') ?? 0),
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
       children: [
+        Row(
+          children: [
+            Expanded(
+              child: _MiniStat(
+                'Present',
+                '$present',
+                c.success,
+                Icons.check_circle_rounded,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _MiniStat(
+                'Late',
+                '$late',
+                c.warning,
+                Icons.schedule_rounded,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _MiniStat(
+                'Absent',
+                '$absent',
+                c.danger,
+                Icons.cancel_rounded,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         TlCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Checked In',
+                'My Attendance',
                 style: TextStyle(
-                  color: c.success,
+                  color: c.text,
                   fontSize: 12,
                   fontWeight: FontWeight.w900,
                 ),
               ),
+              const SizedBox(height: 8),
               Text(
-                tlText(data, 'check_in'),
+                tlText(widget.data, 'check_in'),
                 style: TextStyle(
                   color: c.text,
                   fontSize: 22,
@@ -1502,40 +1616,169 @@ class _Attendance extends StatelessWidget {
                 ),
               ),
               Text(
-                tlText(data, 'location'),
+                tlText(widget.data, 'location'),
                 style: TextStyle(color: c.muted, fontSize: 12),
               ),
             ],
           ),
         ),
         const SizedBox(height: 12),
-        _Calendar(
-          month: tlText(data, 'calendar_month'),
-          day: '${data['calendar_day'] ?? ''}',
+        TextField(
+          controller: _search,
+          onChanged: (_) => setState(() {}),
+          style: TextStyle(color: c.text, fontSize: 12),
+          decoration: InputDecoration(
+            hintText: 'Search employee attendance...',
+            hintStyle: TextStyle(color: c.muted),
+            prefixIcon: Icon(Icons.search_rounded, color: c.muted),
+            filled: true,
+            fillColor: c.surface,
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: c.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: c.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: c.primary),
+            ),
+          ),
         ),
+        const SizedBox(height: 12),
+        if (visible.isEmpty)
+          TlCard(
+            child: Center(
+              child: Text(
+                team.isEmpty
+                    ? 'No employees are assigned under this TL yet.'
+                    : 'No matching attendance data.',
+                style: TextStyle(color: c.muted, fontWeight: FontWeight.w800),
+              ),
+            ),
+          )
+        else
+          ...visible.map((item) => _attendanceEmployeeTile(context, item)),
         const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: c.danger,
+                  backgroundColor: c.primary,
                   foregroundColor: Colors.white,
                 ),
-                onPressed: openSelfie,
-                child: const Text('Check-Out'),
+                onPressed: widget.openSelfie,
+                child: const Text('My Check-In / Out'),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: OutlinedButton(
-                onPressed: openReport,
+                onPressed: widget.openReport,
                 child: const Text('View Full Report'),
               ),
             ),
           ],
         ),
       ],
+    );
+  }
+
+  Map<String, dynamic> _summary(Map<String, dynamic> item) =>
+      item['attendance_summary'] is Map
+          ? Map<String, dynamic>.from(item['attendance_summary'] as Map)
+          : <String, dynamic>{};
+
+  Widget _attendanceEmployeeTile(BuildContext context, Map<String, dynamic> item) {
+    final c = TlPalette.of(context);
+    final summary = _summary(item);
+    final recent = item['recent_attendance'] is List
+        ? (item['recent_attendance'] as List)
+              .whereType<Map>()
+              .map((entry) => Map<String, dynamic>.from(entry))
+              .toList()
+        : <Map<String, dynamic>>[];
+    final latest = recent.isNotEmpty ? recent.first : <String, dynamic>{};
+    final status = '${latest['status'] ?? 'No data'}';
+    final statusColor = status.toLowerCase().contains('late')
+        ? c.warning
+        : status.toLowerCase().contains('absent')
+            ? c.danger
+            : status == 'No data'
+                ? c.muted
+                : c.success;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TlCard(
+        onTap: () {},
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: statusColor.withAlpha(30),
+                  child: Icon(Icons.person_rounded, color: statusColor),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${item['title'] ?? item['name'] ?? 'Employee'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: c.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        '${item['id'] ?? item['trailing'] ?? ''} • ${item['designation'] ?? item['subtitle'] ?? ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: c.muted, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  status,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _TinyMetric('Present', '${summary['present'] ?? 0}', c.success)),
+                Expanded(child: _TinyMetric('Late', '${summary['late'] ?? 0}', c.warning)),
+                Expanded(child: _TinyMetric('Absent', '${summary['absent'] ?? 0}', c.danger)),
+              ],
+            ),
+            if (latest.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                '${latest['date'] ?? ''} • In: ${latest['check_in'] ?? '--'} • Out: ${latest['check_out'] ?? '--'}',
+                style: TextStyle(
+                  color: c.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2117,16 +2360,34 @@ class _MeetingsState extends State<_Meetings> {
           ),
         ),
         const SizedBox(height: 16),
-        ...tlList(widget.data, 'meetings').map(
-          (item) => TlListTile(
-            icon: Icons.event_note_rounded,
-            title: '${item['title']}',
-            subtitle: '${item['subtitle']}',
-            trailing: '${item['time']}',
-            color: c.primary,
-            onTap: () => widget.open(item),
+        if (tlList(widget.data, 'meetings').isEmpty)
+          TlCard(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  'No scheduled meetings found in backend.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: c.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          )
+        else
+          ...tlList(widget.data, 'meetings').map(
+            (item) => TlListTile(
+              icon: Icons.event_note_rounded,
+              title: '${item['title']}',
+              subtitle: '${item['subtitle']}',
+              trailing: '${item['time']}',
+              color: c.primary,
+              onTap: () => widget.open(item),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -2601,16 +2862,866 @@ InputDecoration _meetingFieldDecoration(
 class _Reports extends StatelessWidget {
   final Map<String, dynamic> data;
   final ValueChanged<Map<String, dynamic>> open;
-  const _Reports({required this.data, required this.open});
+  final VoidCallback menu;
+  final VoidCallback theme;
+  const _Reports({
+    required this.data,
+    required this.open,
+    required this.menu,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) => _TlReportsDashboard(
+    data: data,
+    open: open,
+    menu: menu,
+    theme: theme,
+  );
+}
+
+class _TlReportsDashboard extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final ValueChanged<Map<String, dynamic>> open;
+  final VoidCallback menu;
+  final VoidCallback theme;
+
+  const _TlReportsDashboard({
+    required this.data,
+    required this.open,
+    required this.menu,
+    required this.theme,
+  });
+
+  @override
+  State<_TlReportsDashboard> createState() => _TlReportsDashboardState();
+}
+
+class _TlReportsDashboardState extends State<_TlReportsDashboard> {
+  String _range = 'This Week';
+  String _query = '';
+
   @override
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
-    return _ListPage(
-      title: 'Team Reports',
-      items: tlList(data, 'reports'),
-      icon: Icons.assessment_rounded,
-      color: c.primary,
-      onTap: open,
+    final team = tlList(widget.data, 'team');
+    final tasks = tlList(widget.data, 'tasks');
+    final meetings = tlList(widget.data, 'meetings');
+    final pendingLeaves = tlList(widget.data, 'leaves');
+    final pendingApprovals = _intValue(
+      widget.data['pending_approvals'],
+      fallback: pendingLeaves.length,
+    );
+    final members = _intValue(
+      widget.data['members_count'],
+      fallback: team.length,
+    );
+    final presentToday = _presentToday(team);
+    final completedPercent = _intValue(
+      widget.data['tasks_progress'],
+      fallback: _completionPercent(tasks),
+    );
+    final chartValues = _chartValues(team, completedPercent);
+    final categories = _categories(
+      members: members,
+      pendingApprovals: pendingApprovals,
+      meetings: meetings.length,
+      tasksDue: tasks.where((item) => _taskIsOpen(item)).length,
+    ).where((item) {
+      final haystack =
+          '${item['title']} ${item['subtitle']} ${item['badge']}'
+              .toLowerCase();
+      return _query.isEmpty || haystack.contains(_query.toLowerCase());
+    }).toList();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      children: [
+        _ReportsHeader(c: c, menu: widget.menu, theme: widget.theme),
+        const SizedBox(height: 14),
+        _RangeSelector(
+          value: _range,
+          onChanged: (value) => setState(() => _range = value),
+        ),
+        const SizedBox(height: 14),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          childAspectRatio: 1.82,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          children: [
+            _ReportMetricCard(
+              icon: Icons.groups_2_outlined,
+              label: 'Team Members',
+              value: '$members',
+              foot: '${_activeTeamCount(team)} active',
+              color: c.primary,
+            ),
+            _ReportMetricCard(
+              icon: Icons.person_pin_circle_outlined,
+              label: 'Present Today',
+              value: '$presentToday',
+              foot: members == 0
+                  ? '0% of team'
+                  : '${((presentToday / members) * 100).round()}% of team',
+              color: c.success,
+            ),
+            _ReportMetricCard(
+              icon: Icons.pending_actions_rounded,
+              label: 'Pending Reviews',
+              value: '$pendingApprovals',
+              foot: pendingApprovals == 0 ? 'All clear' : 'Needs your action',
+              color: c.warning,
+            ),
+            _ReportMetricCard(
+              icon: Icons.track_changes_rounded,
+              label: 'Tasks Completed',
+              value: '$completedPercent%',
+              foot:
+                  '${_intValue(widget.data['tasks_done'])}/${_intValue(widget.data['tasks_total'], fallback: tasks.length)} tasks done',
+              color: c.purple,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _PerformanceChartCard(values: chartValues),
+        const SizedBox(height: 14),
+        _ReportsSearch(
+          query: _query,
+          onChanged: (value) => setState(() => _query = value),
+          onFilter: _showFilterSheet,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Report Categories',
+          style: TextStyle(
+            color: c.text,
+            fontSize: 20,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (categories.isEmpty)
+          TlCard(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 26),
+              child: Center(
+                child: Text(
+                  'No matching reports found.',
+                  style: TextStyle(
+                    color: c.muted,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          )
+        else
+          ...categories.map(
+            (item) => _ReportCategoryTile(
+              icon: item['icon'] as IconData,
+              title: '${item['title']}',
+              subtitle: '${item['subtitle']}',
+              badge: '${item['badge']}',
+              color: item['color'] as Color,
+              onTap: () => widget.open(item),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _showFilterSheet() {
+    final c = TlPalette.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Filter reports',
+                style: TextStyle(
+                  color: c.text,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...['This Week', 'This Month', 'Custom'].map(
+                (value) => RadioListTile<String>(
+                  value: value,
+                  groupValue: _range,
+                  activeColor: c.primary,
+                  title: Text(value, style: TextStyle(color: c.text)),
+                  onChanged: (next) {
+                    if (next == null) return;
+                    setState(() => _range = next);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static int _intValue(Object? value, {int fallback = 0}) {
+    if (value is num) return value.round();
+    return int.tryParse('$value'.replaceAll('%', '').trim()) ?? fallback;
+  }
+
+  static bool _taskIsOpen(Map<String, dynamic> item) {
+    final status = '${item['status'] ?? ''}'.toLowerCase();
+    return !status.contains('complete') && !status.contains('done');
+  }
+
+  static int _completionPercent(List<Map<String, dynamic>> tasks) {
+    if (tasks.isEmpty) return 0;
+    final done = tasks.where((item) => !_taskIsOpen(item)).length;
+    return ((done / tasks.length) * 100).round();
+  }
+
+  static int _presentToday(List<Map<String, dynamic>> team) {
+    if (team.isEmpty) return 0;
+    return team.where((item) {
+      final attendance = item['attendance_summary'] is Map
+          ? Map<String, dynamic>.from(item['attendance_summary'] as Map)
+          : <String, dynamic>{};
+      return _intValue(attendance['present']) > 0 ||
+          '${item['status'] ?? ''}'.toLowerCase().contains('active');
+    }).length;
+  }
+
+  static int _activeTeamCount(List<Map<String, dynamic>> team) {
+    return team
+        .where((item) => !'${item['status'] ?? ''}'.toLowerCase().contains('inactive'))
+        .length;
+  }
+
+  static List<double> _chartValues(
+    List<Map<String, dynamic>> team,
+    int completedPercent,
+  ) {
+    final scores = team
+        .map((item) => _intValue(item['score'], fallback: completedPercent))
+        .where((value) => value > 0)
+        .take(7)
+        .map((value) => (value / 100).clamp(0.0, 1.0).toDouble())
+        .toList();
+    if (scores.length >= 7) return scores;
+    if (scores.isNotEmpty) {
+      return List<double>.generate(7, (index) => scores[index % scores.length]);
+    }
+    final base = (completedPercent / 100).clamp(0.0, 1.0).toDouble();
+    return List<double>.filled(7, base);
+  }
+
+  List<Map<String, Object>> _categories({
+    required int members,
+    required int pendingApprovals,
+    required int meetings,
+    required int tasksDue,
+  }) {
+    final c = TlPalette.of(context);
+    return [
+      {
+        'icon': Icons.bar_chart_rounded,
+        'title': 'Team Summary',
+        'subtitle': 'Attendance, productivity & workload',
+        'badge': '$members members',
+        'color': c.primary,
+      },
+      {
+        'icon': Icons.calendar_month_rounded,
+        'title': 'Leave & Attendance',
+        'subtitle': '$pendingApprovals pending TL reviews',
+        'badge': pendingApprovals == 0 ? 'Updated' : 'Action needed',
+        'color': c.warning,
+      },
+      {
+        'icon': Icons.assignment_turned_in_outlined,
+        'title': 'Meetings & Tasks',
+        'subtitle': '$meetings meetings • $tasksDue tasks due',
+        'badge': 'Live',
+        'color': c.primary,
+      },
+    ];
+  }
+}
+
+class _ReportsHeader extends StatelessWidget {
+  final TlPalette c;
+  final VoidCallback menu;
+  final VoidCallback theme;
+
+  const _ReportsHeader({
+    required this.c,
+    required this.menu,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton(
+          onPressed: menu,
+          icon: Icon(Icons.menu_rounded, color: c.text, size: 31),
+          tooltip: 'Menu',
+        ),
+        const SizedBox(width: 4),
+        const BitByteLogo(compact: true),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Reports',
+                style: TextStyle(
+                  color: c.text,
+                  fontSize: 28,
+                  height: 1,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Team performance & insights',
+                style: TextStyle(
+                  color: c.muted,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: () {},
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(Icons.notifications_none_rounded, color: c.text, size: 28),
+              Positioned(
+                right: 2,
+                top: 1,
+                child: Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    color: c.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: theme,
+          icon: Icon(
+            c.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+            color: c.muted,
+            size: 30,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RangeSelector extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _RangeSelector({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TlPalette.of(context);
+    const items = ['This Week', 'This Month', 'Custom'];
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(
+        children: items.map((item) {
+          final selected = value == item;
+          return Expanded(
+            child: InkWell(
+              onTap: () => onChanged(item),
+              borderRadius: BorderRadius.circular(10),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected ? c.primary.withAlpha(34) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: selected
+                      ? Border.all(color: c.primary)
+                      : Border.all(color: Colors.transparent),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.calendar_month_outlined,
+                      color: selected ? c.primary : c.muted,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: Text(
+                        item,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: selected ? c.text : c.muted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _ReportMetricCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String foot;
+  final Color color;
+
+  const _ReportMetricCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.foot,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TlPalette.of(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.surface.withAlpha(c.isDark ? 230 : 255),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withAlpha(c.isDark ? 110 : 80)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withAlpha(c.isDark ? 20 : 12),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: color.withAlpha(30),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: color.withAlpha(90)),
+            ),
+            child: Icon(icon, color: color, size: 30),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: c.muted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: c.text,
+                    fontSize: 30,
+                    height: 1,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  foot,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PerformanceChartCard extends StatelessWidget {
+  final List<double> values;
+
+  const _PerformanceChartCard({required this.values});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TlPalette.of(context);
+    return TlCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Team Performance',
+                  style: TextStyle(
+                    color: c.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Text(
+                'View analytics',
+                style: TextStyle(
+                  color: c.primary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: c.muted),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 150,
+            child: CustomPaint(
+              painter: _ReportsLinePainter(
+                values: values,
+                line: c.primary,
+                grid: c.border,
+                label: c.muted,
+              ),
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReportsLinePainter extends CustomPainter {
+  final List<double> values;
+  final Color line;
+  final Color grid;
+  final Color label;
+
+  const _ReportsLinePainter({
+    required this.values,
+    required this.line,
+    required this.grid,
+    required this.label,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const left = 34.0;
+    const bottom = 24.0;
+    const top = 8.0;
+    final chartWidth = size.width - left - 4;
+    final chartHeight = size.height - top - bottom;
+    final gridPaint = Paint()
+      ..color = grid.withAlpha(150)
+      ..strokeWidth = 1;
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    for (var i = 0; i <= 4; i++) {
+      final y = top + (chartHeight / 4) * i;
+      canvas.drawLine(Offset(left, y), Offset(size.width, y), gridPaint);
+      final labelText = '${(100 - (i * 25))}%';
+      textPainter.text = TextSpan(
+        text: labelText,
+        style: TextStyle(
+          color: label,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(0, y - 7));
+    }
+
+    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final points = <Offset>[];
+    final safeValues = values.isEmpty ? List<double>.filled(7, .0) : values;
+    for (var i = 0; i < days.length; i++) {
+      final x = left + (chartWidth / (days.length - 1)) * i;
+      final value = safeValues[i % safeValues.length]
+          .clamp(0.0, 1.0)
+          .toDouble();
+      final y = top + chartHeight - (value * chartHeight);
+      points.add(Offset(x, y));
+      textPainter.text = TextSpan(
+        text: days[i],
+        style: TextStyle(
+          color: label,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(x - (textPainter.width / 2), size.height - 17),
+      );
+    }
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final point in points.skip(1)) {
+      path.lineTo(point.dx, point.dy);
+    }
+    final linePaint = Paint()
+      ..color = line
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(path, linePaint);
+    final pointPaint = Paint()..color = line;
+    for (final point in points) {
+      canvas.drawCircle(point, 4.2, pointPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReportsLinePainter oldDelegate) =>
+      oldDelegate.values != values ||
+      oldDelegate.line != line ||
+      oldDelegate.grid != grid ||
+      oldDelegate.label != label;
+}
+
+class _ReportsSearch extends StatefulWidget {
+  final String query;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onFilter;
+
+  const _ReportsSearch({
+    required this.query,
+    required this.onChanged,
+    required this.onFilter,
+  });
+
+  @override
+  State<_ReportsSearch> createState() => _ReportsSearchState();
+}
+
+class _ReportsSearchState extends State<_ReportsSearch> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.query);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReportsSearch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.query != _controller.text) {
+      _controller.text = widget.query;
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TlPalette.of(context);
+    return TextField(
+      controller: _controller,
+      onChanged: widget.onChanged,
+      style: TextStyle(color: c.text, fontSize: 14),
+      decoration: InputDecoration(
+        hintText: 'Search reports...',
+        hintStyle: TextStyle(color: c.muted, fontWeight: FontWeight.w700),
+        prefixIcon: Icon(Icons.search_rounded, color: c.muted, size: 26),
+        suffixIcon: widget.query.isEmpty
+            ? IconButton(
+                onPressed: widget.onFilter,
+                icon: Icon(Icons.tune_rounded, color: c.muted, size: 25),
+              )
+            : IconButton(
+                onPressed: () {
+                  _controller.clear();
+                  widget.onChanged('');
+                },
+                icon: Icon(Icons.close_rounded, color: c.muted),
+              ),
+        filled: true,
+        fillColor: c.surface,
+        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: c.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: c.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: c.primary),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportCategoryTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String badge;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ReportCategoryTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TlPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: c.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: color.withAlpha(28),
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(color: color.withAlpha(90)),
+                ),
+                child: Icon(icon, color: color, size: 30),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: c.text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withAlpha(35),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: color.withAlpha(65)),
+                      ),
+                      child: Text(
+                        badge,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: c.text, size: 28),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2892,15 +4003,25 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
               ),
             ),
             const SizedBox(width: 8),
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: c.border),
+            PopupMenuButton<String>(
+              tooltip: 'Filter approvals',
+              onSelected: (value) => setState(() => _tab = value),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'pending', child: Text('Pending')),
+                PopupMenuItem(value: 'urgent', child: Text('Urgent')),
+                PopupMenuItem(value: 'approved', child: Text('Approved')),
+                PopupMenuItem(value: 'rejected', child: Text('Rejected')),
+              ],
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: c.border),
+                ),
+                child: Icon(Icons.filter_list_rounded, color: c.primary),
               ),
-              child: Icon(Icons.filter_list_rounded, color: c.primary),
             ),
           ],
         ),
@@ -4178,7 +5299,7 @@ class _CreateTaskState extends State<_CreateTask> {
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task created successfully.')),
+        const SnackBar(content: Text('Task assigned successfully.')),
       );
       widget.onCreated();
     } catch (error) {
@@ -4236,6 +5357,9 @@ class _CreateTaskState extends State<_CreateTask> {
     final c = TlPalette.of(context);
     final team = _uniqueTeam(tlList(widget.data, 'team'));
     final projects = _projectNames(tlList(widget.data, 'projects'));
+    if (_project != null && !projects.contains(_project)) {
+      _project = null;
+    }
     if (_reviewing) return _buildReview(context);
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
@@ -4248,7 +5372,7 @@ class _CreateTaskState extends State<_CreateTask> {
             ),
             Expanded(
               child: Text(
-                'Create Task',
+                'Assign Task',
                 style: TextStyle(
                   color: c.text,
                   fontSize: 19,
@@ -4283,20 +5407,33 @@ class _CreateTaskState extends State<_CreateTask> {
           ).copyWith(hintText: 'Enter task description...'),
         ),
         const SizedBox(height: 10),
-        AppDropdownButtonFormField<String>(
-          value: _project,
-          items: projects
-              .map(
-                (project) =>
-                    DropdownMenuItem(value: project, child: Text(project)),
-              )
-              .toList(),
-          onChanged: (value) => setState(() => _project = value),
-          decoration: _fieldDecoration(
-            context,
-            'Select Project',
-          ).copyWith(hintText: 'Choose project'),
-        ),
+        if (projects.isEmpty)
+          TlCard(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              'No backend projects found. Task can be assigned without a project.',
+              style: TextStyle(
+                color: c.muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          )
+        else
+          AppDropdownButtonFormField<String>(
+            value: _project,
+            items: projects
+                .map(
+                  (project) =>
+                      DropdownMenuItem(value: project, child: Text(project)),
+                )
+                .toList(),
+            onChanged: (value) => setState(() => _project = value),
+            decoration: _fieldDecoration(
+              context,
+              'Select Project',
+            ).copyWith(hintText: 'Choose project'),
+          ),
         const SizedBox(height: 12),
         Text(
           'Assign To',
@@ -4539,7 +5676,7 @@ class _CreateTaskState extends State<_CreateTask> {
                   foregroundColor: Colors.white,
                   minimumSize: const Size.fromHeight(48),
                 ),
-                child: const Text('Create Task'),
+                child: const Text('Assign Task'),
               ),
             ),
           ],
@@ -4606,7 +5743,7 @@ class _CreateTaskState extends State<_CreateTask> {
                     child: _ReviewValue(
                       icon: Icons.work_outline_rounded,
                       label: 'Project',
-                      value: _project ?? 'General',
+                      value: _project ?? 'No project selected',
                       color: c.primary,
                     ),
                   ),
@@ -4890,7 +6027,7 @@ class _CreateTaskState extends State<_CreateTask> {
         .where((name) => name.trim().isNotEmpty)
         .toSet()
         .toList();
-    return names.isEmpty ? ['General'] : names;
+    return names;
   }
 
   String _formatDate(DateTime date) {
@@ -5243,13 +6380,21 @@ class _TeamPerformance extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         ...tlList(data, 'team').map(
-          (item) => TlListTile(
-            icon: Icons.person_rounded,
-            title: '${item['title']}',
-            subtitle: '${item['subtitle']}',
-            trailing: '${item['score'] ?? item['trailing'] ?? ''}',
-            color: c.success,
-          ),
+          (item) {
+            final taskSummary = item['task_summary'] is Map
+                ? Map<String, dynamic>.from(item['task_summary'] as Map)
+                : <String, dynamic>{};
+            final completed = taskSummary['completed'] ?? 0;
+            final assigned = taskSummary['assigned'] ?? 0;
+            final rate = taskSummary['completion_rate'] ?? item['score'] ?? 0;
+            return TlListTile(
+              icon: Icons.person_rounded,
+              title: '${item['title']}',
+              subtitle: '${item['subtitle']} • $completed/$assigned tasks completed',
+              trailing: '$rate%',
+              color: c.success,
+            );
+          },
         ),
       ],
     );
@@ -5282,6 +6427,9 @@ class _EmployeeDetails extends StatelessWidget {
         : <String, dynamic>{};
     final performance = item['performance'] is Map
         ? Map<String, dynamic>.from(item['performance'] as Map)
+        : <String, dynamic>{};
+    final taskSummary = item['task_summary'] is Map
+        ? Map<String, dynamic>.from(item['task_summary'] as Map)
         : <String, dynamic>{};
     final recent = item['recent_attendance'] is List
         ? (item['recent_attendance'] as List)
@@ -5431,6 +6579,10 @@ class _EmployeeDetails extends StatelessWidget {
               const SizedBox(height: 10),
               _Info('Score', '${score.round()}%'),
               _Info('Tasks', '${performance['tasks'] ?? '-'}'),
+              _Info(
+                'Task Completion',
+                '${taskSummary['completed'] ?? 0}/${taskSummary['assigned'] ?? 0}',
+              ),
               _Info('Attendance', '${performance['attendance'] ?? '-'}'),
             ],
           ),
@@ -5669,6 +6821,7 @@ class _ListPage extends StatefulWidget {
 
 class _ListPageState extends State<_ListPage> {
   final _search = TextEditingController();
+  String _statusFilter = 'All';
 
   @override
   void dispose() {
@@ -5682,12 +6835,25 @@ class _ListPageState extends State<_ListPage> {
     final query = _search.text.trim().toLowerCase();
     final visible = widget.items
         .where(
-          (item) =>
-              '${item['title'] ?? item['name'] ?? ''} ${item['subtitle'] ?? item['role'] ?? ''}'
-                  .toLowerCase()
-                  .contains(query),
+          (item) {
+            final status = '${item['status'] ?? item['trailing'] ?? ''}';
+            final matchesStatus =
+                _statusFilter == 'All' ||
+                status.toLowerCase().contains(_statusFilter.toLowerCase());
+            final matchesQuery =
+                '${item['title'] ?? item['name'] ?? ''} ${item['subtitle'] ?? item['role'] ?? ''} ${item['trailing'] ?? ''}'
+                    .toLowerCase()
+                    .contains(query);
+            return matchesStatus && matchesQuery;
+          },
         )
         .toList();
+    final statuses = <String>{
+      'All',
+      ...widget.items
+          .map((item) => '${item['status'] ?? item['trailing'] ?? ''}'.trim())
+          .where((value) => value.isNotEmpty),
+    }.toList();
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
       children: [
@@ -5723,7 +6889,30 @@ class _ListPageState extends State<_ListPage> {
             hintStyle: TextStyle(color: c.muted),
             prefixIcon: Icon(Icons.search_rounded, color: c.muted, size: 20),
             suffixIcon: query.isEmpty
-                ? Icon(Icons.tune_rounded, color: c.muted, size: 19)
+                ? PopupMenuButton<String>(
+                    tooltip: 'Filter ${widget.title.toLowerCase()}',
+                    icon: Icon(Icons.tune_rounded, color: c.muted, size: 19),
+                    onSelected: (value) =>
+                        setState(() => _statusFilter = value),
+                    itemBuilder: (_) => statuses
+                        .map(
+                          (value) => PopupMenuItem(
+                            value: value,
+                            child: Row(
+                              children: [
+                                if (_statusFilter == value)
+                                  Icon(Icons.check_rounded,
+                                      color: c.primary, size: 17)
+                                else
+                                  const SizedBox(width: 17),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(value)),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  )
                 : IconButton(
                     onPressed: () {
                       _search.clear();
@@ -5748,6 +6937,16 @@ class _ListPageState extends State<_ListPage> {
             ),
           ),
         ),
+        if (_statusFilter != 'All') ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: InputChip(
+              label: Text('Filter: $_statusFilter'),
+              onDeleted: () => setState(() => _statusFilter = 'All'),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         if (visible.isEmpty)
           TlCard(
@@ -6164,6 +7363,40 @@ class _Info extends StatelessWidget {
   }
 }
 
+class _TinyMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _TinyMetric(this.label, this.value, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TlPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: c.muted,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MiniStat extends StatelessWidget {
   final String label;
   final String value;
@@ -6538,7 +7771,7 @@ class _BottomNav extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    const items = [0, 1, 2, 3, 13];
+    const items = [0, 1, 2, 3, 11];
     return Container(
       decoration: BoxDecoration(
         color: c.surface,
@@ -6598,6 +7831,7 @@ const _drawerItems = [
   _DrawerItemData(0, 'Dashboard', Icons.dashboard_rounded),
   _DrawerItemData(1, 'Team', Icons.groups_rounded),
   _DrawerItemData(2, 'Tasks', Icons.task_alt_rounded),
+  _DrawerItemData(15, 'Assign Task', Icons.add_task_rounded),
   _DrawerItemData(3, 'Projects', Icons.work_rounded),
   _DrawerItemData(4, 'Attendance', Icons.calendar_month_rounded),
   _DrawerItemData(9, 'Leave', Icons.beach_access_rounded),
@@ -6623,7 +7857,7 @@ const _titles = [
   'Approvals',
   'Notifications',
   'Task Details',
-  'Create Task',
+  'Assign Task',
   'Project Details',
   'Team Performance',
   'Details',

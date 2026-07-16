@@ -28,6 +28,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _selectedIndex = 0;
   String _dashboardRole = 'SuperAdmin';
+  String _usersFocus = 'employees';
+  String _workflowFocus = 'attendance';
 
   void _logout() {
     Navigator.of(context).pushAndRemoveUntil(
@@ -91,12 +93,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         name: widget.firstName,
                         onOpenCreateUser: _openCreateAdmins,
                         onOpenSection: _setSection,
+                        onOpenUsersFocus: _openUsersFocus,
+                        onOpenWorkflowFocus: _openWorkflowFocus,
                       ),
                       _UsersView(
                         colors: colors,
                         onOpenCreateUser: _openCreateAdmins,
+                        focus: _usersFocus,
                       ),
-                      _WorkflowView(colors: colors),
+                      _WorkflowView(colors: colors, focus: _workflowFocus),
                       _ReportsView(colors: colors),
                       _SettingsView(
                         colors: colors,
@@ -121,6 +126,20 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
 
   void _setSection(int index) {
     setState(() => _selectedIndex = index);
+  }
+
+  void _openUsersFocus(String focus) {
+    setState(() {
+      _usersFocus = focus;
+      _selectedIndex = 1;
+    });
+  }
+
+  void _openWorkflowFocus(String focus) {
+    setState(() {
+      _workflowFocus = focus;
+      _selectedIndex = 2;
+    });
   }
 
   Widget _buildTopBar(_SaColors colors) {
@@ -525,6 +544,8 @@ class _DashboardView extends StatelessWidget {
   final String name;
   final VoidCallback onOpenCreateUser;
   final ValueChanged<int> onOpenSection;
+  final ValueChanged<String> onOpenUsersFocus;
+  final ValueChanged<String> onOpenWorkflowFocus;
 
   const _DashboardView({
     required this.colors,
@@ -532,6 +553,8 @@ class _DashboardView extends StatelessWidget {
     this.name = '',
     required this.onOpenCreateUser,
     required this.onOpenSection,
+    required this.onOpenUsersFocus,
+    required this.onOpenWorkflowFocus,
   });
 
   @override
@@ -576,6 +599,7 @@ class _DashboardView extends StatelessWidget {
                   value: '${data['total_employees']}',
                   icon: Icons.groups_rounded,
                   color: colors.primary,
+                  onTap: () => onOpenUsersFocus('employees'),
                 ),
                 _MetricCard(
                   colors: colors,
@@ -583,6 +607,7 @@ class _DashboardView extends StatelessWidget {
                   value: '${data['total_departments']}',
                   icon: Icons.apartment_rounded,
                   color: colors.blue,
+                  onTap: () => onOpenUsersFocus('departments'),
                 ),
                 _MetricCard(
                   colors: colors,
@@ -590,6 +615,7 @@ class _DashboardView extends StatelessWidget {
                   value: '${data['active_users']}',
                   icon: Icons.verified_user_outlined,
                   color: colors.success,
+                  onTap: () => onOpenUsersFocus('active_users'),
                 ),
                 _MetricCard(
                   colors: colors,
@@ -597,6 +623,7 @@ class _DashboardView extends StatelessWidget {
                   value: '${data['attendance']}',
                   icon: Icons.calendar_month_outlined,
                   color: colors.teal,
+                  onTap: () => onOpenWorkflowFocus('attendance'),
                 ),
                 _MetricCard(
                   colors: colors,
@@ -604,6 +631,7 @@ class _DashboardView extends StatelessWidget {
                   value: '${data['pending_leaves']}',
                   icon: Icons.event_busy_outlined,
                   color: colors.warning,
+                  onTap: () => onOpenWorkflowFocus('leaves'),
                 ),
                 _MetricCard(
                   colors: colors,
@@ -611,6 +639,7 @@ class _DashboardView extends StatelessWidget {
                   value: '${data['open_tasks']}',
                   icon: Icons.task_alt_rounded,
                   color: colors.danger,
+                  onTap: () => onOpenWorkflowFocus('tasks'),
                 ),
               ],
             ),
@@ -640,8 +669,13 @@ class _DashboardView extends StatelessWidget {
 class _UsersView extends StatelessWidget {
   final _SaColors colors;
   final VoidCallback onOpenCreateUser;
+  final String focus;
 
-  const _UsersView({required this.colors, required this.onOpenCreateUser});
+  const _UsersView({
+    required this.colors,
+    required this.onOpenCreateUser,
+    required this.focus,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -665,57 +699,85 @@ class _UsersView extends StatelessWidget {
             child: CircularProgressIndicator(color: colors.primary),
           );
         }
-        final rawUsers = snapshot.data!['users'];
-        final users = rawUsers is List
-            ? rawUsers.map((item) {
+        final data = snapshot.data!;
+        final rawEmployees = data['employees'];
+        final rawUsers = data['users'];
+        final rawRows = focus == 'employees'
+            ? (rawEmployees is List && rawEmployees.isNotEmpty ? rawEmployees : rawUsers)
+            : rawUsers;
+        final users = rawRows is List
+            ? rawRows.map((item) {
                 final user = Map<String, dynamic>.from(item as Map);
                 return _PersonData(
                   '${user['name']}',
-                  '${user['subtitle']}',
-                  '${user['detail']}',
-                  '${user['trailing']}',
+                  '${user['subtitle'] ?? user['role'] ?? user['designation'] ?? ''}',
+                  '${user['detail'] ?? user['email'] ?? ''}',
+                  '${user['trailing'] ?? user['employee_id'] ?? user['id'] ?? ''}',
+                  '${user['status'] ?? ''}',
                 );
               }).toList()
             : <_PersonData>[];
+        final visibleUsers = focus == 'active_users'
+            ? users.where((user) => user.status.toLowerCase() == 'active').toList()
+            : users;
+        final title = focus == 'departments'
+            ? 'Department Management'
+            : focus == 'active_users'
+                ? 'Active Users'
+                : 'Employee Directory';
 
         return _ScreenScroll(
           colors: colors,
           children: [
             _PageHeader(
               colors: colors,
-              title: 'User Management',
-              icon: Icons.group_outlined,
+              title: title,
+              icon: focus == 'departments'
+                  ? Icons.apartment_rounded
+                  : Icons.group_outlined,
             ),
             const SizedBox(height: 10),
-            _SearchBar(colors: colors, hint: 'Search users...'),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _FilterChipBox(
-                    colors: colors,
-                    text: 'All Departments',
+            if (focus == 'departments') ...[
+              _DepartmentsCard(colors: colors, data: data),
+            ] else ...[
+              _SearchBar(colors: colors, hint: 'Search ${focus == 'employees' ? 'employees' : 'users'}...'),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _FilterChipBox(
+                      colors: colors,
+                      text: 'All Departments',
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _FilterChipBox(colors: colors, text: 'All Roles'),
-                ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _FilterChipBox(colors: colors, text: 'All Roles'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (visibleUsers.isEmpty)
+                _EmptyPanelText(
+                  colors: colors,
+                  text: focus == 'employees'
+                      ? 'No employee data found in backend'
+                      : 'No user data found in backend',
+                )
+              else
+                ...visibleUsers.map((user) => _UserTile(colors: colors, user: user)),
+              const SizedBox(height: 12),
+              _PrimaryActionButton(
+                colors: colors,
+                label: 'Create User',
+                icon: Icons.add_rounded,
+                onTap: onOpenCreateUser,
+              ),
+              if (focus == 'active_users') ...[
+                const SizedBox(height: 18),
+                _RolesPermissionsCard(colors: colors, data: data),
               ],
-            ),
-            const SizedBox(height: 12),
-            ...users.map((user) => _UserTile(colors: colors, user: user)),
-            const SizedBox(height: 12),
-            _PrimaryActionButton(
-              colors: colors,
-              label: 'Create User',
-              icon: Icons.add_rounded,
-              onTap: onOpenCreateUser,
-            ),
-            const SizedBox(height: 18),
-            _RolesPermissionsCard(colors: colors),
-            const SizedBox(height: 18),
-            _DepartmentsCard(colors: colors),
+            ],
           ],
         );
       },
@@ -725,29 +787,47 @@ class _UsersView extends StatelessWidget {
 
 class _WorkflowView extends StatelessWidget {
   final _SaColors colors;
+  final String focus;
 
-  const _WorkflowView({required this.colors});
+  const _WorkflowView({required this.colors, required this.focus});
 
   @override
   Widget build(BuildContext context) {
-    return _ScreenScroll(
-      colors: colors,
-      children: [
-        _PageHeader(
+    return FutureBuilder<Map<String, dynamic>>(
+      future: SaService().fetchDashboard(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Center(child: CircularProgressIndicator(color: colors.primary));
+        }
+        final data = snapshot.data!;
+        return _ScreenScroll(
           colors: colors,
-          title: 'Workflow',
-          icon: Icons.account_tree_outlined,
-        ),
-        const SizedBox(height: 12),
-        _AttendanceCard(colors: colors),
-        const SizedBox(height: 14),
-        _LeaveManagementCard(colors: colors),
-        const SizedBox(height: 14),
-        _TaskManagementCard(colors: colors),
-        const SizedBox(height: 14),
-        _MeetingManagementCard(colors: colors),
-        const SizedBox(height: 20),
-      ],
+          children: [
+            _PageHeader(
+              colors: colors,
+              title: 'Workflow',
+              icon: Icons.account_tree_outlined,
+            ),
+            const SizedBox(height: 12),
+            if (focus == 'attendance') ...[
+              _AttendanceCard(colors: colors, data: data),
+            ] else if (focus == 'leaves') ...[
+              _LeaveManagementCard(colors: colors, data: data),
+            ] else if (focus == 'tasks') ...[
+              _TaskManagementCard(colors: colors, data: data),
+            ] else ...[
+              _AttendanceCard(colors: colors, data: data),
+              const SizedBox(height: 14),
+              _LeaveManagementCard(colors: colors, data: data),
+              const SizedBox(height: 14),
+              _TaskManagementCard(colors: colors, data: data),
+              const SizedBox(height: 14),
+              _MeetingManagementCard(colors: colors, data: data),
+            ],
+            const SizedBox(height: 20),
+          ],
+        );
+      },
     );
   }
 }
@@ -759,19 +839,28 @@ class _ReportsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _ScreenScroll(
-      colors: colors,
-      children: [
-        _PageHeader(
+    return FutureBuilder<Map<String, dynamic>>(
+      future: SaService().fetchDashboard(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Center(child: CircularProgressIndicator(color: colors.primary));
+        }
+        final data = snapshot.data!;
+        return _ScreenScroll(
           colors: colors,
-          title: 'Reports & Analytics',
-          icon: Icons.insert_chart_outlined_rounded,
-        ),
-        const SizedBox(height: 12),
-        _PayrollOverviewCard(colors: colors),
-        const SizedBox(height: 14),
-        _ReportListCard(colors: colors),
-      ],
+          children: [
+            _PageHeader(
+              colors: colors,
+              title: 'Reports & Analytics',
+              icon: Icons.insert_chart_outlined_rounded,
+            ),
+            const SizedBox(height: 12),
+            _PayrollOverviewCard(colors: colors, data: data),
+            const SizedBox(height: 14),
+            _ReportListCard(colors: colors, data: data),
+          ],
+        );
+      },
     );
   }
 }
@@ -893,6 +982,7 @@ class _MetricCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   const _MetricCard({
     required this.colors,
@@ -900,62 +990,70 @@ class _MetricCard extends StatelessWidget {
     required this.value,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(11),
-      decoration: _box(colors),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              _IconBadge(colors: colors, icon: icon, color: color),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: colors.success.withAlpha(colors.isDark ? 34 : 20),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Icon(
-                  Icons.trending_up_rounded,
-                  color: colors.success,
-                  size: 12,
-                ),
-              ),
-            ],
-          ),
-          Column(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Ink(
+          padding: const EdgeInsets.all(11),
+          decoration: _box(colors),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
+              Row(
+                children: [
+                  _IconBadge(colors: colors, icon: icon, color: color),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: colors.success.withAlpha(colors.isDark ? 34 : 20),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Icon(
+                      Icons.trending_up_rounded,
+                      color: colors.success,
+                      size: 12,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: colors.muted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1133,35 +1231,88 @@ class _QuickActionGrid extends StatelessWidget {
 
 class _RolesPermissionsCard extends StatelessWidget {
   final _SaColors colors;
+  final Map<String, dynamic> data;
 
-  const _RolesPermissionsCard({required this.colors});
+  const _RolesPermissionsCard({required this.colors, required this.data});
 
   @override
   Widget build(BuildContext context) {
-    final roles = const [
-      _LabelValue('Super Admin', '1 User'),
-      _LabelValue('MD', '2 Users'),
-      _LabelValue('Director', '3 Users'),
-      _LabelValue('CEO', '1 User'),
-      _LabelValue('HR Manager', '2 Users'),
-      _LabelValue('Finance Manager', '2 Users'),
-      _LabelValue('Admin', '4 Users'),
-      _LabelValue('Team Lead', '24 Users'),
-    ];
+    final roles = _list(data['roles']);
     return _Panel(
       colors: colors,
       title: 'Role & Permission',
-      child: Column(
-        children: roles
-            .map(
-              (role) => _SimpleRow(
+      child: roles.isEmpty
+          ? _EmptyPanelText(colors: colors, text: 'No role permission data found in backend')
+          : Column(
+              children: roles.take(8).map((role) => _SimpleRow(
                 colors: colors,
                 icon: Icons.badge_outlined,
-                title: role.label,
-                value: role.value,
-              ),
-            )
-            .toList(),
+                title: '${role['name'] ?? 'Role'}',
+                value: '${role['filled_positions'] ?? 0} Users',
+              )).toList(),
+            ),
+    );
+  }
+}
+
+List<Map<String, dynamic>> _list(Object? value) {
+  return ((value as List?) ?? const [])
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
+}
+
+void _openDetail(BuildContext context, String title, Map<dynamic, dynamic> data) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => _RecordDetailScreen(
+        title: title,
+        data: Map<String, dynamic>.from(data),
+      ),
+    ),
+  );
+}
+
+class _RecordDetailScreen extends StatelessWidget {
+  final String title;
+  final Map<String, dynamic> data;
+
+  const _RecordDetailScreen({required this.title, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _SaColors.of(context);
+    final entries = data.entries
+        .where((entry) => '${entry.value}'.trim().isNotEmpty)
+        .toList();
+    return Scaffold(
+      backgroundColor: colors.background,
+      appBar: AppBar(
+        backgroundColor: colors.surface,
+        foregroundColor: colors.text,
+        elevation: 0,
+        title: Text(title),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          _Panel(
+            colors: colors,
+            title: title,
+            child: entries.isEmpty
+                ? _EmptyPanelText(colors: colors, text: 'No detail data')
+                : Column(
+                    children: entries.map((entry) {
+                      return _SimpleRow(
+                        colors: colors,
+                        icon: Icons.info_outline_rounded,
+                        title: entry.key.replaceAll('_', ' ').toUpperCase(),
+                        value: '${entry.value}',
+                      );
+                    }).toList(),
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -1169,355 +1320,247 @@ class _RolesPermissionsCard extends StatelessWidget {
 
 class _DepartmentsCard extends StatelessWidget {
   final _SaColors colors;
+  final Map<String, dynamic> data;
 
-  const _DepartmentsCard({required this.colors});
+  const _DepartmentsCard({required this.colors, required this.data});
 
   @override
   Widget build(BuildContext context) {
-    final departments = const [
-      _DepartmentData(
-        'Human Resources',
-        '95 Employees',
-        Icons.people_alt_outlined,
-      ),
-      _DepartmentData(
-        'Finance',
-        '95 Employees',
-        Icons.account_balance_wallet_outlined,
-      ),
-      _DepartmentData(
-        'Information Technology',
-        '210 Employees',
-        Icons.computer_outlined,
-      ),
-      _DepartmentData(
-        'Sales & Marketing',
-        '160 Employees',
-        Icons.campaign_outlined,
-      ),
-      _DepartmentData(
-        'Production',
-        '110 Employees',
-        Icons.precision_manufacturing_outlined,
-      ),
-    ];
+    var departments = _list(data['departments']);
+    if (departments.isEmpty) {
+      final grouped = <String, int>{};
+      for (final employee in _list(data['employees'])) {
+        final department = '${employee['department'] ?? ''}'.trim();
+        if (department.isEmpty) continue;
+        grouped[department] = (grouped[department] ?? 0) + 1;
+      }
+      departments = grouped.entries
+          .map((entry) => {'name': entry.key, 'employees': entry.value})
+          .toList();
+    }
     return _Panel(
       colors: colors,
       title: 'Department Management',
-      child: Column(
-        children: departments
-            .map(
-              (dept) => _DepartmentTile(
+      child: departments.isEmpty
+          ? _EmptyPanelText(colors: colors, text: 'No department data found in backend')
+          : Column(
+              children: departments.take(8).map((dept) => _SimpleRow(
                 colors: colors,
-                title: dept.title,
-                subtitle: dept.subtitle,
-                icon: dept.icon,
+                icon: Icons.apartment_outlined,
+                title: '${dept['name'] ?? 'Department'}',
+                value: '${dept['employees'] ?? 0} Employees',
+                onTap: () => _showDepartmentEmployees(context, dept),
+              )).toList(),
+            ),
+    );
+  }
+
+  void _showDepartmentEmployees(BuildContext context, Map<String, dynamic> dept) {
+    final name = '${dept['name'] ?? ''}'.trim();
+    var employees = _list(data['employees']).where((employee) {
+      final department = '${employee['department'] ?? ''}'.trim().toLowerCase();
+      return department == name.toLowerCase();
+    }).toList();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name.isEmpty ? 'Department Employees' : name,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            )
-            .toList(),
+              const SizedBox(height: 4),
+              Text(
+                '${employees.length} working employees',
+                style: TextStyle(color: colors.muted, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: employees.map((employee) {
+                    final person = _PersonData(
+                      '${employee['name'] ?? 'Employee'}',
+                      '${employee['designation'] ?? employee['role'] ?? ''}',
+                      '${employee['email'] ?? ''}',
+                      '${employee['employee_id'] ?? employee['id'] ?? ''}',
+                      '${employee['status'] ?? 'Active'}',
+                    );
+                    return _UserTile(colors: colors, user: person);
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
+
 }
 
 class _AttendanceCard extends StatelessWidget {
   final _SaColors colors;
+  final Map<String, dynamic> data;
 
-  const _AttendanceCard({required this.colors});
+  const _AttendanceCard({required this.colors, required this.data});
 
   @override
   Widget build(BuildContext context) {
+    final attendance = Map<String, dynamic>.from((data['attendance_detail'] as Map?) ?? const {});
+    final details = attendance;
+    final total = int.tryParse('${details['total'] ?? 0}') ?? 0;
     return _Panel(
       colors: colors,
       title: 'Attendance Monitoring',
-      child: Column(
-        children: [
-          SizedBox(
-            height: 150,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 118,
-                  height: 118,
-                  child: CircularProgressIndicator(
-                    value: 0.85,
-                    strokeWidth: 12,
-                    color: colors.primary,
-                    backgroundColor: colors.border,
-                  ),
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '85%',
-                      style: TextStyle(
-                        color: colors.text,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      'Total Attendance',
-                      style: TextStyle(color: colors.muted, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          _LegendRow(
-            colors: colors,
-            label: 'Present',
-            value: '1,002 (85%)',
-            color: colors.primary,
-          ),
-          _LegendRow(
-            colors: colors,
-            label: 'Absent',
-            value: '120 (10%)',
-            color: colors.danger,
-          ),
-          _LegendRow(
-            colors: colors,
-            label: 'Late',
-            value: '66 (5.3%)',
-            color: colors.warning,
-          ),
-          _LegendRow(
-            colors: colors,
-            label: 'On Leave',
-            value: '48 (3.8%)',
-            color: colors.purple,
-          ),
-        ],
-      ),
+      child: total == 0
+          ? _EmptyPanelText(colors: colors, text: 'No attendance data found in backend')
+          : Column(children: [
+              _LegendRow(colors: colors, label: 'Present', value: '${details['present'] ?? 0}', color: colors.primary, onTap: () => _openDetail(context, 'Present Attendance', details)),
+              _LegendRow(colors: colors, label: 'Absent', value: '${details['absent'] ?? 0}', color: colors.danger, onTap: () => _openDetail(context, 'Absent Attendance', details)),
+              _LegendRow(colors: colors, label: 'Late', value: '${details['late'] ?? 0}', color: colors.warning, onTap: () => _openDetail(context, 'Late Attendance', details)),
+            ]),
     );
   }
 }
 
 class _LeaveManagementCard extends StatelessWidget {
   final _SaColors colors;
+  final Map<String, dynamic> data;
 
-  const _LeaveManagementCard({required this.colors});
+  const _LeaveManagementCard({required this.colors, required this.data});
 
   @override
   Widget build(BuildContext context) {
+    final leaves = _list(data['leaves']);
     return _Panel(
       colors: colors,
       title: 'Leave Management',
-      child: _EmptyPanelText(colors: colors, text: 'No leave requests found'),
+      child: leaves.isEmpty
+          ? _EmptyPanelText(colors: colors, text: 'No leave requests found')
+          : Column(
+              children: leaves.take(10).map((leave) {
+                return _SimpleRow(
+                  colors: colors,
+                  icon: Icons.event_busy_outlined,
+                  title: '${leave['name'] ?? leave['employee_id'] ?? 'Employee'}',
+                  value: '${leave['leave_type'] ?? ''} • ${leave['status'] ?? ''}',
+                  onTap: () => _openDetail(context, 'Leave Request', leave),
+                );
+              }).toList(),
+            ),
     );
   }
 }
 
 class _TaskManagementCard extends StatelessWidget {
   final _SaColors colors;
+  final Map<String, dynamic> data;
 
-  const _TaskManagementCard({required this.colors});
+  const _TaskManagementCard({required this.colors, required this.data});
 
   @override
   Widget build(BuildContext context) {
+    final tasks = _list(data['tasks']);
     return _Panel(
       colors: colors,
       title: 'Task Management',
-      child: GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.6,
-        children: const [
-          _TaskMiniCard(
-            title: 'System Update',
-            team: 'Admin',
-            priority: 'High',
-          ),
-          _TaskMiniCard(
-            title: 'Data Migration',
-            team: 'IT Team',
-            priority: 'High',
-          ),
-          _TaskMiniCard(
-            title: 'Payroll Review',
-            team: 'Finance Team',
-            priority: 'Medium',
-          ),
-          _TaskMiniCard(
-            title: 'UI/UX Enhancement',
-            team: 'Design Team',
-            priority: 'Low',
-          ),
-        ].map((task) => task.buildWith(colors)).toList(),
-      ),
+      child: tasks.isEmpty
+          ? _EmptyPanelText(colors: colors, text: 'No task data found in backend')
+          : Column(children: tasks.take(6).map((task) => _SimpleRow(
+                colors: colors,
+                icon: Icons.task_alt_rounded,
+                title: '${task['title'] ?? 'Task'}',
+                value: '${task['status'] ?? ''}',
+                onTap: () => _openDetail(context, 'Task Details', task),
+              )).toList()),
     );
   }
 }
 
 class _MeetingManagementCard extends StatelessWidget {
   final _SaColors colors;
+  final Map<String, dynamic> data;
 
-  const _MeetingManagementCard({required this.colors});
+  const _MeetingManagementCard({required this.colors, required this.data});
 
   @override
   Widget build(BuildContext context) {
+    final meetings = _list(data['meetings']);
     return _Panel(
       colors: colors,
       title: 'Meeting Management',
-      child: Column(
-        children: [
-          _CalendarStrip(colors: colors),
-          const SizedBox(height: 12),
-          _MeetingTile(
-            colors: colors,
-            title: 'Project Review Meeting',
-            time: '10:00 AM - 11:00 AM',
-            status: 'Ongoing',
-          ),
-          _MeetingTile(
-            colors: colors,
-            title: 'HR Strategy Discussion',
-            time: '01:15 PM - 02:30 PM',
-            status: 'Upcoming',
-          ),
-          _MeetingTile(
-            colors: colors,
-            title: 'Budget Planning Meeting',
-            time: '04:00 PM - 05:00 PM',
-            status: 'Upcoming',
-          ),
-        ],
-      ),
+      child: meetings.isEmpty
+          ? _EmptyPanelText(colors: colors, text: 'No meeting data found in backend')
+          : Column(children: meetings.take(6).map((meeting) => _SimpleRow(
+                colors: colors,
+                icon: Icons.calendar_month_outlined,
+                title: '${meeting['title'] ?? 'Meeting'}',
+                value: '${meeting['status'] ?? ''}',
+                onTap: () => _openDetail(context, 'Meeting Details', meeting),
+              )).toList()),
     );
   }
 }
 
 class _PayrollOverviewCard extends StatelessWidget {
   final _SaColors colors;
+  final Map<String, dynamic> data;
 
-  const _PayrollOverviewCard({required this.colors});
+  const _PayrollOverviewCard({required this.colors, required this.data});
 
   @override
   Widget build(BuildContext context) {
+    final payroll = Map<String, dynamic>.from((data['payroll'] as Map?) ?? const {});
+    final paid = '${payroll['employees_paid'] ?? 0}';
     return _Panel(
       colors: colors,
       title: 'Payroll Overview',
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _MiniStat(
-                  colors: colors,
-                  title: 'Payroll Processed',
-                  value: r'$125,000',
-                  color: colors.success,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MiniStat(
-                  colors: colors,
-                  title: 'Pending Payroll',
-                  value: r'$32,500',
-                  color: colors.danger,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _MiniStat(
-                  colors: colors,
-                  title: 'Employees Paid',
-                  value: '1,156',
-                  color: colors.warning,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _MiniStat(
-                  colors: colors,
-                  title: 'Average Salary',
-                  value: r'$4,850',
-                  color: colors.blue,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _LineChart(colors: colors),
-        ],
-      ),
+      child: paid == '0'
+          ? _EmptyPanelText(colors: colors, text: 'No payroll data found in backend')
+          : Column(children: [
+              _LegendRow(colors: colors, label: 'Payroll Processed', value: 'Rs. ${payroll['processed'] ?? 0}', color: colors.success, onTap: () => _openDetail(context, 'Payroll Processed', payroll)),
+              _LegendRow(colors: colors, label: 'Employees Paid', value: paid, color: colors.warning, onTap: () => _openDetail(context, 'Employees Paid', payroll)),
+              _LegendRow(colors: colors, label: 'Average Salary', value: 'Rs. ${payroll['average_salary'] ?? 0}', color: colors.blue, onTap: () => _openDetail(context, 'Average Salary', payroll)),
+            ]),
     );
   }
 }
 
 class _ReportListCard extends StatelessWidget {
   final _SaColors colors;
+  final Map<String, dynamic> data;
 
-  const _ReportListCard({required this.colors});
+  const _ReportListCard({required this.colors, required this.data});
 
   @override
   Widget build(BuildContext context) {
-    final reports = const [
-      'Attendance Report',
-      'Leave Report',
-      'Employee Report',
-      'Payroll Report',
-      'Performance Report',
-      'Department Report',
-    ];
+    final reports = _list(data['reports']);
     return _Panel(
       colors: colors,
       title: 'Reports & Analytics',
-      child: Column(
-        children: [
-          ...reports.map(
-            (report) => _SimpleRow(
-              colors: colors,
-              icon: Icons.description_outlined,
-              title: report,
-              value: 'View Details',
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _ExportButton(
-                  colors: colors,
-                  label: 'PDF',
-                  icon: Icons.picture_as_pdf_outlined,
-                  color: colors.danger,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ExportButton(
-                  colors: colors,
-                  label: 'Excel',
-                  icon: Icons.table_chart_outlined,
-                  color: colors.success,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ExportButton(
-                  colors: colors,
-                  label: 'CSV',
-                  icon: Icons.file_copy_outlined,
-                  color: colors.blue,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      child: reports.isEmpty
+          ? _EmptyPanelText(colors: colors, text: 'No reports data found in backend')
+          : Column(children: reports.take(6).map((report) => _SimpleRow(
+                colors: colors,
+                icon: Icons.description_outlined,
+                title: '${report['report_type'] ?? 'Report'}',
+                value: '${report['status'] ?? ''}',
+                onTap: () => _openDetail(context, 'Report Details', report),
+              )).toList()),
     );
   }
 }
@@ -1931,54 +1974,59 @@ class _SimpleRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String value;
+  final VoidCallback? onTap;
 
   const _SimpleRow({
     required this.colors,
     required this.icon,
     required this.title,
     required this.value,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.border)),
-      ),
-      child: Row(
-        children: [
-          _IconBadge(
-            colors: colors,
-            icon: icon,
-            color: colors.primary,
-            compact: true,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: colors.text,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: colors.border)),
+        ),
+        child: Row(
+          children: [
+            _IconBadge(
+              colors: colors,
+              icon: icon,
+              color: colors.primary,
+              compact: true,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
-          ),
-          if (value.isNotEmpty)
-            Text(
-              value,
-              style: TextStyle(
-                color: colors.muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+            if (value.isNotEmpty)
+              Text(
+                value,
+                style: TextStyle(
+                  color: colors.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-          const SizedBox(width: 4),
-          Icon(Icons.chevron_right_rounded, color: colors.muted, size: 18),
-        ],
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right_rounded, color: colors.muted, size: 18),
+          ],
+        ),
       ),
     );
   }
@@ -2508,41 +2556,48 @@ class _LegendRow extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final VoidCallback? onTap;
 
   const _LegendRow({
     required this.colors,
     required this.label,
     required this.value,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          CircleAvatar(radius: 4, backgroundColor: color),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            CircleAvatar(radius: 4, backgroundColor: color),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Text(
+              value,
               style: TextStyle(
-                color: colors.text,
+                color: colors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              color: colors.muted,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right_rounded, color: colors.muted, size: 18),
+          ],
+        ),
       ),
     );
   }
@@ -2819,8 +2874,15 @@ class _PersonData {
   final String subtitle;
   final String detail;
   final String trailing;
+  final String status;
 
-  const _PersonData(this.name, this.subtitle, this.detail, this.trailing);
+  const _PersonData(
+    this.name,
+    this.subtitle,
+    this.detail,
+    this.trailing,
+    this.status,
+  );
 }
 
 class _LabelValue {

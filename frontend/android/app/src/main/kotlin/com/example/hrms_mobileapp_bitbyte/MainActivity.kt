@@ -79,6 +79,33 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             "hrms/files"
         ).setMethodCallHandler { call, result ->
+            if (call.method == "openUrl") {
+                val url = call.argument<String>("url")
+                val mimeType = call.argument<String>("mimeType")
+                if (url.isNullOrBlank()) {
+                    result.error("URL_MISSING", "Document link is not available", null)
+                    return@setMethodCallHandler
+                }
+
+                val uri = Uri.parse(url)
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    if (mimeType.isNullOrBlank()) {
+                        data = uri
+                    } else {
+                        setDataAndType(uri, mimeType)
+                    }
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                if (intent.resolveActivity(packageManager) == null) {
+                    result.success(false)
+                    return@setMethodCallHandler
+                }
+
+                startActivity(intent)
+                result.success(true)
+                return@setMethodCallHandler
+            }
+
             if (call.method != "saveToDownloads") {
                 result.notImplemented()
                 return@setMethodCallHandler
@@ -93,13 +120,14 @@ class MainActivity : FlutterActivity() {
             }
 
             try {
+                var savedUri: Uri? = null
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val values = ContentValues().apply {
                         put(MediaStore.Downloads.DISPLAY_NAME, fileName)
                         put(MediaStore.Downloads.MIME_TYPE, mimeType)
                         put(
                             MediaStore.Downloads.RELATIVE_PATH,
-                            Environment.DIRECTORY_DOWNLOADS + "/BitByte HRMS"
+                        Environment.DIRECTORY_DOWNLOADS + "/BitByte HRMS"
                         )
                         put(MediaStore.Downloads.IS_PENDING, 1)
                     }
@@ -107,6 +135,7 @@ class MainActivity : FlutterActivity() {
                         MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                         values
                     ) ?: throw IllegalStateException("Unable to create download")
+                    savedUri = uri
                     try {
                         contentResolver.openOutputStream(uri)?.use { stream ->
                             stream.write(bytes)
@@ -129,9 +158,11 @@ class MainActivity : FlutterActivity() {
                     if (!downloads.exists() && !downloads.mkdirs()) {
                         throw IllegalStateException("Unable to create Downloads folder")
                     }
-                    File(downloads, fileName).writeBytes(bytes)
+                    val file = File(downloads, fileName)
+                    file.writeBytes(bytes)
+                    savedUri = Uri.fromFile(file)
                 }
-                result.success("Downloads/BitByte HRMS/$fileName")
+                result.success(savedUri?.toString() ?: "Downloads/BitByte HRMS/$fileName")
             } catch (error: Exception) {
                 result.error("SAVE_FAILED", error.message ?: "Unable to save report", null)
             }

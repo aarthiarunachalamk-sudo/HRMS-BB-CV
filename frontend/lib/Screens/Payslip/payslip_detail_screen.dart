@@ -18,7 +18,7 @@ class PayslipDetailScreen extends StatelessWidget {
     final earnings = _listOfMaps(payslip['earnings']);
     final deductions = _listOfMaps(payslip['deductions']);
     return Scaffold(
-      backgroundColor: PayslipColors.background,
+      backgroundColor: PayslipColors.pageBackground(context),
       appBar: AppBar(title: const Text('Payslip Details')),
       body: ListView(
         padding: const EdgeInsets.all(14),
@@ -73,7 +73,9 @@ class PayslipDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900, color: PayslipColors.secondaryNavy)),
+          Builder(
+            builder: (context) => Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: PayslipColors.strongText(context))),
+          ),
           const SizedBox(height: 8),
           ...rows.map((row) => PayslipInfoRow('${row[keys[0]] ?? ''}', keys.length == 3 ? '${money(row[keys[1]])} / ${money(row[keys[2]])}' : money(row[keys[1]]))),
         ],
