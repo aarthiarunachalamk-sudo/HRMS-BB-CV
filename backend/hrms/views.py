@@ -2,6 +2,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.core.cache import cache
 from django.db.models import Count, Q, Sum
 from django.db import IntegrityError
 from django.utils import timezone
@@ -95,9 +96,9 @@ def forgot_password_view(request):
             {'success': False, 'message': 'Unable to send the reset email'},
             status=503,
         )
-    user.set_password(otc)
-    user.save(update_fields=['password'])
-    EmployeeAccount.objects.filter(employee_email__iexact=user.email).update(otc=otc)
+    # Keep the current password valid until the user completes the reset.
+    # The one-time credential expires after 15 minutes.
+    cache.set(f'password_reset:{user.user_id}', otc, timeout=15 * 60)
     return Response({
         'success': True,
         'employee_id': user.user_id,
@@ -6220,10 +6221,19 @@ def change_password_view(request):
 
     try:
         user = User.objects.get(user_id=employee_id)
-        if not user.check_password(otc):
+        reset_key = f'password_reset:{user.user_id}'
+        reset_otc = cache.get(reset_key)
+        valid_current_password = user.check_password(otc)
+        valid_reset_otc = bool(reset_otc) and str(reset_otc) == str(otc)
+        if not valid_current_password and not valid_reset_otc:
             return Response({'success': False, 'message': 'Invalid OTC'}, status=400)
         user.set_password(new_password)
         user.save()
+        if valid_reset_otc:
+            cache.delete(reset_key)
+            EmployeeAccount.objects.filter(
+                employee_email__iexact=user.email,
+            ).update(otc='')
         return Response({'success': True, 'message': 'Password changed!'})
     except User.DoesNotExist:
         return Response({'success': False, 'message': 'Employee not found'}, status=404)
