@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:http/http.dart' as http;
@@ -32,12 +33,81 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const _rememberedUserKey = 'login_remembered_user';
+  static const _rememberedPasswordKey = 'login_remembered_password';
+  static const _secureStorage = FlutterSecureStorage();
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _employeeCodeController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  bool _rememberMe = true;
+  bool _rememberMe = false;
   bool _isLoggingIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreRememberedCredentials();
+  }
+
+  Future<void> _restoreRememberedCredentials() async {
+    try {
+      final values = await Future.wait([
+        _secureStorage.read(key: _rememberedUserKey),
+        _secureStorage.read(key: _rememberedPasswordKey),
+      ]);
+      if (!mounted || values[0] == null || values[1] == null) return;
+      setState(() {
+        _employeeCodeController.text = values[0]!;
+        _passwordController.text = values[1]!;
+        _rememberMe = true;
+      });
+    } catch (_) {
+      // Login remains available if secure storage is unavailable.
+    }
+  }
+
+  Future<void> _updateRememberedCredentials() async {
+    try {
+      if (_rememberMe) {
+        await _secureStorage.write(
+          key: _rememberedUserKey,
+          value: _employeeCodeController.text.trim(),
+        );
+        await _secureStorage.write(
+          key: _rememberedPasswordKey,
+          value: _passwordController.text,
+        );
+      } else {
+        await Future.wait([
+          _secureStorage.delete(key: _rememberedUserKey),
+          _secureStorage.delete(key: _rememberedPasswordKey),
+        ]);
+      }
+    } catch (_) {
+      // A storage failure must not prevent a valid login.
+    }
+  }
+
+  Future<void> _showForgotPasswordDialog() async {
+    final employeeCode = _employeeCodeController.text.trim();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Forgot Password?'),
+        content: Text(
+          employeeCode.isEmpty
+              ? 'Enter your employee code or email, then contact your HR administrator to reset your password.'
+              : 'Ask your HR administrator to reset the password for $employeeCode. You will receive a one-time credential for your next login.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -78,6 +148,8 @@ class _LoginScreenState extends State<LoginScreen> {
           );
           return;
         }
+        await _updateRememberedCredentials();
+        if (!mounted) return;
         final role = _normalizeRole(data['role']);
         Widget dashboard;
         if (role == 'superadmin' || role == 'super_admin') {
@@ -381,6 +453,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                           setState(() {
                                             _rememberMe = value ?? false;
                                           });
+                                          if (!_rememberMe) {
+                                            _updateRememberedCredentials();
+                                          }
                                         },
                                       ),
                                     ),
@@ -393,12 +468,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                     ),
                                     const Spacer(),
-                                    Text(
-                                      'Forgot Password?',
-                                      style: TextStyle(
-                                        color: ThemeConfig.blueAccent,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
+                                    TextButton(
+                                      onPressed: _showForgotPasswordDialog,
+                                      style: TextButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: Text(
+                                        'Forgot Password?',
+                                        style: TextStyle(
+                                          color: ThemeConfig.blueAccent,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ),
                                   ],
