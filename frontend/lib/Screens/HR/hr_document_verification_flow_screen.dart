@@ -2137,6 +2137,8 @@ class _InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardBg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
     return Container(
       width: double.infinity,
       padding: padding,
