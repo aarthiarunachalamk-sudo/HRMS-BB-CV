@@ -296,8 +296,15 @@ class Command(BaseCommand):
             for account in accounts[:6]
         ]
         meeting_owners = [users['ceo'].user_id, users['md'].user_id, users['tl'].user_id, users['hr'].user_id]
-        for index, title in enumerate(['Sprint Planning', 'MD Business Review', 'TL Team Sync', 'HR Policy Discussion', 'Budget Planning'], start=1):
-            scheduled = now + timedelta(days=index, hours=index)
+        meeting_specs = [
+            ('Sprint Planning', 'upcoming', 1),
+            ('MD Business Review', 'upcoming', 2),
+            ('Quarterly Results Review', 'past', -3),
+            ('Vendor Contract Discussion', 'cancelled', 4),
+            ('Budget Planning', 'upcoming', 5),
+        ]
+        for index, (title, status, day_offset) in enumerate(meeting_specs, start=1):
+            scheduled = now + timedelta(days=day_offset, hours=index)
             meeting, _ = MdMeeting.objects.update_or_create(
                 title=title,
                 created_by=meeting_owners[(index - 1) % len(meeting_owners)],
@@ -308,7 +315,7 @@ class Command(BaseCommand):
                     'date_label': scheduled.strftime('%d-%m-%Y'),
                     'time_label': scheduled.strftime('%I:%M %p'),
                     'duration': '45 Minutes',
-                    'status': 'upcoming',
+                    'status': status,
                     'participants': participants,
                     'agenda': ['Review progress', 'Discuss blockers', 'Assign action items'],
                 },

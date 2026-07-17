@@ -3423,14 +3423,18 @@ def ceo_employees_view(request):
 @api_view(['GET'])
 def md_dashboard_view(request):
     user_id = request.GET.get('user_id', '').strip()
-    meeting_queryset = MdMeeting.objects.filter(created_by=user_id) if user_id else MdMeeting.objects.none()
-    meetings = [_md_meeting_payload(item) for item in meeting_queryset[:10]]
+    # MD needs an organization-wide view, including seeded meetings created by
+    # other leadership roles, not only rows created with the exact MD user id.
+    meeting_queryset = MdMeeting.objects.all().order_by('-id')
+    meetings = [_md_meeting_payload(item) for item in meeting_queryset[:30]]
+    today_label = timezone.localdate().strftime('%d-%m-%Y')
+    revenue = _ceo_monthly_revenue()
     return Response({
         'success': True,
-        'total_revenue': '0',
+        'total_revenue': revenue.get('revenue', 'Rs. 0'),
         'total_employees': _employee_count(),
         'pending_approvals': EmployeeLeaveRequest.objects.filter(status='pending').count(),
-        'meetings_today': len(meetings),
+        'meetings_today': meeting_queryset.filter(date_label=today_label).count(),
         'meetings': meetings,
         'participants': [
             {

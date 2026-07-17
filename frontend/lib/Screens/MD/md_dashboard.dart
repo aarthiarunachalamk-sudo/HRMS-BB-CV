@@ -27,7 +27,7 @@ enum MdDashboardScreen {
   meetingList,
 }
 
-enum _MdStep { dashboard, meetings, calendar, time, details, participants, agenda, review, success, list }
+enum _MdStep { dashboard, analytics, employees, meetings, reports, approvals, more, calendar, time, details, participants, agenda, review, success, list }
 
 enum _DashboardRole { md, employee }
 
@@ -239,7 +239,15 @@ class _MdDashboardState extends State<MdDashboard> {
                 onTap: (index) {
                   setState(() {
                     _bottomIndex = index;
-                    _step = index == 3 ? _MdStep.meetings : _MdStep.dashboard;
+                    _step = const [
+                      _MdStep.dashboard,
+                      _MdStep.analytics,
+                      _MdStep.employees,
+                      _MdStep.meetings,
+                      _MdStep.reports,
+                      _MdStep.approvals,
+                      _MdStep.more,
+                    ][index];
                   });
                 },
               ),
@@ -254,7 +262,15 @@ class _MdDashboardState extends State<MdDashboard> {
     Navigator.maybePop(context);
     setState(() {
       _step = step;
-      _bottomIndex = step == _MdStep.meetings || step == _MdStep.list ? 3 : 0;
+      _bottomIndex = {
+        _MdStep.analytics: 1,
+        _MdStep.employees: 2,
+        _MdStep.meetings: 3,
+        _MdStep.list: 3,
+        _MdStep.reports: 4,
+        _MdStep.approvals: 5,
+        _MdStep.more: 6,
+      }[step] ?? 0;
     });
   }
 
@@ -272,7 +288,32 @@ class _MdDashboardState extends State<MdDashboard> {
           selectedRole: _dashboardRole,
           onPickProfileImage: _pickProfileImage,
           onMeetings: () => setState(() => _step = _MdStep.meetings),
+          onNavigate: (step) => setState(() {
+            _step = step;
+            _bottomIndex = {
+              _MdStep.analytics: 1,
+              _MdStep.employees: 2,
+              _MdStep.meetings: 3,
+              _MdStep.reports: 4,
+              _MdStep.approvals: 5,
+              _MdStep.more: 6,
+            }[step] ?? 0;
+          }),
         );
+      case _MdStep.analytics:
+        return _MdModulePage(
+          colors: colors,
+          title: 'Analytics',
+          subtitle: 'Live organization metrics from the MD dashboard API',
+          items: [
+            _MdModuleItem('Revenue', _data.totalRevenue, Icons.payments_outlined),
+            _MdModuleItem('Employees', _data.totalEmployees, Icons.groups_outlined),
+            _MdModuleItem('Pending approvals', '${_data.pendingApprovals}', Icons.pending_actions_outlined),
+            _MdModuleItem('Meetings today', '${_data.meetingsToday}', Icons.event_available_outlined),
+          ],
+        );
+      case _MdStep.employees:
+        return _MdPeoplePage(colors: colors, people: _data.participants);
       case _MdStep.meetings:
       case _MdStep.list:
         return _MeetingsPage(
@@ -284,6 +325,37 @@ class _MdDashboardState extends State<MdDashboard> {
             _draft = meeting;
             _step = _MdStep.details;
           }),
+        );
+      case _MdStep.reports:
+        return _MdModulePage(
+          colors: colors,
+          title: 'Reports',
+          subtitle: 'Management reports generated from backend dashboard data',
+          items: [
+            _MdModuleItem('Workforce report', '${_data.totalEmployees} employees', Icons.people_alt_outlined),
+            _MdModuleItem('Meeting report', '${_data.meetings.length} meetings listed', Icons.event_note_outlined),
+            _MdModuleItem('Revenue report', _data.totalRevenue, Icons.trending_up_rounded),
+          ],
+        );
+      case _MdStep.approvals:
+        return _MdModulePage(
+          colors: colors,
+          title: 'Approvals',
+          subtitle: 'Items currently waiting for management review',
+          items: [
+            _MdModuleItem('Pending approvals', '${_data.pendingApprovals}', Icons.verified_outlined),
+          ],
+        );
+      case _MdStep.more:
+        return _MdModulePage(
+          colors: colors,
+          title: 'More',
+          subtitle: 'Additional MD workspace actions',
+          items: [
+            _MdModuleItem('Meeting participants', '${_data.participants.length}', Icons.groups_2_outlined),
+            _MdModuleItem('Scheduled meetings', '${_data.meetings.length}', Icons.calendar_month_outlined),
+            const _MdModuleItem('Profile & settings', 'Manage account preferences', Icons.settings_outlined),
+          ],
         );
       case _MdStep.calendar:
         return _CalendarPage(
@@ -359,6 +431,7 @@ class _DashboardPage extends StatelessWidget {
   final _DashboardRole selectedRole;
   final VoidCallback onPickProfileImage;
   final VoidCallback onMeetings;
+  final ValueChanged<_MdStep> onNavigate;
 
   const _DashboardPage({
     super.key,
@@ -371,6 +444,7 @@ class _DashboardPage extends StatelessWidget {
     required this.selectedRole,
     required this.onPickProfileImage,
     required this.onMeetings,
+    required this.onNavigate,
   });
 
   @override
@@ -389,9 +463,9 @@ class _DashboardPage extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         if (selectedRole == _DashboardRole.md)
-          _MdRoleDashboardContent(colors: colors, data: data, onMeetings: onMeetings)
+          _MdRoleDashboardContent(colors: colors, data: data, onMeetings: onMeetings, onNavigate: onNavigate)
         else
-          _EmployeeRoleDashboardContent(colors: colors, name: name, email: email, userId: userId),
+          _EmployeeRoleDashboardContent(colors: colors, name: name, email: email, userId: userId, onNavigate: onNavigate),
       ],
     );
   }
@@ -621,11 +695,13 @@ class _MdRoleDashboardContent extends StatelessWidget {
   final _MdColors colors;
   final MdDashboardData data;
   final VoidCallback onMeetings;
+  final ValueChanged<_MdStep> onNavigate;
 
   const _MdRoleDashboardContent({
     required this.colors,
     required this.data,
     required this.onMeetings,
+    required this.onNavigate,
   });
 
   @override
@@ -655,10 +731,10 @@ class _MdRoleDashboardContent extends StatelessWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            _ActionButton(colors: colors, icon: Icons.verified_user_outlined, label: 'Approvals'),
-            _ActionButton(colors: colors, icon: Icons.bar_chart_rounded, label: 'Reports'),
-            _ActionButton(colors: colors, icon: Icons.analytics_outlined, label: 'Analytics'),
-            _ActionButton(colors: colors, icon: Icons.more_horiz_rounded, label: 'More'),
+            _ActionButton(colors: colors, icon: Icons.verified_user_outlined, label: 'Approvals', onTap: () => onNavigate(_MdStep.approvals)),
+            _ActionButton(colors: colors, icon: Icons.bar_chart_rounded, label: 'Reports', onTap: () => onNavigate(_MdStep.reports)),
+            _ActionButton(colors: colors, icon: Icons.analytics_outlined, label: 'Analytics', onTap: () => onNavigate(_MdStep.analytics)),
+            _ActionButton(colors: colors, icon: Icons.more_horiz_rounded, label: 'More', onTap: () => onNavigate(_MdStep.more)),
           ],
         ),
         const SizedBox(height: 20),
@@ -673,12 +749,14 @@ class _EmployeeRoleDashboardContent extends StatelessWidget {
   final String name;
   final String email;
   final String userId;
+  final ValueChanged<_MdStep> onNavigate;
 
   const _EmployeeRoleDashboardContent({
     required this.colors,
     required this.name,
     required this.email,
     required this.userId,
+    required this.onNavigate,
   });
 
   @override
@@ -696,10 +774,10 @@ class _EmployeeRoleDashboardContent extends StatelessWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            _ActionButton(colors: colors, icon: Icons.access_time_rounded, label: 'Attendance'),
-            _ActionButton(colors: colors, icon: Icons.beach_access_outlined, label: 'Leave'),
-            _ActionButton(colors: colors, icon: Icons.assignment_outlined, label: 'Tasks'),
-            _ActionButton(colors: colors, icon: Icons.more_horiz_rounded, label: 'More'),
+            _ActionButton(colors: colors, icon: Icons.access_time_rounded, label: 'Attendance', onTap: () => onNavigate(_MdStep.analytics)),
+            _ActionButton(colors: colors, icon: Icons.beach_access_outlined, label: 'Leave', onTap: () => onNavigate(_MdStep.approvals)),
+            _ActionButton(colors: colors, icon: Icons.assignment_outlined, label: 'Tasks', onTap: () => onNavigate(_MdStep.reports)),
+            _ActionButton(colors: colors, icon: Icons.more_horiz_rounded, label: 'More', onTap: () => onNavigate(_MdStep.more)),
           ],
         ),
       ],
@@ -746,7 +824,7 @@ class _EmployeeInfoPanel extends StatelessWidget {
   }
 }
 
-class _MeetingsPage extends StatelessWidget {
+class _MeetingsPage extends StatefulWidget {
   final _MdColors colors;
   final List<MdMeeting> meetings;
   final VoidCallback onCreate;
@@ -755,28 +833,43 @@ class _MeetingsPage extends StatelessWidget {
   const _MeetingsPage({super.key, required this.colors, required this.meetings, required this.onCreate, required this.onOpen});
 
   @override
+  State<_MeetingsPage> createState() => _MeetingsPageState();
+}
+
+class _MeetingsPageState extends State<_MeetingsPage> {
+  String _selectedTab = 'Upcoming';
+
+  @override
   Widget build(BuildContext context) {
+    final selectedStatus = _selectedTab.toLowerCase();
+    final meetings = widget.meetings
+        .where((meeting) => meeting.status.toLowerCase() == selectedStatus)
+        .toList();
     return Stack(
       children: [
         ListView(
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 92),
           children: [
-            _PageTitle(colors: colors, title: 'Meetings'),
-            _Tabs(colors: colors),
+            _PageTitle(colors: widget.colors, title: 'Meetings'),
+            _Tabs(
+              colors: widget.colors,
+              selected: _selectedTab,
+              onChanged: (tab) => setState(() => _selectedTab = tab),
+            ),
             const SizedBox(height: 16),
-            Text('Backend Meetings', style: TextStyle(color: colors.text, fontSize: 13, fontWeight: FontWeight.w800)),
+            Text('Backend Meetings', style: TextStyle(color: widget.colors.text, fontSize: 13, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
             if (meetings.isEmpty)
-              _InfoPanel(colors: colors, title: 'No meetings', value: 'Create a meeting to save it in backend'),
-            ...meetings.map((meeting) => _MeetingTile(colors: colors, meeting: meeting, onTap: () => onOpen(meeting))),
+              _InfoPanel(colors: widget.colors, title: 'No $_selectedTab meetings', value: 'No backend meetings match this tab'),
+            ...meetings.map((meeting) => _MeetingTile(colors: widget.colors, meeting: meeting, onTap: () => widget.onOpen(meeting))),
           ],
         ),
         Positioned(
           right: 20,
           bottom: 22,
           child: FloatingActionButton(
-            onPressed: onCreate,
-            backgroundColor: colors.primary,
+            onPressed: widget.onCreate,
+            backgroundColor: widget.colors.primary,
             foregroundColor: Colors.white,
             child: const Icon(Icons.add_rounded),
           ),
@@ -877,37 +970,45 @@ class _TimePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hours = List.generate(12, (index) => index + 1);
-    final minutes = [0, 15, 30, 45];
+    final hour24 = selectedPeriod == 'PM'
+        ? (selectedHour == 12 ? 12 : selectedHour + 12)
+        : (selectedHour == 12 ? 0 : selectedHour);
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
       children: [
         _PageTitle(colors: colors, title: 'Select Time', center: true),
         const SizedBox(height: 16),
         Center(child: _Pill(colors: colors, text: selectedDateLabel)),
-        const SizedBox(height: 34),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _TimeColumn(
-              colors: colors,
-              values: hours.map((hour) => hour.toString().padLeft(2, '0')).toList(),
-              selected: selectedHour.toString().padLeft(2, '0'),
-              onSelected: (value) => onTimeChanged(int.parse(value), selectedMinute, selectedPeriod),
+        const SizedBox(height: 28),
+        InkWell(
+          onTap: () async {
+            final picked = await showTimePicker(
+              context: context,
+              initialTime: TimeOfDay(hour: hour24, minute: selectedMinute),
+              initialEntryMode: TimePickerEntryMode.dial,
+              helpText: 'SELECT MEETING TIME',
+            );
+            if (picked == null) return;
+            final hour = picked.hourOfPeriod == 0 ? 12 : picked.hourOfPeriod;
+            onTimeChanged(hour, picked.minute, picked.period == DayPeriod.am ? 'AM' : 'PM');
+          },
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 18),
+            decoration: _box(colors),
+            child: Column(
+              children: [
+                Icon(Icons.schedule_rounded, color: colors.primary, size: 54),
+                const SizedBox(height: 12),
+                Text(
+                  '${selectedHour.toString().padLeft(2, '0')}:${selectedMinute.toString().padLeft(2, '0')} $selectedPeriod',
+                  style: TextStyle(color: colors.text, fontSize: 30, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 7),
+                Text('Tap to choose time on the clock', style: TextStyle(color: colors.muted, fontSize: 12)),
+              ],
             ),
-            _TimeColumn(
-              colors: colors,
-              values: minutes.map((minute) => minute.toString().padLeft(2, '0')).toList(),
-              selected: selectedMinute.toString().padLeft(2, '0'),
-              onSelected: (value) => onTimeChanged(selectedHour, int.parse(value), selectedPeriod),
-            ),
-            _TimeColumn(
-              colors: colors,
-              values: const ['AM', 'PM'],
-              selected: selectedPeriod,
-              onSelected: (value) => onTimeChanged(selectedHour, selectedMinute, value),
-            ),
-          ],
+          ),
         ),
         const SizedBox(height: 34),
         _InfoPanel(colors: colors, title: 'Duration', value: duration),
@@ -1340,6 +1441,94 @@ class _MdDrawerTile extends StatelessWidget {
   }
 }
 
+class _MdModuleItem {
+  final String title;
+  final String value;
+  final IconData icon;
+
+  const _MdModuleItem(this.title, this.value, this.icon);
+}
+
+class _MdModulePage extends StatelessWidget {
+  final _MdColors colors;
+  final String title;
+  final String subtitle;
+  final List<_MdModuleItem> items;
+
+  const _MdModulePage({
+    required this.colors,
+    required this.title,
+    required this.subtitle,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+        children: [
+          _PageTitle(colors: colors, title: title),
+          Text(subtitle, style: TextStyle(color: colors.muted, fontSize: 12)),
+          const SizedBox(height: 18),
+          ...items.map(
+            (item) => Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: _box(colors),
+              child: Row(
+                children: [
+                  _IconBox(colors: colors, icon: item.icon),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item.title, style: TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 4),
+                        Text(item.value, style: TextStyle(color: colors.muted, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+}
+
+class _MdPeoplePage extends StatelessWidget {
+  final _MdColors colors;
+  final List<MdParticipant> people;
+
+  const _MdPeoplePage({required this.colors, required this.people});
+
+  @override
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+        children: [
+          _PageTitle(colors: colors, title: 'Employees'),
+          Text('${people.length} employees loaded from backend', style: TextStyle(color: colors.muted, fontSize: 12)),
+          const SizedBox(height: 14),
+          if (people.isEmpty)
+            _InfoPanel(colors: colors, title: 'No employees', value: 'Seed or add employees in the backend'),
+          ...people.map(
+            (person) => Container(
+              margin: const EdgeInsets.only(bottom: 9),
+              decoration: _box(colors),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: colors.primary.withAlpha(45),
+                  child: Text(person.name.isEmpty ? '?' : person.name[0], style: TextStyle(color: colors.primary)),
+                ),
+                title: Text(person.name, style: TextStyle(color: colors.text, fontWeight: FontWeight.w800)),
+                subtitle: Text(person.role, style: TextStyle(color: colors.muted)),
+              ),
+            ),
+          ),
+        ],
+      );
+}
+
 class _BottomNav extends StatelessWidget {
   final _MdColors colors;
   final int selectedIndex;
@@ -1639,8 +1828,10 @@ class _PageTitle extends StatelessWidget {
 
 class _Tabs extends StatelessWidget {
   final _MdColors colors;
+  final String selected;
+  final ValueChanged<String> onChanged;
 
-  const _Tabs({required this.colors});
+  const _Tabs({required this.colors, required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -1648,12 +1839,16 @@ class _Tabs extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(color: colors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: colors.border)),
       child: Row(children: ['Upcoming', 'Past', 'Cancelled'].map((tab) {
-        final active = tab == 'Upcoming';
-        return Expanded(child: Container(
-          alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(color: active ? colors.primary : Colors.transparent, borderRadius: BorderRadius.circular(7)),
-          child: Text(tab, style: TextStyle(color: active ? Colors.white : colors.text, fontSize: 11, fontWeight: FontWeight.w800)),
+        final active = tab == selected;
+        return Expanded(child: InkWell(
+          onTap: () => onChanged(tab),
+          borderRadius: BorderRadius.circular(7),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(color: active ? colors.primary : Colors.transparent, borderRadius: BorderRadius.circular(7)),
+            child: Text(tab, style: TextStyle(color: active ? Colors.white : colors.text, fontSize: 11, fontWeight: FontWeight.w800)),
+          ),
         ));
       }).toList()),
     );
@@ -1754,18 +1949,26 @@ class _ActionButton extends StatelessWidget {
   final _MdColors colors;
   final IconData icon;
   final String label;
+  final VoidCallback onTap;
 
-  const _ActionButton({required this.colors, required this.icon, required this.label});
+  const _ActionButton({required this.colors, required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Column(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
         children: [
           Icon(icon, color: colors.primary, size: 22),
           const SizedBox(height: 6),
           FittedBox(child: Text(label, style: TextStyle(color: colors.text, fontSize: 11, fontWeight: FontWeight.w700))),
         ],
+          ),
+        ),
       ),
     );
   }
