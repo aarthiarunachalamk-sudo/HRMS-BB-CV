@@ -29,6 +29,41 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+const List<Map<String, dynamic>> _dummyCriticalAlerts = [
+  {
+    'type': 'project',
+    'module': 'PROJECTS',
+    'title': 'Priya Sharma - Project tasks at risk',
+    'subtitle': '3 Phoenix redesign tasks are overdue and need attention',
+    'severity': 'critical',
+    'status': 'open',
+    'date_group': 'Today',
+  },
+  {
+    'type': 'attendance',
+    'module': 'ATTENDANCE',
+    'title': 'Rahul Verma - Attendance review',
+    'subtitle': 'Absent for 3 consecutive working days without an update',
+    'severity': 'critical',
+    'status': 'open',
+    'date_group': 'Today',
+  },
+  {
+    'type': 'hiring',
+    'module': 'HIRING',
+    'title': 'Ananya Singh - Hiring SLA exceeded',
+    'subtitle': 'Senior Flutter Developer candidate is waiting for 8 days',
+    'severity': 'critical',
+    'status': 'open',
+    'date_group': 'Today',
+  },
+];
+
+List<Map<String, dynamic>> _criticalAlerts(dynamic value) {
+  final alerts = _mapList(value);
+  return alerts.isEmpty ? _dummyCriticalAlerts : alerts;
+}
+
 class CeoDashboard extends StatefulWidget {
   final String email;
   final String firstName;
@@ -936,7 +971,7 @@ class _DashboardViewState extends State<_DashboardView> {
             ),
             const SizedBox(height: 14),
             _CriticalAlertsCard(
-              alerts: _mapList(data['critical_alerts']),
+              alerts: _criticalAlerts(data['critical_alerts']),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => _CeoCriticalAlertsPage(
@@ -1935,6 +1970,106 @@ class _CeoCriticalAlertsPageState extends State<_CeoCriticalAlertsPage> {
     return _date == 'Today' ? isToday : !isToday;
   }
 
+  bool get _hasActiveFilters =>
+      _status != 'All' || _module != 'All Modules' || _date != 'All Dates';
+
+  Future<void> _showAlertFilters() async {
+    final data = await _future;
+    if (!mounted) return;
+    final modules = _criticalAlerts(data['critical_alerts'])
+        .map(
+          (alert) => _displayText(
+            alert['module'],
+            fallback: _displayText(alert['type']).toUpperCase(),
+          ),
+        )
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    var status = _status;
+    var module = modules.contains(_module) ? _module : 'All Modules';
+    var date = _date;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ThemeConfig.getCardBg(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Filter Critical Alerts',
+                        style: _CeoText.titleFor(context, 16),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => setSheetState(() {
+                        status = 'All';
+                        module = 'All Modules';
+                        date = 'All Dates';
+                      }),
+                      child: const Text('Reset'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _AlertDropdown(
+                  icon: Icons.priority_high_rounded,
+                  value: status,
+                  items: const ['All', 'Critical', 'Warning', 'Resolved'],
+                  onChanged: (value) =>
+                      setSheetState(() => status = value),
+                ),
+                const SizedBox(height: 10),
+                _AlertDropdown(
+                  icon: Icons.grid_view_rounded,
+                  value: module,
+                  items: ['All Modules', ...modules],
+                  onChanged: (value) =>
+                      setSheetState(() => module = value),
+                ),
+                const SizedBox(height: 10),
+                _AlertDropdown(
+                  icon: Icons.calendar_month_rounded,
+                  value: date,
+                  items: const ['All Dates', 'Today', 'Earlier'],
+                  onChanged: (value) => setSheetState(() => date = value),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _status = status;
+                        _module = module;
+                        _date = date;
+                      });
+                      Navigator.of(sheetContext).pop();
+                    },
+                    icon: const Icon(Icons.check_rounded),
+                    label: const Text('Apply Filters'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return _CeoShell(
@@ -1947,16 +2082,28 @@ class _CeoCriticalAlertsPageState extends State<_CeoCriticalAlertsPage> {
           widget.onNavigate(index);
         },
       ),
-      trailing: const Row(
+      trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
+          const Icon(
             Icons.notifications_none_rounded,
             color: _CeoDashboardState._cyan,
             size: 22,
           ),
-          SizedBox(width: 12),
-          Icon(Icons.filter_alt_outlined, color: Colors.white, size: 22),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: _hasActiveFilters ? 'Change active filters' : 'Filter alerts',
+            onPressed: _showAlertFilters,
+            icon: Icon(
+              _hasActiveFilters
+                  ? Icons.filter_alt_rounded
+                  : Icons.filter_alt_outlined,
+              color: _hasActiveFilters
+                  ? _CeoDashboardState._cyan
+                  : Colors.white,
+              size: 22,
+            ),
+          ),
         ],
       ),
       child: FutureBuilder<Map<String, dynamic>>(
@@ -1967,7 +2114,7 @@ class _CeoCriticalAlertsPageState extends State<_CeoCriticalAlertsPage> {
               child: CircularProgressIndicator(color: _CeoDashboardState._cyan),
             );
           }
-          final allAlerts = _mapList(snapshot.data!['critical_alerts']);
+          final allAlerts = _criticalAlerts(snapshot.data!['critical_alerts']);
           final modules =
               allAlerts
                   .map(
