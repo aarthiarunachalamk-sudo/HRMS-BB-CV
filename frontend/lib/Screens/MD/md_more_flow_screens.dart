@@ -25,6 +25,8 @@ abstract class MdDatabaseFlowScreen extends StatefulWidget {
 
 class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
   late Future<List<Map<String, dynamic>>> _future;
+  final _searchController = TextEditingController();
+  String _filter = 'All';
 
   @override
   void initState() {
@@ -34,6 +36,48 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
 
   void _load() {
     _future = _fetch();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  bool _requiresAction(Map<String, dynamic> item) {
+    final value = '${item['title']} ${item['subtitle']} ${item['detail']}'.toLowerCase();
+    return ['pending', 'critical', 'at risk', 'overdue', 'required', 'warning', 'failed']
+        .any(value.contains);
+  }
+
+  Color _accent() {
+    const colors = [
+      Color(0xFF00C6FF),
+      Color(0xFF9F3BFF),
+      Color(0xFF00D6A3),
+      Color(0xFFFFB52E),
+      Color(0xFFFF5263),
+    ];
+    return colors[widget.module.codeUnits.fold<int>(0, (sum, item) => sum + item) % colors.length];
+  }
+
+  String _subtitle() {
+    const subtitles = {
+      'company-overview': 'Organization Intelligence',
+      'financial-insights': 'Financial Analysis Center',
+      'department-performance': 'Department Intelligence',
+      'project-portfolio': 'Strategic Project Control',
+      'approvals-center': 'Management Decision Center',
+      'workforce-analytics': 'People & Workforce Intelligence',
+      'leadership-team': 'Executive Leadership Directory',
+      'critical-alerts': 'Priority Risk Monitoring',
+      'executive-reports': 'Executive Reporting Center',
+      'meetings': 'Executive Meeting Center',
+      'announcements': 'Organization Communications',
+      'documents': 'Executive Document Center',
+      'settings-preferences': 'Account & Application Controls',
+    };
+    return subtitles[widget.module] ?? 'Management Intelligence';
   }
 
   Future<List<Map<String, dynamic>>> _fetch() async {
@@ -90,41 +134,167 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
             );
           }
           final items = snapshot.data ?? const <Map<String, dynamic>>[];
-          if (items.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(widget.icon, color: muted, size: 52),
-                    const SizedBox(height: 12),
-                    Text('No database records available', style: TextStyle(color: text, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 5),
-                    Text('Records added to the backend will appear here.', textAlign: TextAlign.center, style: TextStyle(color: muted)),
-                  ],
-                ),
-              ),
-            );
-          }
+          final query = _searchController.text.trim().toLowerCase();
+          final actionCount = items.where(_requiresAction).length;
+          final filtered = items.where((item) {
+            final searchable = '${item['title']} ${item['subtitle']} ${item['detail']}'.toLowerCase();
+            final matchesQuery = query.isEmpty || searchable.contains(query);
+            final matchesFilter = _filter == 'All' ||
+                (_filter == 'Needs Action' ? _requiresAction(item) : !_requiresAction(item));
+            return matchesQuery && matchesFilter;
+          }).toList();
+          final accent = _accent();
           return RefreshIndicator(
-            onRefresh: () async => setState(_load),
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final item = items[index];
-                return Container(
-                  padding: const EdgeInsets.all(14),
+            onRefresh: () async {
+              setState(_load);
+              await _future;
+            },
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+              children: [
+                Text(_subtitle(), textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 13)),
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: card,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: border),
+                    gradient: LinearGradient(
+                      colors: [accent.withAlpha(45), card, ThemeConfig.purpleAccent.withAlpha(25)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: accent.withAlpha(120)),
+                    boxShadow: [BoxShadow(color: accent.withAlpha(25), blurRadius: 24, spreadRadius: 2)],
                   ),
                   child: Row(
                     children: [
-                      Icon(widget.icon, color: ThemeConfig.blueAccent, size: 28),
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: [accent, ThemeConfig.purpleAccent]),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(widget.icon, color: Colors.white, size: 38),
+                      ),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Live Database Analysis', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w900)),
+                            const SizedBox(height: 5),
+                            Text('${items.length} records synchronized', style: TextStyle(color: muted, fontSize: 12)),
+                            const SizedBox(height: 10),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(20),
+                              child: LinearProgressIndicator(
+                                value: items.isEmpty ? 0 : 1,
+                                minHeight: 6,
+                                color: accent,
+                                backgroundColor: border,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(color: accent.withAlpha(25), borderRadius: BorderRadius.circular(10), border: Border.all(color: accent.withAlpha(100))),
+                        child: Text('LIVE', style: TextStyle(color: accent, fontSize: 10, fontWeight: FontWeight.w900)),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(child: _AnalysisTile(label: 'Total Records', value: '${items.length}', icon: Icons.database_outlined, color: accent, card: card, border: border, text: text, muted: muted)),
+                    const SizedBox(width: 10),
+                    Expanded(child: _AnalysisTile(label: 'Needs Action', value: '$actionCount', icon: Icons.notification_important_outlined, color: actionCount > 0 ? const Color(0xFFFF5263) : const Color(0xFF00D6A3), card: card, border: border, text: text, muted: muted)),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _searchController,
+                  onChanged: (_) => setState(() {}),
+                  style: TextStyle(color: text),
+                  decoration: InputDecoration(
+                    hintText: 'Search ${widget.screenTitle.toLowerCase()}...',
+                    hintStyle: TextStyle(color: muted),
+                    prefixIcon: Icon(Icons.search_rounded, color: accent),
+                    suffixIcon: query.isEmpty ? null : IconButton(onPressed: () { _searchController.clear(); setState(() {}); }, icon: Icon(Icons.close_rounded, color: muted)),
+                    filled: true,
+                    fillColor: card,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: border)),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: border)),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: accent, width: 1.5)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: ['All', 'Needs Action', 'Other'].map((label) {
+                      final selected = _filter == label;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(label),
+                          selected: selected,
+                          onSelected: (_) => setState(() => _filter = label),
+                          selectedColor: accent.withAlpha(50),
+                          side: BorderSide(color: selected ? accent : border),
+                          labelStyle: TextStyle(color: selected ? accent : muted, fontWeight: FontWeight.w800),
+                          backgroundColor: card,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                Row(
+                  children: [
+                    Expanded(child: Text('DATABASE RECORDS', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900))),
+                    Text('${filtered.length} shown', style: TextStyle(color: accent, fontSize: 11, fontWeight: FontWeight.w800)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (filtered.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                    decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(16), border: Border.all(color: border)),
+                    child: Column(
+                      children: [
+                        Icon(widget.icon, color: muted, size: 46),
+                        const SizedBox(height: 10),
+                        Text(items.isEmpty ? 'No database records available' : 'No matching records', style: TextStyle(color: text, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 5),
+                        Text(items.isEmpty ? 'Records added to the backend will appear here.' : 'Change the search or selected filter.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ...filtered.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  final needsAction = _requiresAction(item);
+                  return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: card,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: needsAction ? const Color(0xFFFF5263).withAlpha(110) : border),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 43,
+                        height: 43,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(color: accent.withAlpha(25), borderRadius: BorderRadius.circular(12)),
+                        child: Text('${index + 1}', style: TextStyle(color: accent, fontWeight: FontWeight.w900)),
+                      ),
                       const SizedBox(width: 13),
                       Expanded(
                         child: Column(
@@ -137,21 +307,75 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                             ],
                             if ('${item['detail'] ?? ''}'.isNotEmpty) ...[
                               const SizedBox(height: 5),
-                              Text('${item['detail']}', style: TextStyle(color: ThemeConfig.blueAccent, fontSize: 11, fontWeight: FontWeight.w700)),
+                              Text('${item['detail']}', style: TextStyle(color: needsAction ? const Color(0xFFFF5263) : accent, fontSize: 11, fontWeight: FontWeight.w700)),
                             ],
                           ],
                         ),
                       ),
+                      Icon(Icons.chevron_right_rounded, color: muted),
                     ],
                   ),
                 );
-              },
+                }),
+              ],
             ),
           );
         },
       ),
     );
   }
+}
+
+class _AnalysisTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final Color card;
+  final Color border;
+  final Color text;
+  final Color muted;
+
+  const _AnalysisTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.card,
+    required this.border,
+    required this.text,
+    required this.muted,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: card,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: color.withAlpha(28), borderRadius: BorderRadius.circular(11)),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(value, style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w900)),
+                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 10)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class MdCompanyOverviewScreen extends MdDatabaseFlowScreen { const MdCompanyOverviewScreen({super.key, required super.userId}) : super(module: 'company-overview', screenTitle: 'Company Overview', icon: Icons.apartment_rounded); }
