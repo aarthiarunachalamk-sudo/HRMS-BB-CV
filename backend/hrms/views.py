@@ -63,6 +63,48 @@ def login_view(request):
     return Response(serializer.errors, status=400)
 
 
+@api_view(['POST'])
+def forgot_password_view(request):
+    """Issue and email a fresh one-time credential for password recovery."""
+    login_id = str(request.data.get('login_id') or '').strip()
+    if not login_id:
+        return Response(
+            {'success': False, 'message': 'Employee code or email is required'},
+            status=400,
+        )
+
+    try:
+        user = User.objects.get(
+            Q(email__iexact=login_id) | Q(user_id__iexact=login_id)
+        )
+    except User.DoesNotExist:
+        return Response(
+            {'success': False, 'message': 'No account found for these details'},
+            status=404,
+        )
+
+    otc = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    html = f'''
+        <h2>Password reset requested</h2>
+        <p>Use this one-time credential in the HRMS app to set a new password:</p>
+        <p style="font-size:22px;font-weight:bold;letter-spacing:3px;">{otc}</p>
+        <p>If you did not request this reset, contact your HR administrator.</p>
+    '''
+    if not send_email(user.email, 'HRMS Password Reset Credential', html):
+        return Response(
+            {'success': False, 'message': 'Unable to send the reset email'},
+            status=503,
+        )
+    user.set_password(otc)
+    user.save(update_fields=['password'])
+    EmployeeAccount.objects.filter(employee_email__iexact=user.email).update(otc=otc)
+    return Response({
+        'success': True,
+        'employee_id': user.user_id,
+        'message': 'A one-time credential was sent to your registered email.',
+    })
+
+
 def _employee_name(employee_id):
     account = EmployeeAccount.objects.filter(employee_id=employee_id).select_related('registration').first()
     if account:
@@ -5778,8 +5820,10 @@ def send_email(to_email, subject, html_content):
             html_content=html_content,
         )
         sg.send(message)
+        return True
     except Exception as e:
         print(f'SendGrid error: {e}')
+        return False
 
 
 def _payslip_email_html(employee_name, employee_id, month_label, net_salary, download_url=''):

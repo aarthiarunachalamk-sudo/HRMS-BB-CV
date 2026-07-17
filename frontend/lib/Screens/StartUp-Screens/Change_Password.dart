@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -9,10 +10,12 @@ import 'login_screen.dart';
 class ChangePasswordScreen extends StatefulWidget {
   final String employeeId;
   final String otc;
+  final bool recoveryMode;
   const ChangePasswordScreen({
     super.key,
     required this.employeeId,
     required this.otc,
+    this.recoveryMode = false,
   });
 
   @override
@@ -20,6 +23,7 @@ class ChangePasswordScreen extends StatefulWidget {
 }
 
 class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
+  late final TextEditingController _otcCtrl;
   final _newPasswordCtrl = TextEditingController();
   final _confirmPasswordCtrl = TextEditingController();
   bool _obscureNew = true;
@@ -27,13 +31,29 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   bool _isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    _otcCtrl = TextEditingController(text: widget.otc);
+  }
+
+  @override
   void dispose() {
+    _otcCtrl.dispose();
     _newPasswordCtrl.dispose();
     _confirmPasswordCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    if (_otcCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter the one-time credential'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
     if (_newPasswordCtrl.text.isEmpty || _confirmPasswordCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -68,12 +88,18 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'employee_id': widget.employeeId,
-          'otc': widget.otc,
+          'otc': _otcCtrl.text.trim(),
           'new_password': _newPasswordCtrl.text,
         }),
       );
       final data = jsonDecode(response.body);
       if (data['success'] == true) {
+        const storage = FlutterSecureStorage();
+        await Future.wait([
+          storage.delete(key: 'login_remembered_user'),
+          storage.delete(key: 'login_remembered_password'),
+        ]);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Password changed! Please login.'),
@@ -97,7 +123,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -171,7 +197,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'OTC (Old Password)',
+                          widget.recoveryMode
+                              ? 'One-Time Credential'
+                              : 'OTC (Old Password)',
                           style: TextStyle(
                             color: textSecondary,
                             fontSize: 11,
@@ -179,38 +207,59 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           ),
                         ),
                         const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 14,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF0A121E)
-                                : const Color(0xFFF1F5F9),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: cardBorder),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
+                        if (widget.recoveryMode)
+                          TextFormField(
+                            controller: _otcCtrl,
+                            textCapitalization: TextCapitalization.characters,
+                            style: TextStyle(color: textPrimary, fontSize: 14),
+                            decoration: InputDecoration(
+                              hintText: 'Enter credential from email',
+                              prefixIcon: const Icon(
                                 Icons.key_rounded,
                                 color: Color(0xFF4FACFE),
-                                size: 18,
                               ),
-                              const SizedBox(width: 10),
-                              Text(
-                                widget.otc,
-                                style: TextStyle(
-                                  color: textPrimary,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 2,
+                              filled: true,
+                              fillColor: isDark
+                                  ? const Color(0xFF0A121E)
+                                  : const Color(0xFFF1F5F9),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xFF0A121E)
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: cardBorder),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.key_rounded,
+                                  color: Color(0xFF4FACFE),
+                                  size: 18,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 10),
+                                Text(
+                                  widget.otc,
+                                  style: TextStyle(
+                                    color: textPrimary,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
                         const SizedBox(height: 18),
                         Text(
                           'New Password',

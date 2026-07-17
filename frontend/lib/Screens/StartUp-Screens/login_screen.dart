@@ -42,6 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isLoggingIn = false;
+  bool _isRequestingReset = false;
 
   @override
   void initState() {
@@ -89,24 +90,85 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _showForgotPasswordDialog() async {
-    final employeeCode = _employeeCodeController.text.trim();
+    final resetController = TextEditingController(
+      text: _employeeCodeController.text.trim(),
+    );
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Forgot Password?'),
-        content: Text(
-          employeeCode.isEmpty
-              ? 'Enter your employee code or email, then contact your HR administrator to reset your password.'
-              : 'Ask your HR administrator to reset the password for $employeeCode. You will receive a one-time credential for your next login.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Close'),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Reset Password'),
+          content: TextField(
+            controller: resetController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Employee code or email',
+              prefixIcon: Icon(Icons.person_outline_rounded),
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: _isRequestingReset
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: _isRequestingReset
+                  ? null
+                  : () async {
+                      final loginId = resetController.text.trim();
+                      if (loginId.isEmpty) return;
+                      setDialogState(() => _isRequestingReset = true);
+                      try {
+                        final response = await http.post(
+                          ApiConfig.uri('/forgot-password/'),
+                          headers: {'Content-Type': 'application/json'},
+                          body: jsonEncode({'login_id': loginId}),
+                        ).timeout(const Duration(seconds: 60));
+                        final data = jsonDecode(response.body);
+                        if (!context.mounted) return;
+                        if (data['success'] == true) {
+                          Navigator.of(dialogContext).pop();
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            SnackBar(content: Text(data['message'])),
+                          );
+                          Navigator.of(this.context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ChangePasswordScreen(
+                                employeeId: '${data['employee_id']}',
+                                otc: '',
+                                recoveryMode: true,
+                              ),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            SnackBar(
+                              content: Text(data['message'] ?? 'Reset failed'),
+                            ),
+                          );
+                        }
+                      } catch (_) {
+                        if (mounted) _showServerUnavailable();
+                      } finally {
+                        _isRequestingReset = false;
+                        if (context.mounted) setDialogState(() {});
+                      }
+                    },
+              child: _isRequestingReset
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Send Credential'),
+            ),
+          ],
+        ),
       ),
     );
+    resetController.dispose();
   }
 
   @override

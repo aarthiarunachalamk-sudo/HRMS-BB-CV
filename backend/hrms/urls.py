@@ -4,6 +4,7 @@ from . import employee_views
 
 urlpatterns = [
     path('login/', views.login_view, name='login'),
+    path('forgot-password/', views.forgot_password_view, name='forgot_password'),
     path('create-user/', views.create_user_view, name='create_user'),
     path('register-employee/', views.register_employee_view, name='register_employee'),
     path('registered-employees/', views.get_registered_employees_view, name='registered_employees'),
