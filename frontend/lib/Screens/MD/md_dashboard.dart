@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 
 import 'md_models.dart';
+import 'md_more_flow_screens.dart';
 import 'md_service.dart';
 
 enum MdDashboardScreen {
@@ -215,7 +216,8 @@ class _MdDashboardState extends State<MdDashboard> {
         body: SafeArea(
           child: Column(
             children: [
-              _TopBar(colors: colors, onMenu: () => _scaffoldKey.currentState?.openDrawer(), onTheme: _toggleTheme, onProfile: _pickProfileImage),
+              if (_step != _MdStep.more)
+                _TopBar(colors: colors, onMenu: () => _scaffoldKey.currentState?.openDrawer(), onTheme: _toggleTheme, onProfile: _pickProfileImage),
               if (_step == _MdStep.dashboard)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
@@ -272,6 +274,28 @@ class _MdDashboardState extends State<MdDashboard> {
         _MdStep.more: 6,
       }[step] ?? 0;
     });
+  }
+
+  void _openMoreFlow(String flow) {
+    final screens = <String, Widget>{
+      'company-overview': MdCompanyOverviewScreen(userId: widget.userId),
+      'financial-insights': MdFinancialInsightsScreen(userId: widget.userId),
+      'department-performance': MdDepartmentPerformanceScreen(userId: widget.userId),
+      'project-portfolio': MdProjectPortfolioScreen(userId: widget.userId),
+      'approvals-center': MdApprovalsCenterScreen(userId: widget.userId),
+      'workforce-analytics': MdWorkforceAnalyticsScreen(userId: widget.userId),
+      'leadership-team': MdLeadershipTeamScreen(userId: widget.userId),
+      'critical-alerts': MdCriticalAlertsScreen(userId: widget.userId),
+      'executive-reports': MdExecutiveReportsScreen(userId: widget.userId),
+      'meetings': MdMeetingsDatabaseScreen(userId: widget.userId),
+      'announcements': MdAnnouncementsScreen(userId: widget.userId),
+      'documents': MdDocumentsScreen(userId: widget.userId),
+      'settings-preferences': MdSettingsPreferencesScreen(userId: widget.userId),
+    };
+    final screen = screens[flow];
+    if (screen != null) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    }
   }
 
   Widget _buildStep(_MdColors colors) {
@@ -347,15 +371,27 @@ class _MdDashboardState extends State<MdDashboard> {
           ],
         );
       case _MdStep.more:
-        return _MdModulePage(
+        return _MdMorePage(
           colors: colors,
-          title: 'More',
-          subtitle: 'Additional MD workspace actions',
-          items: [
-            _MdModuleItem('Meeting participants', '${_data.participants.length}', Icons.groups_2_outlined),
-            _MdModuleItem('Scheduled meetings', '${_data.meetings.length}', Icons.calendar_month_outlined),
-            const _MdModuleItem('Profile & settings', 'Manage account preferences', Icons.settings_outlined),
-          ],
+          name: widget.firstName,
+          email: widget.email,
+          userId: widget.userId,
+          profileImage: _profileImage,
+          pendingApprovals: _data.pendingApprovals,
+          alertCount: 3,
+          onNavigate: (step) => setState(() {
+            _step = step;
+            _bottomIndex = {
+              _MdStep.analytics: 1,
+              _MdStep.employees: 2,
+              _MdStep.meetings: 3,
+              _MdStep.reports: 4,
+              _MdStep.approvals: 5,
+              _MdStep.more: 6,
+            }[step] ?? 0;
+          }),
+          onOpenFlow: _openMoreFlow,
+          onLogout: _logout,
         );
       case _MdStep.calendar:
         return _CalendarPage(
@@ -1436,6 +1472,273 @@ class _MdDrawerTile extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 fontSize: 14)),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _MdMorePage extends StatelessWidget {
+  final _MdColors colors;
+  final String name;
+  final String email;
+  final String userId;
+  final File? profileImage;
+  final int pendingApprovals;
+  final int alertCount;
+  final ValueChanged<_MdStep> onNavigate;
+  final ValueChanged<String> onOpenFlow;
+  final VoidCallback onLogout;
+
+  const _MdMorePage({
+    required this.colors,
+    required this.name,
+    required this.email,
+    required this.userId,
+    required this.profileImage,
+    required this.pendingApprovals,
+    required this.alertCount,
+    required this.onNavigate,
+    required this.onOpenFlow,
+    required this.onLogout,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = name.trim().isEmpty ? 'Managing Director' : name.trim();
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 22),
+      children: [
+        Row(
+          children: [
+            IconButton.filledTonal(
+              tooltip: 'Back to dashboard',
+              onPressed: () => onNavigate(_MdStep.dashboard),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            ),
+            Expanded(
+              child: Column(
+                children: [
+                  Text('More', style: TextStyle(color: colors.text, fontSize: 25, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 3),
+                  Text('Management & Controls', style: TextStyle(color: colors.muted, fontSize: 14)),
+                ],
+              ),
+            ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                IconButton(onPressed: () => onOpenFlow('critical-alerts'), icon: Icon(Icons.notifications_none_rounded, color: colors.text, size: 28)),
+                if (alertCount > 0)
+                  Positioned(right: 7, top: 5, child: CircleAvatar(radius: 4, backgroundColor: colors.danger)),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        InkWell(
+          onTap: () => onOpenFlow('settings-preferences'),
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: _box(colors).copyWith(borderRadius: BorderRadius.circular(18)),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 46,
+                  backgroundColor: colors.primary.withAlpha(50),
+                  backgroundImage: profileImage == null ? null : FileImage(profileImage!),
+                  child: profileImage == null
+                      ? Icon(Icons.person_rounded, color: colors.primary, size: 48)
+                      : null,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(displayName, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.text, fontSize: 20, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 5),
+                      Text('Managing Director', style: TextStyle(color: colors.muted, fontSize: 14)),
+                      const SizedBox(height: 4),
+                      Text(userId.isEmpty ? email : userId, style: TextStyle(color: colors.muted, fontSize: 13)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text('View Profile', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w800)),
+                          Icon(Icons.chevron_right_rounded, color: colors.primary),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 22),
+        _MdMoreSection(
+          colors: colors,
+          title: 'BUSINESS',
+          items: [
+            _MdMoreItem('1. Company\nOverview', Icons.apartment_rounded, 'company-overview'),
+            _MdMoreItem('2. Financial\nInsights', Icons.pie_chart_outline_rounded, 'financial-insights'),
+            _MdMoreItem('3. Department\nPerformance', Icons.groups_2_outlined, 'department-performance'),
+            _MdMoreItem('4. Project\nPortfolio', Icons.business_center_outlined, 'project-portfolio'),
+          ],
+          onOpen: onOpenFlow,
+        ),
+        _MdMoreSection(
+          colors: colors,
+          title: 'MANAGEMENT',
+          items: [
+            _MdMoreItem('5. Approvals\nCenter', Icons.fact_check_outlined, 'approvals-center', badge: pendingApprovals),
+            _MdMoreItem('6. Workforce\nAnalytics', Icons.bar_chart_rounded, 'workforce-analytics'),
+            _MdMoreItem('7. Leadership\nTeam', Icons.groups_outlined, 'leadership-team'),
+            _MdMoreItem('8. Critical\nAlerts', Icons.notifications_active_outlined, 'critical-alerts', badge: alertCount, danger: true),
+          ],
+          onOpen: onOpenFlow,
+        ),
+        _MdMoreSection(
+          colors: colors,
+          title: 'REPORTS & TOOLS',
+          items: [
+            _MdMoreItem('9. Executive\nReports', Icons.insert_chart_outlined_rounded, 'executive-reports'),
+            _MdMoreItem('10. Meetings', Icons.calendar_month_outlined, 'meetings'),
+            _MdMoreItem('11. Announcements', Icons.campaign_outlined, 'announcements'),
+            _MdMoreItem('12. Documents', Icons.folder_outlined, 'documents'),
+          ],
+          onOpen: onOpenFlow,
+        ),
+        _MdMoreWideButton(
+          colors: colors,
+          icon: Icons.settings_outlined,
+          label: 'Settings & Preferences',
+          onTap: () => onOpenFlow('settings-preferences'),
+        ),
+        const SizedBox(height: 12),
+        _MdMoreWideButton(
+          colors: colors,
+          icon: Icons.logout_rounded,
+          label: 'Logout',
+          danger: true,
+          onTap: onLogout,
+        ),
+      ],
+    );
+  }
+}
+
+class _MdMoreItem {
+  final String label;
+  final IconData icon;
+  final String flow;
+  final int badge;
+  final bool danger;
+
+  const _MdMoreItem(this.label, this.icon, this.flow, {this.badge = 0, this.danger = false});
+}
+
+class _MdMoreSection extends StatelessWidget {
+  final _MdColors colors;
+  final String title;
+  final List<_MdMoreItem> items;
+  final ValueChanged<String> onOpen;
+
+  const _MdMoreSection({required this.colors, required this.title, required this.items, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(title, style: TextStyle(color: colors.primary, fontSize: 14, fontWeight: FontWeight.w900)),
+              const SizedBox(width: 12),
+              Expanded(child: Divider(color: colors.primary.withAlpha(80))),
+              CircleAvatar(radius: 3, backgroundColor: colors.primary),
+            ],
+          ),
+          const SizedBox(height: 11),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1.48,
+            ),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final itemColor = item.danger ? colors.danger : colors.primary;
+              return InkWell(
+                onTap: () => onOpen(item.flow),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.all(13),
+                  decoration: _box(colors).copyWith(borderRadius: BorderRadius.circular(14)),
+                  child: Row(
+                    children: [
+                      Icon(item.icon, color: itemColor, size: 29),
+                      const SizedBox(width: 11),
+                      Expanded(child: Text(item.label, style: TextStyle(color: colors.text, fontSize: 13, height: 1.35, fontWeight: FontWeight.w700))),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (item.badge > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(color: item.danger ? colors.danger : const Color(0xFFB87316), borderRadius: BorderRadius.circular(20)),
+                              child: Text('${item.badge}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
+                            ),
+                          Icon(Icons.chevron_right_rounded, color: colors.muted),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+        ],
+      );
+}
+
+class _MdMoreWideButton extends StatelessWidget {
+  final _MdColors colors;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool danger;
+
+  const _MdMoreWideButton({required this.colors, required this.icon, required this.label, required this.onTap, this.danger = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? colors.danger : colors.primary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: _box(colors).copyWith(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: danger ? color : colors.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 12),
+            Text(label, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w900)),
+            if (!danger) ...[
+              const Spacer(),
+              Icon(Icons.chevron_right_rounded, color: colors.muted),
+            ],
+          ],
+        ),
       ),
     );
   }

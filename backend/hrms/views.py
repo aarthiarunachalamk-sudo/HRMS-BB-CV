@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
 from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
-from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest
+from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement
 from .employee_views import _leave_balance_payload
 from .payroll import generate_payroll_for_month, payslip_payload
 import os
@@ -3465,6 +3465,132 @@ def md_meetings_view(request):
         'email_sent_to': email_count,
         'email_error': email_error,
     })
+
+
+@api_view(['GET'])
+def md_module_view(request, module):
+    """Database-only data source for each dedicated MD More flow."""
+    user_id = request.GET.get('user_id', '').strip()
+    module = str(module or '').strip().lower().replace('_', '-')
+    today = timezone.localdate()
+    title = module.replace('-', ' ').title()
+    items = []
+
+    if module == 'company-overview':
+        profiles = OrganizationProfile.objects.all()[:20]
+        items = [
+            {'title': item.name, 'subtitle': item.industry or item.company_type, 'detail': item.address}
+            for item in profiles
+        ]
+    elif module == 'financial-insights':
+        items = [
+            {
+                'title': f'{item.department or "Organization"} · {item.financial_year}',
+                'subtitle': f'Allocated: {_format_inr(item.allocated_amount)}',
+                'detail': f'Spent: {_format_inr(item.spent_amount)} · {item.status.title()}',
+            }
+            for item in BudgetPlan.objects.all()[:50]
+        ]
+    elif module == 'department-performance':
+        items = [
+            {
+                'title': item.name,
+                'subtitle': item.code,
+                'detail': item.location or ('Active' if item.is_active else 'Inactive'),
+            }
+            for item in OrganizationDepartment.objects.all()[:50]
+        ]
+    elif module == 'project-portfolio':
+        items = [
+            {
+                'title': item.name,
+                'subtitle': f'{item.department} · {item.get_status_display()}',
+                'detail': f'{item.progress}% complete · Budget {_format_inr(item.budget)}',
+            }
+            for item in Project.objects.all()[:50]
+        ]
+    elif module == 'approvals-center':
+        items = [
+            {
+                'title': item.title,
+                'subtitle': f'{item.requester_name or item.requester_user_id} · {item.priority}',
+                'detail': item.status.title(),
+            }
+            for item in WorkflowApprovalRequest.objects.all()[:50]
+        ]
+    elif module == 'workforce-analytics':
+        items = [
+            {
+                'title': f'{item.registration.first_name} {item.registration.last_name}'.strip(),
+                'subtitle': f'{item.employee_id} · {item.department}',
+                'detail': item.get_designation_display(),
+            }
+            for item in EmployeeAccount.objects.select_related('registration').filter(is_active=True)[:100]
+        ]
+    elif module == 'leadership-team':
+        items = [
+            {
+                'title': f'{item.first_name} {item.last_name}'.strip() or item.email,
+                'subtitle': item.get_role_display(),
+                'detail': item.department,
+            }
+            for item in User.objects.filter(role__in=['ceo', 'md', 'director', 'hr', 'manager', 'tl'])[:50]
+        ]
+    elif module == 'critical-alerts':
+        items = [
+            {
+                'title': item.get('title', ''),
+                'subtitle': item.get('subtitle', ''),
+                'detail': item.get('severity', '').title(),
+            }
+            for item in _ceo_critical_alerts(today)
+        ]
+    elif module == 'executive-reports':
+        items = [
+            {
+                'title': item.report_type.replace('_', ' ').title(),
+                'subtitle': item.file_format.upper(),
+                'detail': item.status.title(),
+            }
+            for item in ReportExportHistory.objects.all()[:50]
+        ]
+    elif module == 'meetings':
+        items = [
+            {
+                'title': item.title,
+                'subtitle': f'{item.date_label} · {item.time_label}',
+                'detail': item.status.title(),
+            }
+            for item in MdMeeting.objects.all()[:50]
+        ]
+    elif module == 'announcements':
+        items = [
+            {'title': item.title, 'subtitle': item.message, 'detail': item.status.title()}
+            for item in Announcement.objects.all()[:50]
+        ]
+    elif module == 'documents':
+        items = [
+            {
+                'title': item.name,
+                'subtitle': f'{len(item.documents or [])} organization documents',
+                'detail': item.updated_at.isoformat(),
+            }
+            for item in OrganizationProfile.objects.all()[:20]
+        ]
+    elif module == 'settings-preferences':
+        users = User.objects.filter(user_id=user_id) if user_id else User.objects.none()
+        items = [
+            {
+                'title': f'{item.first_name} {item.last_name}'.strip() or item.email,
+                'subtitle': item.email,
+                'detail': f'{item.get_role_display()} · {item.department}',
+            }
+            for item in users
+        ]
+    else:
+        return Response({'success': False, 'message': 'MD module not found'}, status=404)
+
+    return Response({'success': True, 'module': module, 'title': title, 'items': items})
 
 
 @api_view(['GET'])

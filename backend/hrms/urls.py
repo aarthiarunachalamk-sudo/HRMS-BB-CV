@@ -47,6 +47,7 @@ urlpatterns = [
     path('ceo/branch-performance/', views.ceo_branch_performance_view, name='ceo_branch_performance'),
     path('md/dashboard/', views.md_dashboard_view, name='md_dashboard'),
     path('md/meetings/', views.md_meetings_view, name='md_meetings'),
+    path('md/modules/<str:module>/', views.md_module_view, name='md_module'),
     path('admin/dashboard/', views.admin_dashboard_view, name='admin_dashboard'),
     path('admin/employees/', views.admin_employees_view, name='admin_employees'),
     path('admin/employees/create/', views.admin_create_employee_view, name='admin_create_employee'),
