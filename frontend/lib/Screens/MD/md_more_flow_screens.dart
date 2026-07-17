@@ -209,7 +209,7 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    Expanded(child: _AnalysisTile(label: 'Total Records', value: '${items.length}', icon: Icons.database_outlined, color: accent, card: card, border: border, text: text, muted: muted)),
+                    Expanded(child: _AnalysisTile(label: 'Total Records', value: '${items.length}', icon: Icons.storage_outlined, color: accent, card: card, border: border, text: text, muted: muted)),
                     const SizedBox(width: 10),
                     Expanded(child: _AnalysisTile(label: 'Needs Action', value: '$actionCount', icon: Icons.notification_important_outlined, color: actionCount > 0 ? const Color(0xFFFF5263) : const Color(0xFF00D6A3), card: card, border: border, text: text, muted: muted)),
                   ],
