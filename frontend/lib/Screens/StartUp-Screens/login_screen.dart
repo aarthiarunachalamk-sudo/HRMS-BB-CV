@@ -42,7 +42,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isLoggingIn = false;
-  bool _isRequestingReset = false;
 
   @override
   void initState() {
@@ -93,10 +92,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final resetController = TextEditingController(
       text: _employeeCodeController.text.trim(),
     );
+    var isRequestingReset = false;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (dialogContentContext, setDialogState) => AlertDialog(
           title: const Text('Reset Password'),
           content: TextField(
             controller: resetController,
@@ -108,18 +108,19 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: _isRequestingReset
+              onPressed: isRequestingReset
                   ? null
                   : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: _isRequestingReset
+              onPressed: isRequestingReset
                   ? null
                   : () async {
                       final loginId = resetController.text.trim();
                       if (loginId.isEmpty) return;
-                      setDialogState(() => _isRequestingReset = true);
+                      setDialogState(() => isRequestingReset = true);
+                      var dialogWasClosed = false;
                       try {
                         final response = await http.post(
                           ApiConfig.uri('/forgot-password/'),
@@ -127,13 +128,16 @@ class _LoginScreenState extends State<LoginScreen> {
                           body: jsonEncode({'login_id': loginId}),
                         ).timeout(const Duration(seconds: 60));
                         final data = jsonDecode(response.body);
-                        if (!context.mounted) return;
+                        if (!dialogContentContext.mounted) return;
                         if (data['success'] == true) {
+                          dialogWasClosed = true;
                           Navigator.of(dialogContext).pop();
+                          await Future<void>.delayed(Duration.zero);
+                          if (!mounted) return;
                           ScaffoldMessenger.of(this.context).showSnackBar(
                             SnackBar(content: Text(data['message'])),
                           );
-                          Navigator.of(this.context).push(
+                          await Navigator.of(this.context).push(
                             MaterialPageRoute(
                               builder: (_) => ChangePasswordScreen(
                                 employeeId: '${data['employee_id']}',
@@ -152,11 +156,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       } catch (_) {
                         if (mounted) _showServerUnavailable();
                       } finally {
-                        _isRequestingReset = false;
-                        if (context.mounted) setDialogState(() {});
+                        isRequestingReset = false;
+                        if (!dialogWasClosed && dialogContentContext.mounted) {
+                          setDialogState(() {});
+                        }
                       }
                     },
-              child: _isRequestingReset
+              child: isRequestingReset
                   ? const SizedBox(
                       width: 18,
                       height: 18,
@@ -168,6 +174,8 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+    // Let the dialog's exit animation finish before disposing its controller.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
     resetController.dispose();
   }
 
