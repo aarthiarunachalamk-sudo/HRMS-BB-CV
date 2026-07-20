@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 
 abstract class MdDatabaseFlowScreen extends StatefulWidget {
   final String userId;
@@ -45,9 +46,17 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
   }
 
   bool _requiresAction(Map<String, dynamic> item) {
-    final value = '${item['title']} ${item['subtitle']} ${item['detail']}'.toLowerCase();
-    return ['pending', 'critical', 'at risk', 'overdue', 'required', 'warning', 'failed']
-        .any(value.contains);
+    final value = '${item['title']} ${item['subtitle']} ${item['detail']}'
+        .toLowerCase();
+    return [
+      'pending',
+      'critical',
+      'at risk',
+      'overdue',
+      'required',
+      'warning',
+      'failed',
+    ].any(value.contains);
   }
 
   Color _accent() {
@@ -58,7 +67,11 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
       Color(0xFFFFB52E),
       Color(0xFFFF5263),
     ];
-    return colors[widget.module.codeUnits.fold<int>(0, (sum, item) => sum + item) % colors.length];
+    return colors[widget.module.codeUnits.fold<int>(
+          0,
+          (sum, item) => sum + item,
+        ) %
+        colors.length];
   }
 
   String _subtitle() {
@@ -81,16 +94,30 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetch() async {
-    final response = await http.get(
-      ApiConfig.uri('/md/modules/${widget.module}/?user_id=${Uri.encodeQueryComponent(widget.userId)}'),
-    ).timeout(const Duration(seconds: 60));
+    final response = await http
+        .get(
+          ApiConfig.uri(
+            '/md/modules/${widget.module}/?user_id=${Uri.encodeQueryComponent(widget.userId)}',
+          ),
+        )
+        .timeout(const Duration(seconds: 60));
     final decoded = jsonDecode(response.body);
-    if (response.statusCode < 200 || response.statusCode >= 300 || decoded is! Map || decoded['success'] != true) {
-      throw Exception(decoded is Map ? decoded['message'] ?? 'Unable to load ${widget.screenTitle}' : 'Invalid backend response');
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300 ||
+        decoded is! Map ||
+        decoded['success'] != true) {
+      throw Exception(
+        decoded is Map
+            ? decoded['message'] ?? 'Unable to load ${widget.screenTitle}'
+            : 'Invalid backend response',
+      );
     }
     final rawItems = decoded['items'];
     return rawItems is List
-        ? rawItems.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+        ? rawItems
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList()
         : <Map<String, dynamic>>[];
   }
 
@@ -106,7 +133,7 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
       appBar: AppBar(
         backgroundColor: background,
         foregroundColor: text,
-        title: Text(widget.screenTitle),
+        title: AppBarLogoTitle(title: widget.screenTitle),
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _future,
@@ -121,7 +148,11 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('${snapshot.error}', textAlign: TextAlign.center, style: TextStyle(color: muted)),
+                    Text(
+                      '${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: muted),
+                    ),
                     const SizedBox(height: 14),
                     OutlinedButton.icon(
                       onPressed: () => setState(_load),
@@ -137,10 +168,15 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
           final query = _searchController.text.trim().toLowerCase();
           final actionCount = items.where(_requiresAction).length;
           final filtered = items.where((item) {
-            final searchable = '${item['title']} ${item['subtitle']} ${item['detail']}'.toLowerCase();
+            final searchable =
+                '${item['title']} ${item['subtitle']} ${item['detail']}'
+                    .toLowerCase();
             final matchesQuery = query.isEmpty || searchable.contains(query);
-            final matchesFilter = _filter == 'All' ||
-                (_filter == 'Needs Action' ? _requiresAction(item) : !_requiresAction(item));
+            final matchesFilter =
+                _filter == 'All' ||
+                (_filter == 'Needs Action'
+                    ? _requiresAction(item)
+                    : !_requiresAction(item));
             return matchesQuery && matchesFilter;
           }).toList();
           final accent = _accent();
@@ -152,19 +188,33 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
               children: [
-                Text(_subtitle(), textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 13)),
+                Text(
+                  _subtitle(),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: muted, fontSize: 13),
+                ),
                 const SizedBox(height: 18),
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [accent.withAlpha(45), card, ThemeConfig.purpleAccent.withAlpha(25)],
+                      colors: [
+                        accent.withAlpha(45),
+                        card,
+                        ThemeConfig.purpleAccent.withAlpha(25),
+                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: accent.withAlpha(120)),
-                    boxShadow: [BoxShadow(color: accent.withAlpha(25), blurRadius: 24, spreadRadius: 2)],
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withAlpha(25),
+                        blurRadius: 24,
+                        spreadRadius: 2,
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
@@ -172,7 +222,9 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                         width: 70,
                         height: 70,
                         decoration: BoxDecoration(
-                          gradient: LinearGradient(colors: [accent, ThemeConfig.purpleAccent]),
+                          gradient: LinearGradient(
+                            colors: [accent, ThemeConfig.purpleAccent],
+                          ),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Icon(widget.icon, color: Colors.white, size: 38),
@@ -182,9 +234,19 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Live Database Analysis', style: TextStyle(color: text, fontSize: 16, fontWeight: FontWeight.w900)),
+                            Text(
+                              'Live Database Analysis',
+                              style: TextStyle(
+                                color: text,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                             const SizedBox(height: 5),
-                            Text('${items.length} records synchronized', style: TextStyle(color: muted, fontSize: 12)),
+                            Text(
+                              '${items.length} records synchronized',
+                              style: TextStyle(color: muted, fontSize: 12),
+                            ),
                             const SizedBox(height: 10),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(20),
@@ -199,9 +261,23 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                        decoration: BoxDecoration(color: accent.withAlpha(25), borderRadius: BorderRadius.circular(10), border: Border.all(color: accent.withAlpha(100))),
-                        child: Text('LIVE', style: TextStyle(color: accent, fontSize: 10, fontWeight: FontWeight.w900)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: accent.withAlpha(25),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: accent.withAlpha(100)),
+                        ),
+                        child: Text(
+                          'LIVE',
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -209,9 +285,33 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    Expanded(child: _AnalysisTile(label: 'Total Records', value: '${items.length}', icon: Icons.storage_outlined, color: accent, card: card, border: border, text: text, muted: muted)),
+                    Expanded(
+                      child: _AnalysisTile(
+                        label: 'Total Records',
+                        value: '${items.length}',
+                        icon: Icons.storage_outlined,
+                        color: accent,
+                        card: card,
+                        border: border,
+                        text: text,
+                        muted: muted,
+                      ),
+                    ),
                     const SizedBox(width: 10),
-                    Expanded(child: _AnalysisTile(label: 'Needs Action', value: '$actionCount', icon: Icons.notification_important_outlined, color: actionCount > 0 ? const Color(0xFFFF5263) : const Color(0xFF00D6A3), card: card, border: border, text: text, muted: muted)),
+                    Expanded(
+                      child: _AnalysisTile(
+                        label: 'Needs Action',
+                        value: '$actionCount',
+                        icon: Icons.notification_important_outlined,
+                        color: actionCount > 0
+                            ? const Color(0xFFFF5263)
+                            : const Color(0xFF00D6A3),
+                        card: card,
+                        border: border,
+                        text: text,
+                        muted: muted,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -223,12 +323,29 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                     hintText: 'Search ${widget.screenTitle.toLowerCase()}...',
                     hintStyle: TextStyle(color: muted),
                     prefixIcon: Icon(Icons.search_rounded, color: accent),
-                    suffixIcon: query.isEmpty ? null : IconButton(onPressed: () { _searchController.clear(); setState(() {}); }, icon: Icon(Icons.close_rounded, color: muted)),
+                    suffixIcon: query.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {});
+                            },
+                            icon: Icon(Icons.close_rounded, color: muted),
+                          ),
                     filled: true,
                     fillColor: card,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: border)),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: border)),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: accent, width: 1.5)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: accent, width: 1.5),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -245,7 +362,10 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                           onSelected: (_) => setState(() => _filter = label),
                           selectedColor: accent.withAlpha(50),
                           side: BorderSide(color: selected ? accent : border),
-                          labelStyle: TextStyle(color: selected ? accent : muted, fontWeight: FontWeight.w800),
+                          labelStyle: TextStyle(
+                            color: selected ? accent : muted,
+                            fontWeight: FontWeight.w800,
+                          ),
                           backgroundColor: card,
                         ),
                       );
@@ -255,22 +375,59 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                 const SizedBox(height: 15),
                 Row(
                   children: [
-                    Expanded(child: Text('DATABASE RECORDS', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900))),
-                    Text('${filtered.length} shown', style: TextStyle(color: accent, fontSize: 11, fontWeight: FontWeight.w800)),
+                    Expanded(
+                      child: Text(
+                        'DATABASE RECORDS',
+                        style: TextStyle(
+                          color: text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${filtered.length} shown',
+                      style: TextStyle(
+                        color: accent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
                 if (filtered.isEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-                    decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(16), border: Border.all(color: border)),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 40,
+                      horizontal: 20,
+                    ),
+                    decoration: BoxDecoration(
+                      color: card,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: border),
+                    ),
                     child: Column(
                       children: [
                         Icon(widget.icon, color: muted, size: 46),
                         const SizedBox(height: 10),
-                        Text(items.isEmpty ? 'No database records available' : 'No matching records', style: TextStyle(color: text, fontWeight: FontWeight.w800)),
+                        Text(
+                          items.isEmpty
+                              ? 'No database records available'
+                              : 'No matching records',
+                          style: TextStyle(
+                            color: text,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                         const SizedBox(height: 5),
-                        Text(items.isEmpty ? 'Records added to the backend will appear here.' : 'Change the search or selected filter.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 12)),
+                        Text(
+                          items.isEmpty
+                              ? 'Records added to the backend will appear here.'
+                              : 'Change the search or selected filter.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: muted, fontSize: 12),
+                        ),
                       ],
                     ),
                   ),
@@ -299,35 +456,73 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                           decoration: BoxDecoration(
                             color: card,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: needsAction ? const Color(0xFFFF5263).withAlpha(110) : border),
+                            border: Border.all(
+                              color: needsAction
+                                  ? const Color(0xFFFF5263).withAlpha(110)
+                                  : border,
+                            ),
                           ),
                           child: Row(
                             children: [
-                      Container(
-                        width: 43,
-                        height: 43,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(color: accent.withAlpha(25), borderRadius: BorderRadius.circular(12)),
-                        child: Text('${index + 1}', style: TextStyle(color: accent, fontWeight: FontWeight.w900)),
-                      ),
-                      const SizedBox(width: 13),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('${item['title'] ?? ''}', style: TextStyle(color: text, fontWeight: FontWeight.w900)),
-                            if ('${item['subtitle'] ?? ''}'.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text('${item['subtitle']}', maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 12)),
-                            ],
-                            if ('${item['detail'] ?? ''}'.isNotEmpty) ...[
-                              const SizedBox(height: 5),
-                              Text('${item['detail']}', style: TextStyle(color: needsAction ? const Color(0xFFFF5263) : accent, fontSize: 11, fontWeight: FontWeight.w700)),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Icon(Icons.chevron_right_rounded, color: muted),
+                              Container(
+                                width: 43,
+                                height: 43,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: accent.withAlpha(25),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  '${index + 1}',
+                                  style: TextStyle(
+                                    color: accent,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 13),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${item['title'] ?? ''}',
+                                      style: TextStyle(
+                                        color: text,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    if ('${item['subtitle'] ?? ''}'
+                                        .isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${item['subtitle']}',
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: muted,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                    if ('${item['detail'] ?? ''}'
+                                        .isNotEmpty) ...[
+                                      const SizedBox(height: 5),
+                                      Text(
+                                        '${item['detail']}',
+                                        style: TextStyle(
+                                          color: needsAction
+                                              ? const Color(0xFFFF5263)
+                                              : accent,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              Icon(Icons.chevron_right_rounded, color: muted),
                             ],
                           ),
                         ),
@@ -359,7 +554,10 @@ class _MdRecordDetailScreen extends StatelessWidget {
 
   String _label(String key) => key
       .split('_')
-      .map((part) => part.isEmpty ? '' : '${part[0].toUpperCase()}${part.substring(1)}')
+      .map(
+        (part) =>
+            part.isEmpty ? '' : '${part[0].toUpperCase()}${part.substring(1)}',
+      )
       .join(' ');
 
   @override
@@ -377,7 +575,7 @@ class _MdRecordDetailScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: background,
         foregroundColor: text,
-        title: Text('$moduleTitle Details'),
+        title: AppBarLogoTitle(title: '$moduleTitle Details'),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -386,7 +584,11 @@ class _MdRecordDetailScreen extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [accent.withAlpha(55), card, ThemeConfig.purpleAccent.withAlpha(28)],
+                colors: [
+                  accent.withAlpha(55),
+                  card,
+                  ThemeConfig.purpleAccent.withAlpha(28),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -399,7 +601,9 @@ class _MdRecordDetailScreen extends StatelessWidget {
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [accent, ThemeConfig.purpleAccent]),
+                    gradient: LinearGradient(
+                      colors: [accent, ThemeConfig.purpleAccent],
+                    ),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Icon(icon, color: Colors.white, size: 38),
@@ -408,17 +612,32 @@ class _MdRecordDetailScreen extends StatelessWidget {
                 Text(
                   '${record['title'] ?? 'Record Details'}',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: text,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 if ('${record['subtitle'] ?? ''}'.isNotEmpty) ...[
                   const SizedBox(height: 7),
-                  Text('${record['subtitle']}', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 13)),
+                  Text(
+                    '${record['subtitle']}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: muted, fontSize: 13),
+                  ),
                 ],
               ],
             ),
           ),
           const SizedBox(height: 18),
-          Text('RECORD INFORMATION', style: TextStyle(color: accent, fontSize: 13, fontWeight: FontWeight.w900)),
+          Text(
+            'RECORD INFORMATION',
+            style: TextStyle(
+              color: accent,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 10),
           ...entries.map(
             (entry) => Container(
@@ -435,17 +654,38 @@ class _MdRecordDetailScreen extends StatelessWidget {
                   Container(
                     width: 36,
                     height: 36,
-                    decoration: BoxDecoration(color: accent.withAlpha(25), borderRadius: BorderRadius.circular(10)),
-                    child: Icon(Icons.info_outline_rounded, color: accent, size: 19),
+                    decoration: BoxDecoration(
+                      color: accent.withAlpha(25),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.info_outline_rounded,
+                      color: accent,
+                      size: 19,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_label(entry.key), style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w700)),
+                        Text(
+                          _label(entry.key),
+                          style: TextStyle(
+                            color: muted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text('${entry.value}', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w800)),
+                        Text(
+                          '${entry.value}',
+                          style: TextStyle(
+                            color: text,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -482,45 +722,163 @@ class _AnalysisTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: card,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: border),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: card,
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: border),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color.withAlpha(28),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon, color: color, size: 22),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(color: color.withAlpha(28), borderRadius: BorderRadius.circular(11)),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(value, style: TextStyle(color: text, fontSize: 19, fontWeight: FontWeight.w900)),
-                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 10)),
-                ],
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  color: text,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
-          ],
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: muted, fontSize: 10),
+              ),
+            ],
+          ),
         ),
+      ],
+    ),
+  );
+}
+
+class MdCompanyOverviewScreen extends MdDatabaseFlowScreen {
+  const MdCompanyOverviewScreen({super.key, required super.userId})
+    : super(
+        module: 'company-overview',
+        screenTitle: 'Company Overview',
+        icon: Icons.apartment_rounded,
       );
 }
 
-class MdCompanyOverviewScreen extends MdDatabaseFlowScreen { const MdCompanyOverviewScreen({super.key, required super.userId}) : super(module: 'company-overview', screenTitle: 'Company Overview', icon: Icons.apartment_rounded); }
-class MdFinancialInsightsScreen extends MdDatabaseFlowScreen { const MdFinancialInsightsScreen({super.key, required super.userId}) : super(module: 'financial-insights', screenTitle: 'Financial Insights', icon: Icons.pie_chart_outline_rounded); }
-class MdDepartmentPerformanceScreen extends MdDatabaseFlowScreen { const MdDepartmentPerformanceScreen({super.key, required super.userId}) : super(module: 'department-performance', screenTitle: 'Department Performance', icon: Icons.groups_2_outlined); }
-class MdProjectPortfolioScreen extends MdDatabaseFlowScreen { const MdProjectPortfolioScreen({super.key, required super.userId}) : super(module: 'project-portfolio', screenTitle: 'Project Portfolio', icon: Icons.business_center_outlined); }
-class MdApprovalsCenterScreen extends MdDatabaseFlowScreen { const MdApprovalsCenterScreen({super.key, required super.userId}) : super(module: 'approvals-center', screenTitle: 'Approvals Center', icon: Icons.fact_check_outlined); }
-class MdWorkforceAnalyticsScreen extends MdDatabaseFlowScreen { const MdWorkforceAnalyticsScreen({super.key, required super.userId}) : super(module: 'workforce-analytics', screenTitle: 'Workforce Analytics', icon: Icons.bar_chart_rounded); }
-class MdLeadershipTeamScreen extends MdDatabaseFlowScreen { const MdLeadershipTeamScreen({super.key, required super.userId}) : super(module: 'leadership-team', screenTitle: 'Leadership Team', icon: Icons.groups_outlined); }
-class MdCriticalAlertsScreen extends MdDatabaseFlowScreen { const MdCriticalAlertsScreen({super.key, required super.userId}) : super(module: 'critical-alerts', screenTitle: 'Critical Alerts', icon: Icons.notifications_active_outlined); }
-class MdExecutiveReportsScreen extends MdDatabaseFlowScreen { const MdExecutiveReportsScreen({super.key, required super.userId}) : super(module: 'executive-reports', screenTitle: 'Executive Reports', icon: Icons.insert_chart_outlined_rounded); }
-class MdMeetingsDatabaseScreen extends MdDatabaseFlowScreen { const MdMeetingsDatabaseScreen({super.key, required super.userId}) : super(module: 'meetings', screenTitle: 'Meetings', icon: Icons.calendar_month_outlined); }
-class MdAnnouncementsScreen extends MdDatabaseFlowScreen { const MdAnnouncementsScreen({super.key, required super.userId}) : super(module: 'announcements', screenTitle: 'Announcements', icon: Icons.campaign_outlined); }
-class MdDocumentsScreen extends MdDatabaseFlowScreen { const MdDocumentsScreen({super.key, required super.userId}) : super(module: 'documents', screenTitle: 'Documents', icon: Icons.folder_outlined); }
-class MdSettingsPreferencesScreen extends MdDatabaseFlowScreen { const MdSettingsPreferencesScreen({super.key, required super.userId}) : super(module: 'settings-preferences', screenTitle: 'Settings & Preferences', icon: Icons.settings_outlined); }
+class MdFinancialInsightsScreen extends MdDatabaseFlowScreen {
+  const MdFinancialInsightsScreen({super.key, required super.userId})
+    : super(
+        module: 'financial-insights',
+        screenTitle: 'Financial Insights',
+        icon: Icons.pie_chart_outline_rounded,
+      );
+}
+
+class MdDepartmentPerformanceScreen extends MdDatabaseFlowScreen {
+  const MdDepartmentPerformanceScreen({super.key, required super.userId})
+    : super(
+        module: 'department-performance',
+        screenTitle: 'Department Performance',
+        icon: Icons.groups_2_outlined,
+      );
+}
+
+class MdProjectPortfolioScreen extends MdDatabaseFlowScreen {
+  const MdProjectPortfolioScreen({super.key, required super.userId})
+    : super(
+        module: 'project-portfolio',
+        screenTitle: 'Project Portfolio',
+        icon: Icons.business_center_outlined,
+      );
+}
+
+class MdApprovalsCenterScreen extends MdDatabaseFlowScreen {
+  const MdApprovalsCenterScreen({super.key, required super.userId})
+    : super(
+        module: 'approvals-center',
+        screenTitle: 'Approvals Center',
+        icon: Icons.fact_check_outlined,
+      );
+}
+
+class MdWorkforceAnalyticsScreen extends MdDatabaseFlowScreen {
+  const MdWorkforceAnalyticsScreen({super.key, required super.userId})
+    : super(
+        module: 'workforce-analytics',
+        screenTitle: 'Workforce Analytics',
+        icon: Icons.bar_chart_rounded,
+      );
+}
+
+class MdLeadershipTeamScreen extends MdDatabaseFlowScreen {
+  const MdLeadershipTeamScreen({super.key, required super.userId})
+    : super(
+        module: 'leadership-team',
+        screenTitle: 'Leadership Team',
+        icon: Icons.groups_outlined,
+      );
+}
+
+class MdCriticalAlertsScreen extends MdDatabaseFlowScreen {
+  const MdCriticalAlertsScreen({super.key, required super.userId})
+    : super(
+        module: 'critical-alerts',
+        screenTitle: 'Critical Alerts',
+        icon: Icons.notifications_active_outlined,
+      );
+}
+
+class MdExecutiveReportsScreen extends MdDatabaseFlowScreen {
+  const MdExecutiveReportsScreen({super.key, required super.userId})
+    : super(
+        module: 'executive-reports',
+        screenTitle: 'Executive Reports',
+        icon: Icons.insert_chart_outlined_rounded,
+      );
+}
+
+class MdMeetingsDatabaseScreen extends MdDatabaseFlowScreen {
+  const MdMeetingsDatabaseScreen({super.key, required super.userId})
+    : super(
+        module: 'meetings',
+        screenTitle: 'Meetings',
+        icon: Icons.calendar_month_outlined,
+      );
+}
+
+class MdAnnouncementsScreen extends MdDatabaseFlowScreen {
+  const MdAnnouncementsScreen({super.key, required super.userId})
+    : super(
+        module: 'announcements',
+        screenTitle: 'Announcements',
+        icon: Icons.campaign_outlined,
+      );
+}
+
+class MdDocumentsScreen extends MdDatabaseFlowScreen {
+  const MdDocumentsScreen({super.key, required super.userId})
+    : super(
+        module: 'documents',
+        screenTitle: 'Documents',
+        icon: Icons.folder_outlined,
+      );
+}
+
+class MdSettingsPreferencesScreen extends MdDatabaseFlowScreen {
+  const MdSettingsPreferencesScreen({super.key, required super.userId})
+    : super(
+        module: 'settings-preferences',
+        screenTitle: 'Settings & Preferences',
+        icon: Icons.settings_outlined,
+      );
+}

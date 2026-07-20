@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image/image.dart' as img;
@@ -31,7 +32,8 @@ class EmployeeSelfieAttendanceScreen extends StatefulWidget {
 }
 
 class _EmployeeSelfieAttendanceScreenState
-    extends State<EmployeeSelfieAttendanceScreen> with WidgetsBindingObserver {
+    extends State<EmployeeSelfieAttendanceScreen>
+    with WidgetsBindingObserver {
   CameraController? _cameraController;
   Future<void>? _initializeControllerFuture;
 
@@ -137,16 +139,14 @@ class _EmployeeSelfieAttendanceScreenState
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         if (mounted) {
-          setState(
-            () {
-              _loadingLocation = false;
-              _locationPermissionDeniedForever =
-                  permission == LocationPermission.deniedForever;
-              _error = permission == LocationPermission.deniedForever
-                  ? 'Location permission is permanently denied. Enable it from app settings.'
-                  : 'Location permission is required before opening the selfie camera.';
-            },
-          );
+          setState(() {
+            _loadingLocation = false;
+            _locationPermissionDeniedForever =
+                permission == LocationPermission.deniedForever;
+            _error = permission == LocationPermission.deniedForever
+                ? 'Location permission is permanently denied. Enable it from app settings.'
+                : 'Location permission is required before opening the selfie camera.';
+          });
         }
         return;
       }
@@ -246,11 +246,7 @@ class _EmployeeSelfieAttendanceScreenState
     // Correct orientation using EXIF data captured by the camera sensor.
     decoded = img.bakeOrientation(decoded);
 
-    final watermarked = _drawWatermark(
-      decoded,
-      _position,
-      DateTime.now(),
-    );
+    final watermarked = _drawWatermark(decoded, _position, DateTime.now());
 
     final directory = await getTemporaryDirectory();
     final outPath =
@@ -572,8 +568,7 @@ class _EmployeeSelfieAttendanceScreenState
       appBar: AppBar(
         backgroundColor: bg,
         elevation: 0,
-        centerTitle: true,
-        title: Text(_successTitle),
+        title: AppBarLogoTitle(title: _successTitle),
       ),
       body: SafeArea(child: _result == null ? _captureBody() : _successBody()),
     );
@@ -606,10 +601,7 @@ class _EmployeeSelfieAttendanceScreenState
             aspectRatio: _selfiePreviewAspectRatio,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(7),
-              child: Container(
-                color: previewBg,
-                child: _cameraPreview(),
-              ),
+              child: Container(color: previewBg, child: _cameraPreview()),
             ),
           ),
           const SizedBox(height: 14),
@@ -628,7 +620,9 @@ class _EmployeeSelfieAttendanceScreenState
                   onTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Flash control is not available on this camera flow.'),
+                        content: Text(
+                          'Flash control is not available on this camera flow.',
+                        ),
                       ),
                     );
                   },
@@ -672,12 +666,14 @@ class _EmployeeSelfieAttendanceScreenState
             message: waitingForLocation
                 ? 'Turn on GPS and allow location access. The selfie camera opens only after your location is captured.'
                 : (_isCheckIn
-                    ? 'Please capture your selfie to mark your attendance.'
-                    : 'Capture your selfie to complete check-out.'),
+                      ? 'Please capture your selfie to mark your attendance.'
+                      : 'Capture your selfie to complete check-out.'),
             actionText: waitingForLocation
                 ? (_openingLocationSettings ? 'Opening...' : 'Enable GPS')
                 : 'OK',
-            onAction: waitingForLocation ? _openLocationSettings : _captureSelfie,
+            onAction: waitingForLocation
+                ? _openLocationSettings
+                : _captureSelfie,
           ),
           if (waitingForLocation) ...[
             const SizedBox(height: 10),
@@ -772,8 +768,8 @@ class _EmployeeSelfieAttendanceScreenState
         : 'You have successfully checked out.';
     final statusText = '${result['status'] ?? _policyStatus ?? 'Present'}';
     final statusLower = statusText.toLowerCase();
-    final statusColor = statusLower.contains('half') ||
-            statusLower.contains('late')
+    final statusColor =
+        statusLower.contains('half') || statusLower.contains('late')
         ? EmployeeColors.gold
         : EmployeeColors.green;
 

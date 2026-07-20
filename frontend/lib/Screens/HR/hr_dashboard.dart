@@ -203,7 +203,7 @@ class _HrDashboardState extends State<HrDashboard> {
                       Padding(
                         padding: const EdgeInsets.all(8),
                         child: Text(
-                          'Backend data unavailable',
+                          'Unable to load data. Please try again.',
                           style: TextStyle(
                             color: c.danger,
                             fontSize: 11,

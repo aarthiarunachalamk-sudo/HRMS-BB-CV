@@ -237,7 +237,7 @@ class _TLDashboardState extends State<TLDashboard> {
                         padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
                         child: TlCard(
                           child: Text(
-                            'Backend data unavailable: ${snapshot.error}',
+                            'Unable to load data. Please try again.',
                             style: TextStyle(
                               color: c.danger,
                               fontSize: 11,
@@ -485,7 +485,8 @@ class _Dashboard extends StatelessWidget {
         ),
         _ProgressCard(
           value: tlPercent(data, 'team_progress'),
-          label: '${tlText(data, 'on_track')} employee(s) on track by task completion',
+          label:
+              '${tlText(data, 'on_track')} employee(s) on track by task completion',
         ),
       ],
     );
@@ -1114,8 +1115,11 @@ class _TasksState extends State<_Tasks> {
                                 child: Row(
                                   children: [
                                     if (_priorityFilter == value)
-                                      Icon(Icons.check_rounded,
-                                          color: c.primary, size: 17)
+                                      Icon(
+                                        Icons.check_rounded,
+                                        color: c.primary,
+                                        size: 17,
+                                      )
                                     else
                                       const SizedBox(width: 17),
                                     const SizedBox(width: 8),
@@ -1553,7 +1557,8 @@ class _AttendanceState extends State<_Attendance> {
     );
     final late = team.fold<int>(
       0,
-      (sum, item) => sum + (int.tryParse('${_summary(item)['late'] ?? 0}') ?? 0),
+      (sum, item) =>
+          sum + (int.tryParse('${_summary(item)['late'] ?? 0}') ?? 0),
     );
     final absent = team.fold<int>(
       0,
@@ -1690,10 +1695,13 @@ class _AttendanceState extends State<_Attendance> {
 
   Map<String, dynamic> _summary(Map<String, dynamic> item) =>
       item['attendance_summary'] is Map
-          ? Map<String, dynamic>.from(item['attendance_summary'] as Map)
-          : <String, dynamic>{};
+      ? Map<String, dynamic>.from(item['attendance_summary'] as Map)
+      : <String, dynamic>{};
 
-  Widget _attendanceEmployeeTile(BuildContext context, Map<String, dynamic> item) {
+  Widget _attendanceEmployeeTile(
+    BuildContext context,
+    Map<String, dynamic> item,
+  ) {
     final c = TlPalette.of(context);
     final summary = _summary(item);
     final recent = item['recent_attendance'] is List
@@ -1707,10 +1715,10 @@ class _AttendanceState extends State<_Attendance> {
     final statusColor = status.toLowerCase().contains('late')
         ? c.warning
         : status.toLowerCase().contains('absent')
-            ? c.danger
-            : status == 'No data'
-                ? c.muted
-                : c.success;
+        ? c.danger
+        : status == 'No data'
+        ? c.muted
+        : c.success;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TlCard(
@@ -1760,9 +1768,27 @@ class _AttendanceState extends State<_Attendance> {
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: _TinyMetric('Present', '${summary['present'] ?? 0}', c.success)),
-                Expanded(child: _TinyMetric('Late', '${summary['late'] ?? 0}', c.warning)),
-                Expanded(child: _TinyMetric('Absent', '${summary['absent'] ?? 0}', c.danger)),
+                Expanded(
+                  child: _TinyMetric(
+                    'Present',
+                    '${summary['present'] ?? 0}',
+                    c.success,
+                  ),
+                ),
+                Expanded(
+                  child: _TinyMetric(
+                    'Late',
+                    '${summary['late'] ?? 0}',
+                    c.warning,
+                  ),
+                ),
+                Expanded(
+                  child: _TinyMetric(
+                    'Absent',
+                    '${summary['absent'] ?? 0}',
+                    c.danger,
+                  ),
+                ),
               ],
             ),
             if (latest.isNotEmpty) ...[
@@ -2872,12 +2898,8 @@ class _Reports extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => _TlReportsDashboard(
-    data: data,
-    open: open,
-    menu: menu,
-    theme: theme,
-  );
+  Widget build(BuildContext context) =>
+      _TlReportsDashboard(data: data, open: open, menu: menu, theme: theme);
 }
 
 class _TlReportsDashboard extends StatefulWidget {
@@ -2922,17 +2944,18 @@ class _TlReportsDashboardState extends State<_TlReportsDashboard> {
       fallback: _completionPercent(tasks),
     );
     final chartValues = _chartValues(team, completedPercent);
-    final categories = _categories(
-      members: members,
-      pendingApprovals: pendingApprovals,
-      meetings: meetings.length,
-      tasksDue: tasks.where((item) => _taskIsOpen(item)).length,
-    ).where((item) {
-      final haystack =
-          '${item['title']} ${item['subtitle']} ${item['badge']}'
-              .toLowerCase();
-      return _query.isEmpty || haystack.contains(_query.toLowerCase());
-    }).toList();
+    final categories =
+        _categories(
+          members: members,
+          pendingApprovals: pendingApprovals,
+          meetings: meetings.length,
+          tasksDue: tasks.where((item) => _taskIsOpen(item)).length,
+        ).where((item) {
+          final haystack =
+              '${item['title']} ${item['subtitle']} ${item['badge']}'
+                  .toLowerCase();
+          return _query.isEmpty || haystack.contains(_query.toLowerCase());
+        }).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
@@ -3010,10 +3033,7 @@ class _TlReportsDashboardState extends State<_TlReportsDashboard> {
               child: Center(
                 child: Text(
                   'No matching reports found.',
-                  style: TextStyle(
-                    color: c.muted,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: TextStyle(color: c.muted, fontWeight: FontWeight.w800),
                 ),
               ),
             ),
@@ -3106,7 +3126,10 @@ class _TlReportsDashboardState extends State<_TlReportsDashboard> {
 
   static int _activeTeamCount(List<Map<String, dynamic>> team) {
     return team
-        .where((item) => !'${item['status'] ?? ''}'.toLowerCase().contains('inactive'))
+        .where(
+          (item) =>
+              !'${item['status'] ?? ''}'.toLowerCase().contains('inactive'),
+        )
         .length;
   }
 
@@ -3272,7 +3295,9 @@ class _RangeSelector extends StatelessWidget {
                 height: 48,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: selected ? c.primary.withAlpha(34) : Colors.transparent,
+                  color: selected
+                      ? c.primary.withAlpha(34)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                   border: selected
                       ? Border.all(color: c.primary)
@@ -6379,23 +6404,22 @@ class _TeamPerformance extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        ...tlList(data, 'team').map(
-          (item) {
-            final taskSummary = item['task_summary'] is Map
-                ? Map<String, dynamic>.from(item['task_summary'] as Map)
-                : <String, dynamic>{};
-            final completed = taskSummary['completed'] ?? 0;
-            final assigned = taskSummary['assigned'] ?? 0;
-            final rate = taskSummary['completion_rate'] ?? item['score'] ?? 0;
-            return TlListTile(
-              icon: Icons.person_rounded,
-              title: '${item['title']}',
-              subtitle: '${item['subtitle']} • $completed/$assigned tasks completed',
-              trailing: '$rate%',
-              color: c.success,
-            );
-          },
-        ),
+        ...tlList(data, 'team').map((item) {
+          final taskSummary = item['task_summary'] is Map
+              ? Map<String, dynamic>.from(item['task_summary'] as Map)
+              : <String, dynamic>{};
+          final completed = taskSummary['completed'] ?? 0;
+          final assigned = taskSummary['assigned'] ?? 0;
+          final rate = taskSummary['completion_rate'] ?? item['score'] ?? 0;
+          return TlListTile(
+            icon: Icons.person_rounded,
+            title: '${item['title']}',
+            subtitle:
+                '${item['subtitle']} • $completed/$assigned tasks completed',
+            trailing: '$rate%',
+            color: c.success,
+          );
+        }),
       ],
     );
   }
@@ -6833,21 +6857,17 @@ class _ListPageState extends State<_ListPage> {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     final query = _search.text.trim().toLowerCase();
-    final visible = widget.items
-        .where(
-          (item) {
-            final status = '${item['status'] ?? item['trailing'] ?? ''}';
-            final matchesStatus =
-                _statusFilter == 'All' ||
-                status.toLowerCase().contains(_statusFilter.toLowerCase());
-            final matchesQuery =
-                '${item['title'] ?? item['name'] ?? ''} ${item['subtitle'] ?? item['role'] ?? ''} ${item['trailing'] ?? ''}'
-                    .toLowerCase()
-                    .contains(query);
-            return matchesStatus && matchesQuery;
-          },
-        )
-        .toList();
+    final visible = widget.items.where((item) {
+      final status = '${item['status'] ?? item['trailing'] ?? ''}';
+      final matchesStatus =
+          _statusFilter == 'All' ||
+          status.toLowerCase().contains(_statusFilter.toLowerCase());
+      final matchesQuery =
+          '${item['title'] ?? item['name'] ?? ''} ${item['subtitle'] ?? item['role'] ?? ''} ${item['trailing'] ?? ''}'
+              .toLowerCase()
+              .contains(query);
+      return matchesStatus && matchesQuery;
+    }).toList();
     final statuses = <String>{
       'All',
       ...widget.items
@@ -6901,8 +6921,11 @@ class _ListPageState extends State<_ListPage> {
                             child: Row(
                               children: [
                                 if (_statusFilter == value)
-                                  Icon(Icons.check_rounded,
-                                      color: c.primary, size: 17)
+                                  Icon(
+                                    Icons.check_rounded,
+                                    color: c.primary,
+                                    size: 17,
+                                  )
                                 else
                                   const SizedBox(width: 17),
                                 const SizedBox(width: 8),

@@ -172,7 +172,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                   ),
                 ),
                 Text(
-                  widget.firstName.trim().isEmpty ? 'Super Admin' : widget.firstName,
+                  widget.firstName.trim().isEmpty
+                      ? 'Super Admin'
+                      : widget.firstName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -282,7 +284,9 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          widget.firstName.trim().isEmpty ? 'Super Admin' : widget.firstName,
+                          widget.firstName.trim().isEmpty
+                              ? 'Super Admin'
+                              : widget.firstName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -565,7 +569,7 @@ class _DashboardView extends StatelessWidget {
         if (snapshot.hasError) {
           return Center(
             child: Text(
-              'Backend data unavailable',
+              'Unable to load data. Please try again.',
               style: TextStyle(
                 color: colors.muted,
                 fontSize: 12,
@@ -685,7 +689,7 @@ class _UsersView extends StatelessWidget {
         if (snapshot.hasError) {
           return Center(
             child: Text(
-              'Backend data unavailable',
+              'Unable to load data. Please try again.',
               style: TextStyle(
                 color: colors.muted,
                 fontSize: 12,
@@ -703,7 +707,9 @@ class _UsersView extends StatelessWidget {
         final rawEmployees = data['employees'];
         final rawUsers = data['users'];
         final rawRows = focus == 'employees'
-            ? (rawEmployees is List && rawEmployees.isNotEmpty ? rawEmployees : rawUsers)
+            ? (rawEmployees is List && rawEmployees.isNotEmpty
+                  ? rawEmployees
+                  : rawUsers)
             : rawUsers;
         final users = rawRows is List
             ? rawRows.map((item) {
@@ -718,13 +724,15 @@ class _UsersView extends StatelessWidget {
               }).toList()
             : <_PersonData>[];
         final visibleUsers = focus == 'active_users'
-            ? users.where((user) => user.status.toLowerCase() == 'active').toList()
+            ? users
+                  .where((user) => user.status.toLowerCase() == 'active')
+                  .toList()
             : users;
         final title = focus == 'departments'
             ? 'Department Management'
             : focus == 'active_users'
-                ? 'Active Users'
-                : 'Employee Directory';
+            ? 'Active Users'
+            : 'Employee Directory';
 
         return _ScreenScroll(
           colors: colors,
@@ -740,7 +748,11 @@ class _UsersView extends StatelessWidget {
             if (focus == 'departments') ...[
               _DepartmentsCard(colors: colors, data: data),
             ] else ...[
-              _SearchBar(colors: colors, hint: 'Search ${focus == 'employees' ? 'employees' : 'users'}...'),
+              _SearchBar(
+                colors: colors,
+                hint:
+                    'Search ${focus == 'employees' ? 'employees' : 'users'}...',
+              ),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -765,7 +777,9 @@ class _UsersView extends StatelessWidget {
                       : 'No user data found in backend',
                 )
               else
-                ...visibleUsers.map((user) => _UserTile(colors: colors, user: user)),
+                ...visibleUsers.map(
+                  (user) => _UserTile(colors: colors, user: user),
+                ),
               const SizedBox(height: 12),
               _PrimaryActionButton(
                 colors: colors,
@@ -797,7 +811,9 @@ class _WorkflowView extends StatelessWidget {
       future: SaService().fetchDashboard(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return Center(child: CircularProgressIndicator(color: colors.primary));
+          return Center(
+            child: CircularProgressIndicator(color: colors.primary),
+          );
         }
         final data = snapshot.data!;
         return _ScreenScroll(
@@ -843,7 +859,9 @@ class _ReportsView extends StatelessWidget {
       future: SaService().fetchDashboard(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return Center(child: CircularProgressIndicator(color: colors.primary));
+          return Center(
+            child: CircularProgressIndicator(color: colors.primary),
+          );
         }
         final data = snapshot.data!;
         return _ScreenScroll(
@@ -917,7 +935,11 @@ class _IdentityCard extends StatelessWidget {
   final String email;
   final String name;
 
-  const _IdentityCard({required this.colors, required this.email, this.name = ''});
+  const _IdentityCard({
+    required this.colors,
+    required this.email,
+    this.name = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1012,7 +1034,10 @@ class _MetricCard extends StatelessWidget {
                   _IconBadge(colors: colors, icon: icon, color: color),
                   const Spacer(),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: colors.success.withAlpha(colors.isDark ? 34 : 20),
                       borderRadius: BorderRadius.circular(999),
@@ -1242,14 +1267,22 @@ class _RolesPermissionsCard extends StatelessWidget {
       colors: colors,
       title: 'Role & Permission',
       child: roles.isEmpty
-          ? _EmptyPanelText(colors: colors, text: 'No role permission data found in backend')
+          ? _EmptyPanelText(
+              colors: colors,
+              text: 'No role permission data found in backend',
+            )
           : Column(
-              children: roles.take(8).map((role) => _SimpleRow(
-                colors: colors,
-                icon: Icons.badge_outlined,
-                title: '${role['name'] ?? 'Role'}',
-                value: '${role['filled_positions'] ?? 0} Users',
-              )).toList(),
+              children: roles
+                  .take(8)
+                  .map(
+                    (role) => _SimpleRow(
+                      colors: colors,
+                      icon: Icons.badge_outlined,
+                      title: '${role['name'] ?? 'Role'}',
+                      value: '${role['filled_positions'] ?? 0} Users',
+                    ),
+                  )
+                  .toList(),
             ),
     );
   }
@@ -1262,7 +1295,11 @@ List<Map<String, dynamic>> _list(Object? value) {
       .toList();
 }
 
-void _openDetail(BuildContext context, String title, Map<dynamic, dynamic> data) {
+void _openDetail(
+  BuildContext context,
+  String title,
+  Map<dynamic, dynamic> data,
+) {
   Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => _RecordDetailScreen(
@@ -1342,20 +1379,31 @@ class _DepartmentsCard extends StatelessWidget {
       colors: colors,
       title: 'Department Management',
       child: departments.isEmpty
-          ? _EmptyPanelText(colors: colors, text: 'No department data found in backend')
+          ? _EmptyPanelText(
+              colors: colors,
+              text: 'No department data found in backend',
+            )
           : Column(
-              children: departments.take(8).map((dept) => _SimpleRow(
-                colors: colors,
-                icon: Icons.apartment_outlined,
-                title: '${dept['name'] ?? 'Department'}',
-                value: '${dept['employees'] ?? 0} Employees',
-                onTap: () => _showDepartmentEmployees(context, dept),
-              )).toList(),
+              children: departments
+                  .take(8)
+                  .map(
+                    (dept) => _SimpleRow(
+                      colors: colors,
+                      icon: Icons.apartment_outlined,
+                      title: '${dept['name'] ?? 'Department'}',
+                      value: '${dept['employees'] ?? 0} Employees',
+                      onTap: () => _showDepartmentEmployees(context, dept),
+                    ),
+                  )
+                  .toList(),
             ),
     );
   }
 
-  void _showDepartmentEmployees(BuildContext context, Map<String, dynamic> dept) {
+  void _showDepartmentEmployees(
+    BuildContext context,
+    Map<String, dynamic> dept,
+  ) {
     final name = '${dept['name'] ?? ''}'.trim();
     var employees = _list(data['employees']).where((employee) {
       final department = '${employee['department'] ?? ''}'.trim().toLowerCase();
@@ -1409,7 +1457,6 @@ class _DepartmentsCard extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _AttendanceCard extends StatelessWidget {
@@ -1420,19 +1467,46 @@ class _AttendanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final attendance = Map<String, dynamic>.from((data['attendance_detail'] as Map?) ?? const {});
+    final attendance = Map<String, dynamic>.from(
+      (data['attendance_detail'] as Map?) ?? const {},
+    );
     final details = attendance;
     final total = int.tryParse('${details['total'] ?? 0}') ?? 0;
     return _Panel(
       colors: colors,
       title: 'Attendance Monitoring',
       child: total == 0
-          ? _EmptyPanelText(colors: colors, text: 'No attendance data found in backend')
-          : Column(children: [
-              _LegendRow(colors: colors, label: 'Present', value: '${details['present'] ?? 0}', color: colors.primary, onTap: () => _openDetail(context, 'Present Attendance', details)),
-              _LegendRow(colors: colors, label: 'Absent', value: '${details['absent'] ?? 0}', color: colors.danger, onTap: () => _openDetail(context, 'Absent Attendance', details)),
-              _LegendRow(colors: colors, label: 'Late', value: '${details['late'] ?? 0}', color: colors.warning, onTap: () => _openDetail(context, 'Late Attendance', details)),
-            ]),
+          ? _EmptyPanelText(
+              colors: colors,
+              text: 'No attendance data found in backend',
+            )
+          : Column(
+              children: [
+                _LegendRow(
+                  colors: colors,
+                  label: 'Present',
+                  value: '${details['present'] ?? 0}',
+                  color: colors.primary,
+                  onTap: () =>
+                      _openDetail(context, 'Present Attendance', details),
+                ),
+                _LegendRow(
+                  colors: colors,
+                  label: 'Absent',
+                  value: '${details['absent'] ?? 0}',
+                  color: colors.danger,
+                  onTap: () =>
+                      _openDetail(context, 'Absent Attendance', details),
+                ),
+                _LegendRow(
+                  colors: colors,
+                  label: 'Late',
+                  value: '${details['late'] ?? 0}',
+                  color: colors.warning,
+                  onTap: () => _openDetail(context, 'Late Attendance', details),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -1456,8 +1530,10 @@ class _LeaveManagementCard extends StatelessWidget {
                 return _SimpleRow(
                   colors: colors,
                   icon: Icons.event_busy_outlined,
-                  title: '${leave['name'] ?? leave['employee_id'] ?? 'Employee'}',
-                  value: '${leave['leave_type'] ?? ''} • ${leave['status'] ?? ''}',
+                  title:
+                      '${leave['name'] ?? leave['employee_id'] ?? 'Employee'}',
+                  value:
+                      '${leave['leave_type'] ?? ''} • ${leave['status'] ?? ''}',
                   onTap: () => _openDetail(context, 'Leave Request', leave),
                 );
               }).toList(),
@@ -1479,14 +1555,24 @@ class _TaskManagementCard extends StatelessWidget {
       colors: colors,
       title: 'Task Management',
       child: tasks.isEmpty
-          ? _EmptyPanelText(colors: colors, text: 'No task data found in backend')
-          : Column(children: tasks.take(6).map((task) => _SimpleRow(
-                colors: colors,
-                icon: Icons.task_alt_rounded,
-                title: '${task['title'] ?? 'Task'}',
-                value: '${task['status'] ?? ''}',
-                onTap: () => _openDetail(context, 'Task Details', task),
-              )).toList()),
+          ? _EmptyPanelText(
+              colors: colors,
+              text: 'No task data found in backend',
+            )
+          : Column(
+              children: tasks
+                  .take(6)
+                  .map(
+                    (task) => _SimpleRow(
+                      colors: colors,
+                      icon: Icons.task_alt_rounded,
+                      title: '${task['title'] ?? 'Task'}',
+                      value: '${task['status'] ?? ''}',
+                      onTap: () => _openDetail(context, 'Task Details', task),
+                    ),
+                  )
+                  .toList(),
+            ),
     );
   }
 }
@@ -1504,14 +1590,25 @@ class _MeetingManagementCard extends StatelessWidget {
       colors: colors,
       title: 'Meeting Management',
       child: meetings.isEmpty
-          ? _EmptyPanelText(colors: colors, text: 'No meeting data found in backend')
-          : Column(children: meetings.take(6).map((meeting) => _SimpleRow(
-                colors: colors,
-                icon: Icons.calendar_month_outlined,
-                title: '${meeting['title'] ?? 'Meeting'}',
-                value: '${meeting['status'] ?? ''}',
-                onTap: () => _openDetail(context, 'Meeting Details', meeting),
-              )).toList()),
+          ? _EmptyPanelText(
+              colors: colors,
+              text: 'No meeting data found in backend',
+            )
+          : Column(
+              children: meetings
+                  .take(6)
+                  .map(
+                    (meeting) => _SimpleRow(
+                      colors: colors,
+                      icon: Icons.calendar_month_outlined,
+                      title: '${meeting['title'] ?? 'Meeting'}',
+                      value: '${meeting['status'] ?? ''}',
+                      onTap: () =>
+                          _openDetail(context, 'Meeting Details', meeting),
+                    ),
+                  )
+                  .toList(),
+            ),
     );
   }
 }
@@ -1524,18 +1621,44 @@ class _PayrollOverviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final payroll = Map<String, dynamic>.from((data['payroll'] as Map?) ?? const {});
+    final payroll = Map<String, dynamic>.from(
+      (data['payroll'] as Map?) ?? const {},
+    );
     final paid = '${payroll['employees_paid'] ?? 0}';
     return _Panel(
       colors: colors,
       title: 'Payroll Overview',
       child: paid == '0'
-          ? _EmptyPanelText(colors: colors, text: 'No payroll data found in backend')
-          : Column(children: [
-              _LegendRow(colors: colors, label: 'Payroll Processed', value: 'Rs. ${payroll['processed'] ?? 0}', color: colors.success, onTap: () => _openDetail(context, 'Payroll Processed', payroll)),
-              _LegendRow(colors: colors, label: 'Employees Paid', value: paid, color: colors.warning, onTap: () => _openDetail(context, 'Employees Paid', payroll)),
-              _LegendRow(colors: colors, label: 'Average Salary', value: 'Rs. ${payroll['average_salary'] ?? 0}', color: colors.blue, onTap: () => _openDetail(context, 'Average Salary', payroll)),
-            ]),
+          ? _EmptyPanelText(
+              colors: colors,
+              text: 'No payroll data found in backend',
+            )
+          : Column(
+              children: [
+                _LegendRow(
+                  colors: colors,
+                  label: 'Payroll Processed',
+                  value: 'Rs. ${payroll['processed'] ?? 0}',
+                  color: colors.success,
+                  onTap: () =>
+                      _openDetail(context, 'Payroll Processed', payroll),
+                ),
+                _LegendRow(
+                  colors: colors,
+                  label: 'Employees Paid',
+                  value: paid,
+                  color: colors.warning,
+                  onTap: () => _openDetail(context, 'Employees Paid', payroll),
+                ),
+                _LegendRow(
+                  colors: colors,
+                  label: 'Average Salary',
+                  value: 'Rs. ${payroll['average_salary'] ?? 0}',
+                  color: colors.blue,
+                  onTap: () => _openDetail(context, 'Average Salary', payroll),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -1553,14 +1676,25 @@ class _ReportListCard extends StatelessWidget {
       colors: colors,
       title: 'Reports & Analytics',
       child: reports.isEmpty
-          ? _EmptyPanelText(colors: colors, text: 'No reports data found in backend')
-          : Column(children: reports.take(6).map((report) => _SimpleRow(
-                colors: colors,
-                icon: Icons.description_outlined,
-                title: '${report['report_type'] ?? 'Report'}',
-                value: '${report['status'] ?? ''}',
-                onTap: () => _openDetail(context, 'Report Details', report),
-              )).toList()),
+          ? _EmptyPanelText(
+              colors: colors,
+              text: 'No reports data found in backend',
+            )
+          : Column(
+              children: reports
+                  .take(6)
+                  .map(
+                    (report) => _SimpleRow(
+                      colors: colors,
+                      icon: Icons.description_outlined,
+                      title: '${report['report_type'] ?? 'Report'}',
+                      value: '${report['status'] ?? ''}',
+                      onTap: () =>
+                          _openDetail(context, 'Report Details', report),
+                    ),
+                  )
+                  .toList(),
+            ),
     );
   }
 }

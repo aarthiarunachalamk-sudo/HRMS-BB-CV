@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 
 import 'employee_documents_screen.dart';
 import 'employee_meetings_screen.dart';
@@ -52,11 +53,7 @@ class EmployeeMoreScreen extends StatelessWidget {
           Icons.calendar_month_rounded,
           'Meetings',
           EmployeeColors.purple,
-          EmployeeMeetingsScreen(
-            userId: userId,
-            data: data,
-            service: service,
-          ),
+          EmployeeMeetingsScreen(userId: userId, data: data, service: service),
         ),
         _tile(
           context,
@@ -70,11 +67,7 @@ class EmployeeMoreScreen extends StatelessWidget {
           Icons.payments_rounded,
           'Payslip',
           EmployeeColors.blue,
-          EmployeePayslipScreen(
-            userId: userId,
-            data: data,
-            service: service,
-          ),
+          EmployeePayslipScreen(userId: userId, data: data, service: service),
         ),
         _tile(
           context,
@@ -122,7 +115,7 @@ class EmployeeMoreScreen extends StatelessWidget {
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => Scaffold(
-            appBar: AppBar(title: Text(title)),
+            appBar: AppBar(title: AppBarLogoTitle(title: title)),
             body: screen,
           ),
         ),

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/constellation_background.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
@@ -82,7 +83,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
       if (result['working_hours'] != null)
         'working_hours': result['working_hours'],
       if (result['late_entry'] != null) 'late_entry': result['late_entry'],
-      if (result['late_minutes'] != null) 'late_minutes': result['late_minutes'],
+      if (result['late_minutes'] != null)
+        'late_minutes': result['late_minutes'],
       if (result['overtime'] != null) 'overtime': result['overtime'],
       if (result['overtime_minutes'] != null)
         'overtime_minutes': result['overtime_minutes'],
@@ -142,9 +144,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   void _switchRole(String role) {
     final builder = widget.roleSwitchBuilder;
     if (role == widget.roleSwitchLabel && builder != null) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: builder),
-      );
+      Navigator.of(context).push(MaterialPageRoute(builder: builder));
     }
   }
 
@@ -160,7 +160,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => Scaffold(
-              appBar: AppBar(title: const Text('Meeting Details')),
+              appBar: AppBar(
+                title: const AppBarLogoTitle(title: 'Meeting Details'),
+              ),
               body: EmployeeMeetingDetailsScreen(meeting: meeting),
             ),
           ),
@@ -189,7 +191,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Scaffold(
-          appBar: AppBar(title: Text(title)),
+          appBar: AppBar(title: AppBarLogoTitle(title: title)),
           body: screen,
         ),
       ),
@@ -255,14 +257,19 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     );
   }
 
-  Map<String, dynamic>? _meetingForNotification(Map<String, dynamic> notification) {
-    final ref = '${notification['reference_id'] ?? notification['id'] ?? ''}'.trim();
+  Map<String, dynamic>? _meetingForNotification(
+    Map<String, dynamic> notification,
+  ) {
+    final ref = '${notification['reference_id'] ?? notification['id'] ?? ''}'
+        .trim();
     if (ref.isNotEmpty) {
       for (final meeting in _data.meetings) {
         if ('${meeting['id'] ?? ''}' == ref) return meeting;
       }
     }
-    final message = '${notification['message'] ?? notification['subtitle'] ?? notification['title'] ?? ''}'.toLowerCase();
+    final message =
+        '${notification['message'] ?? notification['subtitle'] ?? notification['title'] ?? ''}'
+            .toLowerCase();
     for (final meeting in _data.meetings) {
       final title = '${meeting['title'] ?? ''}'.toLowerCase();
       if (title.isNotEmpty && message.contains(title)) return meeting;
@@ -343,14 +350,26 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                   child: Row(
                     children: [
                       IconButton(
-                        onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                        icon: Icon(Icons.menu_rounded, color: ThemeConfig.getTextPrimary(context), size: 26),
+                        onPressed: () =>
+                            _scaffoldKey.currentState?.openDrawer(),
+                        icon: Icon(
+                          Icons.menu_rounded,
+                          color: ThemeConfig.getTextPrimary(context),
+                          size: 26,
+                        ),
                         tooltip: 'Menu',
                       ),
                       const SizedBox(width: 2),
                       const BitByteLogo(compact: true),
                       const SizedBox(width: 10),
-                      Text('HRMS', style: TextStyle(color: ThemeConfig.getTextPrimary(context), fontSize: 20, fontWeight: FontWeight.bold)),
+                      Text(
+                        'HRMS',
+                        style: TextStyle(
+                          color: ThemeConfig.getTextPrimary(context),
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const Spacer(),
                       if (_loading)
                         const SizedBox(
@@ -361,18 +380,24 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                       IconButton(
                         tooltip: 'Toggle Theme',
                         icon: Icon(
-                          ThemeConfig.isDark(context) ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                          ThemeConfig.isDark(context)
+                              ? Icons.light_mode_outlined
+                              : Icons.dark_mode_outlined,
                           color: EmployeeColors.blue,
                         ),
                         onPressed: () {
-                          MyApp.themeNotifier.value = MyApp.themeNotifier.value == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+                          MyApp.themeNotifier.value =
+                              MyApp.themeNotifier.value == ThemeMode.dark
+                              ? ThemeMode.light
+                              : ThemeMode.dark;
                           setState(() {});
                         },
                       ),
                     ],
                   ),
                 ),
-                if (widget.roleSwitchLabel != null && widget.roleSwitchBuilder != null)
+                if (widget.roleSwitchLabel != null &&
+                    widget.roleSwitchBuilder != null)
                   _EmployeeRoleDropdown(
                     value: 'Employee',
                     alternateRole: widget.roleSwitchLabel!,
@@ -508,44 +533,50 @@ class _EmployeeRoleDropdown extends StatelessWidget {
             ),
             selectedItemBuilder: (context) {
               return [value, alternateRole].map((_) {
-                return Row(children: [
-                  const Icon(
-                    Icons.manage_accounts_outlined,
-                    color: EmployeeColors.blue,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Role Based',
-                    style: TextStyle(
-                      color: textSecondary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                return Row(
+                  children: [
+                    const Icon(
+                      Icons.manage_accounts_outlined,
+                      color: EmployeeColors.blue,
+                      size: 18,
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(value, overflow: TextOverflow.ellipsis),
-                  ),
-                ]);
+                    const SizedBox(width: 8),
+                    Text(
+                      'Role Based',
+                      style: TextStyle(
+                        color: textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(value, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                );
               }).toList();
             },
             items: [
               const DropdownMenuItem(
                 value: 'Employee',
-                child: Row(children: [
-                  Icon(Icons.person_outline_rounded, size: 18),
-                  SizedBox(width: 8),
-                  Text('Employee'),
-                ]),
+                child: Row(
+                  children: [
+                    Icon(Icons.person_outline_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text('Employee'),
+                  ],
+                ),
               ),
               DropdownMenuItem(
                 value: alternateRole,
-                child: Row(children: [
-                  const Icon(Icons.admin_panel_settings_outlined, size: 18),
-                  const SizedBox(width: 8),
-                  Text(alternateRole),
-                ]),
+                child: Row(
+                  children: [
+                    const Icon(Icons.admin_panel_settings_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Text(alternateRole),
+                  ],
+                ),
               ),
             ],
             onChanged: (role) {
@@ -601,189 +632,189 @@ class _EmployeeDrawer extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Column(
               children: [
-              Row(
-                children: [
-                  Image.asset('assets/logo.png', width: 58, height: 42),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'HRMS',
-                      style: TextStyle(
-                        color: menuTextColor,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(
-                      Icons.close_rounded,
-                      color: mutedTextColor,
-                      size: 24,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  InkWell(
-                    onTap: onPickProfileImage,
-                    borderRadius: BorderRadius.circular(34),
-                    child: Container(
-                      width: 68,
-                      height: 68,
-                      padding: const EdgeInsets.all(2.5),
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            Color(0xFF10C7F4),
-                            Color(0xFF3EDC81),
-                            Color(0xFF1C8BFF),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+                Row(
+                  children: [
+                    Image.asset('assets/logo.png', width: 58, height: 42),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'HRMS',
+                        style: TextStyle(
+                          color: menuTextColor,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: mutedTextColor,
+                        size: 24,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    InkWell(
+                      onTap: onPickProfileImage,
+                      borderRadius: BorderRadius.circular(34),
                       child: Container(
-                        decoration: BoxDecoration(
+                        width: 68,
+                        height: 68,
+                        padding: const EdgeInsets.all(2.5),
+                        decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: avatarBg,
-                          image:
+                          gradient: LinearGradient(
+                            colors: [
+                              Color(0xFF10C7F4),
+                              Color(0xFF3EDC81),
+                              Color(0xFF1C8BFF),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: avatarBg,
+                            image:
+                                profileImagePath == null ||
+                                    profileImagePath!.isEmpty
+                                ? null
+                                : DecorationImage(
+                                    image: FileImage(File(profileImagePath!)),
+                                    fit: BoxFit.cover,
+                                  ),
+                          ),
+                          child:
                               profileImagePath == null ||
                                   profileImagePath!.isEmpty
-                              ? null
-                              : DecorationImage(
-                                  image: FileImage(File(profileImagePath!)),
-                                  fit: BoxFit.cover,
-                                ),
+                              ? const Icon(
+                                  Icons.add_a_photo_rounded,
+                                  color: EmployeeColors.blue,
+                                  size: 22,
+                                )
+                              : null,
                         ),
-                        child:
-                            profileImagePath == null ||
-                                profileImagePath!.isEmpty
-                            ? const Icon(
-                                Icons.add_a_photo_rounded,
-                                color: EmployeeColors.blue,
-                                size: 22,
-                              )
-                            : null,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: menuTextColor,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          employeeId,
-                          style: const TextStyle(
-                            color: EmployeeColors.blue,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          designation,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: mutedTextColor,
-                            fontSize: 12,
-                          ),
-                        ),
-                        if (department.isNotEmpty) ...[
-                          const SizedBox(height: 3),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            department,
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: menuTextColor,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            employeeId,
+                            style: const TextStyle(
+                              color: EmployeeColors.blue,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            designation,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: mutedTextColor,
                               fontSize: 12,
-                              fontWeight: FontWeight.w700,
                             ),
                           ),
+                          if (department.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              department,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: mutedTextColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Divider(color: borderColor),
-              const SizedBox(height: 6),
-              Expanded(
-                child: ListView(
-                  children: [
-                    _DrawerItem(
-                      icon: Icons.home_rounded,
-                      title: 'Dashboard',
-                      color: EmployeeColors.blue,
-                      selected: true,
-                      onTap: () => onSelect(0),
-                    ),
-                    _DrawerItem(
-                      icon: Icons.access_time_rounded,
-                      title: 'Attendance',
-                      color: EmployeeColors.red,
-                      onTap: () => onSelect(1),
-                    ),
-                    _DrawerItem(
-                      icon: Icons.beach_access_rounded,
-                      title: 'Leave',
-                      color: EmployeeColors.blue,
-                      onTap: () => onSelect(2),
-                    ),
-                    _DrawerItem(
-                      icon: Icons.payments_rounded,
-                      title: 'Payslip',
-                      color: EmployeeColors.purple,
-                      onTap: () => onSelect(3),
-                    ),
-                    _DrawerItem(
-                      icon: Icons.description_rounded,
-                      title: 'Documents',
-                      color: EmployeeColors.gold,
-                      onTap: () => onSelect(3),
-                    ),
-                    _DrawerItem(
-                      icon: Icons.person_rounded,
-                      title: 'Profile',
-                      color: EmployeeColors.blue,
-                      onTap: () => onSelect(3),
-                    ),
-                    const SizedBox(height: 6),
-                    Divider(color: borderColor),
-                    _DrawerItem(
-                      icon: Icons.logout_rounded,
-                      title: 'Logout',
-                      color: EmployeeColors.red,
-                      danger: true,
-                      onTap: onLogout,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'App Version 1.0.0',
-                style: TextStyle(color: mutedTextColor, fontSize: 11),
-              ),
+                const SizedBox(height: 16),
+                Divider(color: borderColor),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      _DrawerItem(
+                        icon: Icons.home_rounded,
+                        title: 'Dashboard',
+                        color: EmployeeColors.blue,
+                        selected: true,
+                        onTap: () => onSelect(0),
+                      ),
+                      _DrawerItem(
+                        icon: Icons.access_time_rounded,
+                        title: 'Attendance',
+                        color: EmployeeColors.red,
+                        onTap: () => onSelect(1),
+                      ),
+                      _DrawerItem(
+                        icon: Icons.beach_access_rounded,
+                        title: 'Leave',
+                        color: EmployeeColors.blue,
+                        onTap: () => onSelect(2),
+                      ),
+                      _DrawerItem(
+                        icon: Icons.payments_rounded,
+                        title: 'Payslip',
+                        color: EmployeeColors.purple,
+                        onTap: () => onSelect(3),
+                      ),
+                      _DrawerItem(
+                        icon: Icons.description_rounded,
+                        title: 'Documents',
+                        color: EmployeeColors.gold,
+                        onTap: () => onSelect(3),
+                      ),
+                      _DrawerItem(
+                        icon: Icons.person_rounded,
+                        title: 'Profile',
+                        color: EmployeeColors.blue,
+                        onTap: () => onSelect(3),
+                      ),
+                      const SizedBox(height: 6),
+                      Divider(color: borderColor),
+                      _DrawerItem(
+                        icon: Icons.logout_rounded,
+                        title: 'Logout',
+                        color: EmployeeColors.red,
+                        danger: true,
+                        onTap: onLogout,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'App Version 1.0.0',
+                  style: TextStyle(color: mutedTextColor, fontSize: 11),
+                ),
               ],
             ),
           ),
@@ -816,9 +847,7 @@ class _DrawerItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = ThemeConfig.isDark(context);
     final textPrimary = isDark ? Colors.white : const Color(0xFF1F3654);
-    final selectedBg = isDark
-        ? color.withAlpha(42)
-        : const Color(0xFFF5FAFF);
+    final selectedBg = isDark ? color.withAlpha(42) : const Color(0xFFF5FAFF);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: InkWell(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'hr_shared.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/privacy_utils.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 
 class HrEmployeeDetailScreen extends StatelessWidget {
   final Map<String, dynamic> employee;
@@ -39,14 +40,7 @@ class HrEmployeeDetailScreen extends StatelessWidget {
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.text, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          'Employee Details',
-          style: TextStyle(
-            color: c.text,
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
+        title: const AppBarLogoTitle(title: 'Employee Details'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(color: c.border, height: 1),

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
@@ -595,9 +596,7 @@ class _DateBox extends StatelessWidget {
               height: 53,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: selectedForMode
-                    ? EmployeeColors.blue
-                    : cardBg,
+                color: selectedForMode ? EmployeeColors.blue : cardBg,
                 borderRadius: BorderRadius.circular(9),
                 border: Border.all(color: EmployeeColors.blue.withAlpha(45)),
                 boxShadow: selectedForMode
@@ -1582,17 +1581,17 @@ class _SelfieBox extends StatelessWidget {
         InkWell(
           onTap: hasImage
               ? () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => _SelfieViewer(
-                        title: label,
-                        imageUrl: imageUrl,
-                        latitude: latitude,
-                        longitude: longitude,
-                        accuracy: accuracy,
-                        color: color,
-                      ),
+                  MaterialPageRoute(
+                    builder: (_) => _SelfieViewer(
+                      title: label,
+                      imageUrl: imageUrl,
+                      latitude: latitude,
+                      longitude: longitude,
+                      accuracy: accuracy,
+                      color: color,
                     ),
-                  )
+                  ),
+                )
               : () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -1777,7 +1776,7 @@ class _SelfieViewer extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: Text(title),
+        title: AppBarLogoTitle(title: title),
         actions: [
           IconButton(
             tooltip: 'View Map',
@@ -1805,10 +1804,8 @@ class _SelfieViewer extends StatelessWidget {
                             progress.expectedTotalBytes!,
                 );
               },
-              errorBuilder: (_, _, _) => _SelfieError(
-                url: imageUrl,
-                color: color,
-              ),
+              errorBuilder: (_, _, _) =>
+                  _SelfieError(url: imageUrl, color: color),
             ),
           ),
         ),

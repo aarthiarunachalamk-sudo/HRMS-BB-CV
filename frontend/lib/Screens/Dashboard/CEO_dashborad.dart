@@ -290,7 +290,9 @@ class _CeoDashboardState extends State<CeoDashboard> {
                   return _drawerProfileHeader(
                     context,
                     profile: profile,
-                    fallbackName: widget.firstName.isEmpty ? 'CEO' : widget.firstName,
+                    fallbackName: widget.firstName.isEmpty
+                        ? 'CEO'
+                        : widget.firstName,
                     fallbackEmail: widget.email,
                     fallbackUserId: widget.userId,
                     isDark: isDark,
@@ -442,15 +444,18 @@ class _CeoDashboardState extends State<CeoDashboard> {
                       ),
                     ),
                     subtitle: Text(
-                      currentlyDark ? 'Switch to light theme' : 'Switch to dark theme',
+                      currentlyDark
+                          ? 'Switch to light theme'
+                          : 'Switch to dark theme',
                       style: TextStyle(
                         color: ThemeConfig.getTextSecondary(context),
                         fontSize: 11,
                       ),
                     ),
                     onTap: () {
-                      MyApp.themeNotifier.value =
-                          currentlyDark ? ThemeMode.light : ThemeMode.dark;
+                      MyApp.themeNotifier.value = currentlyDark
+                          ? ThemeMode.light
+                          : ThemeMode.dark;
                     },
                   );
                 },
@@ -582,7 +587,10 @@ class _CeoDashboardState extends State<CeoDashboard> {
     final name = _displayText(profile['name'], fallback: fallbackName);
     final role = _displayText(
       profile['designation_label'],
-      fallback: _displayText(profile['role_label'], fallback: 'Chief Executive Officer'),
+      fallback: _displayText(
+        profile['role_label'],
+        fallback: 'Chief Executive Officer',
+      ),
     );
     final id = _displayText(profile['id'], fallback: fallbackUserId);
     final email = _displayText(profile['email'], fallback: fallbackEmail);
@@ -717,9 +725,8 @@ class _CeoDashboardState extends State<CeoDashboard> {
             _openPage(CeoAuditFlowScreen(userId: widget.userId)),
         onMeetings: () =>
             _openPage(CeoProjectsFlowScreen(userId: widget.userId)),
-        onLeave: () => _openPage(
-          CeoLeaveIntelligenceScreen(userId: widget.userId),
-        ),
+        onLeave: () =>
+            _openPage(CeoLeaveIntelligenceScreen(userId: widget.userId)),
         onHiring: () =>
             _openPage(CeoHiringPipelineScreen(userId: widget.userId)),
         onDepartment: () => _openPage(
@@ -731,8 +738,7 @@ class _CeoDashboardState extends State<CeoDashboard> {
         onPerformance: () =>
             _openPage(CeoPerformanceMatrixScreen(userId: widget.userId)),
         onBranch: () => _openPage(_CeoAiInsightsPage(userId: widget.userId)),
-        onReports: () =>
-            _openPage(CeoReportsFlowScreen(userId: widget.userId)),
+        onReports: () => _openPage(CeoReportsFlowScreen(userId: widget.userId)),
         onDocuments: () =>
             _openPage(CeoDocumentCenterScreen(userId: widget.userId)),
         onAnalytics: () => _openPage(
@@ -766,7 +772,10 @@ class _CeoDashboardState extends State<CeoDashboard> {
             ? IconButton(
                 tooltip: 'Notifications',
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(width: 40, height: 42),
+                constraints: const BoxConstraints.tightFor(
+                  width: 40,
+                  height: 42,
+                ),
                 icon: const Icon(
                   Icons.notifications_none_rounded,
                   color: _cyan,
@@ -848,7 +857,7 @@ class _DashboardViewState extends State<_DashboardView> {
             child: Padding(
               padding: const EdgeInsets.all(18),
               child: Text(
-                'Backend data unavailable\n${snapshot.error}',
+                'Unable to load data. Please try again.',
                 textAlign: TextAlign.center,
                 style: _CeoText.mutedFor(context, 12),
               ),
@@ -1537,11 +1546,7 @@ class _CeoRecentMembersPageState extends State<_CeoRecentMembersPage> {
     addAll(homeData['recent_members']);
     addAll(employeesData['active_employees']);
 
-    return {
-      ...employeesData,
-      'success': true,
-      'created_members': merged,
-    };
+    return {...employeesData, 'success': true, 'created_members': merged};
   }
 
   @override
@@ -1616,15 +1621,10 @@ class _CeoRecentMembersPageState extends State<_CeoRecentMembersPage> {
               aDate ?? DateTime(1970),
             );
             if (result == 0) {
-              result = _displayText(
-                b['id'],
-                fallback: _displayText(b['email']),
-              ).compareTo(
-                _displayText(
-                  a['id'],
-                  fallback: _displayText(a['email']),
-                ),
-              );
+              result = _displayText(b['id'], fallback: _displayText(b['email']))
+                  .compareTo(
+                    _displayText(a['id'], fallback: _displayText(a['email'])),
+                  );
             }
             return _sort == 'Oldest First' ? -result : result;
           });
@@ -1976,17 +1976,18 @@ class _CeoCriticalAlertsPageState extends State<_CeoCriticalAlertsPage> {
   Future<void> _showAlertFilters() async {
     final data = await _future;
     if (!mounted) return;
-    final modules = _criticalAlerts(data['critical_alerts'])
-        .map(
-          (alert) => _displayText(
-            alert['module'],
-            fallback: _displayText(alert['type']).toUpperCase(),
-          ),
-        )
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final modules =
+        _criticalAlerts(data['critical_alerts'])
+            .map(
+              (alert) => _displayText(
+                alert['module'],
+                fallback: _displayText(alert['type']).toUpperCase(),
+              ),
+            )
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
     var status = _status;
     var module = modules.contains(_module) ? _module : 'All Modules';
     var date = _date;
@@ -2028,16 +2029,14 @@ class _CeoCriticalAlertsPageState extends State<_CeoCriticalAlertsPage> {
                   icon: Icons.priority_high_rounded,
                   value: status,
                   items: const ['All', 'Critical', 'Warning', 'Resolved'],
-                  onChanged: (value) =>
-                      setSheetState(() => status = value),
+                  onChanged: (value) => setSheetState(() => status = value),
                 ),
                 const SizedBox(height: 10),
                 _AlertDropdown(
                   icon: Icons.grid_view_rounded,
                   value: module,
                   items: ['All Modules', ...modules],
-                  onChanged: (value) =>
-                      setSheetState(() => module = value),
+                  onChanged: (value) => setSheetState(() => module = value),
                 ),
                 const SizedBox(height: 10),
                 _AlertDropdown(
@@ -2092,7 +2091,9 @@ class _CeoCriticalAlertsPageState extends State<_CeoCriticalAlertsPage> {
           ),
           const SizedBox(width: 4),
           IconButton(
-            tooltip: _hasActiveFilters ? 'Change active filters' : 'Filter alerts',
+            tooltip: _hasActiveFilters
+                ? 'Change active filters'
+                : 'Filter alerts',
             onPressed: _showAlertFilters,
             icon: Icon(
               _hasActiveFilters
@@ -3336,24 +3337,24 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
                       ),
                     )
                   : ListView.builder(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
-                itemCount: employees.length,
-                itemBuilder: (context, index) {
-                  final employee = employees[index];
-                  return _AttendanceEmployeeRow(
-                    employee: employee,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => _AttendanceEmployeeDetailFlowPage(
+                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+                      itemCount: employees.length,
+                      itemBuilder: (context, index) {
+                        final employee = employees[index];
+                        return _AttendanceEmployeeRow(
                           employee: employee,
-                          data: data,
-                          userId: widget.userId,
-                          onNavigate: widget.onNavigate,
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => _AttendanceEmployeeDetailFlowPage(
+                                employee: employee,
+                                data: data,
+                                userId: widget.userId,
+                                onNavigate: widget.onNavigate,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
             ),
           ],
@@ -3935,12 +3936,13 @@ class _AttendanceExportFlowPageState extends State<_AttendanceExportFlowPage> {
   }
 
   List<String> _filterOptions(String key) {
-    final values = _mapList(_data['employees'])
-        .map((item) => _displayText(item[key]))
-        .where((value) => value.isNotEmpty && value != '-')
-        .toSet()
-        .toList()
-      ..sort();
+    final values =
+        _mapList(_data['employees'])
+            .map((item) => _displayText(item[key]))
+            .where((value) => value.isNotEmpty && value != '-')
+            .toSet()
+            .toList()
+          ..sort();
     return ['All', ...values];
   }
 
@@ -4166,8 +4168,7 @@ class _AttendanceExportFlowPageState extends State<_AttendanceExportFlowPage> {
                 label: 'Employment Type',
                 value: _employmentType,
                 options: _filterOptions('employment_type'),
-                onChanged: (value) =>
-                    setState(() => _employmentType = value),
+                onChanged: (value) => setState(() => _employmentType = value),
               ),
             ],
           ),
@@ -4589,10 +4590,7 @@ class _AttendanceEmptyState extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 30),
     child: Center(
-      child: Text(
-        'No data available',
-        style: _CeoText.mutedFor(context, 11),
-      ),
+      child: Text('No data available', style: _CeoText.mutedFor(context, 11)),
     ),
   );
 }
@@ -6530,10 +6528,7 @@ class _DepartmentDistributionChart extends StatelessWidget {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    '$chartTotal',
-                    style: _CeoText.titleFor(context, 21),
-                  ),
+                  Text('$chartTotal', style: _CeoText.titleFor(context, 21)),
                   Text('Total', style: _CeoText.mutedFor(context, 8.5)),
                 ],
               ),
@@ -6609,10 +6604,7 @@ class _DepartmentDistributionLegendRow extends StatelessWidget {
             style: _CeoText.mutedFor(context, 8.5),
           ),
         ),
-        Text(
-          '$count ($percentage%)',
-          style: _CeoText.titleFor(context, 8.5),
-        ),
+        Text('$count ($percentage%)', style: _CeoText.titleFor(context, 8.5)),
       ],
     ),
   );
@@ -10807,31 +10799,31 @@ class _OrganizationMenuDrawer extends StatelessWidget {
               ),
             ),
             Divider(color: border),
-          _OrganizationDrawerItem(
-            icon: Icons.home_rounded,
-            label: 'Home',
-            onTap: () => _go(context, 0),
-          ),
-          _OrganizationDrawerItem(
-            icon: Icons.groups_2_rounded,
-            label: 'People',
-            onTap: () => _go(context, 1),
-          ),
-          _OrganizationDrawerItem(
-            icon: Icons.approval_rounded,
-            label: 'Approvals',
-            onTap: () => _go(context, 2),
-          ),
-          _OrganizationDrawerItem(
-            icon: Icons.more_horiz_rounded,
-            label: 'More',
-            selected: true,
-            onTap: () => _go(context, 3),
-          ),
-        ],
+            _OrganizationDrawerItem(
+              icon: Icons.home_rounded,
+              label: 'Home',
+              onTap: () => _go(context, 0),
+            ),
+            _OrganizationDrawerItem(
+              icon: Icons.groups_2_rounded,
+              label: 'People',
+              onTap: () => _go(context, 1),
+            ),
+            _OrganizationDrawerItem(
+              icon: Icons.approval_rounded,
+              label: 'Approvals',
+              onTap: () => _go(context, 2),
+            ),
+            _OrganizationDrawerItem(
+              icon: Icons.more_horiz_rounded,
+              label: 'More',
+              selected: true,
+              onTap: () => _go(context, 3),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
   }
 }
 
@@ -11835,7 +11827,8 @@ class _EmployeeDirectoryDynamicPageState
         final items = _roleMembers(snapshot.data!['role_members']);
         final query = _search.text.trim().toLowerCase();
         final employees = items.map(_employeeFromMap).where((employee) {
-          final matchesQuery = query.isEmpty ||
+          final matchesQuery =
+              query.isEmpty ||
               employee.name.toLowerCase().contains(query) ||
               employee.role.toLowerCase().contains(query) ||
               employee.department.toLowerCase().contains(query) ||
@@ -11927,8 +11920,9 @@ class _EmployeeDirectoryDynamicPageState
         onPressed: () async {
           final data = await CeoService().fetchEmployees(widget.userId);
           if (!mounted) return;
-          final employees =
-              _roleMembers(data['role_members']).map(_employeeFromMap).toList();
+          final employees = _roleMembers(
+            data['role_members'],
+          ).map(_employeeFromMap).toList();
           await _showPeopleFilters(
             roles: _employeeFilterOptions(employees, (e) => e.role),
             departments: _employeeFilterOptions(employees, (e) => e.department),
@@ -11977,18 +11971,23 @@ class _EmployeeDirectoryDynamicPageState
               DropdownButtonFormField<String>(
                 value: role,
                 items: roles
-                    .map((item) =>
-                        DropdownMenuItem(value: item, child: Text(item)))
+                    .map(
+                      (item) =>
+                          DropdownMenuItem(value: item, child: Text(item)),
+                    )
                     .toList(),
-                onChanged: (value) => setSheetState(() => role = value ?? 'All'),
+                onChanged: (value) =>
+                    setSheetState(() => role = value ?? 'All'),
                 decoration: const InputDecoration(labelText: 'Role'),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: department,
                 items: departments
-                    .map((item) =>
-                        DropdownMenuItem(value: item, child: Text(item)))
+                    .map(
+                      (item) =>
+                          DropdownMenuItem(value: item, child: Text(item)),
+                    )
                     .toList(),
                 onChanged: (value) =>
                     setSheetState(() => department = value ?? 'All'),
@@ -11998,8 +11997,10 @@ class _EmployeeDirectoryDynamicPageState
               DropdownButtonFormField<String>(
                 value: status,
                 items: statuses
-                    .map((item) =>
-                        DropdownMenuItem(value: item, child: Text(item)))
+                    .map(
+                      (item) =>
+                          DropdownMenuItem(value: item, child: Text(item)),
+                    )
                     .toList(),
                 onChanged: (value) =>
                     setSheetState(() => status = value ?? 'All'),
@@ -12119,7 +12120,8 @@ class _NotificationsDynamicPage extends StatefulWidget {
   const _NotificationsDynamicPage({required this.userId});
 
   @override
-  State<_NotificationsDynamicPage> createState() => _NotificationsDynamicPageState();
+  State<_NotificationsDynamicPage> createState() =>
+      _NotificationsDynamicPageState();
 }
 
 class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
@@ -12251,12 +12253,11 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
   }
 
   List<Map<String, dynamic>> _participantOptions(Map<String, dynamic> data) {
-    final raw =
-        data['available_participants'] is List
-            ? data['available_participants'] as List
-            : data['participants'] is List
-                ? data['participants'] as List
-                : const [];
+    final raw = data['available_participants'] is List
+        ? data['available_participants'] as List
+        : data['participants'] is List
+        ? data['participants'] as List
+        : const [];
     return raw
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
@@ -12328,21 +12329,40 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                       18 + MediaQuery.of(context).viewInsets.bottom,
                     ),
                     children: [
-                      Text('Schedule Meeting', style: _CeoText.titleFor(context, 18)),
+                      Text(
+                        'Schedule Meeting',
+                        style: _CeoText.titleFor(context, 18),
+                      ),
                       const SizedBox(height: 14),
                       TextField(
                         controller: titleController,
-                        decoration: const InputDecoration(labelText: 'Meeting title'),
+                        decoration: const InputDecoration(
+                          labelText: 'Meeting title',
+                        ),
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         value: platform,
-                        items: const ['Online', 'Google Meet', 'Zoom', 'Microsoft Teams', 'Office']
-                            .map((item) => DropdownMenuItem(value: item, child: Text(item)))
-                            .toList(),
+                        items:
+                            const [
+                                  'Online',
+                                  'Google Meet',
+                                  'Zoom',
+                                  'Microsoft Teams',
+                                  'Office',
+                                ]
+                                .map(
+                                  (item) => DropdownMenuItem(
+                                    value: item,
+                                    child: Text(item),
+                                  ),
+                                )
+                                .toList(),
                         onChanged: (value) =>
                             setSheetState(() => platform = value ?? platform),
-                        decoration: const InputDecoration(labelText: 'Meeting type'),
+                        decoration: const InputDecoration(
+                          labelText: 'Meeting type',
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -12367,7 +12387,9 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                       const SizedBox(height: 10),
                       TextField(
                         controller: durationController,
-                        decoration: const InputDecoration(labelText: 'Duration'),
+                        decoration: const InputDecoration(
+                          labelText: 'Duration',
+                        ),
                       ),
                       const SizedBox(height: 10),
                       TextField(
@@ -12382,10 +12404,15 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                         controller: descriptionController,
                         minLines: 2,
                         maxLines: 4,
-                        decoration: const InputDecoration(labelText: 'Description'),
+                        decoration: const InputDecoration(
+                          labelText: 'Description',
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      Text('Scheduled users', style: _CeoText.titleFor(context, 13)),
+                      Text(
+                        'Scheduled users',
+                        style: _CeoText.titleFor(context, 13),
+                      ),
                       const SizedBox(height: 8),
                       ...options.map((person) {
                         final id = _displayText(person['id']);
@@ -12394,10 +12421,15 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                           value: checked,
                           contentPadding: EdgeInsets.zero,
                           activeColor: _CeoDashboardState._cyan,
-                          title: Text(_displayText(person['name'], fallback: id)),
+                          title: Text(
+                            _displayText(person['name'], fallback: id),
+                          ),
                           subtitle: Text(
                             [
-                              _displayText(person['role_label'], fallback: _displayText(person['role'])),
+                              _displayText(
+                                person['role_label'],
+                                fallback: _displayText(person['role']),
+                              ),
                               _displayText(person['department']),
                             ].where((value) => value.isNotEmpty).join(' • '),
                           ),
@@ -12419,7 +12451,9 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                           if (title.isEmpty || selectedIds.isEmpty) {
                             ScaffoldMessenger.of(sheetContext).showSnackBar(
                               const SnackBar(
-                                content: Text('Enter title and select at least one user.'),
+                                content: Text(
+                                  'Enter title and select at least one user.',
+                                ),
                               ),
                             );
                             return;
@@ -12436,7 +12470,11 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                             'duration': durationController.text.trim(),
                             'description': descriptionController.text.trim(),
                             'participants': options
-                                .where((person) => selectedIds.contains(_displayText(person['id'])))
+                                .where(
+                                  (person) => selectedIds.contains(
+                                    _displayText(person['id']),
+                                  ),
+                                )
                                 .toList(),
                           });
                         },
@@ -12472,7 +12510,11 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${result['message'] ?? 'Unable to schedule meeting.'}')),
+        SnackBar(
+          content: Text(
+            '${result['message'] ?? 'Unable to schedule meeting.'}',
+          ),
+        ),
       );
     }
   }
@@ -12579,7 +12621,11 @@ class _ProfileSettingsPageState extends State<_ProfileSettingsPage> {
         future: _future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return _buildProfile(context, const <String, dynamic>{}, loading: true);
+            return _buildProfile(
+              context,
+              const <String, dynamic>{},
+              loading: true,
+            );
           }
           if (snapshot.hasError) {
             return _buildProfile(
@@ -12608,10 +12654,16 @@ class _ProfileSettingsPageState extends State<_ProfileSettingsPage> {
     );
     final role = _displayText(
       profile['designation_label'],
-      fallback: _displayText(profile['role_label'], fallback: 'Chief Executive Officer'),
+      fallback: _displayText(
+        profile['role_label'],
+        fallback: 'Chief Executive Officer',
+      ),
     );
     final id = _displayText(profile['id'], fallback: widget.userId);
-    final email = _displayText(profile['email'], fallback: widget.fallbackEmail);
+    final email = _displayText(
+      profile['email'],
+      fallback: widget.fallbackEmail,
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
       children: [
@@ -12625,10 +12677,7 @@ class _ProfileSettingsPageState extends State<_ProfileSettingsPage> {
         ],
         if (warning.isNotEmpty) ...[
           _GlassCard(
-            child: Text(
-              warning,
-              style: _CeoText.mutedFor(context, 12),
-            ),
+            child: Text(warning, style: _CeoText.mutedFor(context, 12)),
           ),
           const SizedBox(height: 12),
         ],
@@ -12644,10 +12693,22 @@ class _ProfileSettingsPageState extends State<_ProfileSettingsPage> {
           children: [
             _SettingsRow(Icons.badge_outlined, 'Employee ID', id),
             _SettingsRow(Icons.mail_outline_rounded, 'Email', email),
-            _SettingsRow(Icons.phone_outlined, 'Phone', _displayText(profile['phone'], fallback: '-')),
+            _SettingsRow(
+              Icons.phone_outlined,
+              'Phone',
+              _displayText(profile['phone'], fallback: '-'),
+            ),
             _SettingsRow(Icons.work_outline_rounded, 'Role', role),
-            _SettingsRow(Icons.location_city_outlined, 'Location', _displayText(profile['address'], fallback: '-')),
-            _SettingsRow(Icons.verified_user_outlined, 'Status', _displayText(profile['status'], fallback: '-')),
+            _SettingsRow(
+              Icons.location_city_outlined,
+              'Location',
+              _displayText(profile['address'], fallback: '-'),
+            ),
+            _SettingsRow(
+              Icons.verified_user_outlined,
+              'Status',
+              _displayText(profile['status'], fallback: '-'),
+            ),
           ],
         ),
         const SizedBox(height: 14),
@@ -12658,11 +12719,17 @@ class _ProfileSettingsPageState extends State<_ProfileSettingsPage> {
             children: [
               const _SettingsRow(Icons.language_rounded, 'Language', 'English'),
               _SettingsRow(
-                mode == ThemeMode.dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                mode == ThemeMode.dark
+                    ? Icons.dark_mode_outlined
+                    : Icons.light_mode_outlined,
                 'Theme',
                 mode == ThemeMode.dark ? 'Dark' : 'Light',
               ),
-              const _SettingsRow(Icons.notifications_none_rounded, 'Notification Settings', 'Backend'),
+              const _SettingsRow(
+                Icons.notifications_none_rounded,
+                'Notification Settings',
+                'Backend',
+              ),
             ],
           ),
         ),
@@ -12815,7 +12882,7 @@ class _CeoShell extends StatelessWidget {
                     return Row(
                       children: [
                         SizedBox(
-                          width: 42,
+                          width: rightWidth,
                           height: 42,
                           child: showBack
                               ? IconButton(
@@ -12849,22 +12916,12 @@ class _CeoShell extends StatelessWidget {
                                   ),
                                 ),
                         ),
-                        if (!showBack) ...[
-                          const SizedBox(width: 4),
-                          const BitByteLogo(compact: true),
-                          const SizedBox(width: 10),
-                        ],
                         Expanded(
-                          child: Text(
-                            title,
-                            textAlign: showBack
-                                ? TextAlign.center
-                                : TextAlign.start,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: textPrimary,
-                              fontSize: titleFontSize,
-                              fontWeight: FontWeight.w800,
+                          child: Semantics(
+                            label: title,
+                            header: true,
+                            child: const Center(
+                              child: BitByteLogo(compact: true),
                             ),
                           ),
                         ),
@@ -14232,7 +14289,10 @@ class _DepartmentViewAllButton extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.apartment_rounded, color: _CeoDashboardState._cyan),
+                const Icon(
+                  Icons.apartment_rounded,
+                  color: _CeoDashboardState._cyan,
+                ),
                 const SizedBox(width: 9),
                 Text(
                   'View All Departments',
@@ -15341,7 +15401,9 @@ class _ActionTile extends StatelessWidget {
           children: [
             Icon(icon, color: _CeoDashboardState._cyan, size: 22),
             const SizedBox(height: 6),
-            FittedBox(child: Text(label, style: _CeoText.mutedFor(context, 10))),
+            FittedBox(
+              child: Text(label, style: _CeoText.mutedFor(context, 10)),
+            ),
           ],
         ),
       ),
@@ -17013,10 +17075,13 @@ class _GradientButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: TextButton.icon(
-        onPressed: onPressed ??
+        onPressed:
+            onPressed ??
             () {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$label is not available for this report.')),
+                SnackBar(
+                  content: Text('$label is not available for this report.'),
+                ),
               );
             },
         icon: Icon(icon, color: Colors.white, size: 18),

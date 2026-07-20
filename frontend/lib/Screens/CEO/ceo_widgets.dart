@@ -9,7 +9,7 @@ class CeoColors {
   static const card = Color(0xFF071A2D);
   static const cardAlt = Color(0xFF0A2238);
   static const border = Color(0xFF123A5C);
-  static const cyan = Color(0xFF00C6FF);   // unified primary
+  static const cyan = Color(0xFF00C6FF); // unified primary
   static const green = Color(0xFF13D989);
   static const purple = Color(0xFF8B5CFF);
   static const gold = Color(0xFFD7932E);
@@ -51,7 +51,11 @@ class CeoShell extends StatelessWidget {
       floatingActionButton: floatingActionButton,
       body: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(colors: [bgTop, bgBottom], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+          gradient: LinearGradient(
+            colors: [bgTop, bgBottom],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
         ),
         child: SafeArea(
           child: Column(
@@ -60,40 +64,55 @@ class CeoShell extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final rightWidth = trailing == null ? 48.0 : (constraints.maxWidth < 360 ? 88.0 : 96.0);
+                    final rightWidth = trailing == null
+                        ? 48.0
+                        : (constraints.maxWidth < 360 ? 88.0 : 96.0);
                     return Row(
                       children: [
                         SizedBox(
-                          width: 42,
+                          width: rightWidth,
                           height: 42,
                           child: showBack
                               ? IconButton(
-                                  constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 42,
+                                    height: 42,
+                                  ),
                                   padding: EdgeInsets.zero,
-                                  icon: Icon(Icons.arrow_back_ios_new_rounded, color: textPrimary, size: 18),
-                                  onPressed: onBack ?? () => Navigator.of(context).pop(),
+                                  icon: Icon(
+                                    Icons.arrow_back_ios_new_rounded,
+                                    color: textPrimary,
+                                    size: 18,
+                                  ),
+                                  onPressed:
+                                      onBack ??
+                                      () => Navigator.of(context).pop(),
                                 )
                               : Builder(
                                   builder: (ctx) => IconButton(
-                                    constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+                                    constraints: const BoxConstraints.tightFor(
+                                      width: 42,
+                                      height: 42,
+                                    ),
                                     padding: EdgeInsets.zero,
                                     tooltip: 'Menu',
-                                    icon: Icon(Icons.menu_rounded, color: textPrimary, size: 26),
-                                    onPressed: () => Scaffold.of(ctx).openDrawer(),
+                                    icon: Icon(
+                                      Icons.menu_rounded,
+                                      color: textPrimary,
+                                      size: 26,
+                                    ),
+                                    onPressed: () =>
+                                        Scaffold.of(ctx).openDrawer(),
                                   ),
                                 ),
                         ),
-                        if (!showBack) ...[
-                          const SizedBox(width: 4),
-                          const BitByteLogo(compact: true),
-                          const SizedBox(width: 10),
-                        ],
                         Expanded(
-                          child: Text(
-                            title,
-                            textAlign: showBack ? TextAlign.center : TextAlign.start,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: textPrimary, fontSize: 17, fontWeight: FontWeight.w800),
+                          child: Semantics(
+                            label: title,
+                            header: true,
+                            child: const Center(
+                              child: BitByteLogo(compact: true),
+                            ),
                           ),
                         ),
                         SizedBox(
@@ -104,7 +123,14 @@ class CeoShell extends StatelessWidget {
                             children: [
                               const _CeoThemeToggleButton(),
                               if (trailing != null)
-                                SizedBox(width: 42, height: 42, child: FittedBox(fit: BoxFit.scaleDown, child: trailing)),
+                                SizedBox(
+                                  width: 42,
+                                  height: 42,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: trailing,
+                                  ),
+                                ),
                             ],
                           ),
                         ),
@@ -135,9 +161,15 @@ class _CeoThemeToggleButton extends StatelessWidget {
           constraints: const BoxConstraints.tightFor(width: 40, height: 42),
           padding: EdgeInsets.zero,
           tooltip: isDark ? 'Light theme' : 'Dark theme',
-          icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: ThemeConfig.getTextPrimary(context), size: 20),
+          icon: Icon(
+            isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+            color: ThemeConfig.getTextPrimary(context),
+            size: 20,
+          ),
           onPressed: () {
-            MyApp.themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
+            MyApp.themeNotifier.value = isDark
+                ? ThemeMode.light
+                : ThemeMode.dark;
           },
         );
       },
@@ -160,12 +192,14 @@ class CeoFutureBody extends StatelessWidget {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(18),
-              child: muted('Backend data unavailable\n${snapshot.error}', 12),
+              child: muted('Unable to load data. Please try again.', 12),
             ),
           );
         }
         if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator(color: CeoColors.cyan));
+          return const Center(
+            child: CircularProgressIndicator(color: CeoColors.cyan),
+          );
         }
         return builder(snapshot.data!);
       },
@@ -178,7 +212,12 @@ class CeoCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
 
-  const CeoCard({super.key, required this.child, this.padding = const EdgeInsets.all(12), this.onTap});
+  const CeoCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(12),
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -191,14 +230,30 @@ class CeoCard extends StatelessWidget {
         color: cardBg,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(ThemeConfig.isDark(context) ? 0.32 : 0.08), blurRadius: 18, offset: const Offset(0, 10))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(
+              ThemeConfig.isDark(context) ? 0.32 : 0.08,
+            ),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: child,
     );
-    if (onTap == null) return Padding(padding: const EdgeInsets.only(bottom: 10), child: card);
+    if (onTap == null)
+      return Padding(padding: const EdgeInsets.only(bottom: 10), child: card);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Material(color: Colors.transparent, child: InkWell(borderRadius: BorderRadius.circular(8), onTap: onTap, child: card)),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: card,
+        ),
+      ),
     );
   }
 }
@@ -214,7 +269,12 @@ class CeoMetricGrid extends StatelessWidget {
       itemCount: cards.length,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 1.55),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 1.55,
+      ),
       itemBuilder: (context, index) {
         final card = cards[index];
         return CeoCard(
@@ -223,8 +283,22 @@ class CeoMetricGrid extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(children: [Icon(card.icon, color: card.color, size: 20), const Spacer(), if (card.trend.isNotEmpty) small(card.trend, color: CeoColors.green)]),
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [muted(card.title, 11), const SizedBox(height: 4), title(card.value, 20)]),
+              Row(
+                children: [
+                  Icon(card.icon, color: card.color, size: 20),
+                  const Spacer(),
+                  if (card.trend.isNotEmpty)
+                    small(card.trend, color: CeoColors.green),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  muted(card.title, 11),
+                  const SizedBox(height: 4),
+                  title(card.value, 20),
+                ],
+              ),
             ],
           ),
         );
@@ -240,7 +314,14 @@ class CeoListTile extends StatelessWidget {
   final Color color;
   final VoidCallback? onTap;
 
-  const CeoListTile({super.key, required this.icon, required this.titleText, required this.subtitle, this.color = CeoColors.cyan, this.onTap});
+  const CeoListTile({
+    super.key,
+    required this.icon,
+    required this.titleText,
+    required this.subtitle,
+    this.color = CeoColors.cyan,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -251,11 +332,23 @@ class CeoListTile extends StatelessWidget {
           Container(
             width: 42,
             height: 42,
-            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Icon(icon, color: color, size: 22),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [title(titleText, 14), const SizedBox(height: 3), muted(subtitle, 11)])),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                title(titleText, 14),
+                const SizedBox(height: 3),
+                muted(subtitle, 11),
+              ],
+            ),
+          ),
           const Icon(Icons.chevron_right_rounded, color: CeoColors.muted),
         ],
       ),
@@ -297,25 +390,36 @@ Widget chartCard(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (subtitle != null) muted(subtitle, 11),
-        Row(children: [Expanded(child: title(titleText, 18)), if (trend != null) small(trend, color: CeoColors.green)]),
+        Row(
+          children: [
+            Expanded(child: title(titleText, 18)),
+            if (trend != null) small(trend, color: CeoColors.green),
+          ],
+        ),
         const SizedBox(height: 14),
         SizedBox(
           height: 88,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: values
-                .map((h) => Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        child: Container(
-                          height: h,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(colors: [color.withOpacity(0.35), color], begin: Alignment.bottomCenter, end: Alignment.topCenter),
-                            borderRadius: BorderRadius.circular(8),
+                .map(
+                  (h) => Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: Container(
+                        height: h,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [color.withOpacity(0.35), color],
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
                           ),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                    ))
+                    ),
+                  ),
+                )
                 .toList(),
           ),
         ),
@@ -325,21 +429,44 @@ Widget chartCard(
 }
 
 Widget pageList(List<Widget> children) {
-  return ListView(padding: const EdgeInsets.fromLTRB(18, 8, 18, 18), children: children);
+  return ListView(
+    padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+    children: children,
+  );
 }
 
 Widget title(String text, double size) {
   return Builder(
-    builder: (context) => Text(text, overflow: TextOverflow.ellipsis, style: TextStyle(color: ThemeConfig.getTextPrimary(context), fontSize: size, fontWeight: FontWeight.w800)),
+    builder: (context) => Text(
+      text,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: ThemeConfig.getTextPrimary(context),
+        fontSize: size,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
   );
 }
 
 Widget muted(String text, double size) {
   return Builder(
-    builder: (context) => Text(text, overflow: TextOverflow.ellipsis, style: TextStyle(color: ThemeConfig.getTextSecondary(context), fontSize: size, fontWeight: FontWeight.w500)),
+    builder: (context) => Text(
+      text,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: ThemeConfig.getTextSecondary(context),
+        fontSize: size,
+        fontWeight: FontWeight.w500,
+      ),
+    ),
   );
 }
 
 Widget small(String text, {Color color = CeoColors.cyan}) {
-  return Text(text, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800));
+  return Text(
+    text,
+    overflow: TextOverflow.ellipsis,
+    style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800),
+  );
 }

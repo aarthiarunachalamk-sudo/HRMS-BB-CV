@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import 'package:flutter/services.dart';
 
 import 'employee_models.dart';
@@ -53,8 +54,8 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen> {
     final meetings = _selectedDate == null
         ? _data.meetings
         : _data.meetings
-            .where((item) => _isSameDay(_meetingDate(item), _selectedDate!))
-            .toList();
+              .where((item) => _isSameDay(_meetingDate(item), _selectedDate!))
+              .toList();
     return EmployeePage(
       title: 'Meetings',
       children: [
@@ -115,10 +116,7 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen> {
                 IconButton(
                   tooltip: 'Show all',
                   onPressed: () => setState(() => _selectedDate = null),
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    color: Colors.white70,
-                  ),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white70),
                 ),
             ],
           ),
@@ -172,7 +170,9 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Meeting Details')),
+          appBar: AppBar(
+            title: const AppBarLogoTitle(title: 'Meeting Details'),
+          ),
           body: EmployeeMeetingDetailsScreen(meeting: item),
         ),
       ),
@@ -234,7 +234,9 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen> {
       return;
     }
     try {
-      final opened = await _channel.invokeMethod<bool>('openUrl', {'url': link});
+      final opened = await _channel.invokeMethod<bool>('openUrl', {
+        'url': link,
+      });
       if (opened != true && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Unable to open meeting link.')),
@@ -243,7 +245,9 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen> {
     } on PlatformException catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message ?? 'Unable to open meeting link.')),
+        SnackBar(
+          content: Text(error.message ?? 'Unable to open meeting link.'),
+        ),
       );
     }
   }
@@ -260,8 +264,8 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final agenda = meeting['agenda'] is List
         ? (meeting['agenda'] as List)
-            .where((item) => item is! Map || item['_meta'] != 'meeting')
-            .toList()
+              .where((item) => item is! Map || item['_meta'] != 'meeting')
+              .toList()
         : const [];
     final link = _meetingLink(meeting);
     final canJoin = link.isNotEmpty && _isMeetingDate(meeting);
@@ -270,86 +274,183 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
       title: 'Meeting Details',
       children: [
         EmployeeCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(color: EmployeeColors.purple.withAlpha(35), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.video_call_rounded, color: EmployeeColors.purple),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: EmployeeColors.purple.withAlpha(35),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.video_call_rounded,
+                      color: EmployeeColors.purple,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${meeting['title'] ?? 'Meeting'}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${meeting['platform'] ?? meeting['mode'] ?? ''}',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('${meeting['title'] ?? 'Meeting'}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 4),
-                Text('${meeting['platform'] ?? meeting['mode'] ?? ''}', style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700)),
-              ])),
-            ]),
-            const SizedBox(height: 18),
-            _MeetingDetailRow(Icons.calendar_month_rounded, 'Date', '${meeting['date'] ?? meeting['date_label'] ?? ''}'),
-            _MeetingDetailRow(Icons.schedule_rounded, 'Time', '${meeting['time'] ?? meeting['time_label'] ?? ''}'),
-            _MeetingDetailRow(Icons.timer_rounded, 'Duration', '${meeting['duration'] ?? ''}'),
-            if ('${meeting['description'] ?? ''}'.trim().isNotEmpty)
-              _MeetingDetailRow(Icons.notes_rounded, 'Description', '${meeting['description']}'),
-          ]),
+              const SizedBox(height: 18),
+              _MeetingDetailRow(
+                Icons.calendar_month_rounded,
+                'Date',
+                '${meeting['date'] ?? meeting['date_label'] ?? ''}',
+              ),
+              _MeetingDetailRow(
+                Icons.schedule_rounded,
+                'Time',
+                '${meeting['time'] ?? meeting['time_label'] ?? ''}',
+              ),
+              _MeetingDetailRow(
+                Icons.timer_rounded,
+                'Duration',
+                '${meeting['duration'] ?? ''}',
+              ),
+              if ('${meeting['description'] ?? ''}'.trim().isNotEmpty)
+                _MeetingDetailRow(
+                  Icons.notes_rounded,
+                  'Description',
+                  '${meeting['description']}',
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         EmployeeCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Meeting Link', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 10),
-            InkWell(
-              onTap: canJoin ? () => _openLink(context, link) : () => _showJoinUnavailable(context),
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: joinColor.withAlpha(24), borderRadius: BorderRadius.circular(8), border: Border.all(color: joinColor.withAlpha(90))),
-                child: Row(children: [
-                  Icon(Icons.link_rounded, color: joinColor),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(link.isEmpty ? 'Meeting link is not available' : link, style: const TextStyle(fontWeight: FontWeight.w800))),
-                  Icon(Icons.open_in_new_rounded, color: joinColor, size: 18),
-                ]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Meeting Link',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
               ),
-            ),
-            if (!canJoin && link.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const Text('Join button will be enabled on the meeting date.', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700)),
-            ],
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: joinColor,
-                  disabledBackgroundColor: Colors.blueGrey.withAlpha(130),
-                  foregroundColor: Colors.white,
-                  disabledForegroundColor: Colors.white70,
+              const SizedBox(height: 10),
+              InkWell(
+                onTap: canJoin
+                    ? () => _openLink(context, link)
+                    : () => _showJoinUnavailable(context),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: joinColor.withAlpha(24),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: joinColor.withAlpha(90)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.link_rounded, color: joinColor),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          link.isEmpty ? 'Meeting link is not available' : link,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      Icon(
+                        Icons.open_in_new_rounded,
+                        color: joinColor,
+                        size: 18,
+                      ),
+                    ],
+                  ),
                 ),
-                onPressed: canJoin ? () => _openLink(context, link) : null,
-                icon: const Icon(Icons.video_call_rounded),
-                label: Text(canJoin ? 'Join Meeting' : 'Available on Meeting Date', style: const TextStyle(fontWeight: FontWeight.w900)),
               ),
-            ),
-          ]),
+              if (!canJoin && link.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Join button will be enabled on the meeting date.',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: joinColor,
+                    disabledBackgroundColor: Colors.blueGrey.withAlpha(130),
+                    foregroundColor: Colors.white,
+                    disabledForegroundColor: Colors.white70,
+                  ),
+                  onPressed: canJoin ? () => _openLink(context, link) : null,
+                  icon: const Icon(Icons.video_call_rounded),
+                  label: Text(
+                    canJoin ? 'Join Meeting' : 'Available on Meeting Date',
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         if (agenda.isNotEmpty) ...[
           const SizedBox(height: 12),
           EmployeeCard(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Agenda', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 10),
-              ...agenda.map((item) => Padding(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Agenda',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 10),
+                ...agenda.map(
+                  (item) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Icon(Icons.check_circle_outline_rounded, color: EmployeeColors.green, size: 17),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text('$item', style: const TextStyle(fontWeight: FontWeight.w700))),
-                    ]),
-                  )),
-            ]),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_outline_rounded,
+                          color: EmployeeColors.green,
+                          size: 17,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '$item',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ],
@@ -357,7 +458,9 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
   }
 
   static String _meetingLink(Map<String, dynamic> item) {
-    final link = '${item['meeting_link'] ?? item['link'] ?? item['location'] ?? ''}'.trim();
+    final link =
+        '${item['meeting_link'] ?? item['link'] ?? item['location'] ?? ''}'
+            .trim();
     if (link.contains('meet.bitbyte.in')) {
       return _defaultPlatformLink('${item['platform'] ?? item['mode'] ?? ''}');
     }
@@ -376,7 +479,9 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
     final date = parseMeetingDate(raw);
     if (date == null) return true;
     final now = DateTime.now();
-    return date.year == now.year && date.month == now.month && date.day == now.day;
+    return date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
   }
 
   static DateTime? parseMeetingDate(String value) {
@@ -396,7 +501,9 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
 
   static void _showJoinUnavailable(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Join button will be enabled on the meeting date.')),
+      const SnackBar(
+        content: Text('Join button will be enabled on the meeting date.'),
+      ),
     );
   }
 
@@ -408,7 +515,9 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
       return;
     }
     try {
-      final opened = await _channel.invokeMethod<bool>('openUrl', {'url': link});
+      final opened = await _channel.invokeMethod<bool>('openUrl', {
+        'url': link,
+      });
       if (opened != true && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Unable to open meeting link.')),
@@ -417,7 +526,9 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
     } on PlatformException catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message ?? 'Unable to open meeting link.')),
+        SnackBar(
+          content: Text(error.message ?? 'Unable to open meeting link.'),
+        ),
       );
     }
   }
@@ -434,15 +545,36 @@ class _MeetingDetailRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: EmployeeColors.blue, size: 19),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 2),
-          Text(value.isEmpty ? '-' : value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)),
-        ])),
-      ]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: EmployeeColors.blue, size: 19),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value.isEmpty ? '-' : value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -36,7 +36,11 @@ class _SaUserManagementScreenState extends State<SaUserManagementScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Center(
-                    child: saMuted(context, 'Backend data unavailable', 13),
+                    child: saMuted(
+                      context,
+                      'Unable to load data. Please try again.',
+                      13,
+                    ),
                   ),
                 ),
               ),
@@ -55,7 +59,8 @@ class _SaUserManagementScreenState extends State<SaUserManagementScreen> {
         final statuses = _options(allUsers.map((user) => user.status));
         final query = _search.text.trim().toLowerCase();
         final users = allUsers.where((user) {
-          final matchesQuery = query.isEmpty ||
+          final matchesQuery =
+              query.isEmpty ||
               '${user.name} ${user.subtitle} ${user.detail}'
                   .toLowerCase()
                   .contains(query);
@@ -107,29 +112,31 @@ class _SaUserManagementScreenState extends State<SaUserManagementScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            Row(children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () => _showUserFilters(roles, statuses),
-                  child: SaCard(
-                    color: c.input,
-                    padding: const EdgeInsets.all(11),
-                    child: saTitle(context, 'Role: $_roleFilter', 12),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _showUserFilters(roles, statuses),
+                    child: SaCard(
+                      color: c.input,
+                      padding: const EdgeInsets.all(11),
+                      child: saTitle(context, 'Role: $_roleFilter', 12),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: InkWell(
-                  onTap: () => _showUserFilters(roles, statuses),
-                  child: SaCard(
-                    color: c.input,
-                    padding: const EdgeInsets.all(11),
-                    child: saTitle(context, 'Status: $_statusFilter', 12),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _showUserFilters(roles, statuses),
+                    child: SaCard(
+                      color: c.input,
+                      padding: const EdgeInsets.all(11),
+                      child: saTitle(context, 'Status: $_statusFilter', 12),
+                    ),
                   ),
                 ),
-              ),
-            ]),
+              ],
+            ),
             const SizedBox(height: 12),
             if (users.isEmpty)
               SaCard(
@@ -178,7 +185,9 @@ class _SaUserManagementScreenState extends State<SaUserManagementScreen> {
   List<_UserRow> _usersFrom(dynamic rawUsers) {
     if (rawUsers is! List) return <_UserRow>[];
     return rawUsers.map((item) {
-      final u = item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{};
+      final u = item is Map
+          ? Map<String, dynamic>.from(item)
+          : <String, dynamic>{};
       return _UserRow(
         name: '${u['name'] ?? ''}',
         subtitle: '${u['subtitle'] ?? ''}  ${u['trailing'] ?? ''}',
@@ -189,9 +198,9 @@ class _SaUserManagementScreenState extends State<SaUserManagementScreen> {
   }
 
   List<String> _options(Iterable<String> values) => <String>{
-        'All',
-        ...values.map((value) => value.trim()).where((value) => value.isNotEmpty),
-      }.toList();
+    'All',
+    ...values.map((value) => value.trim()).where((value) => value.isNotEmpty),
+  }.toList();
 
   Future<void> _showUserFilters(List<String> roles, List<String> statuses) {
     var role = roles.contains(_roleFilter) ? _roleFilter : 'All';
@@ -212,18 +221,23 @@ class _SaUserManagementScreenState extends State<SaUserManagementScreen> {
               DropdownButtonFormField<String>(
                 value: role,
                 items: roles
-                    .map((item) =>
-                        DropdownMenuItem(value: item, child: Text(item)))
+                    .map(
+                      (item) =>
+                          DropdownMenuItem(value: item, child: Text(item)),
+                    )
                     .toList(),
-                onChanged: (value) => setSheetState(() => role = value ?? 'All'),
+                onChanged: (value) =>
+                    setSheetState(() => role = value ?? 'All'),
                 decoration: const InputDecoration(labelText: 'Role'),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: status,
                 items: statuses
-                    .map((item) =>
-                        DropdownMenuItem(value: item, child: Text(item)))
+                    .map(
+                      (item) =>
+                          DropdownMenuItem(value: item, child: Text(item)),
+                    )
                     .toList(),
                 onChanged: (value) =>
                     setSheetState(() => status = value ?? 'All'),
