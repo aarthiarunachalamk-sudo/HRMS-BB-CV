@@ -278,16 +278,31 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                   final index = entry.key;
                   final item = entry.value;
                   final needsAction = _requiresAction(item);
-                  return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: card,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: needsAction ? const Color(0xFFFF5263).withAlpha(110) : border),
-                  ),
-                  child: Row(
-                    children: [
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => _MdRecordDetailScreen(
+                              moduleTitle: widget.screenTitle,
+                              icon: widget.icon,
+                              accent: accent,
+                              record: item,
+                            ),
+                          ),
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: card,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: needsAction ? const Color(0xFFFF5263).withAlpha(110) : border),
+                          ),
+                          child: Row(
+                            children: [
                       Container(
                         width: 43,
                         height: 43,
@@ -313,14 +328,132 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
                         ),
                       ),
                       Icon(Icons.chevron_right_rounded, color: muted),
-                    ],
-                  ),
-                );
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
                 }),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _MdRecordDetailScreen extends StatelessWidget {
+  final String moduleTitle;
+  final IconData icon;
+  final Color accent;
+  final Map<String, dynamic> record;
+
+  const _MdRecordDetailScreen({
+    required this.moduleTitle,
+    required this.icon,
+    required this.accent,
+    required this.record,
+  });
+
+  String _label(String key) => key
+      .split('_')
+      .map((part) => part.isEmpty ? '' : '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
+
+  @override
+  Widget build(BuildContext context) {
+    final background = ThemeConfig.getBgStart(context);
+    final card = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
+    final text = ThemeConfig.getTextPrimary(context);
+    final muted = ThemeConfig.getTextSecondary(context);
+    final entries = record.entries
+        .where((entry) => '${entry.value ?? ''}'.trim().isNotEmpty)
+        .toList();
+    return Scaffold(
+      backgroundColor: background,
+      appBar: AppBar(
+        backgroundColor: background,
+        foregroundColor: text,
+        title: Text('$moduleTitle Details'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [accent.withAlpha(55), card, ThemeConfig.purpleAccent.withAlpha(28)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: accent.withAlpha(120)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [accent, ThemeConfig.purpleAccent]),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 38),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  '${record['title'] ?? 'Record Details'}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900),
+                ),
+                if ('${record['subtitle'] ?? ''}'.isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Text('${record['subtitle']}', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 13)),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text('RECORD INFORMATION', style: TextStyle(color: accent, fontSize: 13, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          ...entries.map(
+            (entry) => Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: card,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: border),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(color: accent.withAlpha(25), borderRadius: BorderRadius.circular(10)),
+                    child: Icon(Icons.info_outline_rounded, color: accent, size: 19),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_label(entry.key), style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 4),
+                        Text('${entry.value}', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w800)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
