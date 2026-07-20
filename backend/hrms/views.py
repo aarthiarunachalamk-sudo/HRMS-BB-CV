@@ -2706,9 +2706,9 @@ def hr_dashboard_view(request):
     approved_leaves = [_leave_dashboard_item(leave) for leave in EmployeeLeaveRequest.objects.filter(status='approved')[:20]]
     rejected_leaves = [_leave_dashboard_item(leave) for leave in EmployeeLeaveRequest.objects.filter(status='rejected')[:20]]
     payroll_month = timezone.localdate()
-    month_payslips = Payslip.objects.filter(year=payroll_month.year, month=payroll_month.month)
-    payroll_items = [_hr_payroll_item(item) for item in month_payslips[:20]]
-    payroll_cost = sum(item.net_salary for item in month_payslips.filter(status__in=['approved', 'paid']))
+    month_payslips = list(
+        Payslip.objects.filter(year=payroll_month.year, month=payroll_month.month)
+    )
     notifications = _notifications_for_role('hr')
 
     # Live attendance counts
@@ -2726,6 +2726,17 @@ def hr_dashboard_view(request):
     )
     all_active_accounts = list(
         EmployeeAccount.objects.select_related('registration').filter(is_active=True)
+    )
+    account_by_employee_id = {
+        account.employee_id: account for account in all_active_accounts
+    }
+    payroll_items = [
+        _hr_payroll_item(item, account_by_employee_id) for item in month_payslips[:20]
+    ]
+    payroll_cost = sum(
+        item.net_salary
+        for item in month_payslips
+        if item.status in ['approved', 'paid']
     )
     total_employees = len(all_active_accounts)
     present_today = len(present_ids)
@@ -2779,12 +2790,12 @@ def hr_dashboard_view(request):
     ]
     payroll_validation = _hr_payroll_validation(all_active_accounts, payroll_month)
     payroll_ready = sum(1 for item in payroll_validation if item['ready'])
-    payroll_totals = month_payslips.aggregate(
-        gross=Sum('gross_salary'),
-        earnings=Sum('total_earnings'),
-        deductions=Sum('total_deductions'),
-        net=Sum('net_salary'),
-    )
+    payroll_totals = {
+        'gross': sum(item.gross_salary for item in month_payslips),
+        'earnings': sum(item.total_earnings for item in month_payslips),
+        'deductions': sum(item.total_deductions for item in month_payslips),
+        'net': sum(item.net_salary for item in month_payslips),
+    }
 
     return Response({
         'success': True,
@@ -2804,8 +2815,8 @@ def hr_dashboard_view(request):
         'tasks': [],
         'documents': [],
         'payroll_month': payroll_month.strftime('%B %Y'),
-        'payroll_processed': month_payslips.count(),
-        'payroll_pending': max(_active_employee_count() - month_payslips.count(), 0),
+        'payroll_processed': len(month_payslips),
+        'payroll_pending': max(total_employees - len(month_payslips), 0),
         'payroll_cost': str(payroll_cost),
         'payroll_items': payroll_items,
         'payroll_validation': payroll_validation,
@@ -2831,9 +2842,11 @@ def hr_dashboard_view(request):
     })
 
 
-def _hr_payroll_item(payslip):
-    account = EmployeeAccount.objects.select_related('registration').filter(employee_id=payslip.employee_id).first()
-    employee_name = _employee_name(payslip.employee_id)
+def _hr_payroll_item(payslip, account_by_employee_id=None):
+    account = (account_by_employee_id or {}).get(payslip.employee_id)
+    if account is None:
+        account = EmployeeAccount.objects.select_related('registration').filter(employee_id=payslip.employee_id).first()
+    employee_name = _account_display_name(account, payslip.employee_id)
     return {
         'title': f'{employee_name} - {payslip.month:02d}/{payslip.year}',
         'subtitle': f'Net Rs {payslip.net_salary} | Paid {payslip.paid_days} days | LOP {payslip.lop_days}',
@@ -2866,22 +2879,32 @@ def _hr_payroll_validation(accounts, payroll_date):
         for day in range(1, payroll_date.day + 1)
         if payroll_date.replace(day=day).weekday() < 5
     )
+    employee_ids = [account.employee_id for account in accounts]
+    attendance_counts = {
+        row['employee_id']: row['count']
+        for row in EmployeeAttendanceRecord.objects.filter(
+            employee_id__in=employee_ids,
+            attendance_date__gte=month_start,
+            attendance_date__lte=payroll_date,
+        ).values('employee_id').annotate(count=Count('id'))
+    }
+    salary_employee_ids = set(
+        SalaryStructure.objects.filter(
+            employee_id__in=employee_ids,
+        ).values_list('employee_id', flat=True)
+    )
     items = []
     for account in accounts:
         registration = account.registration
-        name = _employee_name(account.employee_id)
-        attendance_days = EmployeeAttendanceRecord.objects.filter(
-            employee_id=account.employee_id,
-            attendance_date__gte=month_start,
-            attendance_date__lte=payroll_date,
-        ).count()
+        name = _account_display_name(account, account.employee_id)
+        attendance_days = attendance_counts.get(account.employee_id, 0)
         missing_attendance_days = max(elapsed_working_days - attendance_days, 0)
         bank_missing = not (
             registration
             and str(registration.account_number or '').strip()
             and str(registration.ifsc_code or '').strip()
         )
-        salary = SalaryStructure.objects.filter(employee_id=account.employee_id).first()
+        salary_configured = account.employee_id in salary_employee_ids
         items.append({
             'employee_id': account.employee_id,
             'employee_name': name,
@@ -2895,10 +2918,18 @@ def _hr_payroll_validation(accounts, payroll_date):
             'expected_attendance_days': elapsed_working_days,
             'missing_attendance_days': missing_attendance_days,
             'attendance_conflict': missing_attendance_days > 0,
-            'salary_configured': salary is not None,
-            'ready': not bank_missing and missing_attendance_days == 0 and salary is not None,
+            'salary_configured': salary_configured,
+            'ready': not bank_missing and missing_attendance_days == 0 and salary_configured,
         })
     return items
+
+
+def _account_display_name(account, fallback='Employee'):
+    if account and account.registration:
+        registration = account.registration
+        name = f'{registration.first_name} {registration.last_name}'.strip()
+        return name or account.employee_email or fallback
+    return fallback or 'Employee'
 
 
 @api_view(['POST'])
@@ -3148,6 +3179,15 @@ def tl_dashboard_view(request):
 
 @api_view(['POST'])
 def tl_meetings_view(request):
+    meeting_start = _parse_meeting_start(
+        str(request.data.get('date_label') or ''),
+        str(request.data.get('time_label') or ''),
+    )
+    if meeting_start <= timezone.now():
+        return Response({
+            'success': False,
+            'message': 'Meeting date and time must be in the future.',
+        }, status=400)
     meeting = _create_meeting_from_payload(request.data, 'Team Meeting')
     _notify_meeting_participants(meeting)
     email_count = 0

@@ -1,7 +1,10 @@
 from datetime import date
 
 from django.test import SimpleTestCase
+from django.core.cache import cache
 from rest_framework import serializers
+from rest_framework.test import APIRequestFactory
+from unittest.mock import Mock, patch
 
 from .serializers import (
     CreateUserSerializer,
@@ -10,6 +13,8 @@ from .serializers import (
     mask_phone_number,
 )
 from .views import _attendance_credit, _working_dates
+from . import views
+from .models import User
 
 
 class PhonePrivacyTests(SimpleTestCase):
@@ -217,3 +222,81 @@ class CreateUserDepartmentValidationTests(SimpleTestCase):
         )
 
         self.assertEqual(data['department'], 'ceo')
+
+
+class MeetingScheduleValidationTests(SimpleTestCase):
+    def test_tl_cannot_schedule_a_meeting_in_the_past(self):
+        request = APIRequestFactory().post(
+            '/api/tl/meetings/',
+            {
+                'title': 'Past meeting',
+                'date_label': '01-01-2020',
+                'time_label': '09:00 AM',
+            },
+            format='json',
+        )
+
+        with patch.object(views, '_create_meeting_from_payload') as create:
+            response = views.tl_meetings_view(request)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('future', response.data['message'].lower())
+        create.assert_not_called()
+
+
+class PasswordRecoveryTests(SimpleTestCase):
+    def setUp(self):
+        cache.clear()
+        self.factory = APIRequestFactory()
+        self.user = User(
+            user_id='BBEMPTEST01',
+            email='employee.test@bitbyte.test',
+            role='employee',
+        )
+        self.user.set_password('Current@123')
+        self.user.save = Mock()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_cached_recovery_credential_changes_password_once(self):
+        cache.set('password_reset:BBEMPTEST01', 'RESET123', timeout=900)
+        request = self.factory.post(
+            '/api/change-password/',
+            {
+                'employee_id': 'BBEMPTEST01',
+                'otc': 'RESET123',
+                'new_password': 'Changed@123',
+            },
+            format='json',
+        )
+
+        with patch.object(views.User.objects, 'get', return_value=self.user), patch.object(
+            views.EmployeeAccount.objects,
+            'filter',
+        ) as accounts:
+            accounts.return_value.update.return_value = 1
+            response = views.change_password_view(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['success'])
+        self.assertTrue(self.user.check_password('Changed@123'))
+        self.assertIsNone(cache.get('password_reset:BBEMPTEST01'))
+        accounts.return_value.update.assert_called_once_with(otc='')
+
+    def test_recovery_credential_cannot_be_reused(self):
+        request = self.factory.post(
+            '/api/change-password/',
+            {
+                'employee_id': 'BBEMPTEST01',
+                'otc': 'EXPIRED1',
+                'new_password': 'Changed@123',
+            },
+            format='json',
+        )
+
+        with patch.object(views.User.objects, 'get', return_value=self.user):
+            response = views.change_password_view(request)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data['success'])

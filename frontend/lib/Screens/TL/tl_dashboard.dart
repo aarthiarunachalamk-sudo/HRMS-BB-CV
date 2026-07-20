@@ -2077,6 +2077,22 @@ class _MeetingsState extends State<_Meetings> {
       );
       return;
     }
+    final now = DateTime.now();
+    final scheduledAt = DateTime(
+      _date.year,
+      _date.month,
+      _date.day,
+      _time.hour,
+      _time.minute,
+    );
+    if (!scheduledAt.isAfter(now)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Meeting date and time must be in the future.'),
+        ),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       final link = _link.text.trim().isEmpty
