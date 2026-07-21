@@ -685,6 +685,15 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                               textPrimary,
                               textSecondary,
                               cardBorder,
+                            ),
+                            const SizedBox(height: 14),
+                            _buildField(
+                              'PAN Number',
+                              _panController,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                              cardBorder,
                               hint: 'ABCPD1234F',
                               textCapitalization: TextCapitalization.characters,
                               inputFormatters: [
@@ -695,15 +704,6 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                                 _UpperCaseFormatter(),
                               ],
                               validator: _validatePan,
-                            ),
-                            const SizedBox(height: 14),
-                            _buildField(
-                              'PAN Number',
-                              _panController,
-                              isDark,
-                              textPrimary,
-                              textSecondary,
-                              cardBorder,
                             ),
                             const SizedBox(height: 14),
                             _buildField(
