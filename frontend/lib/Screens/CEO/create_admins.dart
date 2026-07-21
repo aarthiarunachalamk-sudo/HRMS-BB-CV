@@ -311,6 +311,16 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
   String? _req(String? v, String label) =>
       (v == null || v.trim().isEmpty) ? '$label is required' : null;
 
+  String? _validateName(String? v, String label) {
+    final value = v?.trim() ?? '';
+    if (value.isEmpty) return '$label is required';
+    if (value.length < 2) return '$label must have at least 2 letters';
+    if (!RegExp(r"^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$").hasMatch(value)) {
+      return 'Enter a valid $label';
+    }
+    return null;
+  }
+
   String? _validateEmail(String? v) {
     if (v == null || v.trim().isEmpty) return 'Email is required';
     final re = RegExp(r'^[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}$');
@@ -360,17 +370,20 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
 
   String? _validatePincode(String? v) {
     if (v == null || v.trim().isEmpty) return 'Pincode is required';
-    if (!RegExp(r'^\d{4,10}$').hasMatch(v.trim()))
-      return 'Enter a valid pincode';
+    if (!RegExp(r'^[1-9][0-9]{5}$').hasMatch(v.trim())) {
+      return 'Enter a valid 6-digit Indian pincode';
+    }
     return null;
   }
 
   String? _validatePan(String? v) {
-    if (v == null || v.trim().isEmpty) return 'PAN number is required';
-    if (!RegExp(
-      r'^[A-Z]{5}[0-9]{4}[A-Z]{1}$',
-    ).hasMatch(v.trim().toUpperCase())) {
-      return 'Enter valid PAN (e.g. ABCDE1234F)';
+    final pan = v?.trim().toUpperCase() ?? '';
+    if (pan.isEmpty) return 'PAN number is required';
+    // PAN: 3 alphabetic-series characters, a valid holder-type character,
+    // holder-name initial, 4 digits, and an alphabetic check character.
+    if (!RegExp(r'^[A-Z]{3}[PCHABGJLFTE][A-Z][0-9]{4}[A-Z]$')
+        .hasMatch(pan)) {
+      return 'Enter a valid PAN (e.g. ABCPD1234F)';
     }
     return null;
   }
@@ -385,7 +398,15 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
 
   // ── API submit ───────────────────────────────────────────────
   Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final invalidStep = _firstInvalidStep();
+    if (invalidStep != null) {
+      setState(() => _step = invalidStep);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _formKey.currentState?.validate();
+      });
+      _showError('Please correct all required fields before submitting.');
+      return;
+    }
     setState(() => _loading = true);
     try {
       final res = await http.post(
@@ -444,6 +465,38 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  int? _firstInvalidStep() {
+    if (_role.trim().isEmpty ||
+        (_requiresDepartmentSelection(_role) &&
+            _validateSelectedDepartment(_role, _department) != null) ||
+        !_kWorkModes.contains(_workMode)) {
+      return 0;
+    }
+    if (_validateName(_firstName.text, 'First name') != null ||
+        _validateName(_lastName.text, 'Last name') != null ||
+        _validateEmail(_email.text) != null ||
+        _validatePhone(_phone.text) != null ||
+        _validateDob(_dob.text) != null) {
+      return 1;
+    }
+    if (_validatePassword(_password.text) != null ||
+        _validateConfirm(_confirm.text) != null) {
+      return 2;
+    }
+    if (_req(_doorNo.text, 'Door no.') != null ||
+        _req(_street.text, 'Street') != null ||
+        _validateState(_state.text) != null ||
+        _validateCityForState(_state.text, _city.text) != null ||
+        _validatePincode(_pincode.text) != null) {
+      return 3;
+    }
+    if (_validatePan(_pan.text) != null ||
+        _validateAadhar(_aadhar.text) != null) {
+      return 4;
+    }
+    return null;
   }
 
   void _showSuccess(String userId) {
@@ -593,7 +646,7 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
           validateEmail: _validateEmail,
           validatePhone: _validatePhone,
           validateDob: _validateDob,
-          req: _req,
+          validateName: _validateName,
         );
       case 2:
         return _StepPassword(
@@ -1772,7 +1825,7 @@ class _StepPersonal extends StatefulWidget {
   final String countryCode, gender;
   final ValueChanged<String> onCountryChanged, onGenderChanged;
   final String? Function(String?) validateEmail, validatePhone, validateDob;
-  final String? Function(String?, String) req;
+  final String? Function(String?, String) validateName;
 
   const _StepPersonal({
     super.key,
@@ -1788,7 +1841,7 @@ class _StepPersonal extends StatefulWidget {
     required this.validateEmail,
     required this.validatePhone,
     required this.validateDob,
-    required this.req,
+    required this.validateName,
   });
 
   @override
@@ -1798,6 +1851,7 @@ class _StepPersonal extends StatefulWidget {
 class _StepPersonalState extends State<_StepPersonal> {
   Future<void> _pickDate() async {
     final now = DateTime.now();
+    final latestDob = DateTime(now.year - 18, now.month, now.day);
     DateTime initial = now.subtract(const Duration(days: 365 * 25));
     if (widget.dob.text.trim().isNotEmpty) {
       try {
@@ -1807,8 +1861,9 @@ class _StepPersonalState extends State<_StepPersonal> {
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
       firstDate: DateTime(1950),
-      lastDate: now.subtract(const Duration(days: 365 * 18)),
+      lastDate: latestDob,
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.dark(
@@ -1852,7 +1907,7 @@ class _StepPersonalState extends State<_StepPersonal> {
                       color: CeoColors.muted,
                       size: 18,
                     ),
-                    validator: (v) => widget.req(v, 'First name'),
+                    validator: (v) => widget.validateName(v, 'First name'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1867,7 +1922,7 @@ class _StepPersonalState extends State<_StepPersonal> {
                       color: CeoColors.muted,
                       size: 18,
                     ),
-                    validator: (v) => widget.req(v, 'Last name'),
+                    validator: (v) => widget.validateName(v, 'Last name'),
                   ),
                 ),
               ],
