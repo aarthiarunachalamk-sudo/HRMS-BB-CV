@@ -47,6 +47,30 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
     {'code': '+971', 'name': 'UAE'},
   ];
 
+  Future<void> _pickDob() async {
+    final now = DateTime.now();
+    final latestDob = DateTime(now.year - 18, now.month, now.day);
+    var initialDate = DateTime(now.year - 25, now.month, now.day);
+    final currentValue = DateTime.tryParse(_dobController.text.trim());
+    if (currentValue != null &&
+        !currentValue.isBefore(DateTime(1950)) &&
+        !currentValue.isAfter(latestDob)) {
+      initialDate = currentValue;
+    }
+
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
+      firstDate: DateTime(1950),
+      lastDate: latestDob,
+    );
+    if (selected == null) return;
+
+    _dobController.text =
+        '${selected.year}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
+  }
+
   @override
   void dispose() {
     _firstNameController.dispose();
@@ -134,7 +158,10 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Server error: $e'), backgroundColor: Colors.redAccent),
+        SnackBar(
+          content: Text('Server error: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
       );
     } finally {
       setState(() => _isLoading = false);
@@ -157,7 +184,10 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
             children: [
               // Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
                 child: Row(
                   children: [
                     GestureDetector(
@@ -170,11 +200,22 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: cardBorder),
                         ),
-                        child: Icon(Icons.arrow_back_ios_new_rounded, color: textPrimary, size: 18),
+                        child: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: textPrimary,
+                          size: 18,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Text('Create Admin', style: TextStyle(color: textPrimary, fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text(
+                      'Create Admin',
+                      style: TextStyle(
+                        color: textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -201,12 +242,22 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                               value: _selectedRole,
                               isExpanded: true,
                               dropdownColor: cardBg,
-                              style: TextStyle(color: textPrimary, fontSize: 14),
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontSize: 14,
+                              ),
                               items: const [
-                                DropdownMenuItem(value: 'ceo', child: Text('CEO')),
-                                DropdownMenuItem(value: 'md', child: Text('MD')),
+                                DropdownMenuItem(
+                                  value: 'ceo',
+                                  child: Text('CEO'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'md',
+                                  child: Text('MD'),
+                                ),
                               ],
-                              onChanged: (val) => setState(() => _selectedRole = val!),
+                              onChanged: (val) =>
+                                  setState(() => _selectedRole = val!),
                             ),
                           ),
                         ),
@@ -219,86 +270,190 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                           cardBorder: cardBorder,
                           children: [
                             _buildRow([
-                              _buildField('First Name', _firstNameController, isDark, textPrimary, textSecondary, cardBorder),
-                              _buildField('Last Name', _lastNameController, isDark, textPrimary, textSecondary, cardBorder),
+                              _buildField(
+                                'First Name',
+                                _firstNameController,
+                                isDark,
+                                textPrimary,
+                                textSecondary,
+                                cardBorder,
+                              ),
+                              _buildField(
+                                'Last Name',
+                                _lastNameController,
+                                isDark,
+                                textPrimary,
+                                textSecondary,
+                                cardBorder,
+                              ),
                             ]),
                             const SizedBox(height: 14),
-                            _buildField('Email', _emailController, isDark, textPrimary, textSecondary, cardBorder,
-                                keyboardType: TextInputType.emailAddress),
+                            _buildField(
+                              'Email',
+                              _emailController,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                              cardBorder,
+                              keyboardType: TextInputType.emailAddress,
+                            ),
                             const SizedBox(height: 14),
 
                             // Phone with country code
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: cardBorder),
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: AppDropdownButton<String>(
-                                      value: _selectedCountryCode,
-                                      dropdownColor: isDark ? const Color(0xFF0A121E) : Colors.white,
-                                      style: TextStyle(color: textPrimary, fontSize: 13),
-                                      items: _countryCodes.map((c) {
-                                        return DropdownMenuItem(
-                                          value: c['code'],
-                                          child: Text('${c['code']} ${c['name']}'),
-                                        );
-                                      }).toList(),
-                                      onChanged: (val) => setState(() => _selectedCountryCode = val!),
-                                    ),
+                                SizedBox(
+                                  width: 105,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Country Code',
+                                        style: TextStyle(
+                                          color: textSecondary,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Container(
+                                        height: 48,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isDark
+                                              ? const Color(0xFF0A121E)
+                                              : const Color(0xFFF1F5F9),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          border: Border.all(color: cardBorder),
+                                        ),
+                                        child: DropdownButtonHideUnderline(
+                                          child: AppDropdownButton<String>(
+                                            value: _selectedCountryCode,
+                                            isExpanded: true,
+                                            dropdownColor: isDark
+                                                ? const Color(0xFF0A121E)
+                                                : Colors.white,
+                                            style: TextStyle(
+                                              color: textPrimary,
+                                              fontSize: 13,
+                                            ),
+                                            items: _countryCodes.map((c) {
+                                              return DropdownMenuItem(
+                                                value: c['code'],
+                                                child: Text(
+                                                  '${c['code']} ${c['name']}',
+                                                ),
+                                              );
+                                            }).toList(),
+                                            onChanged: (val) => setState(
+                                              () => _selectedCountryCode = val!,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: _buildField('Phone', _phoneController, isDark, textPrimary, textSecondary, cardBorder,
-                                      keyboardType: TextInputType.phone),
+                                  child: _buildField(
+                                    'Phone',
+                                    _phoneController,
+                                    isDark,
+                                    textPrimary,
+                                    textSecondary,
+                                    cardBorder,
+                                    keyboardType: TextInputType.phone,
+                                  ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 14),
 
                             // Gender
-                            Text('Gender', style: TextStyle(color: textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                            Text(
+                              'Gender',
+                              style: TextStyle(
+                                color: textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                             const SizedBox(height: 8),
                             Row(
-                              children: ['male', 'female', 'other'].map((g) {
-                                return Expanded(
-                                  child: GestureDetector(
-                                    onTap: () => setState(() => _selectedGender = g),
-                                    child: Container(
-                                      margin: const EdgeInsets.only(right: 8),
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
-                                      decoration: BoxDecoration(
-                                        color: _selectedGender == g ? ThemeConfig.blueAccent : cardBg,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: _selectedGender == g ? ThemeConfig.blueAccent : cardBorder,
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          g[0].toUpperCase() + g.substring(1),
-                                          style: TextStyle(
-                                            color: _selectedGender == g ? Colors.white : textPrimary,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
+                              children: ['male', 'female', 'other']
+                                  .asMap()
+                                  .entries
+                                  .map((entry) {
+                                    final index = entry.key;
+                                    final g = entry.value;
+                                    return Expanded(
+                                      child: GestureDetector(
+                                        onTap: () =>
+                                            setState(() => _selectedGender = g),
+                                        child: Container(
+                                          margin: EdgeInsets.only(
+                                            right: index < 2 ? 8 : 0,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 10,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _selectedGender == g
+                                                ? ThemeConfig.blueAccent
+                                                : cardBg,
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                            border: Border.all(
+                                              color: _selectedGender == g
+                                                  ? ThemeConfig.blueAccent
+                                                  : cardBorder,
+                                            ),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              g[0].toUpperCase() +
+                                                  g.substring(1),
+                                              style: TextStyle(
+                                                color: _selectedGender == g
+                                                    ? Colors.white
+                                                    : textPrimary,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
+                                    );
+                                  })
+                                  .toList(),
                             ),
                             const SizedBox(height: 14),
 
                             // DOB
-                            _buildField('Date of Birth (YYYY-MM-DD)', _dobController, isDark, textPrimary, textSecondary, cardBorder,
-                                hint: '2000-01-25'),
+                            _buildField(
+                              'Date of Birth',
+                              _dobController,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                              cardBorder,
+                              hint: 'Select from calendar',
+                              readOnly: true,
+                              onTap: _pickDob,
+                              suffixIcon: const Icon(
+                                Icons.calendar_month_rounded,
+                                size: 18,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -309,17 +464,36 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                           cardBg: cardBg,
                           cardBorder: cardBorder,
                           children: [
-                            _buildPasswordField('Password', _passwordController, isDark, textPrimary, textSecondary, cardBorder,
-                                isObscure: _obscurePassword,
-                                onToggle: () => setState(() => _obscurePassword = !_obscurePassword)),
+                            _buildPasswordField(
+                              'Password',
+                              _passwordController,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                              cardBorder,
+                              isObscure: _obscurePassword,
+                              onToggle: () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
+                            ),
                             const SizedBox(height: 14),
-                            _buildPasswordField('Confirm Password', _confirmPasswordController, isDark, textPrimary, textSecondary, cardBorder,
-                                isObscure: _obscureConfirm,
-                                onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                                validator: (val) {
-                                  if (val != _passwordController.text) return 'Passwords do not match';
-                                  return null;
-                                }),
+                            _buildPasswordField(
+                              'Confirm Password',
+                              _confirmPasswordController,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                              cardBorder,
+                              isObscure: _obscureConfirm,
+                              onToggle: () => setState(
+                                () => _obscureConfirm = !_obscureConfirm,
+                              ),
+                              validator: (val) {
+                                if (val != _passwordController.text)
+                                  return 'Passwords do not match';
+                                return null;
+                              },
+                            ),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -331,16 +505,51 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                           cardBorder: cardBorder,
                           children: [
                             _buildRow([
-                              _buildField('Door No', _doorNoController, isDark, textPrimary, textSecondary, cardBorder),
-                              _buildField('Pincode', _pincodeController, isDark, textPrimary, textSecondary, cardBorder,
-                                  keyboardType: TextInputType.number),
+                              _buildField(
+                                'Door No',
+                                _doorNoController,
+                                isDark,
+                                textPrimary,
+                                textSecondary,
+                                cardBorder,
+                              ),
+                              _buildField(
+                                'Pincode',
+                                _pincodeController,
+                                isDark,
+                                textPrimary,
+                                textSecondary,
+                                cardBorder,
+                                keyboardType: TextInputType.number,
+                              ),
                             ]),
                             const SizedBox(height: 14),
-                            _buildField('Street Name', _streetController, isDark, textPrimary, textSecondary, cardBorder),
+                            _buildField(
+                              'Street Name',
+                              _streetController,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                              cardBorder,
+                            ),
                             const SizedBox(height: 14),
                             _buildRow([
-                              _buildField('City', _cityController, isDark, textPrimary, textSecondary, cardBorder),
-                              _buildField('State', _stateController, isDark, textPrimary, textSecondary, cardBorder),
+                              _buildField(
+                                'City',
+                                _cityController,
+                                isDark,
+                                textPrimary,
+                                textSecondary,
+                                cardBorder,
+                              ),
+                              _buildField(
+                                'State',
+                                _stateController,
+                                isDark,
+                                textPrimary,
+                                textSecondary,
+                                cardBorder,
+                              ),
                             ]),
                           ],
                         ),
@@ -352,12 +561,33 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                           cardBg: cardBg,
                           cardBorder: cardBorder,
                           children: [
-                            _buildField('Occupation', _occupationController, isDark, textPrimary, textSecondary, cardBorder),
+                            _buildField(
+                              'Occupation',
+                              _occupationController,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                              cardBorder,
+                            ),
                             const SizedBox(height: 14),
-                            _buildField('PAN Number', _panController, isDark, textPrimary, textSecondary, cardBorder),
+                            _buildField(
+                              'PAN Number',
+                              _panController,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                              cardBorder,
+                            ),
                             const SizedBox(height: 14),
-                            _buildField('Aadhar Number', _aadharController, isDark, textPrimary, textSecondary, cardBorder,
-                                keyboardType: TextInputType.number),
+                            _buildField(
+                              'Aadhar Number',
+                              _aadharController,
+                              isDark,
+                              textPrimary,
+                              textSecondary,
+                              cardBorder,
+                              keyboardType: TextInputType.number,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 30),
@@ -381,8 +611,17 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                             ),
                             child: Center(
                               child: _isLoading
-                                  ? const CircularProgressIndicator(color: Colors.white)
-                                  : const Text('Create Admin', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                  ? const CircularProgressIndicator(
+                                      color: Colors.white,
+                                    )
+                                  : const Text(
+                                      'Create Admin',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
                             ),
                           ),
                         ),
@@ -402,11 +641,22 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
   Widget _buildSectionTitle(String title, Color textPrimary) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Text(title, style: TextStyle(color: textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+      child: Text(
+        title,
+        style: TextStyle(
+          color: textPrimary,
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 
-  Widget _buildCard({required Color cardBg, required Color cardBorder, required List<Widget> children}) {
+  Widget _buildCard({
+    required Color cardBg,
+    required Color cardBorder,
+    required List<Widget> children,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -414,74 +664,174 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: cardBorder, width: 1.2),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
     );
   }
 
   Widget _buildRow(List<Widget> children) {
     return Row(
-      children: children.map((w) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 8), child: w))).toList(),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children.asMap().entries.map((entry) {
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              right: entry.key < children.length - 1 ? 8 : 0,
+            ),
+            child: entry.value,
+          ),
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildField(String label, TextEditingController controller, bool isDark,
-      Color textPrimary, Color textSecondary, Color cardBorder,
-      {TextInputType keyboardType = TextInputType.text, String? hint}) {
+  Widget _buildField(
+    String label,
+    TextEditingController controller,
+    bool isDark,
+    Color textPrimary,
+    Color textSecondary,
+    Color cardBorder, {
+    TextInputType keyboardType = TextInputType.text,
+    String? hint,
+    bool readOnly = false,
+    VoidCallback? onTap,
+    Widget? suffixIcon,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: TextStyle(
+            color: textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
           keyboardType: keyboardType,
+          readOnly: readOnly,
+          onTap: onTap,
           style: TextStyle(color: textPrimary, fontSize: 13),
-          validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
+          validator: (val) =>
+              val == null || val.trim().isEmpty ? 'Required' : null,
           decoration: InputDecoration(
             hintText: hint ?? label,
-            hintStyle: TextStyle(color: textSecondary.withAlpha(80), fontSize: 12),
+            hintStyle: TextStyle(
+              color: textSecondary.withAlpha(80),
+              fontSize: 12,
+            ),
             filled: true,
-            fillColor: isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00C6FF), width: 1.5)),
-            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.redAccent)),
+            fillColor: isDark
+                ? const Color(0xFF0A121E)
+                : const Color(0xFFF1F5F9),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            suffixIcon: suffixIcon,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: cardBorder),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: cardBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: Color(0xFF00C6FF),
+                width: 1.5,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Colors.redAccent),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildPasswordField(String label, TextEditingController controller, bool isDark,
-      Color textPrimary, Color textSecondary, Color cardBorder,
-      {required bool isObscure, required VoidCallback onToggle, String? Function(String?)? validator}) {
+  Widget _buildPasswordField(
+    String label,
+    TextEditingController controller,
+    bool isDark,
+    Color textPrimary,
+    Color textSecondary,
+    Color cardBorder, {
+    required bool isObscure,
+    required VoidCallback onToggle,
+    String? Function(String?)? validator,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: TextStyle(
+            color: textSecondary,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
           obscureText: isObscure,
           style: TextStyle(color: textPrimary, fontSize: 13),
-          validator: validator ?? (val) {
-            if (val == null || val.isEmpty) return 'Required';
-            if (val.length < 6) return 'Min 6 characters';
-            return null;
-          },
+          validator:
+              validator ??
+              (val) {
+                if (val == null || val.isEmpty) return 'Required';
+                if (val.length < 6) return 'Min 6 characters';
+                return null;
+              },
           decoration: InputDecoration(
             filled: true,
-            fillColor: isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            fillColor: isDark
+                ? const Color(0xFF0A121E)
+                : const Color(0xFFF1F5F9),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
             suffixIcon: IconButton(
-              icon: Icon(isObscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: textSecondary, size: 18),
+              icon: Icon(
+                isObscure
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: textSecondary,
+                size: 18,
+              ),
               onPressed: onToggle,
             ),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF00C6FF), width: 1.5)),
-            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.redAccent)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: cardBorder),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: cardBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: Color(0xFF00C6FF),
+                width: 1.5,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Colors.redAccent),
+            ),
           ),
         ),
       ],
