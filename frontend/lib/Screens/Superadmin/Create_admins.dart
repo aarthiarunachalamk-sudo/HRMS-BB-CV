@@ -1,10 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/constellation_background.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
+
+const Map<String, List<String>> _citiesByState = {
+  'Andhra Pradesh': ['Visakhapatnam', 'Vijayawada', 'Guntur', 'Tirupati'],
+  'Karnataka': ['Bengaluru', 'Mysuru', 'Mangaluru', 'Hubballi'],
+  'Kerala': ['Kochi', 'Thiruvananthapuram', 'Kozhikode', 'Thrissur'],
+  'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Nashik'],
+  'Tamil Nadu': [
+    'Chennai',
+    'Coimbatore',
+    'Erode',
+    'Madurai',
+    'Salem',
+    'Tiruchirappalli',
+    'Tirunelveli',
+    'Vellore',
+  ],
+  'Telangana': ['Hyderabad', 'Warangal', 'Karimnagar', 'Nizamabad'],
+  'Uttar Pradesh': ['Lucknow', 'Noida', 'Kanpur', 'Varanasi', 'Agra'],
+  'West Bengal': ['Kolkata', 'Howrah', 'Durgapur', 'Siliguri'],
+};
+
+class _UpperCaseFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    return newValue.copyWith(text: newValue.text.toUpperCase());
+  }
+}
 
 class CreateAdminsPage extends StatefulWidget {
   const CreateAdminsPage({super.key});
@@ -69,6 +100,75 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
 
     _dobController.text =
         '${selected.year}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}';
+  }
+
+  String? _validatePan(String? value) {
+    final pan = value?.trim().toUpperCase() ?? '';
+    if (pan.isEmpty) return 'PAN number is required';
+    if (!RegExp(r'^[A-Z]{3}[PCHABGJLFTE][A-Z][0-9]{4}[A-Z]$').hasMatch(pan)) {
+      return 'Use PAN format ABCPD1234F';
+    }
+    return null;
+  }
+
+  String? _validateAadhaar(String? value) {
+    final aadhaar = value?.replaceAll(RegExp(r'\s'), '') ?? '';
+    if (aadhaar.isEmpty) return 'Aadhaar number is required';
+    if (!RegExp(r'^[2-9][0-9]{11}$').hasMatch(aadhaar)) {
+      return 'Aadhaar must be 12 digits and cannot start with 0 or 1';
+    }
+    if (!_hasValidVerhoeffChecksum(aadhaar)) {
+      return 'Enter a valid Aadhaar number';
+    }
+    return null;
+  }
+
+  bool _hasValidVerhoeffChecksum(String value) {
+    const multiplication = [
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+      [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+      [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+      [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+      [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+      [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+      [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+      [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+      [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+    ];
+    const permutation = [
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+      [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+      [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+      [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+      [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+      [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+      [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+    ];
+
+    var checksum = 0;
+    final digits = value.split('').reversed.map(int.parse).toList();
+    for (var index = 0; index < digits.length; index++) {
+      checksum =
+          multiplication[checksum][permutation[index % 8][digits[index]]];
+    }
+    return checksum == 0;
+  }
+
+  String? _validateState(String? value) {
+    if (value == null || value.isEmpty) return 'Select a state';
+    if (!_citiesByState.containsKey(value)) return 'Select a valid state';
+    return null;
+  }
+
+  String? _validateCity(String? value) {
+    if (_stateController.text.isEmpty) return 'Select state first';
+    if (value == null || value.isEmpty) return 'Select a city';
+    if (!(_citiesByState[_stateController.text]?.contains(value) ?? false)) {
+      return 'Select a city in ${_stateController.text}';
+    }
+    return null;
   }
 
   @override
@@ -534,21 +634,38 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                             ),
                             const SizedBox(height: 14),
                             _buildRow([
-                              _buildField(
-                                'City',
-                                _cityController,
-                                isDark,
-                                textPrimary,
-                                textSecondary,
-                                cardBorder,
+                              _buildDropdownField(
+                                label: 'State',
+                                value: _stateController.text,
+                                options: _citiesByState.keys.toList(),
+                                hint: 'Select state',
+                                isDark: isDark,
+                                textPrimary: textPrimary,
+                                textSecondary: textSecondary,
+                                cardBorder: cardBorder,
+                                validator: _validateState,
+                                onChanged: (value) => setState(() {
+                                  _stateController.text = value;
+                                  _cityController.clear();
+                                }),
                               ),
-                              _buildField(
-                                'State',
-                                _stateController,
-                                isDark,
-                                textPrimary,
-                                textSecondary,
-                                cardBorder,
+                              _buildDropdownField(
+                                label: 'City',
+                                value: _cityController.text,
+                                options:
+                                    _citiesByState[_stateController.text] ??
+                                    const [],
+                                hint: _stateController.text.isEmpty
+                                    ? 'Select state first'
+                                    : 'Select city',
+                                isDark: isDark,
+                                textPrimary: textPrimary,
+                                textSecondary: textSecondary,
+                                cardBorder: cardBorder,
+                                validator: _validateCity,
+                                onChanged: (value) => setState(
+                                  () => _cityController.text = value,
+                                ),
                               ),
                             ]),
                           ],
@@ -568,6 +685,16 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                               textPrimary,
                               textSecondary,
                               cardBorder,
+                              hint: 'ABCPD1234F',
+                              textCapitalization: TextCapitalization.characters,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r'[A-Za-z0-9]'),
+                                ),
+                                LengthLimitingTextInputFormatter(10),
+                                _UpperCaseFormatter(),
+                              ],
+                              validator: _validatePan,
                             ),
                             const SizedBox(height: 14),
                             _buildField(
@@ -580,13 +707,19 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                             ),
                             const SizedBox(height: 14),
                             _buildField(
-                              'Aadhar Number',
+                              'Aadhaar Number',
                               _aadharController,
                               isDark,
                               textPrimary,
                               textSecondary,
                               cardBorder,
                               keyboardType: TextInputType.number,
+                              hint: '12-digit Aadhaar number',
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(12),
+                              ],
+                              validator: _validateAadhaar,
                             ),
                           ],
                         ),
@@ -699,6 +832,9 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
     bool readOnly = false,
     VoidCallback? onTap,
     Widget? suffixIcon,
+    List<TextInputFormatter>? inputFormatters,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -717,9 +853,12 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
           keyboardType: keyboardType,
           readOnly: readOnly,
           onTap: onTap,
+          inputFormatters: inputFormatters,
+          textCapitalization: textCapitalization,
           style: TextStyle(color: textPrimary, fontSize: 13),
-          validator: (val) =>
-              val == null || val.trim().isEmpty ? 'Required' : null,
+          validator:
+              validator ??
+              (val) => val == null || val.trim().isEmpty ? 'Required' : null,
           decoration: InputDecoration(
             hintText: hint ?? label,
             hintStyle: TextStyle(
@@ -757,6 +896,88 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDropdownField({
+    required String label,
+    required String value,
+    required List<String> options,
+    required String hint,
+    required bool isDark,
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color cardBorder,
+    required ValueChanged<String> onChanged,
+    required String? Function(String?) validator,
+  }) {
+    return FormField<String>(
+      initialValue: value,
+      validator: (_) => validator(value),
+      builder: (field) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: field.hasError ? Colors.redAccent : cardBorder,
+                width: field.hasError ? 1.2 : 1,
+              ),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: AppDropdownButton<String>(
+                value: options.contains(value) ? value : null,
+                hint: Text(
+                  hint,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: textSecondary.withAlpha(100),
+                    fontSize: 12,
+                  ),
+                ),
+                isExpanded: true,
+                dropdownColor: isDark ? const Color(0xFF0A121E) : Colors.white,
+                style: TextStyle(color: textPrimary, fontSize: 13),
+                items: options
+                    .map(
+                      (option) => DropdownMenuItem(
+                        value: option,
+                        child: Text(option, overflow: TextOverflow.ellipsis),
+                      ),
+                    )
+                    .toList(),
+                onChanged: options.isEmpty
+                    ? null
+                    : (selected) {
+                        if (selected == null) return;
+                        field.didChange(selected);
+                        onChanged(selected);
+                      },
+              ),
+            ),
+          ),
+          if (field.hasError) ...[
+            const SizedBox(height: 5),
+            Text(
+              field.errorText!,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 11),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
