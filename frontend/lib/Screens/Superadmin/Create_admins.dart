@@ -80,6 +80,23 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
     {'code': '+971', 'name': 'UAE'},
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_warmServer());
+  }
+
+  Future<void> _warmServer() async {
+    final apiUri = ApiConfig.uri('/create-user/');
+    try {
+      await http
+          .get(apiUri.replace(path: '/'))
+          .timeout(const Duration(seconds: 15));
+    } catch (_) {
+      // Best-effort warm-up; form entry and submission must remain available.
+    }
+  }
+
   Future<void> _pickDob() async {
     final now = DateTime.now();
     final latestDob = DateTime(now.year - 18, now.month, now.day);
@@ -163,7 +180,6 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
     setState(() => _isLoading = true);
 
     try {
-      await _waitForServer();
       final response = await http
           .post(
             ApiConfig.uri('/create-user/'),
@@ -261,35 +277,6 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Future<void> _waitForServer() async {
-    final apiUri = ApiConfig.uri('/create-user/');
-    final healthUri = apiUri.replace(path: '/');
-    Object? lastError;
-
-    // Render free services can need close to a minute to wake from sleep. A
-    // harmless GET avoids retrying the create request and creating duplicates.
-    for (var attempt = 0; attempt < 2; attempt++) {
-      try {
-        final response = await http
-            .get(healthUri)
-            .timeout(const Duration(seconds: 45));
-        if (response.statusCode >= 200 && response.statusCode < 500) return;
-        lastError = http.ClientException(
-          'Server returned ${response.statusCode}',
-          healthUri,
-        );
-      } on TimeoutException catch (error) {
-        lastError = error;
-      } on http.ClientException catch (error) {
-        lastError = error;
-      }
-      if (attempt == 0) await Future<void>.delayed(const Duration(seconds: 2));
-    }
-
-    if (lastError is TimeoutException) throw lastError;
-    throw lastError ?? http.ClientException('Server is unavailable', healthUri);
   }
 
   @override
