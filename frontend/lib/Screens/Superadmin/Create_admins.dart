@@ -205,7 +205,7 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
               'role': _selectedRole,
             }),
           )
-          .timeout(const Duration(seconds: 45));
+          .timeout(const Duration(seconds: 20));
 
       final decoded = jsonDecode(response.body);
       if (decoded is! Map) {
@@ -251,7 +251,7 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'The HRMS server is taking too long to respond. Please try again in a minute.',
+            'The HRMS backend is currently offline. Please restart the Render service and try again.',
           ),
           backgroundColor: Colors.redAccent,
         ),
