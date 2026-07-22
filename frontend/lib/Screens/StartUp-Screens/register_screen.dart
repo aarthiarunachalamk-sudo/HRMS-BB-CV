@@ -44,7 +44,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _maritalStatus = 'single';
   final _maritalOtherCtrl = TextEditingController();
   String _bloodGroup = 'A+';
-  final _nationalityCtrl = TextEditingController();
+  final _nationalityCtrl = TextEditingController(text: 'Indian');
 
   // Page 2 - Emergency + Identity
   final _emergencyNameCtrl = TextEditingController();
@@ -520,6 +520,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _submitForm() async {
+    final nationality = _nationalityCtrl.text.trim();
+    if (nationality.isEmpty) {
+      _nationalityCtrl.text = 'Indian';
+    }
     setState(() => _isLoading = true);
     try {
       final uri = ApiConfig.uri('/register-employee/');
@@ -655,9 +659,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         );
       } else {
+        final errorMessage = _registrationErrorMessage(data['errors']);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${data['errors'] ?? 'Failed'}'),
+            content: Text(errorMessage),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -672,8 +677,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _registrationErrorMessage(dynamic errors) {
+    if (errors is Map && errors.isNotEmpty) {
+      final entry = errors.entries.first;
+      final label = entry.key
+          .toString()
+          .replaceAll('_', ' ')
+          .split(' ')
+          .where((word) => word.isNotEmpty)
+          .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+          .join(' ');
+      final value = entry.value;
+      final message = value is List && value.isNotEmpty
+          ? value.first.toString()
+          : value.toString();
+      return '$label: $message';
+    }
+    return errors?.toString() ?? 'Registration could not be submitted.';
   }
 
   @override

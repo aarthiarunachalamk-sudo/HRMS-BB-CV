@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.db.models import Count, Q, Sum
 from django.db import IntegrityError
 from django.utils import timezone
+from django.utils.html import escape
 from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
 from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
@@ -13,6 +14,7 @@ from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformance
 from .employee_views import _leave_balance_payload
 from .payroll import generate_payroll_for_month, payslip_payload
 import os
+from .mailer import email_is_configured, send_email as send_transactional_email
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Attachment, Disposition, FileContent, FileName, FileType, Mail
 from .models import EmployeeAccount
@@ -2026,20 +2028,16 @@ def _send_meeting_invite(meeting):
       <p>The calendar invite is attached to this email.</p>
     </div>
     """
-    message = Mail(
-        from_email=os.getenv('EMAIL_FROM', 'noreply@bitbyte.com'),
-        to_emails=recipients,
-        subject=f'Meeting Scheduled: {meeting.title}',
-        html_content=html,
+    send_transactional_email(
+        recipients,
+        f'Meeting Scheduled: {meeting.title}',
+        html,
+        attachments=[{
+            'filename': 'meeting.ics',
+            'content': _meeting_ics(meeting).encode('utf-8'),
+            'content_type': 'text/calendar',
+        }],
     )
-    encoded = base64.b64encode(_meeting_ics(meeting).encode('utf-8')).decode('ascii')
-    message.attachment = Attachment(
-        FileContent(encoded),
-        FileName('meeting.ics'),
-        FileType('text/calendar'),
-        Disposition('attachment'),
-    )
-    SendGridAPIClient(os.getenv('SENDGRID_API_KEY')).send(message)
     return len(recipients)
 
 
@@ -2464,6 +2462,34 @@ def _empty_ceo_dashboard_payload(user_id='', message='CEO dashboard data unavail
         'revenue_months': [],
         'monthly_revenue': [],
     }
+
+
+def _document_flag_email_html(registration, document_title, details):
+    employee_name = (
+        f'{registration.first_name} {registration.last_name}'.strip()
+        or registration.personal_email
+    )
+    issue_type = escape(str(details.get('issue_type') or 'Document correction required'))
+    remark = escape(str(details.get('remark') or 'Please upload a clear and correct document.'))
+    suggested_action = escape(str(details.get('suggested_action') or 'Re-upload the corrected document in the HRMS app.'))
+    priority = escape(str(details.get('priority') or 'Normal'))
+    return f'''
+    <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:30px;border:1px solid #e5e7eb;border-radius:10px;">
+      <h2 style="margin-top:0;color:#dc2626;">Document Correction Required</h2>
+      <p>Dear <b>{escape(employee_name)}</b>,</p>
+      <p>HR has flagged your <b>{escape(document_title)}</b> during document verification.</p>
+      <div style="background:#fff7ed;padding:18px;border-left:4px solid #f97316;border-radius:8px;margin:20px 0;">
+        <p><b>Issue:</b> {issue_type}</p>
+        <p><b>HR Remark:</b> {remark}</p>
+        <p><b>Suggested Action:</b> {suggested_action}</p>
+        <p><b>Priority:</b> {priority}</p>
+      </div>
+      <p>Please sign in to the HRMS application and re-upload the corrected document.</p>
+      <br/>
+      <p>Regards,</p>
+      <p><b>Bitbyte HR Team</b></p>
+    </div>
+    '''
 
 
 @api_view(['GET'])
@@ -6036,6 +6062,7 @@ def employee_document_action_view(request, pk):
 
     title = DOCUMENT_FIELD_LABELS[document_key]
     recipient = _employee_recipient_id(emp)
+    email_sent = None
     if action == 'flag':
         _create_notification(
             user_id=recipient,
@@ -6045,6 +6072,11 @@ def employee_document_action_view(request, pk):
             module='documents',
             reference_id=f'{emp.id}:{document_key}',
         )
+        email_sent = send_email(
+            emp.personal_email,
+            f'Action Required: {title} Flagged by HR',
+            _document_flag_email_html(emp, title, details),
+        ) if emp.personal_email else False
     elif action == 'reject':
         _create_notification(
             user_id=recipient,
@@ -6065,9 +6097,17 @@ def employee_document_action_view(request, pk):
         )
 
     serializer = EmployeeRegistrationSerializer(emp)
+    response_message = f'{title} {status_value}.'
+    if action == 'flag':
+        response_message += (
+            ' Correction email sent to the employee.'
+            if email_sent
+            else ' Document was flagged, but the correction email could not be sent.'
+        )
     return Response({
         'success': True,
-        'message': f'{title} {status_value}.',
+        'message': response_message,
+        'email_sent': email_sent,
         'employee': serializer.data,
     })
 
@@ -6075,17 +6115,10 @@ def employee_document_action_view(request, pk):
 
 def send_email(to_email, subject, html_content):
     try:
-        sg = SendGridAPIClient(os.getenv('SENDGRID_API_KEY'))
-        message = Mail(
-            from_email=os.getenv('EMAIL_FROM', 'noreply@bitbyte.com'),
-            to_emails=to_email,
-            subject=subject,
-            html_content=html_content,
-        )
-        sg.send(message)
+        send_transactional_email(to_email, subject, html_content)
         return True
     except Exception as e:
-        print(f'SendGrid error: {e}')
+        print(f'Email delivery error: {e}')
         return False
 
 

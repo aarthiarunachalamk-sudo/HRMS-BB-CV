@@ -148,6 +148,13 @@ class EmployeeAccountSerializer(serializers.ModelSerializer):
 import cloudinary
 
 class EmployeeRegistrationSerializer(serializers.ModelSerializer):
+    # Registration is currently India-specific (Aadhaar/PAN). Accept requests
+    # from older app builds that omitted nationality and store a useful value.
+    nationality = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='Indian',
+    )
     doc_passport_photo = serializers.SerializerMethodField()
     doc_aadhar = serializers.SerializerMethodField()
     doc_pan = serializers.SerializerMethodField()
@@ -192,6 +199,9 @@ class EmployeeRegistrationSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         data['mobile'] = mask_phone_number(data.get('mobile'))
         return data
+
+    def validate_nationality(self, value):
+        return str(value or '').strip() or 'Indian'
 
     class Meta:
         model = EmployeeRegistration
