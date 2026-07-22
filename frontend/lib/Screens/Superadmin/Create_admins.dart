@@ -1,8 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/constellation_background.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
@@ -161,6 +163,7 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
     setState(() => _isLoading = true);
 
     try {
+      await _waitForServer();
       final response = await http.post(
         ApiConfig.uri('/create-user/'),
         headers: {'Content-Type': 'application/json'},
@@ -184,9 +187,14 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
           'aadhar': _aadharController.text.trim(),
           'role': _selectedRole,
         }),
-      );
+      ).timeout(const Duration(seconds: 45));
 
-      final data = jsonDecode(response.body);
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) {
+        throw const FormatException('Invalid server response');
+      }
+      final data = Map<String, dynamic>.from(decoded);
+      if (!mounted) return;
 
       if (data['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -220,16 +228,66 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
           ),
         );
       }
-    } catch (e) {
+    } on TimeoutException {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Server error: $e'),
+        const SnackBar(
+          content: Text(
+            'The HRMS server is taking too long to respond. Please try again in a minute.',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } on http.ClientException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cannot connect to the HRMS server. Check your internet connection and try again.',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } on FormatException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The HRMS server returned an invalid response.'),
           backgroundColor: Colors.redAccent,
         ),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _waitForServer() async {
+    final apiUri = ApiConfig.uri('/create-user/');
+    final healthUri = apiUri.replace(path: '/');
+    Object? lastError;
+
+    // Render free services can need close to a minute to wake from sleep. A
+    // harmless GET avoids retrying the create request and creating duplicates.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final response = await http
+            .get(healthUri)
+            .timeout(const Duration(seconds: 45));
+        if (response.statusCode >= 200 && response.statusCode < 500) return;
+        lastError = http.ClientException(
+          'Server returned ${response.statusCode}',
+          healthUri,
+        );
+      } on TimeoutException catch (error) {
+        lastError = error;
+      } on http.ClientException catch (error) {
+        lastError = error;
+      }
+      if (attempt == 0) await Future<void>.delayed(const Duration(seconds: 2));
+    }
+
+    if (lastError is TimeoutException) throw lastError;
+    throw lastError ?? http.ClientException('Server is unavailable', healthUri);
   }
 
   @override
