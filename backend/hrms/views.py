@@ -261,7 +261,25 @@ def _active_employee_count():
 
 
 def _department_count():
-    return EmployeeAccount.objects.exclude(department='').values('department').distinct().count()
+    department_keys = set(
+        EmployeeAccount.objects.exclude(department='')
+        .values_list('department', flat=True)
+    )
+    department_keys.update(
+        User.objects.filter(is_active=True)
+        .exclude(role='superadmin')
+        .exclude(department='')
+        .values_list('department', flat=True)
+    )
+    department_keys.update(
+        OrganizationDepartment.objects.filter(is_active=True)
+        .values_list('department_key', flat=True)
+    )
+    return len({
+        str(value).strip().lower().replace(' ', '_')
+        for value in department_keys
+        if str(value).strip()
+    })
 
 
 def _branch_count():
@@ -791,22 +809,42 @@ def _ceo_employee_categories():
 
 
 def _ceo_employee_category_summary():
-    counts = {
-        row['department']: row['count']
-        for row in EmployeeAccount.objects.exclude(department='')
+    counts = {}
+    department_labels = {}
+
+    def key_for(value):
+        return str(value or '').strip().lower().replace(' ', '_')
+
+    for row in (
+        EmployeeAccount.objects.exclude(department='')
         .values('department')
         .annotate(count=Count('id'))
-    }
+    ):
+        key = key_for(row['department'])
+        counts[key] = counts.get(key, 0) + row['count']
+    for row in (
+        User.objects.filter(is_active=True)
+        .exclude(role='superadmin')
+        .exclude(department='')
+        .values('department')
+        .annotate(count=Count('id'))
+    ):
+        key = key_for(row['department'])
+        counts[key] = counts.get(key, 0) + row['count']
+    for item in OrganizationDepartment.objects.filter(is_active=True):
+        key = key_for(item.department_key or item.name)
+        department_labels[key] = item.name
+        counts.setdefault(key, 0)
+
+    department_keys = set(counts)
     total_employees = sum(counts.values())
     categories = []
-    for department, _label in EmployeeAccount.DEPARTMENT_CHOICES:
+    for department in department_keys:
         count = counts.get(department, 0)
-        if count <= 0:
-            continue
         strength = round((count / total_employees) * 100) if total_employees else 0
         categories.append({
             'department': department,
-            'label': _department_label(department),
+            'label': department_labels.get(department) or _department_label(department),
             'count': count,
             'performance': strength,
             'performance_label': f'{strength}%',

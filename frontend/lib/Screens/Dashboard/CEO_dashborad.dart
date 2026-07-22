@@ -924,12 +924,7 @@ class _DashboardViewState extends State<_DashboardView> {
             _BackendPeopleSection(
               title: 'Leadership & Role Details',
               people: rolePeople,
-              departmentCount: categories
-                  .where(
-                    (item) =>
-                        (int.tryParse(_displayText(item['count'])) ?? 0) > 0,
-                  )
-                  .length,
+              departmentCount: categories.length,
               emptyText: 'No HR, TL, Manager, Admin, or MD members found',
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
@@ -14047,13 +14042,8 @@ class _DepartmentPerformanceExecutiveCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final populated = items
-        .where((item) => _departmentCount(item) > 0)
-        .toList();
-    final departments = (populated.isNotEmpty ? populated : items)
-        .take(4)
-        .toList();
-    final totalEmployees = populated.fold<int>(
+    final departments = items.take(4).toList();
+    final totalEmployees = items.fold<int>(
       0,
       (total, item) => total + _departmentCount(item),
     );
@@ -14083,7 +14073,7 @@ class _DepartmentPerformanceExecutiveCard extends StatelessWidget {
             ],
           ),
           Text(
-            '${populated.length} Departments · $totalEmployees Employees',
+            '${items.length} Departments · $totalEmployees Employees',
             style: _CeoText.mutedFor(context, 12),
           ),
           const SizedBox(height: 14),
@@ -14820,7 +14810,15 @@ class _BackendPeopleSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visible = people.take(4).toList();
+    final hrMembers = people
+        .where((person) => _displayText(person['role']).toLowerCase() == 'hr')
+        .toList();
+    final visible = [
+      ...hrMembers,
+      ...people.where(
+        (person) => _displayText(person['role']).toLowerCase() != 'hr',
+      ),
+    ].take(4).toList();
     final adminCount = people
         .where(
           (person) => _displayText(person['role']).toLowerCase() == 'admin',
@@ -14829,6 +14827,7 @@ class _BackendPeopleSection extends StatelessWidget {
     final tlCount = people
         .where((person) => _displayText(person['role']).toLowerCase() == 'tl')
         .length;
+    final hrCount = hrMembers.length;
     final roleCount = people
         .map((person) => _displayText(person['role']))
         .where((role) => role.isNotEmpty)
@@ -14863,6 +14862,15 @@ class _BackendPeopleSection extends StatelessWidget {
                     value: '$adminCount',
                     label: 'Admins',
                     color: const Color(0xFF4895FF),
+                  ),
+                ),
+                const _DashboardDivider(),
+                Expanded(
+                  child: _LeadershipStat(
+                    icon: Icons.badge_rounded,
+                    value: '$hrCount',
+                    label: 'HR',
+                    color: _CeoDashboardState._green,
                   ),
                 ),
                 const _DashboardDivider(),
