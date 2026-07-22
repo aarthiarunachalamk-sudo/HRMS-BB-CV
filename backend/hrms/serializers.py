@@ -135,7 +135,7 @@ class CreateUserSerializer(serializers.Serializer):
         else:
             # Other members always belong to the department represented by
             # their role (HR -> hr, CEO -> ceo, Finance -> finance, and so on).
-            data['department'] = role
+            data['department'] = 'management' if role == 'admin' else role
         return data
 
 

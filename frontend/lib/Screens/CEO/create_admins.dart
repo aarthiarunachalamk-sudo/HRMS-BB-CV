@@ -235,6 +235,12 @@ const _kRolesWithDepartmentSelection = {'hr', 'it', 'tl'};
 bool _requiresDepartmentSelection(String role) =>
     _kRolesWithDepartmentSelection.contains(role);
 
+String _assignedDepartmentLabel(String role) =>
+    role == 'admin' ? 'Management' : _roleLabelFromValue(role);
+
+String _assignedDepartmentValue(String role) =>
+    role == 'admin' ? 'management' : role;
+
 List<String> _departmentsForRole(String role) =>
     role == 'hr' ? _kHrDepartments : _kItAndTlDepartments;
 
@@ -434,7 +440,7 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
           'designation': _role,
           'department': _requiresDepartmentSelection(_role)
               ? (_kDepartmentValues[_department] ?? _department)
-              : _role,
+              : _assignedDepartmentValue(_role),
           'work_mode': _kWorkModeValues[_workMode] ?? 'onsite',
           'created_by': widget.createdBy,
           'pan': _pan.text.trim().toUpperCase(),
@@ -628,7 +634,7 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
             _role = v;
             _department = _requiresDepartmentSelection(v)
                 ? ''
-                : _roleLabelFromValue(v);
+                : _assignedDepartmentLabel(v);
           }),
           onDepartmentChanged: (v) => setState(() => _department = v),
           onWorkModeChanged: (v) => setState(() => _workMode = v),
@@ -1798,7 +1804,7 @@ class _StepRole extends StatelessWidget {
             validator: (value) => _validateSelectedDepartment(role, value),
           )
         else
-          _AssignedDepartmentField(value: _roleLabelFromValue(role)),
+          _AssignedDepartmentField(value: _assignedDepartmentLabel(role)),
         const SizedBox(height: 16),
         _AnchoredDropdownField(
           label: 'Work Mode *',

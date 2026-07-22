@@ -214,7 +214,10 @@ class CreateUserDepartmentValidationTests(SimpleTestCase):
         for role in roles:
             with self.subTest(role=role):
                 data = CreateUserSerializer().validate(self._data(role))
-                self.assertEqual(data['department'], role)
+                self.assertEqual(
+                    data['department'],
+                    'management' if role == 'admin' else role,
+                )
 
     def test_supplied_department_is_replaced_for_non_team_lead(self):
         data = CreateUserSerializer().validate(
@@ -222,6 +225,11 @@ class CreateUserDepartmentValidationTests(SimpleTestCase):
         )
 
         self.assertEqual(data['department'], 'ceo')
+
+    def test_admin_is_assigned_to_management_department(self):
+        data = CreateUserSerializer().validate(self._data('admin'))
+
+        self.assertEqual(data['department'], 'management')
 
 
 class MeetingScheduleValidationTests(SimpleTestCase):
