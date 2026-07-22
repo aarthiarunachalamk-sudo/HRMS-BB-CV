@@ -28,6 +28,53 @@ class PhonePrivacyTests(SimpleTestCase):
         self.assertEqual(mask_phone_number('95XXXXXXX6'), '95XXXXXXX6')
 
 
+class SharedAdminEmailLoginTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+    def _user(self, user_id, password_matches):
+        user = Mock(
+            user_id=user_id,
+            email='office@bitbyte.test',
+            role='admin',
+            first_name=user_id,
+        )
+        user.check_password.return_value = password_matches
+        return user
+
+    def test_password_selects_one_admin_from_shared_email(self):
+        request = self.factory.post(
+            '/api/login/',
+            {'email': 'office@bitbyte.test', 'password': 'AdminTwo@123'},
+            format='json',
+        )
+        users = [self._user('BBADM0001', False), self._user('BBADM0002', True)]
+
+        with patch.object(views.User.objects, 'filter', return_value=users), patch.object(
+            views.EmployeeAccount.objects,
+            'get',
+            side_effect=views.EmployeeAccount.DoesNotExist,
+        ):
+            response = views.login_view(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['user_id'], 'BBADM0002')
+
+    def test_same_email_and_password_requires_user_id(self):
+        request = self.factory.post(
+            '/api/login/',
+            {'email': 'office@bitbyte.test', 'password': 'Shared@123'},
+            format='json',
+        )
+        users = [self._user('BBADM0001', True), self._user('BBADM0002', True)]
+
+        with patch.object(views.User.objects, 'filter', return_value=users):
+            response = views.login_view(request)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn('user ID', response.data['message'])
+
+
 class AttendanceHealthCalculationTests(SimpleTestCase):
     def test_attendance_statuses_receive_expected_credit(self):
         self.assertEqual(_attendance_credit('Present'), 1.0)

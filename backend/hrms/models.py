@@ -91,7 +91,7 @@ class User(AbstractBaseUser):
         ('onsite', 'OnSite'),
     ]
 
-    email = models.EmailField(unique=True)
+    email = models.EmailField(db_index=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee')
     is_active = models.BooleanField(default=True)
     user_id = models.CharField(max_length=20, unique=True, blank=True)
@@ -116,7 +116,7 @@ class User(AbstractBaseUser):
     pan = models.CharField(max_length=10, blank=True)
     aadhar = models.CharField(max_length=12, blank=True)
 
-    USERNAME_FIELD = 'email'
+    USERNAME_FIELD = 'user_id'
     objects = UserManager()
 
     def save(self, *args, **kwargs):

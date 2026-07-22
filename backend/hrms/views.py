@@ -34,33 +34,43 @@ def login_view(request):
     if serializer.is_valid():
         login_id = serializer.validated_data['email'].strip()
         password = serializer.validated_data['password']
-        try:
-            user = User.objects.get(Q(email__iexact=login_id) | Q(user_id__iexact=login_id))
-            if user.check_password(password):
+        candidates = list(
+            User.objects.filter(
+                Q(email__iexact=login_id) | Q(user_id__iexact=login_id),
+                is_active=True,
+            )
+        )
+        matching_users = [user for user in candidates if user.check_password(password)]
+        if len(matching_users) == 1:
+            user = matching_users[0]
                 # Check if employee account exists and OTC is still active
-                try:
-                    from .models import EmployeeAccount
-                    emp_account = EmployeeAccount.objects.get(employee_email=user.email)
-                    if emp_account.otc == password:
-                        return Response({
-                            'success': True,
-                            'requires_password_change': True,
-                            'user_id': user.user_id,
-                            'email': user.email,
-                        })
-                except:
-                    pass
-                return Response({
-                    'success': True,
-                    'role': user.role,
-                    'email': user.email,
-                    'first_name': user.first_name,
-                    'user_id': user.user_id,
-                })
-            else:
-                return Response({'success': False, 'message': 'Wrong password'}, status=400)
-        except User.DoesNotExist:
+            try:
+                from .models import EmployeeAccount
+                emp_account = EmployeeAccount.objects.get(employee_email=user.email)
+                if emp_account.otc == password:
+                    return Response({
+                        'success': True,
+                        'requires_password_change': True,
+                        'user_id': user.user_id,
+                        'email': user.email,
+                    })
+            except (EmployeeAccount.DoesNotExist, EmployeeAccount.MultipleObjectsReturned):
+                pass
+            return Response({
+                'success': True,
+                'role': user.role,
+                'email': user.email,
+                'first_name': user.first_name,
+                'user_id': user.user_id,
+            })
+        if not candidates:
             return Response({'success': False, 'message': 'User not found'}, status=404)
+        if len(matching_users) > 1:
+            return Response({
+                'success': False,
+                'message': 'More than one account uses these credentials. Login with your user ID.',
+            }, status=409)
+        return Response({'success': False, 'message': 'Wrong password'}, status=400)
     return Response(serializer.errors, status=400)
 
 
@@ -82,6 +92,14 @@ def forgot_password_view(request):
         return Response(
             {'success': False, 'message': 'No account found for these details'},
             status=404,
+        )
+    except User.MultipleObjectsReturned:
+        return Response(
+            {
+                'success': False,
+                'message': 'Multiple accounts use this email. Enter your user ID instead.',
+            },
+            status=409,
         )
 
     otc = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
@@ -5752,8 +5770,15 @@ def create_user_view(request):
     serializer = CreateUserSerializer(data=request.data)
     if serializer.is_valid():
         data = serializer.validated_data
-        if User.objects.filter(email=data['email']).exists():
-            return Response({'success': False, 'message': 'Email already exists'}, status=400)
+        existing_email_users = User.objects.filter(email__iexact=data['email'])
+        if existing_email_users.exists() and (
+            data['role'] != 'admin'
+            or existing_email_users.exclude(role='admin').exists()
+        ):
+            return Response({
+                'success': False,
+                'message': 'Email already exists. Shared email is allowed only between Admin accounts.',
+            }, status=400)
         user = User(
             email=data['email'],
             role=data['role'],
