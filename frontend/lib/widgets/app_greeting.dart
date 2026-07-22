@@ -59,6 +59,7 @@ class AppGreeting {
       'super_admin': 'Super Admin',
       'ceo': 'CEO',
       'md': 'MD',
+      'director': 'Executive Director',
       'hr': 'HR',
       'finance': 'Finance',
       'admin': 'Admin',
@@ -244,11 +245,7 @@ class _GreetingDialog extends StatelessWidget {
                     Text(
                       'Welcome back to your ${AppGreeting.roleLabel(role)} dashboard.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: muted,
-                        fontSize: 12,
-                        height: 1.4,
-                      ),
+                      style: TextStyle(color: muted, fontSize: 12, height: 1.4),
                     ),
                     const SizedBox(height: 20),
                     SizedBox(

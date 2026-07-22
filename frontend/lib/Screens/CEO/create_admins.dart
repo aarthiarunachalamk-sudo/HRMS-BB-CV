@@ -10,7 +10,11 @@ import 'ceo_widgets.dart';
 const _kRoles = [
   {'value': 'ceo', 'label': 'CEO', 'icon': Icons.workspace_premium_outlined},
   {'value': 'md', 'label': 'MD', 'icon': Icons.business_center_outlined},
-  {'value': 'director', 'label': 'Director', 'icon': Icons.apartment_outlined},
+  {
+    'value': 'director',
+    'label': 'Executive Director',
+    'icon': Icons.apartment_outlined,
+  },
   {'value': 'hr', 'label': 'HR', 'icon': Icons.badge_outlined},
   {
     'value': 'finance',
@@ -381,8 +385,7 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
     if (pan.isEmpty) return 'PAN number is required';
     // PAN: 3 alphabetic-series characters, a valid holder-type character,
     // holder-name initial, 4 digits, and an alphabetic check character.
-    if (!RegExp(r'^[A-Z]{3}[PCHABGJLFTE][A-Z][0-9]{4}[A-Z]$')
-        .hasMatch(pan)) {
+    if (!RegExp(r'^[A-Z]{3}[PCHABGJLFTE][A-Z][0-9]{4}[A-Z]$').hasMatch(pan)) {
       return 'Enter a valid PAN (e.g. ABCPD1234F)';
     }
     return null;

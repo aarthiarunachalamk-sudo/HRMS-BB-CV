@@ -73,7 +73,7 @@ class User(AbstractBaseUser):
         ('superadmin', 'Super Admin'),
         ('ceo', 'CEO'),
         ('md', 'MD'),
-        ('director', 'Director'),
+        ('director', 'Executive Director'),
         ('hr', 'HR'),
         ('finance', 'Finance'),
         ('marketing', 'Marketing Team'),
@@ -280,7 +280,7 @@ class EmployeeAccount(models.Model):
         ('hr', 'HR'),
         ('ceo', 'CEO'),
         ('md', 'MD'),
-        ('director', 'Director'),
+        ('director', 'Executive Director'),
         ('manager', 'Manager'),
     ]
     EMPLOYMENT_TYPE_CHOICES = [

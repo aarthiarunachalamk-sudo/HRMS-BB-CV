@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/superadmin_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/CEO_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/MD_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ED/ed_dashboard.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/HR_dadhborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Finance_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Admin_dashborad.dart';
@@ -122,11 +123,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       setDialogState(() => isRequestingReset = true);
                       var dialogWasClosed = false;
                       try {
-                        final response = await http.post(
-                          ApiConfig.uri('/forgot-password/'),
-                          headers: {'Content-Type': 'application/json'},
-                          body: jsonEncode({'login_id': loginId}),
-                        ).timeout(const Duration(seconds: 60));
+                        final response = await http
+                            .post(
+                              ApiConfig.uri('/forgot-password/'),
+                              headers: {'Content-Type': 'application/json'},
+                              body: jsonEncode({'login_id': loginId}),
+                            )
+                            .timeout(const Duration(seconds: 60));
                         final data = jsonDecode(response.body);
                         if (!dialogContentContext.mounted) return;
                         if (data['success'] == true) {
@@ -234,8 +237,14 @@ class _LoginScreenState extends State<LoginScreen> {
             firstName: data['first_name'] ?? '',
             userId: data['user_id'] ?? '',
           );
-        } else if (role == 'md' || role == 'director') {
+        } else if (role == 'md') {
           dashboard = MdDashboard(
+            email: data['email'],
+            firstName: data['first_name'] ?? '',
+            userId: data['user_id'] ?? '',
+          );
+        } else if (role == 'director') {
+          dashboard = ExecutiveDirectorDashboard(
             email: data['email'],
             firstName: data['first_name'] ?? '',
             userId: data['user_id'] ?? '',

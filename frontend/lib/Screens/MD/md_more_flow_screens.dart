@@ -94,10 +94,13 @@ class _MdDatabaseFlowScreenState extends State<MdDatabaseFlowScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetch() async {
+    final managementRole = widget.userId.toUpperCase().startsWith('BBDIR')
+        ? 'director'
+        : 'md';
     final response = await http
         .get(
           ApiConfig.uri(
-            '/md/modules/${widget.module}/?user_id=${Uri.encodeQueryComponent(widget.userId)}',
+            '/$managementRole/modules/${widget.module}/?user_id=${Uri.encodeQueryComponent(widget.userId)}',
           ),
         )
         .timeout(const Duration(seconds: 60));

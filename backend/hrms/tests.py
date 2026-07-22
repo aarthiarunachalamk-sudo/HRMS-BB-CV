@@ -244,6 +244,38 @@ class MeetingScheduleValidationTests(SimpleTestCase):
         create.assert_not_called()
 
 
+class ExecutiveDirectorAccessTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+
+    def test_inactive_director_cannot_open_dashboard(self):
+        request = self.factory.get(
+            '/api/director/dashboard/',
+            {'user_id': 'BBDIR0001'},
+        )
+
+        with patch.object(views.User.objects, 'filter') as users:
+            users.return_value.exists.return_value = False
+            response = views.md_dashboard_view(request)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('Executive Director', response.data['message'])
+
+    def test_inactive_director_cannot_schedule_meeting(self):
+        request = self.factory.post(
+            '/api/director/meetings/',
+            {'created_by': 'BBDIR0001'},
+            format='json',
+        )
+
+        with patch.object(views.User.objects, 'filter') as users:
+            users.return_value.exists.return_value = False
+            response = views.md_meetings_view(request)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn('Executive Director', response.data['message'])
+
+
 class PasswordRecoveryTests(SimpleTestCase):
     def setUp(self):
         cache.clear()

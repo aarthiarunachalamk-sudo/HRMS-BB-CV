@@ -9,6 +9,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Finance_dashborad.dart'
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/HR_dadhborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/ITTeam_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/MD_dashborad.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ED/ed_dashboard.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Manager-dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/MarketingTeam_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/TL_dashborad.dart';
@@ -72,8 +73,8 @@ class _RoleDashboardState extends State<RoleDashboard> {
     ),
     _RoleOption(
       key: 'director',
-      title: 'Director',
-      subtitle: 'Leadership',
+      title: 'Executive Director',
+      subtitle: 'Executive Leadership',
       icon: Icons.apartment_outlined,
       accent: Color(0xFF06B6D4),
     ),
@@ -151,23 +152,53 @@ class _RoleDashboardState extends State<RoleDashboard> {
     const userId = '';
 
     final Widget dashboard = switch (role.key) {
-      'admin' => AdminDashboard(email: email, firstName: firstName, userId: userId),
+      'admin' => AdminDashboard(
+        email: email,
+        firstName: firstName,
+        userId: userId,
+      ),
       'ceo' => CeoDashboard(email: email, firstName: firstName, userId: userId),
       'md' => MdDashboard(email: email, firstName: firstName, userId: userId),
-      'director' => MdDashboard(email: email, firstName: firstName, userId: userId),
+      'director' => ExecutiveDirectorDashboard(
+        email: email,
+        firstName: firstName,
+        userId: userId,
+      ),
       'hr' => HrDashboard(email: email, firstName: firstName, userId: userId),
       'tl' => TLDashboard(email: email, firstName: firstName, userId: userId),
-      'employee' => EmployeeDashboard(email: email, firstName: firstName, userId: userId),
-      'finance' => FinanceDashboard(email: email, firstName: firstName, userId: userId),
-      'manager' => ManagerDashboard(email: email, firstName: firstName, userId: userId),
-      'it' => ITTeamDashboard(email: email, firstName: firstName, userId: userId),
-      'marketing' => MarketingTeamDashboard(email: email, firstName: firstName, userId: userId),
-      _ => EmployeeDashboard(email: email, firstName: firstName, userId: userId),
+      'employee' => EmployeeDashboard(
+        email: email,
+        firstName: firstName,
+        userId: userId,
+      ),
+      'finance' => FinanceDashboard(
+        email: email,
+        firstName: firstName,
+        userId: userId,
+      ),
+      'manager' => ManagerDashboard(
+        email: email,
+        firstName: firstName,
+        userId: userId,
+      ),
+      'it' => ITTeamDashboard(
+        email: email,
+        firstName: firstName,
+        userId: userId,
+      ),
+      'marketing' => MarketingTeamDashboard(
+        email: email,
+        firstName: firstName,
+        userId: userId,
+      ),
+      _ => EmployeeDashboard(
+        email: email,
+        firstName: firstName,
+        userId: userId,
+      ),
     };
 
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => dashboard),
-    );
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => dashboard));
   }
 
   @override
@@ -449,8 +480,9 @@ class _RoleDashboardState extends State<RoleDashboard> {
                       style: TextStyle(
                         color: isSelected ? colors.primary : colors.navMuted,
                         fontSize: 11,
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 4),

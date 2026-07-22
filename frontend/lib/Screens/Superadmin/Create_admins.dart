@@ -164,30 +164,32 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
 
     try {
       await _waitForServer();
-      final response = await http.post(
-        ApiConfig.uri('/create-user/'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'first_name': _firstNameController.text.trim(),
-          'last_name': _lastNameController.text.trim(),
-          'email': _emailController.text.trim(),
-          'country_code': _selectedCountryCode,
-          'phone': _phoneController.text.trim(),
-          'gender': _selectedGender,
-          'dob': _dobController.text.trim(),
-          'password': _passwordController.text,
-          'confirm_password': _confirmPasswordController.text,
-          'door_no': _doorNoController.text.trim(),
-          'street': _streetController.text.trim(),
-          'pincode': _pincodeController.text.trim(),
-          'city': _cityController.text.trim(),
-          'state': _stateController.text.trim(),
-          'occupation': _occupationController.text.trim(),
-          'pan': _panController.text.trim(),
-          'aadhar': _aadharController.text.trim(),
-          'role': _selectedRole,
-        }),
-      ).timeout(const Duration(seconds: 45));
+      final response = await http
+          .post(
+            ApiConfig.uri('/create-user/'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'first_name': _firstNameController.text.trim(),
+              'last_name': _lastNameController.text.trim(),
+              'email': _emailController.text.trim(),
+              'country_code': _selectedCountryCode,
+              'phone': _phoneController.text.trim(),
+              'gender': _selectedGender,
+              'dob': _dobController.text.trim(),
+              'password': _passwordController.text,
+              'confirm_password': _confirmPasswordController.text,
+              'door_no': _doorNoController.text.trim(),
+              'street': _streetController.text.trim(),
+              'pincode': _pincodeController.text.trim(),
+              'city': _cityController.text.trim(),
+              'state': _stateController.text.trim(),
+              'occupation': _occupationController.text.trim(),
+              'pan': _panController.text.trim(),
+              'aadhar': _aadharController.text.trim(),
+              'role': _selectedRole,
+            }),
+          )
+          .timeout(const Duration(seconds: 45));
 
       final decoded = jsonDecode(response.body);
       if (decoded is! Map) {
@@ -376,6 +378,10 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                                 DropdownMenuItem(
                                   value: 'md',
                                   child: Text('MD'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'director',
+                                  child: Text('Executive Director'),
                                 ),
                               ],
                               onChanged: (val) =>

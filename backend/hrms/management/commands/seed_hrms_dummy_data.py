@@ -68,7 +68,7 @@ class Command(BaseCommand):
         ('superadmin', 'superadmin@bitbyte.test', 'Super', 'Admin', 'Management', 'Super Administrator'),
         ('ceo', 'ceo@bitbyte.test', 'Rajesh', 'Kumar', 'Management', 'Chief Executive Officer'),
         ('md', 'md@bitbyte.test', 'Meena', 'Raman', 'Management', 'Managing Director'),
-        ('director', 'director@bitbyte.test', 'Arun', 'Prakash', 'Management', 'Director'),
+        ('director', 'director@bitbyte.test', 'Arun', 'Prakash', 'Management', 'Executive Director'),
         ('hr', 'hr@bitbyte.test', 'Padma', 'Sheela', 'HR', 'HR Manager'),
         ('admin', 'admin@bitbyte.test', 'Aarthi', 'Karthik', 'Administration', 'Admin'),
         ('tl', 'tl@bitbyte.test', 'Jai', 'Ramachandran', 'Web Application Development', 'Team Lead'),

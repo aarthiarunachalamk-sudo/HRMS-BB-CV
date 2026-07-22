@@ -3463,6 +3463,15 @@ def ceo_employees_view(request):
 @api_view(['GET'])
 def md_dashboard_view(request):
     user_id = request.GET.get('user_id', '').strip()
+    if '/director/' in request.path and not User.objects.filter(
+        user_id=user_id,
+        role='director',
+        is_active=True,
+    ).exists():
+        return Response(
+            {'success': False, 'message': 'Only an active Executive Director can access this dashboard.'},
+            status=403,
+        )
     # MD needs an organization-wide view, including seeded meetings created by
     # other leadership roles, not only rows created with the exact MD user id.
     meeting_queryset = MdMeeting.objects.all().order_by('-id')
@@ -3489,6 +3498,17 @@ def md_dashboard_view(request):
 
 @api_view(['POST'])
 def md_meetings_view(request):
+    if '/director/' in request.path:
+        user_id = str(request.data.get('created_by') or '').strip()
+        if not User.objects.filter(
+            user_id=user_id,
+            role='director',
+            is_active=True,
+        ).exists():
+            return Response(
+                {'success': False, 'message': 'Only an active Executive Director can schedule meetings.'},
+                status=403,
+            )
     meeting = _create_meeting_from_payload(request.data, 'Meeting')
     _notify_meeting_participants(meeting)
     email_count = 0
@@ -3511,6 +3531,15 @@ def md_meetings_view(request):
 def md_module_view(request, module):
     """Database-only data source for each dedicated MD More flow."""
     user_id = request.GET.get('user_id', '').strip()
+    if '/director/' in request.path and not User.objects.filter(
+        user_id=user_id,
+        role='director',
+        is_active=True,
+    ).exists():
+        return Response(
+            {'success': False, 'message': 'Only an active Executive Director can access this module.'},
+            status=403,
+        )
     module = str(module or '').strip().lower().replace('_', '-')
     today = timezone.localdate()
     title = module.replace('-', ' ').title()

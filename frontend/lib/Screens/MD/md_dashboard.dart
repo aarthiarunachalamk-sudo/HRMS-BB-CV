@@ -9,8 +9,6 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart'
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
-
 import 'md_models.dart';
 import 'md_more_flow_screens.dart';
 import 'md_service.dart';
@@ -28,17 +26,37 @@ enum MdDashboardScreen {
   meetingList,
 }
 
-enum _MdStep { dashboard, analytics, employees, meetings, reports, approvals, more, calendar, time, details, participants, agenda, review, success, list }
+enum _MdStep {
+  dashboard,
+  analytics,
+  employees,
+  meetings,
+  reports,
+  approvals,
+  more,
+  calendar,
+  time,
+  details,
+  participants,
+  agenda,
+  review,
+  success,
+  list,
+}
 
 enum _DashboardRole { md, employee }
 
 int _mdDaysInMonth(DateTime date) {
-  final nextMonth = date.month == 12 ? DateTime(date.year + 1, 1, 1) : DateTime(date.year, date.month + 1, 1);
+  final nextMonth = date.month == 12
+      ? DateTime(date.year + 1, 1, 1)
+      : DateTime(date.year, date.month + 1, 1);
   return nextMonth.subtract(const Duration(days: 1)).day;
 }
 
 bool _mdIsSameDate(DateTime first, DateTime second) {
-  return first.year == second.year && first.month == second.month && first.day == second.day;
+  return first.year == second.year &&
+      first.month == second.month &&
+      first.day == second.day;
 }
 
 String _mdClockLabel(DateTime time) {
@@ -53,6 +71,7 @@ class MdDashboard extends StatefulWidget {
   final String firstName;
   final String userId;
   final MdDashboardScreen initialScreen;
+  final String role;
 
   const MdDashboard({
     super.key,
@@ -60,6 +79,7 @@ class MdDashboard extends StatefulWidget {
     required this.firstName,
     required this.userId,
     this.initialScreen = MdDashboardScreen.dashboard,
+    this.role = 'md',
   });
 
   @override
@@ -68,7 +88,7 @@ class MdDashboard extends StatefulWidget {
 
 class _MdDashboardState extends State<MdDashboard> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
-  final MdService _service = MdService();
+  late final MdService _service;
   late MdMeeting _draft;
   MdDashboardData _data = MdDashboardData.empty;
   _MdStep _step = _MdStep.dashboard;
@@ -91,9 +111,14 @@ class _MdDashboardState extends State<MdDashboard> {
   @override
   void initState() {
     super.initState();
+    _service = MdService(role: widget.role);
     _draft = _emptyDraft();
     _step = _mapInitialScreen(widget.initialScreen);
-    _bottomIndex = widget.initialScreen == MdDashboardScreen.meetings || widget.initialScreen == MdDashboardScreen.meetingList ? 3 : 0;
+    _bottomIndex =
+        widget.initialScreen == MdDashboardScreen.meetings ||
+            widget.initialScreen == MdDashboardScreen.meetingList
+        ? 3
+        : 0;
     _load();
   }
 
@@ -155,7 +180,7 @@ class _MdDashboardState extends State<MdDashboard> {
       if (!mounted) return;
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('MD backend not connected: $e')),
+        SnackBar(content: Text('$_roleLabel backend not connected: $e')),
       );
     }
   }
@@ -171,26 +196,56 @@ class _MdDashboardState extends State<MdDashboard> {
           totalEmployees: _data.totalEmployees,
           pendingApprovals: _data.pendingApprovals,
           meetingsToday: _data.meetingsToday + 1,
-          meetings: [scheduled, ..._data.meetings.where((item) => item.id != scheduled.id)],
+          meetings: [
+            scheduled,
+            ..._data.meetings.where((item) => item.id != scheduled.id),
+          ],
           participants: _data.participants,
         );
         _step = _MdStep.success;
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Meeting not saved: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Meeting not saved: $e')));
     }
   }
 
   void _toggleTheme() {
-    MyApp.themeNotifier.value = MyApp.themeNotifier.value == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    MyApp.themeNotifier.value = MyApp.themeNotifier.value == ThemeMode.dark
+        ? ThemeMode.light
+        : ThemeMode.dark;
     setState(() {});
   }
 
   void _logout() {
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
+  Future<void> _requestLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Logout'),
+        content: Text('Logout from the $_roleLabel dashboard?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) _logout();
   }
 
   Future<void> _pickProfileImage() async {
@@ -208,21 +263,37 @@ class _MdDashboardState extends State<MdDashboard> {
   Widget build(BuildContext context) {
     final colors = _MdColors.of(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: colors.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      value: colors.isDark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
       child: Scaffold(
         key: _scaffoldKey,
         backgroundColor: colors.bg,
-        drawer: _MdDrawer(colors: colors, name: widget.firstName, email: widget.email, select: _setDrawerStep, logout: _logout),
+        drawer: _MdDrawer(
+          colors: colors,
+          name: widget.firstName,
+          email: widget.email,
+          roleLabel: _roleLabel,
+          select: _setDrawerStep,
+          logout: _requestLogout,
+        ),
         body: SafeArea(
           child: Column(
             children: [
               if (_step != _MdStep.more)
-                _TopBar(colors: colors, onMenu: () => _scaffoldKey.currentState?.openDrawer(), onTheme: _toggleTheme, onProfile: _pickProfileImage),
+                _TopBar(
+                  colors: colors,
+                  dashboardTitle: '$_roleShortLabel Dashboard',
+                  onMenu: () => _scaffoldKey.currentState?.openDrawer(),
+                  onTheme: _toggleTheme,
+                  onProfile: _pickProfileImage,
+                ),
               if (_step == _MdStep.dashboard)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
                   child: _RoleSelector(
                     colors: colors,
+                    managementRoleLabel: _roleShortLabel,
                     selectedRole: _dashboardRole,
                     onChanged: (role) => setState(() => _dashboardRole = role),
                   ),
@@ -231,7 +302,11 @@ class _MdDashboardState extends State<MdDashboard> {
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
                   child: _loading
-                      ? Center(child: CircularProgressIndicator(color: colors.primary))
+                      ? Center(
+                          child: CircularProgressIndicator(
+                            color: colors.primary,
+                          ),
+                        )
                       : _buildStep(colors),
                 ),
               ),
@@ -264,23 +339,32 @@ class _MdDashboardState extends State<MdDashboard> {
     Navigator.maybePop(context);
     setState(() {
       _step = step;
-      _bottomIndex = {
-        _MdStep.analytics: 1,
-        _MdStep.employees: 2,
-        _MdStep.meetings: 3,
-        _MdStep.list: 3,
-        _MdStep.reports: 4,
-        _MdStep.approvals: 5,
-        _MdStep.more: 6,
-      }[step] ?? 0;
+      _bottomIndex =
+          {
+            _MdStep.analytics: 1,
+            _MdStep.employees: 2,
+            _MdStep.meetings: 3,
+            _MdStep.list: 3,
+            _MdStep.reports: 4,
+            _MdStep.approvals: 5,
+            _MdStep.more: 6,
+          }[step] ??
+          0;
     });
   }
+
+  bool get _isDirector => widget.role.toLowerCase() == 'director';
+  String get _roleLabel =>
+      _isDirector ? 'Executive Director' : 'Managing Director';
+  String get _roleShortLabel => _isDirector ? 'Director' : 'MD';
 
   void _openMoreFlow(String flow) {
     final screens = <String, Widget>{
       'company-overview': MdCompanyOverviewScreen(userId: widget.userId),
       'financial-insights': MdFinancialInsightsScreen(userId: widget.userId),
-      'department-performance': MdDepartmentPerformanceScreen(userId: widget.userId),
+      'department-performance': MdDepartmentPerformanceScreen(
+        userId: widget.userId,
+      ),
       'project-portfolio': MdProjectPortfolioScreen(userId: widget.userId),
       'approvals-center': MdApprovalsCenterScreen(userId: widget.userId),
       'workforce-analytics': MdWorkforceAnalyticsScreen(userId: widget.userId),
@@ -290,7 +374,9 @@ class _MdDashboardState extends State<MdDashboard> {
       'meetings': MdMeetingsDatabaseScreen(userId: widget.userId),
       'announcements': MdAnnouncementsScreen(userId: widget.userId),
       'documents': MdDocumentsScreen(userId: widget.userId),
-      'settings-preferences': MdSettingsPreferencesScreen(userId: widget.userId),
+      'settings-preferences': MdSettingsPreferencesScreen(
+        userId: widget.userId,
+      ),
     };
     final screen = screens[flow];
     if (screen != null) {
@@ -310,30 +396,50 @@ class _MdDashboardState extends State<MdDashboard> {
           userId: widget.userId,
           profileImage: _profileImage,
           selectedRole: _dashboardRole,
+          managementRoleLabel: _roleShortLabel,
           onPickProfileImage: _pickProfileImage,
           onMeetings: () => setState(() => _step = _MdStep.meetings),
           onNavigate: (step) => setState(() {
             _step = step;
-            _bottomIndex = {
-              _MdStep.analytics: 1,
-              _MdStep.employees: 2,
-              _MdStep.meetings: 3,
-              _MdStep.reports: 4,
-              _MdStep.approvals: 5,
-              _MdStep.more: 6,
-            }[step] ?? 0;
+            _bottomIndex =
+                {
+                  _MdStep.analytics: 1,
+                  _MdStep.employees: 2,
+                  _MdStep.meetings: 3,
+                  _MdStep.reports: 4,
+                  _MdStep.approvals: 5,
+                  _MdStep.more: 6,
+                }[step] ??
+                0;
           }),
         );
       case _MdStep.analytics:
         return _MdModulePage(
           colors: colors,
           title: 'Analytics',
-          subtitle: 'Live organization metrics from the MD dashboard API',
+          subtitle:
+              'Live organization metrics from the $_roleShortLabel dashboard API',
           items: [
-            _MdModuleItem('Revenue', _data.totalRevenue, Icons.payments_outlined),
-            _MdModuleItem('Employees', _data.totalEmployees, Icons.groups_outlined),
-            _MdModuleItem('Pending approvals', '${_data.pendingApprovals}', Icons.pending_actions_outlined),
-            _MdModuleItem('Meetings today', '${_data.meetingsToday}', Icons.event_available_outlined),
+            _MdModuleItem(
+              'Revenue',
+              _data.totalRevenue,
+              Icons.payments_outlined,
+            ),
+            _MdModuleItem(
+              'Employees',
+              _data.totalEmployees,
+              Icons.groups_outlined,
+            ),
+            _MdModuleItem(
+              'Pending approvals',
+              '${_data.pendingApprovals}',
+              Icons.pending_actions_outlined,
+            ),
+            _MdModuleItem(
+              'Meetings today',
+              '${_data.meetingsToday}',
+              Icons.event_available_outlined,
+            ),
           ],
         );
       case _MdStep.employees:
@@ -356,9 +462,21 @@ class _MdDashboardState extends State<MdDashboard> {
           title: 'Reports',
           subtitle: 'Management reports generated from backend dashboard data',
           items: [
-            _MdModuleItem('Workforce report', '${_data.totalEmployees} employees', Icons.people_alt_outlined),
-            _MdModuleItem('Meeting report', '${_data.meetings.length} meetings listed', Icons.event_note_outlined),
-            _MdModuleItem('Revenue report', _data.totalRevenue, Icons.trending_up_rounded),
+            _MdModuleItem(
+              'Workforce report',
+              '${_data.totalEmployees} employees',
+              Icons.people_alt_outlined,
+            ),
+            _MdModuleItem(
+              'Meeting report',
+              '${_data.meetings.length} meetings listed',
+              Icons.event_note_outlined,
+            ),
+            _MdModuleItem(
+              'Revenue report',
+              _data.totalRevenue,
+              Icons.trending_up_rounded,
+            ),
           ],
         );
       case _MdStep.approvals:
@@ -367,7 +485,11 @@ class _MdDashboardState extends State<MdDashboard> {
           title: 'Approvals',
           subtitle: 'Items currently waiting for management review',
           items: [
-            _MdModuleItem('Pending approvals', '${_data.pendingApprovals}', Icons.verified_outlined),
+            _MdModuleItem(
+              'Pending approvals',
+              '${_data.pendingApprovals}',
+              Icons.verified_outlined,
+            ),
           ],
         );
       case _MdStep.more:
@@ -381,17 +503,20 @@ class _MdDashboardState extends State<MdDashboard> {
           alertCount: 3,
           onNavigate: (step) => setState(() {
             _step = step;
-            _bottomIndex = {
-              _MdStep.analytics: 1,
-              _MdStep.employees: 2,
-              _MdStep.meetings: 3,
-              _MdStep.reports: 4,
-              _MdStep.approvals: 5,
-              _MdStep.more: 6,
-            }[step] ?? 0;
+            _bottomIndex =
+                {
+                  _MdStep.analytics: 1,
+                  _MdStep.employees: 2,
+                  _MdStep.meetings: 3,
+                  _MdStep.reports: 4,
+                  _MdStep.approvals: 5,
+                  _MdStep.more: 6,
+                }[step] ??
+                0;
           }),
           onOpenFlow: _openMoreFlow,
-          onLogout: _logout,
+          onLogout: _requestLogout,
+          roleLabel: _roleLabel,
         );
       case _MdStep.calendar:
         return _CalendarPage(
@@ -415,7 +540,10 @@ class _MdDashboardState extends State<MdDashboard> {
             _selectedHour = hour;
             _selectedMinute = minute;
             _selectedPeriod = period;
-            _draft = _draft.copyWith(timeLabel: _formatTimeRange(), duration: _duration);
+            _draft = _draft.copyWith(
+              timeLabel: _formatTimeRange(),
+              duration: _duration,
+            );
           }),
           onNext: () => setState(() => _step = _MdStep.details),
         );
@@ -445,7 +573,11 @@ class _MdDashboardState extends State<MdDashboard> {
           }),
         );
       case _MdStep.review:
-        return _ReviewPage(colors: colors, meeting: _draft, onSchedule: _schedule);
+        return _ReviewPage(
+          colors: colors,
+          meeting: _draft,
+          onSchedule: _schedule,
+        );
       case _MdStep.success:
         return _SuccessPage(
           colors: colors,
@@ -465,6 +597,7 @@ class _DashboardPage extends StatelessWidget {
   final String userId;
   final File? profileImage;
   final _DashboardRole selectedRole;
+  final String managementRoleLabel;
   final VoidCallback onPickProfileImage;
   final VoidCallback onMeetings;
   final ValueChanged<_MdStep> onNavigate;
@@ -478,6 +611,7 @@ class _DashboardPage extends StatelessWidget {
     required this.userId,
     required this.profileImage,
     required this.selectedRole,
+    required this.managementRoleLabel,
     required this.onPickProfileImage,
     required this.onMeetings,
     required this.onNavigate,
@@ -494,14 +628,26 @@ class _DashboardPage extends StatelessWidget {
           email: email,
           userId: userId,
           selectedRole: selectedRole,
+          managementRoleLabel: managementRoleLabel,
           profileImage: profileImage,
           onPickProfileImage: onPickProfileImage,
         ),
         const SizedBox(height: 18),
         if (selectedRole == _DashboardRole.md)
-          _MdRoleDashboardContent(colors: colors, data: data, onMeetings: onMeetings, onNavigate: onNavigate)
+          _MdRoleDashboardContent(
+            colors: colors,
+            data: data,
+            onMeetings: onMeetings,
+            onNavigate: onNavigate,
+          )
         else
-          _EmployeeRoleDashboardContent(colors: colors, name: name, email: email, userId: userId, onNavigate: onNavigate),
+          _EmployeeRoleDashboardContent(
+            colors: colors,
+            name: name,
+            email: email,
+            userId: userId,
+            onNavigate: onNavigate,
+          ),
       ],
     );
   }
@@ -513,6 +659,7 @@ class _MdIdentityHeader extends StatelessWidget {
   final String email;
   final String userId;
   final _DashboardRole selectedRole;
+  final String managementRoleLabel;
   final File? profileImage;
   final VoidCallback onPickProfileImage;
 
@@ -522,13 +669,14 @@ class _MdIdentityHeader extends StatelessWidget {
     required this.email,
     required this.userId,
     required this.selectedRole,
+    required this.managementRoleLabel,
     required this.profileImage,
     required this.onPickProfileImage,
   });
 
   @override
   Widget build(BuildContext context) {
-    final displayName = name.trim().isEmpty ? 'MD' : name.trim();
+    final displayName = name.trim().isEmpty ? managementRoleLabel : name.trim();
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -546,9 +694,19 @@ class _MdIdentityHeader extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 28,
-                      backgroundColor: colors.primary.withAlpha(colors.isDark ? 65 : 30),
-                      backgroundImage: profileImage == null ? null : FileImage(profileImage!),
-                      child: profileImage == null ? Icon(Icons.person_rounded, color: colors.primary, size: 30) : null,
+                      backgroundColor: colors.primary.withAlpha(
+                        colors.isDark ? 65 : 30,
+                      ),
+                      backgroundImage: profileImage == null
+                          ? null
+                          : FileImage(profileImage!),
+                      child: profileImage == null
+                          ? Icon(
+                              Icons.person_rounded,
+                              color: colors.primary,
+                              size: 30,
+                            )
+                          : null,
                     ),
                     Positioned(
                       right: -2,
@@ -561,7 +719,11 @@ class _MdIdentityHeader extends StatelessWidget {
                           shape: BoxShape.circle,
                           border: Border.all(color: colors.surface, width: 2),
                         ),
-                        child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 12),
+                        child: const Icon(
+                          Icons.camera_alt_rounded,
+                          color: Colors.white,
+                          size: 12,
+                        ),
                       ),
                     ),
                   ],
@@ -572,27 +734,43 @@ class _MdIdentityHeader extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Good ${colors.isDark ? 'Evening' : 'Morning'},', style: TextStyle(color: colors.muted, fontSize: 12)),                    const SizedBox(height: 3),
+                    Text(
+                      'Good ${colors.isDark ? 'Evening' : 'Morning'},',
+                      style: TextStyle(color: colors.muted, fontSize: 12),
+                    ),
+                    const SizedBox(height: 3),
                     Text(
                       displayName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colors.text, fontSize: 20, fontWeight: FontWeight.w900),
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                     const SizedBox(height: 5),
                     if (userId.trim().isNotEmpty)
                       Text(
-                        '${selectedRole == _DashboardRole.md ? 'MD' : 'Employee'} ID: $userId',
+                        '${selectedRole == _DashboardRole.md ? managementRoleLabel : 'Employee'} ID: $userId',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: colors.primary, fontSize: 12, fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                          color: colors.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     if (email.trim().isNotEmpty)
                       Text(
                         email,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: colors.muted, fontSize: 12, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          color: colors.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                   ],
                 ),
@@ -607,23 +785,29 @@ class _MdIdentityHeader extends StatelessWidget {
 
 class _RoleSelector extends StatelessWidget {
   final _MdColors colors;
+  final String managementRoleLabel;
   final _DashboardRole selectedRole;
   final ValueChanged<_DashboardRole> onChanged;
 
   const _RoleSelector({
     required this.colors,
+    required this.managementRoleLabel,
     required this.selectedRole,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final selectedLabel = selectedRole == _DashboardRole.md ? 'MD' : 'Employee';
+    final selectedLabel = selectedRole == _DashboardRole.md
+        ? managementRoleLabel
+        : 'Employee';
     return Container(
       height: 42,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: colors.isDark ? const Color(0xFF07182A) : const Color(0xFFF1F5F9),
+        color: colors.isDark
+            ? const Color(0xFF07182A)
+            : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: colors.border),
       ),
@@ -633,22 +817,39 @@ class _RoleSelector extends StatelessWidget {
           isExpanded: true,
           dropdownColor: colors.surface,
           icon: Icon(Icons.keyboard_arrow_down_rounded, color: colors.primary),
-          style: TextStyle(color: colors.text, fontSize: 13, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            color: colors.text,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+          ),
           selectedItemBuilder: (context) {
             return _DashboardRole.values.map((_) {
               return Row(
                 children: [
-                  Icon(Icons.admin_panel_settings_outlined, color: colors.primary, size: 18),
+                  Icon(
+                    Icons.admin_panel_settings_outlined,
+                    color: colors.primary,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
-                  Text('Role Based', style: TextStyle(color: colors.muted, fontSize: 11, fontWeight: FontWeight.w700)),
+                  Text(
+                    'Role Based',
+                    style: TextStyle(
+                      color: colors.muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(width: 10),
-                  Expanded(child: Text(selectedLabel, overflow: TextOverflow.ellipsis)),
+                  Expanded(
+                    child: Text(selectedLabel, overflow: TextOverflow.ellipsis),
+                  ),
                 ],
               );
             }).toList();
           },
-          items: const [
-            DropdownMenuItem(
+          items: [
+            const DropdownMenuItem(
               value: _DashboardRole.employee,
               child: Row(
                 children: [
@@ -664,7 +865,7 @@ class _RoleSelector extends StatelessWidget {
                 children: [
                   Icon(Icons.business_center_outlined, size: 18),
                   SizedBox(width: 8),
-                  Text('MD'),
+                  Text(managementRoleLabel),
                 ],
               ),
             ),
@@ -709,7 +910,11 @@ class _RoleOptionButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: selected ? Colors.white : colors.muted, size: 17),
+              Icon(
+                icon,
+                color: selected ? Colors.white : colors.muted,
+                size: 17,
+              ),
               const SizedBox(width: 6),
               Text(
                 label,
@@ -752,14 +957,35 @@ class _MdRoleDashboardContent extends StatelessWidget {
           mainAxisSpacing: 12,
           childAspectRatio: 1.7,
           children: [
-            _MetricCard(colors: colors, title: 'Total Revenue', value: data.totalRevenue),
-            _MetricCard(colors: colors, title: 'Total Employees', value: data.totalEmployees),
-            _MetricCard(colors: colors, title: 'Pending Approvals', value: '${data.pendingApprovals}'),
-            _MetricCard(colors: colors, title: 'Meetings Today', value: '${data.meetingsToday}', danger: true),
+            _MetricCard(
+              colors: colors,
+              title: 'Total Revenue',
+              value: data.totalRevenue,
+            ),
+            _MetricCard(
+              colors: colors,
+              title: 'Total Employees',
+              value: data.totalEmployees,
+            ),
+            _MetricCard(
+              colors: colors,
+              title: 'Pending Approvals',
+              value: '${data.pendingApprovals}',
+            ),
+            _MetricCard(
+              colors: colors,
+              title: 'Meetings Today',
+              value: '${data.meetingsToday}',
+              danger: true,
+            ),
           ],
         ),
         const SizedBox(height: 20),
-        _SectionHeader(colors: colors, title: 'Key Metrics', action: 'This Month'),
+        _SectionHeader(
+          colors: colors,
+          title: 'Key Metrics',
+          action: 'This Month',
+        ),
         const SizedBox(height: 12),
         _ChartCard(colors: colors),
         const SizedBox(height: 20),
@@ -767,14 +993,39 @@ class _MdRoleDashboardContent extends StatelessWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            _ActionButton(colors: colors, icon: Icons.verified_user_outlined, label: 'Approvals', onTap: () => onNavigate(_MdStep.approvals)),
-            _ActionButton(colors: colors, icon: Icons.bar_chart_rounded, label: 'Reports', onTap: () => onNavigate(_MdStep.reports)),
-            _ActionButton(colors: colors, icon: Icons.analytics_outlined, label: 'Analytics', onTap: () => onNavigate(_MdStep.analytics)),
-            _ActionButton(colors: colors, icon: Icons.more_horiz_rounded, label: 'More', onTap: () => onNavigate(_MdStep.more)),
+            _ActionButton(
+              colors: colors,
+              icon: Icons.verified_user_outlined,
+              label: 'Approvals',
+              onTap: () => onNavigate(_MdStep.approvals),
+            ),
+            _ActionButton(
+              colors: colors,
+              icon: Icons.bar_chart_rounded,
+              label: 'Reports',
+              onTap: () => onNavigate(_MdStep.reports),
+            ),
+            _ActionButton(
+              colors: colors,
+              icon: Icons.analytics_outlined,
+              label: 'Analytics',
+              onTap: () => onNavigate(_MdStep.analytics),
+            ),
+            _ActionButton(
+              colors: colors,
+              icon: Icons.more_horiz_rounded,
+              label: 'More',
+              onTap: () => onNavigate(_MdStep.more),
+            ),
           ],
         ),
         const SizedBox(height: 20),
-        _PrimaryButton(colors: colors, label: 'Schedule Meeting', icon: Icons.add_rounded, onTap: onMeetings),
+        _PrimaryButton(
+          colors: colors,
+          label: 'Schedule Meeting',
+          icon: Icons.add_rounded,
+          onTap: onMeetings,
+        ),
       ],
     );
   }
@@ -802,18 +1053,53 @@ class _EmployeeRoleDashboardContent extends StatelessWidget {
       children: [
         _SectionHeader(colors: colors, title: 'Employee Profile'),
         const SizedBox(height: 12),
-        _EmployeeInfoPanel(colors: colors, title: 'Name', value: displayName, icon: Icons.person_outline_rounded),
-        _EmployeeInfoPanel(colors: colors, title: 'Employee ID', value: userId.trim().isEmpty ? 'Not available' : userId, icon: Icons.badge_outlined),
-        _EmployeeInfoPanel(colors: colors, title: 'Email', value: email.trim().isEmpty ? 'Not available' : email, icon: Icons.mail_outline_rounded),
+        _EmployeeInfoPanel(
+          colors: colors,
+          title: 'Name',
+          value: displayName,
+          icon: Icons.person_outline_rounded,
+        ),
+        _EmployeeInfoPanel(
+          colors: colors,
+          title: 'Employee ID',
+          value: userId.trim().isEmpty ? 'Not available' : userId,
+          icon: Icons.badge_outlined,
+        ),
+        _EmployeeInfoPanel(
+          colors: colors,
+          title: 'Email',
+          value: email.trim().isEmpty ? 'Not available' : email,
+          icon: Icons.mail_outline_rounded,
+        ),
         const SizedBox(height: 20),
         _SectionHeader(colors: colors, title: 'Employee Dashboard'),
         const SizedBox(height: 12),
         Row(
           children: [
-            _ActionButton(colors: colors, icon: Icons.access_time_rounded, label: 'Attendance', onTap: () => onNavigate(_MdStep.analytics)),
-            _ActionButton(colors: colors, icon: Icons.beach_access_outlined, label: 'Leave', onTap: () => onNavigate(_MdStep.approvals)),
-            _ActionButton(colors: colors, icon: Icons.assignment_outlined, label: 'Tasks', onTap: () => onNavigate(_MdStep.reports)),
-            _ActionButton(colors: colors, icon: Icons.more_horiz_rounded, label: 'More', onTap: () => onNavigate(_MdStep.more)),
+            _ActionButton(
+              colors: colors,
+              icon: Icons.access_time_rounded,
+              label: 'Attendance',
+              onTap: () => onNavigate(_MdStep.analytics),
+            ),
+            _ActionButton(
+              colors: colors,
+              icon: Icons.beach_access_outlined,
+              label: 'Leave',
+              onTap: () => onNavigate(_MdStep.approvals),
+            ),
+            _ActionButton(
+              colors: colors,
+              icon: Icons.assignment_outlined,
+              label: 'Tasks',
+              onTap: () => onNavigate(_MdStep.reports),
+            ),
+            _ActionButton(
+              colors: colors,
+              icon: Icons.more_horiz_rounded,
+              label: 'More',
+              onTap: () => onNavigate(_MdStep.more),
+            ),
           ],
         ),
       ],
@@ -848,9 +1134,25 @@ class _EmployeeInfoPanel extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: colors.muted, fontSize: 11, fontWeight: FontWeight.w800)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.text, fontSize: 13, fontWeight: FontWeight.w900)),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ],
             ),
           ),
@@ -866,7 +1168,13 @@ class _MeetingsPage extends StatefulWidget {
   final VoidCallback onCreate;
   final ValueChanged<MdMeeting> onOpen;
 
-  const _MeetingsPage({super.key, required this.colors, required this.meetings, required this.onCreate, required this.onOpen});
+  const _MeetingsPage({
+    super.key,
+    required this.colors,
+    required this.meetings,
+    required this.onCreate,
+    required this.onOpen,
+  });
 
   @override
   State<_MeetingsPage> createState() => _MeetingsPageState();
@@ -893,11 +1201,28 @@ class _MeetingsPageState extends State<_MeetingsPage> {
               onChanged: (tab) => setState(() => _selectedTab = tab),
             ),
             const SizedBox(height: 16),
-            Text('Backend Meetings', style: TextStyle(color: widget.colors.text, fontSize: 13, fontWeight: FontWeight.w800)),
+            Text(
+              'Backend Meetings',
+              style: TextStyle(
+                color: widget.colors.text,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 10),
             if (meetings.isEmpty)
-              _InfoPanel(colors: widget.colors, title: 'No $_selectedTab meetings', value: 'No backend meetings match this tab'),
-            ...meetings.map((meeting) => _MeetingTile(colors: widget.colors, meeting: meeting, onTap: () => widget.onOpen(meeting))),
+              _InfoPanel(
+                colors: widget.colors,
+                title: 'No $_selectedTab meetings',
+                value: 'No backend meetings match this tab',
+              ),
+            ...meetings.map(
+              (meeting) => _MeetingTile(
+                colors: widget.colors,
+                meeting: meeting,
+                onTap: () => widget.onOpen(meeting),
+              ),
+            ),
           ],
         ),
         Positioned(
@@ -931,8 +1256,12 @@ class _CalendarPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final daysInMonth = _mdDaysInMonth(selectedDate);
-    final days = List.generate(daysInMonth, (index) => DateTime(selectedDate.year, selectedDate.month, index + 1));
-    final monthLabel = '${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.year}';
+    final days = List.generate(
+      daysInMonth,
+      (index) => DateTime(selectedDate.year, selectedDate.month, index + 1),
+    );
+    final monthLabel =
+        '${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.year}';
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
       children: [
@@ -941,12 +1270,25 @@ class _CalendarPage extends StatelessWidget {
         Row(
           children: [
             IconButton(
-              onPressed: () => onDateChanged(DateTime(selectedDate.year, selectedDate.month - 1, 1)),
+              onPressed: () => onDateChanged(
+                DateTime(selectedDate.year, selectedDate.month - 1, 1),
+              ),
               icon: Icon(Icons.chevron_left_rounded, color: colors.muted),
             ),
-            Expanded(child: Text(monthLabel, textAlign: TextAlign.center, style: TextStyle(color: colors.text, fontWeight: FontWeight.w900))),
+            Expanded(
+              child: Text(
+                monthLabel,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
             IconButton(
-              onPressed: () => onDateChanged(DateTime(selectedDate.year, selectedDate.month + 1, 1)),
+              onPressed: () => onDateChanged(
+                DateTime(selectedDate.year, selectedDate.month + 1, 1),
+              ),
               icon: Icon(Icons.chevron_right_rounded, color: colors.muted),
             ),
           ],
@@ -967,17 +1309,36 @@ class _CalendarPage extends StatelessWidget {
                   width: 34,
                   height: 34,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(color: selected ? colors.primary : Colors.transparent, shape: BoxShape.circle),
-                  child: Text('${date.day}', style: TextStyle(color: selected ? Colors.white : colors.text, fontWeight: selected ? FontWeight.w900 : FontWeight.w500)),
+                  decoration: BoxDecoration(
+                    color: selected ? colors.primary : Colors.transparent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '${date.day}',
+                    style: TextStyle(
+                      color: selected ? Colors.white : colors.text,
+                      fontWeight: selected ? FontWeight.w900 : FontWeight.w500,
+                    ),
+                  ),
                 ),
               ),
             );
           }).toList(),
         ),
         const SizedBox(height: 24),
-        _InfoPanel(colors: colors, title: 'Selected Date', value: '${selectedDate.day.toString().padLeft(2, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.year}'),
+        _InfoPanel(
+          colors: colors,
+          title: 'Selected Date',
+          value:
+              '${selectedDate.day.toString().padLeft(2, '0')}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.year}',
+        ),
         const SizedBox(height: 16),
-        _PrimaryButton(colors: colors, label: 'Next', icon: Icons.arrow_forward_rounded, onTap: onNext),
+        _PrimaryButton(
+          colors: colors,
+          label: 'Next',
+          icon: Icons.arrow_forward_rounded,
+          onTap: onNext,
+        ),
       ],
     );
   }
@@ -1014,7 +1375,9 @@ class _TimePage extends StatelessWidget {
       children: [
         _PageTitle(colors: colors, title: 'Select Time', center: true),
         const SizedBox(height: 16),
-        Center(child: _Pill(colors: colors, text: selectedDateLabel)),
+        Center(
+          child: _Pill(colors: colors, text: selectedDateLabel),
+        ),
         const SizedBox(height: 28),
         InkWell(
           onTap: () async {
@@ -1026,7 +1389,11 @@ class _TimePage extends StatelessWidget {
             );
             if (picked == null) return;
             final hour = picked.hourOfPeriod == 0 ? 12 : picked.hourOfPeriod;
-            onTimeChanged(hour, picked.minute, picked.period == DayPeriod.am ? 'AM' : 'PM');
+            onTimeChanged(
+              hour,
+              picked.minute,
+              picked.period == DayPeriod.am ? 'AM' : 'PM',
+            );
           },
           borderRadius: BorderRadius.circular(18),
           child: Container(
@@ -1038,10 +1405,17 @@ class _TimePage extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   '${selectedHour.toString().padLeft(2, '0')}:${selectedMinute.toString().padLeft(2, '0')} $selectedPeriod',
-                  style: TextStyle(color: colors.text, fontSize: 30, fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 7),
-                Text('Tap to choose time on the clock', style: TextStyle(color: colors.muted, fontSize: 12)),
+                Text(
+                  'Tap to choose time on the clock',
+                  style: TextStyle(color: colors.muted, fontSize: 12),
+                ),
               ],
             ),
           ),
@@ -1049,7 +1423,12 @@ class _TimePage extends StatelessWidget {
         const SizedBox(height: 34),
         _InfoPanel(colors: colors, title: 'Duration', value: duration),
         const SizedBox(height: 18),
-        _PrimaryButton(colors: colors, label: 'Next', icon: Icons.arrow_forward_rounded, onTap: onNext),
+        _PrimaryButton(
+          colors: colors,
+          label: 'Next',
+          icon: Icons.arrow_forward_rounded,
+          onTap: onNext,
+        ),
       ],
     );
   }
@@ -1061,17 +1440,30 @@ class _DetailsPage extends StatefulWidget {
   final ValueChanged<MdMeeting> onChanged;
   final VoidCallback onNext;
 
-  const _DetailsPage({required this.colors, required this.draft, required this.onChanged, required this.onNext});
+  const _DetailsPage({
+    required this.colors,
+    required this.draft,
+    required this.onChanged,
+    required this.onNext,
+  });
 
   @override
   State<_DetailsPage> createState() => _DetailsPageState();
 }
 
 class _DetailsPageState extends State<_DetailsPage> {
-  late final TextEditingController _title = TextEditingController(text: widget.draft.title);
-  late final TextEditingController _meetingType = TextEditingController(text: widget.draft.meetingType);
-  late final TextEditingController _location = TextEditingController(text: widget.draft.location);
-  late final TextEditingController _description = TextEditingController(text: widget.draft.description);
+  late final TextEditingController _title = TextEditingController(
+    text: widget.draft.title,
+  );
+  late final TextEditingController _meetingType = TextEditingController(
+    text: widget.draft.meetingType,
+  );
+  late final TextEditingController _location = TextEditingController(
+    text: widget.draft.location,
+  );
+  late final TextEditingController _description = TextEditingController(
+    text: widget.draft.description,
+  );
 
   @override
   void dispose() {
@@ -1083,12 +1475,14 @@ class _DetailsPageState extends State<_DetailsPage> {
   }
 
   void _next() {
-    widget.onChanged(widget.draft.copyWith(
-      title: _title.text,
-      meetingType: _meetingType.text,
-      location: _location.text,
-      description: _description.text,
-    ));
+    widget.onChanged(
+      widget.draft.copyWith(
+        title: _title.text,
+        meetingType: _meetingType.text,
+        location: _location.text,
+        description: _description.text,
+      ),
+    );
     widget.onNext();
   }
 
@@ -1101,10 +1495,25 @@ class _DetailsPageState extends State<_DetailsPage> {
         _PageTitle(colors: colors, title: 'Meeting Details', center: true),
         _Field(colors: colors, label: 'Meeting Title', controller: _title),
         _Field(colors: colors, label: 'Meeting Type', controller: _meetingType),
-        _Field(colors: colors, label: 'Location', controller: _location, suffix: Icons.location_on_outlined),
-        _Field(colors: colors, label: 'Add Description (Optional)', controller: _description, maxLines: 4),
+        _Field(
+          colors: colors,
+          label: 'Location',
+          controller: _location,
+          suffix: Icons.location_on_outlined,
+        ),
+        _Field(
+          colors: colors,
+          label: 'Add Description (Optional)',
+          controller: _description,
+          maxLines: 4,
+        ),
         const SizedBox(height: 14),
-        _PrimaryButton(colors: colors, label: 'Next', icon: Icons.arrow_forward_rounded, onTap: _next),
+        _PrimaryButton(
+          colors: colors,
+          label: 'Next',
+          icon: Icons.arrow_forward_rounded,
+          onTap: _next,
+        ),
       ],
     );
   }
@@ -1115,7 +1524,11 @@ class _ParticipantsPage extends StatefulWidget {
   final List<MdParticipant> participants;
   final ValueChanged<List<MdParticipant>> onNext;
 
-  const _ParticipantsPage({required this.colors, required this.participants, required this.onNext});
+  const _ParticipantsPage({
+    required this.colors,
+    required this.participants,
+    required this.onNext,
+  });
 
   @override
   State<_ParticipantsPage> createState() => _ParticipantsPageState();
@@ -1130,7 +1543,11 @@ class _ParticipantsPageState extends State<_ParticipantsPage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
       children: [
-        _PageTitle(colors: widget.colors, title: 'Add Participants', center: true),
+        _PageTitle(
+          colors: widget.colors,
+          title: 'Add Participants',
+          center: true,
+        ),
         _SearchBox(colors: widget.colors),
         const SizedBox(height: 12),
         ...List.generate(_participants.length, (index) {
@@ -1138,11 +1555,20 @@ class _ParticipantsPageState extends State<_ParticipantsPage> {
           return _ParticipantTile(
             colors: widget.colors,
             participant: item,
-            onTap: () => setState(() => _participants[index] = item.copyWith(selected: !item.selected)),
+            onTap: () => setState(
+              () => _participants[index] = item.copyWith(
+                selected: !item.selected,
+              ),
+            ),
           );
         }),
         const SizedBox(height: 18),
-        _PrimaryButton(colors: widget.colors, label: 'Next ($selected)', icon: Icons.arrow_forward_rounded, onTap: () => widget.onNext(_participants)),
+        _PrimaryButton(
+          colors: widget.colors,
+          label: 'Next ($selected)',
+          icon: Icons.arrow_forward_rounded,
+          onTap: () => widget.onNext(_participants),
+        ),
       ],
     );
   }
@@ -1153,15 +1579,20 @@ class _AgendaPage extends StatefulWidget {
   final List<String> agenda;
   final ValueChanged<List<String>> onNext;
 
-  const _AgendaPage({required this.colors, required this.agenda, required this.onNext});
+  const _AgendaPage({
+    required this.colors,
+    required this.agenda,
+    required this.onNext,
+  });
 
   @override
   State<_AgendaPage> createState() => _AgendaPageState();
 }
 
 class _AgendaPageState extends State<_AgendaPage> {
-  late final List<TextEditingController> _controllers =
-      widget.agenda.map((item) => TextEditingController(text: item)).toList();
+  late final List<TextEditingController> _controllers = widget.agenda
+      .map((item) => TextEditingController(text: item))
+      .toList();
 
   @override
   void dispose() {
@@ -1178,7 +1609,10 @@ class _AgendaPageState extends State<_AgendaPage> {
   }
 
   void _next() {
-    final agenda = _controllers.map((controller) => controller.text.trim()).where((item) => item.isNotEmpty).toList();
+    final agenda = _controllers
+        .map((controller) => controller.text.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
     widget.onNext(agenda);
   }
 
@@ -1189,14 +1623,32 @@ class _AgendaPageState extends State<_AgendaPage> {
       children: [
         _PageTitle(colors: widget.colors, title: 'Add Agenda', center: true),
         const SizedBox(height: 8),
-        ...List.generate(_controllers.length, (index) => _AgendaField(colors: widget.colors, index: index + 1, controller: _controllers[index])),
+        ...List.generate(
+          _controllers.length,
+          (index) => _AgendaField(
+            colors: widget.colors,
+            index: index + 1,
+            controller: _controllers[index],
+          ),
+        ),
         TextButton.icon(
           onPressed: _addAgendaItem,
           icon: Icon(Icons.add_rounded, color: widget.colors.primary, size: 18),
-          label: Text('Add Agenda Item', style: TextStyle(color: widget.colors.primary, fontWeight: FontWeight.w800)),
+          label: Text(
+            'Add Agenda Item',
+            style: TextStyle(
+              color: widget.colors.primary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ),
         const SizedBox(height: 18),
-        _PrimaryButton(colors: widget.colors, label: 'Next', icon: Icons.arrow_forward_rounded, onTap: _next),
+        _PrimaryButton(
+          colors: widget.colors,
+          label: 'Next',
+          icon: Icons.arrow_forward_rounded,
+          onTap: _next,
+        ),
       ],
     );
   }
@@ -1207,7 +1659,11 @@ class _ReviewPage extends StatelessWidget {
   final MdMeeting meeting;
   final VoidCallback onSchedule;
 
-  const _ReviewPage({required this.colors, required this.meeting, required this.onSchedule});
+  const _ReviewPage({
+    required this.colors,
+    required this.meeting,
+    required this.onSchedule,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1215,14 +1671,50 @@ class _ReviewPage extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
       children: [
         _PageTitle(colors: colors, title: 'Review Meeting', center: true),
-        _ReviewRow(colors: colors, icon: Icons.title_rounded, title: 'Title', value: meeting.title),
-        _ReviewRow(colors: colors, icon: Icons.calendar_today_rounded, title: 'Date', value: meeting.dateLabel),
-        _ReviewRow(colors: colors, icon: Icons.schedule_rounded, title: 'Time', value: meeting.timeLabel),
-        _ReviewRow(colors: colors, icon: Icons.location_on_outlined, title: 'Location', value: meeting.location),
-        _ReviewRow(colors: colors, icon: Icons.people_outline_rounded, title: 'Participants', value: '${meeting.participants.where((item) => item.selected).length} Selected'),
-        _ReviewRow(colors: colors, icon: Icons.list_alt_rounded, title: 'Agenda', value: '${meeting.agenda.length} Agenda Items'),
+        _ReviewRow(
+          colors: colors,
+          icon: Icons.title_rounded,
+          title: 'Title',
+          value: meeting.title,
+        ),
+        _ReviewRow(
+          colors: colors,
+          icon: Icons.calendar_today_rounded,
+          title: 'Date',
+          value: meeting.dateLabel,
+        ),
+        _ReviewRow(
+          colors: colors,
+          icon: Icons.schedule_rounded,
+          title: 'Time',
+          value: meeting.timeLabel,
+        ),
+        _ReviewRow(
+          colors: colors,
+          icon: Icons.location_on_outlined,
+          title: 'Location',
+          value: meeting.location,
+        ),
+        _ReviewRow(
+          colors: colors,
+          icon: Icons.people_outline_rounded,
+          title: 'Participants',
+          value:
+              '${meeting.participants.where((item) => item.selected).length} Selected',
+        ),
+        _ReviewRow(
+          colors: colors,
+          icon: Icons.list_alt_rounded,
+          title: 'Agenda',
+          value: '${meeting.agenda.length} Agenda Items',
+        ),
         const SizedBox(height: 18),
-        _PrimaryButton(colors: colors, label: 'Schedule Meeting', icon: Icons.event_available_rounded, onTap: onSchedule),
+        _PrimaryButton(
+          colors: colors,
+          label: 'Schedule Meeting',
+          icon: Icons.event_available_rounded,
+          onTap: onSchedule,
+        ),
       ],
     );
   }
@@ -1234,7 +1726,12 @@ class _SuccessPage extends StatelessWidget {
   final VoidCallback onView;
   final VoidCallback onDone;
 
-  const _SuccessPage({required this.colors, required this.meeting, required this.onView, required this.onDone});
+  const _SuccessPage({
+    required this.colors,
+    required this.meeting,
+    required this.onView,
+    required this.onDone,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1247,17 +1744,45 @@ class _SuccessPage extends StatelessWidget {
           const SizedBox(height: 14),
           Icon(Icons.check_circle_rounded, color: colors.success, size: 44),
           const SizedBox(height: 18),
-          Text('Meeting Scheduled\nSuccessfully!', textAlign: TextAlign.center, style: TextStyle(color: colors.text, fontSize: 24, fontWeight: FontWeight.w900)),
+          Text(
+            'Meeting Scheduled\nSuccessfully!',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 14),
-          Text(meeting.title, style: TextStyle(color: colors.text, fontWeight: FontWeight.w800)),
+          Text(
+            meeting.title,
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+          ),
           const SizedBox(height: 6),
-          Text('${meeting.dateLabel} - ${meeting.timeLabel}', textAlign: TextAlign.center, style: TextStyle(color: colors.muted, fontSize: 12)),
+          Text(
+            '${meeting.dateLabel} - ${meeting.timeLabel}',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: colors.muted, fontSize: 12),
+          ),
           const SizedBox(height: 28),
           Row(
             children: [
-              Expanded(child: _SecondaryButton(colors: colors, label: 'View Meeting', onTap: onView)),
+              Expanded(
+                child: _SecondaryButton(
+                  colors: colors,
+                  label: 'View Meeting',
+                  onTap: onView,
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _PrimaryButton(colors: colors, label: 'Done', icon: Icons.check_rounded, onTap: onDone)),
+              Expanded(
+                child: _PrimaryButton(
+                  colors: colors,
+                  label: 'Done',
+                  icon: Icons.check_rounded,
+                  onTap: onDone,
+                ),
+              ),
             ],
           ),
         ],
@@ -1268,11 +1793,18 @@ class _SuccessPage extends StatelessWidget {
 
 class _TopBar extends StatelessWidget {
   final _MdColors colors;
+  final String dashboardTitle;
   final VoidCallback onMenu;
   final VoidCallback onTheme;
   final VoidCallback onProfile;
 
-  const _TopBar({required this.colors, required this.onMenu, required this.onTheme, required this.onProfile});
+  const _TopBar({
+    required this.colors,
+    required this.dashboardTitle,
+    required this.onMenu,
+    required this.onTheme,
+    required this.onProfile,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1293,20 +1825,54 @@ class _TopBar extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: colors.border),
               ),
-              child: const BitByteLogo(size: 28, showSubtitle: false, compact: true),
+              child: const BitByteLogo(
+                size: 28,
+                showSubtitle: false,
+                compact: true,
+              ),
             ),
           ),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('MD Dashboard', style: TextStyle(color: colors.text, fontSize: 15, fontWeight: FontWeight.w900)),
-              Text(timeLabel, style: TextStyle(color: colors.muted, fontSize: 11, fontWeight: FontWeight.w700)),
+              Text(
+                dashboardTitle,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(
+                timeLabel,
+                style: TextStyle(
+                  color: colors.muted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
           const Spacer(),
-          IconButton(onPressed: onTheme, icon: Icon(colors.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: colors.text, size: 20)),
-          IconButton(onPressed: onProfile, icon: Icon(Icons.account_circle_outlined, color: colors.text, size: 22)),
+          IconButton(
+            onPressed: onTheme,
+            icon: Icon(
+              colors.isDark
+                  ? Icons.light_mode_outlined
+                  : Icons.dark_mode_outlined,
+              color: colors.text,
+              size: 20,
+            ),
+          ),
+          IconButton(
+            onPressed: onProfile,
+            icon: Icon(
+              Icons.account_circle_outlined,
+              color: colors.text,
+              size: 22,
+            ),
+          ),
         ],
       ),
     );
@@ -1317,14 +1883,22 @@ class _MdDrawer extends StatelessWidget {
   final _MdColors colors;
   final String name;
   final String email;
+  final String roleLabel;
   final ValueChanged<_MdStep> select;
   final VoidCallback logout;
 
-  const _MdDrawer({required this.colors, required this.name, required this.email, required this.select, required this.logout});
+  const _MdDrawer({
+    required this.colors,
+    required this.name,
+    required this.email,
+    required this.roleLabel,
+    required this.select,
+    required this.logout,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final displayName = name.trim().isEmpty ? 'MD' : name.trim();
+    final displayName = name.trim().isEmpty ? roleLabel : name.trim();
     return Drawer(
       width: MediaQuery.of(context).size.width * 0.86,
       backgroundColor: colors.surface,
@@ -1334,116 +1908,165 @@ class _MdDrawer extends StatelessWidget {
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-          child: Column(children: [
-            // ── Logo + close ──────────────────────────────────
-            Row(children: [
-              const BitByteLogo(compact: true),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text('HRMS',
-                    style: TextStyle(
-                        color: colors.text, fontSize: 22, fontWeight: FontWeight.w800)),
+          child: Column(
+            children: [
+              // ── Logo + close ──────────────────────────────────
+              Row(
+                children: [
+                  const BitByteLogo(compact: true),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'HRMS',
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: colors.muted,
+                      size: 26,
+                    ),
+                  ),
+                ],
               ),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: Icon(Icons.close_rounded, color: colors.muted, size: 26),
-              ),
-            ]),
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            // ── Profile section ───────────────────────────────
-            Row(children: [
-              Container(
-                width: 72,
-                height: 72,
-                padding: const EdgeInsets.all(2.5),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [colors.primary, colors.success, const Color(0xFF8B5CFF)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+              // ── Profile section ───────────────────────────────
+              Row(
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    padding: const EdgeInsets.all(2.5),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          colors.primary,
+                          colors.success,
+                          const Color(0xFF8B5CFF),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: CircleAvatar(
+                      backgroundColor: colors.isDark
+                          ? const Color(0xFF0A2238)
+                          : const Color(0xFFEEF6FF),
+                      child: Icon(
+                        Icons.business_center_rounded,
+                        color: colors.primary,
+                        size: 30,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.text,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          roleLabel,
+                          style: TextStyle(
+                            color: colors.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          email,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.muted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Divider(color: colors.border),
+              const SizedBox(height: 4),
+
+              // ── Nav items ─────────────────────────────────────
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _MdDrawerTile(
+                      colors: colors,
+                      icon: Icons.dashboard_rounded,
+                      title: 'Dashboard',
+                      onTap: () => select(_MdStep.dashboard),
+                    ),
+                    _MdDrawerTile(
+                      colors: colors,
+                      icon: Icons.event_note_rounded,
+                      title: 'Schedule Meeting',
+                      onTap: () => select(_MdStep.meetings),
+                    ),
+                    _MdDrawerTile(
+                      colors: colors,
+                      icon: Icons.list_alt_rounded,
+                      title: 'Meeting List',
+                      onTap: () => select(_MdStep.list),
+                    ),
+                    _MdDrawerTile(
+                      colors: colors,
+                      icon: Icons.calendar_month_rounded,
+                      title: 'Calendar',
+                      onTap: () => select(_MdStep.calendar),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(color: colors.border),
+
+              // ── Logout ────────────────────────────────────────
+              ListTile(
+                dense: true,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                leading: const Icon(
+                  Icons.logout_rounded,
+                  color: Colors.redAccent,
+                  size: 20,
+                ),
+                title: const Text(
+                  'Logout',
+                  style: TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                child: CircleAvatar(
-                  backgroundColor: colors.isDark
-                      ? const Color(0xFF0A2238)
-                      : const Color(0xFFEEF6FF),
-                  child: Icon(Icons.business_center_rounded,
-                      color: colors.primary, size: 30),
-                ),
+                onTap: logout,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: colors.text,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Text('Managing Director',
-                      style: TextStyle(
-                          color: colors.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 2),
-                  Text(email,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color: colors.muted,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600)),
-                ]),
-              ),
-            ]),
-            const SizedBox(height: 18),
-            Divider(color: colors.border),
-            const SizedBox(height: 4),
-
-            // ── Nav items ─────────────────────────────────────
-            Expanded(
-              child: ListView(padding: EdgeInsets.zero, children: [
-                _MdDrawerTile(
-                    colors: colors,
-                    icon: Icons.dashboard_rounded,
-                    title: 'Dashboard',
-                    onTap: () => select(_MdStep.dashboard)),
-                _MdDrawerTile(
-                    colors: colors,
-                    icon: Icons.event_note_rounded,
-                    title: 'Schedule Meeting',
-                    onTap: () => select(_MdStep.meetings)),
-                _MdDrawerTile(
-                    colors: colors,
-                    icon: Icons.list_alt_rounded,
-                    title: 'Meeting List',
-                    onTap: () => select(_MdStep.list)),
-                _MdDrawerTile(
-                    colors: colors,
-                    icon: Icons.calendar_month_rounded,
-                    title: 'Calendar',
-                    onTap: () => select(_MdStep.calendar)),
-              ]),
-            ),
-            Divider(color: colors.border),
-
-            // ── Logout ────────────────────────────────────────
-            ListTile(
-              dense: true,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              leading: const Icon(Icons.logout_rounded,
-                  color: Colors.redAccent, size: 20),
-              title: const Text('Logout',
-                  style: TextStyle(
-                      color: Colors.redAccent, fontWeight: FontWeight.w800)),
-              onTap: logout,
-            ),
-          ]),
+            ],
+          ),
         ),
       ),
     );
@@ -1456,7 +2079,12 @@ class _MdDrawerTile extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
 
-  const _MdDrawerTile({required this.colors, required this.icon, required this.title, required this.onTap});
+  const _MdDrawerTile({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1466,11 +2094,14 @@ class _MdDrawerTile extends StatelessWidget {
         dense: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         leading: Icon(icon, color: colors.primary, size: 20),
-        title: Text(title,
-            style: TextStyle(
-                color: colors.text,
-                fontWeight: FontWeight.w700,
-                fontSize: 14)),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: colors.text,
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+          ),
+        ),
         onTap: onTap,
       ),
     );
@@ -1488,6 +2119,7 @@ class _MdMorePage extends StatelessWidget {
   final ValueChanged<_MdStep> onNavigate;
   final ValueChanged<String> onOpenFlow;
   final VoidCallback onLogout;
+  final String roleLabel;
 
   const _MdMorePage({
     required this.colors,
@@ -1500,11 +2132,12 @@ class _MdMorePage extends StatelessWidget {
     required this.onNavigate,
     required this.onOpenFlow,
     required this.onLogout,
+    required this.roleLabel,
   });
 
   @override
   Widget build(BuildContext context) {
-    final displayName = name.trim().isEmpty ? 'Managing Director' : name.trim();
+    final displayName = name.trim().isEmpty ? roleLabel : name.trim();
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 22),
       children: [
@@ -1518,18 +2151,42 @@ class _MdMorePage extends StatelessWidget {
             Expanded(
               child: Column(
                 children: [
-                  Text('More', style: TextStyle(color: colors.text, fontSize: 25, fontWeight: FontWeight.w900)),
+                  Text(
+                    'More',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 25,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   const SizedBox(height: 3),
-                  Text('Management & Controls', style: TextStyle(color: colors.muted, fontSize: 14)),
+                  Text(
+                    'Management & Controls',
+                    style: TextStyle(color: colors.muted, fontSize: 14),
+                  ),
                 ],
               ),
             ),
             Stack(
               clipBehavior: Clip.none,
               children: [
-                IconButton(onPressed: () => onOpenFlow('critical-alerts'), icon: Icon(Icons.notifications_none_rounded, color: colors.text, size: 28)),
+                IconButton(
+                  onPressed: () => onOpenFlow('critical-alerts'),
+                  icon: Icon(
+                    Icons.notifications_none_rounded,
+                    color: colors.text,
+                    size: 28,
+                  ),
+                ),
                 if (alertCount > 0)
-                  Positioned(right: 7, top: 5, child: CircleAvatar(radius: 4, backgroundColor: colors.danger)),
+                  Positioned(
+                    right: 7,
+                    top: 5,
+                    child: CircleAvatar(
+                      radius: 4,
+                      backgroundColor: colors.danger,
+                    ),
+                  ),
               ],
             ),
           ],
@@ -1540,15 +2197,23 @@ class _MdMorePage extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           child: Container(
             padding: const EdgeInsets.all(16),
-            decoration: _box(colors).copyWith(borderRadius: BorderRadius.circular(18)),
+            decoration: _box(
+              colors,
+            ).copyWith(borderRadius: BorderRadius.circular(18)),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 46,
                   backgroundColor: colors.primary.withAlpha(50),
-                  backgroundImage: profileImage == null ? null : FileImage(profileImage!),
+                  backgroundImage: profileImage == null
+                      ? null
+                      : FileImage(profileImage!),
                   child: profileImage == null
-                      ? Icon(Icons.person_rounded, color: colors.primary, size: 48)
+                      ? Icon(
+                          Icons.person_rounded,
+                          color: colors.primary,
+                          size: 48,
+                        )
                       : null,
                 ),
                 const SizedBox(width: 16),
@@ -1556,16 +2221,40 @@ class _MdMorePage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(displayName, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.text, fontSize: 20, fontWeight: FontWeight.w900)),
+                      Text(
+                        displayName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.text,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                       const SizedBox(height: 5),
-                      Text('Managing Director', style: TextStyle(color: colors.muted, fontSize: 14)),
+                      Text(
+                        roleLabel,
+                        style: TextStyle(color: colors.muted, fontSize: 14),
+                      ),
                       const SizedBox(height: 4),
-                      Text(userId.isEmpty ? email : userId, style: TextStyle(color: colors.muted, fontSize: 13)),
+                      Text(
+                        userId.isEmpty ? email : userId,
+                        style: TextStyle(color: colors.muted, fontSize: 13),
+                      ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Text('View Profile', style: TextStyle(color: colors.primary, fontWeight: FontWeight.w800)),
-                          Icon(Icons.chevron_right_rounded, color: colors.primary),
+                          Text(
+                            'View Profile',
+                            style: TextStyle(
+                              color: colors.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            color: colors.primary,
+                          ),
                         ],
                       ),
                     ],
@@ -1580,10 +2269,26 @@ class _MdMorePage extends StatelessWidget {
           colors: colors,
           title: 'BUSINESS',
           items: [
-            _MdMoreItem('1. Company\nOverview', Icons.apartment_rounded, 'company-overview'),
-            _MdMoreItem('2. Financial\nInsights', Icons.pie_chart_outline_rounded, 'financial-insights'),
-            _MdMoreItem('3. Department\nPerformance', Icons.groups_2_outlined, 'department-performance'),
-            _MdMoreItem('4. Project\nPortfolio', Icons.business_center_outlined, 'project-portfolio'),
+            _MdMoreItem(
+              '1. Company\nOverview',
+              Icons.apartment_rounded,
+              'company-overview',
+            ),
+            _MdMoreItem(
+              '2. Financial\nInsights',
+              Icons.pie_chart_outline_rounded,
+              'financial-insights',
+            ),
+            _MdMoreItem(
+              '3. Department\nPerformance',
+              Icons.groups_2_outlined,
+              'department-performance',
+            ),
+            _MdMoreItem(
+              '4. Project\nPortfolio',
+              Icons.business_center_outlined,
+              'project-portfolio',
+            ),
           ],
           onOpen: onOpenFlow,
         ),
@@ -1591,10 +2296,29 @@ class _MdMorePage extends StatelessWidget {
           colors: colors,
           title: 'MANAGEMENT',
           items: [
-            _MdMoreItem('5. Approvals\nCenter', Icons.fact_check_outlined, 'approvals-center', badge: pendingApprovals),
-            _MdMoreItem('6. Workforce\nAnalytics', Icons.bar_chart_rounded, 'workforce-analytics'),
-            _MdMoreItem('7. Leadership\nTeam', Icons.groups_outlined, 'leadership-team'),
-            _MdMoreItem('8. Critical\nAlerts', Icons.notifications_active_outlined, 'critical-alerts', badge: alertCount, danger: true),
+            _MdMoreItem(
+              '5. Approvals\nCenter',
+              Icons.fact_check_outlined,
+              'approvals-center',
+              badge: pendingApprovals,
+            ),
+            _MdMoreItem(
+              '6. Workforce\nAnalytics',
+              Icons.bar_chart_rounded,
+              'workforce-analytics',
+            ),
+            _MdMoreItem(
+              '7. Leadership\nTeam',
+              Icons.groups_outlined,
+              'leadership-team',
+            ),
+            _MdMoreItem(
+              '8. Critical\nAlerts',
+              Icons.notifications_active_outlined,
+              'critical-alerts',
+              badge: alertCount,
+              danger: true,
+            ),
           ],
           onOpen: onOpenFlow,
         ),
@@ -1602,9 +2326,21 @@ class _MdMorePage extends StatelessWidget {
           colors: colors,
           title: 'REPORTS & TOOLS',
           items: [
-            _MdMoreItem('9. Executive\nReports', Icons.insert_chart_outlined_rounded, 'executive-reports'),
-            _MdMoreItem('10. Meetings', Icons.calendar_month_outlined, 'meetings'),
-            _MdMoreItem('11. Announcements', Icons.campaign_outlined, 'announcements'),
+            _MdMoreItem(
+              '9. Executive\nReports',
+              Icons.insert_chart_outlined_rounded,
+              'executive-reports',
+            ),
+            _MdMoreItem(
+              '10. Meetings',
+              Icons.calendar_month_outlined,
+              'meetings',
+            ),
+            _MdMoreItem(
+              '11. Announcements',
+              Icons.campaign_outlined,
+              'announcements',
+            ),
             _MdMoreItem('12. Documents', Icons.folder_outlined, 'documents'),
           ],
           onOpen: onOpenFlow,
@@ -1635,7 +2371,13 @@ class _MdMoreItem {
   final int badge;
   final bool danger;
 
-  const _MdMoreItem(this.label, this.icon, this.flow, {this.badge = 0, this.danger = false});
+  const _MdMoreItem(
+    this.label,
+    this.icon,
+    this.flow, {
+    this.badge = 0,
+    this.danger = false,
+  });
 }
 
 class _MdMoreSection extends StatelessWidget {
@@ -1644,66 +2386,105 @@ class _MdMoreSection extends StatelessWidget {
   final List<_MdMoreItem> items;
   final ValueChanged<String> onOpen;
 
-  const _MdMoreSection({required this.colors, required this.title, required this.items, required this.onOpen});
+  const _MdMoreSection({
+    required this.colors,
+    required this.title,
+    required this.items,
+    required this.onOpen,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
         children: [
-          Row(
-            children: [
-              Text(title, style: TextStyle(color: colors.primary, fontSize: 14, fontWeight: FontWeight.w900)),
-              const SizedBox(width: 12),
-              Expanded(child: Divider(color: colors.primary.withAlpha(80))),
-              CircleAvatar(radius: 3, backgroundColor: colors.primary),
-            ],
-          ),
-          const SizedBox(height: 11),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 1.48,
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.primary,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
             ),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              final itemColor = item.danger ? colors.danger : colors.primary;
-              return InkWell(
-                onTap: () => onOpen(item.flow),
-                borderRadius: BorderRadius.circular(14),
-                child: Container(
-                  padding: const EdgeInsets.all(13),
-                  decoration: _box(colors).copyWith(borderRadius: BorderRadius.circular(14)),
-                  child: Row(
-                    children: [
-                      Icon(item.icon, color: itemColor, size: 29),
-                      const SizedBox(width: 11),
-                      Expanded(child: Text(item.label, style: TextStyle(color: colors.text, fontSize: 13, height: 1.35, fontWeight: FontWeight.w700))),
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (item.badge > 0)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                              decoration: BoxDecoration(color: item.danger ? colors.danger : const Color(0xFFB87316), borderRadius: BorderRadius.circular(20)),
-                              child: Text('${item.badge}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 10)),
-                            ),
-                          Icon(Icons.chevron_right_rounded, color: colors.muted),
-                        ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Divider(color: colors.primary.withAlpha(80))),
+          CircleAvatar(radius: 3, backgroundColor: colors.primary),
+        ],
+      ),
+      const SizedBox(height: 11),
+      GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: items.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 1.48,
+        ),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          final itemColor = item.danger ? colors.danger : colors.primary;
+          return InkWell(
+            onTap: () => onOpen(item.flow),
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              padding: const EdgeInsets.all(13),
+              decoration: _box(
+                colors,
+              ).copyWith(borderRadius: BorderRadius.circular(14)),
+              child: Row(
+                children: [
+                  Icon(item.icon, color: itemColor, size: 29),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 13,
+                        height: 1.35,
+                        fontWeight: FontWeight.w700,
                       ),
+                    ),
+                  ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (item.badge > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: item.danger
+                                ? colors.danger
+                                : const Color(0xFFB87316),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${item.badge}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      Icon(Icons.chevron_right_rounded, color: colors.muted),
                     ],
                   ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-        ],
-      );
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+      const SizedBox(height: 20),
+    ],
+  );
 }
 
 class _MdMoreWideButton extends StatelessWidget {
@@ -1713,7 +2494,13 @@ class _MdMoreWideButton extends StatelessWidget {
   final VoidCallback onTap;
   final bool danger;
 
-  const _MdMoreWideButton({required this.colors, required this.icon, required this.label, required this.onTap, this.danger = false});
+  const _MdMoreWideButton({
+    required this.colors,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1732,7 +2519,14 @@ class _MdMoreWideButton extends StatelessWidget {
           children: [
             Icon(icon, color: color),
             const SizedBox(width: 12),
-            Text(label, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w900)),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
             if (!danger) ...[
               const Spacer(),
               Icon(Icons.chevron_right_rounded, color: colors.muted),
@@ -1767,36 +2561,45 @@ class _MdModulePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-        children: [
-          _PageTitle(colors: colors, title: title),
-          Text(subtitle, style: TextStyle(color: colors.muted, fontSize: 12)),
-          const SizedBox(height: 18),
-          ...items.map(
-            (item) => Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              decoration: _box(colors),
-              child: Row(
-                children: [
-                  _IconBox(colors: colors, icon: item.icon),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(item.title, style: TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 4),
-                        Text(item.value, style: TextStyle(color: colors.muted, fontSize: 12)),
-                      ],
+    padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+    children: [
+      _PageTitle(colors: colors, title: title),
+      Text(subtitle, style: TextStyle(color: colors.muted, fontSize: 12)),
+      const SizedBox(height: 18),
+      ...items.map(
+        (item) => Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: _box(colors),
+          child: Row(
+            children: [
+              _IconBox(colors: colors, icon: item.icon),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      item.value,
+                      style: TextStyle(color: colors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      );
+        ),
+      ),
+    ],
+  );
 }
 
 class _MdPeoplePage extends StatelessWidget {
@@ -1807,29 +2610,42 @@ class _MdPeoplePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-        children: [
-          _PageTitle(colors: colors, title: 'Employees'),
-          Text('${people.length} employees loaded from backend', style: TextStyle(color: colors.muted, fontSize: 12)),
-          const SizedBox(height: 14),
-          if (people.isEmpty)
-            _InfoPanel(colors: colors, title: 'No employees', value: 'Seed or add employees in the backend'),
-          ...people.map(
-            (person) => Container(
-              margin: const EdgeInsets.only(bottom: 9),
-              decoration: _box(colors),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: colors.primary.withAlpha(45),
-                  child: Text(person.name.isEmpty ? '?' : person.name[0], style: TextStyle(color: colors.primary)),
-                ),
-                title: Text(person.name, style: TextStyle(color: colors.text, fontWeight: FontWeight.w800)),
-                subtitle: Text(person.role, style: TextStyle(color: colors.muted)),
+    padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+    children: [
+      _PageTitle(colors: colors, title: 'Employees'),
+      Text(
+        '${people.length} employees loaded from backend',
+        style: TextStyle(color: colors.muted, fontSize: 12),
+      ),
+      const SizedBox(height: 14),
+      if (people.isEmpty)
+        _InfoPanel(
+          colors: colors,
+          title: 'No employees',
+          value: 'Seed or add employees in the backend',
+        ),
+      ...people.map(
+        (person) => Container(
+          margin: const EdgeInsets.only(bottom: 9),
+          decoration: _box(colors),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: colors.primary.withAlpha(45),
+              child: Text(
+                person.name.isEmpty ? '?' : person.name[0],
+                style: TextStyle(color: colors.primary),
               ),
             ),
+            title: Text(
+              person.name,
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+            ),
+            subtitle: Text(person.role, style: TextStyle(color: colors.muted)),
           ),
-        ],
-      );
+        ),
+      ),
+    ],
+  );
 }
 
 class _BottomNav extends StatelessWidget {
@@ -1837,7 +2653,11 @@ class _BottomNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTap;
 
-  const _BottomNav({required this.colors, required this.selectedIndex, required this.onTap});
+  const _BottomNav({
+    required this.colors,
+    required this.selectedIndex,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1851,7 +2671,10 @@ class _BottomNav extends StatelessWidget {
       _BottomNavEntry(Icons.more_horiz_rounded, 'More'),
     ];
     return Container(
-      decoration: BoxDecoration(color: colors.surface, border: Border(top: BorderSide(color: colors.border))),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.border)),
+      ),
       padding: const EdgeInsets.fromLTRB(6, 7, 6, 10),
       child: Row(
         children: List.generate(items.length, (index) {
@@ -1865,9 +2688,22 @@ class _BottomNav extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(items[index].icon, color: selected ? colors.primary : colors.muted, size: 18),
+                    Icon(
+                      items[index].icon,
+                      color: selected ? colors.primary : colors.muted,
+                      size: 18,
+                    ),
                     const SizedBox(height: 3),
-                    FittedBox(child: Text(items[index].label, style: TextStyle(color: selected ? colors.primary : colors.muted, fontSize: 10, fontWeight: FontWeight.w700))),
+                    FittedBox(
+                      child: Text(
+                        items[index].label,
+                        style: TextStyle(
+                          color: selected ? colors.primary : colors.muted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1893,7 +2729,13 @@ class _MetricCard extends StatelessWidget {
   final String? trend;
   final bool danger;
 
-  const _MetricCard({required this.colors, required this.title, required this.value, this.trend, this.danger = false});
+  const _MetricCard({
+    required this.colors,
+    required this.title,
+    required this.value,
+    this.trend,
+    this.danger = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1904,11 +2746,36 @@ class _MetricCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: TextStyle(color: colors.muted, fontSize: 11, fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           Row(
             children: [
-              Expanded(child: Text(value, overflow: TextOverflow.ellipsis, style: TextStyle(color: danger ? colors.danger : colors.text, fontSize: 18, fontWeight: FontWeight.w900))),
-              if (trend != null) Text(trend!, style: TextStyle(color: colors.success, fontSize: 10, fontWeight: FontWeight.w800)),
+              Expanded(
+                child: Text(
+                  value,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: danger ? colors.danger : colors.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (trend != null)
+                Text(
+                  trend!,
+                  style: TextStyle(
+                    color: colors.success,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
             ],
           ),
         ],
@@ -1931,10 +2798,25 @@ class _ChartCard extends StatelessWidget {
       decoration: _box(colors),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
-        children: points.map((point) => Expanded(child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: FractionallySizedBox(heightFactor: point, alignment: Alignment.bottomCenter, child: Container(decoration: BoxDecoration(color: colors.primary, borderRadius: BorderRadius.circular(8)))),
-        ))).toList(),
+        children: points
+            .map(
+              (point) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: FractionallySizedBox(
+                    heightFactor: point,
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            )
+            .toList(),
       ),
     );
   }
@@ -1945,7 +2827,11 @@ class _MeetingTile extends StatelessWidget {
   final MdMeeting meeting;
   final VoidCallback onTap;
 
-  const _MeetingTile({required this.colors, required this.meeting, required this.onTap});
+  const _MeetingTile({
+    required this.colors,
+    required this.meeting,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1965,10 +2851,26 @@ class _MeetingTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(meeting.title, overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.text, fontSize: 13, fontWeight: FontWeight.w900)),
+                    Text(
+                      meeting.title,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text('${meeting.dateLabel}, ${meeting.timeLabel}', overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.muted, fontSize: 11)),
-                    Text(meeting.location, overflow: TextOverflow.ellipsis, style: TextStyle(color: colors.muted, fontSize: 11)),
+                    Text(
+                      '${meeting.dateLabel}, ${meeting.timeLabel}',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.muted, fontSize: 11),
+                    ),
+                    Text(
+                      meeting.location,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.muted, fontSize: 11),
+                    ),
                   ],
                 ),
               ),
@@ -1988,7 +2890,13 @@ class _Field extends StatelessWidget {
   final int maxLines;
   final IconData? suffix;
 
-  const _Field({required this.colors, required this.label, required this.controller, this.maxLines = 1, this.suffix});
+  const _Field({
+    required this.colors,
+    required this.label,
+    required this.controller,
+    this.maxLines = 1,
+    this.suffix,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1997,19 +2905,37 @@ class _Field extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: colors.muted, fontSize: 11, fontWeight: FontWeight.w800)),
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           const SizedBox(height: 7),
           TextField(
             controller: controller,
             maxLines: maxLines,
             style: TextStyle(color: colors.text, fontSize: 13),
             decoration: InputDecoration(
-              suffixIcon: suffix == null ? null : Icon(suffix, color: colors.muted, size: 18),
+              suffixIcon: suffix == null
+                  ? null
+                  : Icon(suffix, color: colors.muted, size: 18),
               filled: true,
               fillColor: colors.surface,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: colors.border)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: colors.primary)),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: colors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: colors.primary),
+              ),
             ),
           ),
         ],
@@ -2023,17 +2949,43 @@ class _ParticipantTile extends StatelessWidget {
   final MdParticipant participant;
   final VoidCallback onTap;
 
-  const _ParticipantTile({required this.colors, required this.participant, required this.onTap});
+  const _ParticipantTile({
+    required this.colors,
+    required this.participant,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final initial = participant.name.trim().isEmpty ? '?' : participant.name.trim().substring(0, 1);
+    final initial = participant.name.trim().isEmpty
+        ? '?'
+        : participant.name.trim().substring(0, 1);
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(backgroundColor: colors.primary.withAlpha(45), child: Text(initial, style: TextStyle(color: colors.primary, fontWeight: FontWeight.w900))),
-      title: Text(participant.name, style: TextStyle(color: colors.text, fontWeight: FontWeight.w800, fontSize: 13)),
-      subtitle: Text(participant.role, style: TextStyle(color: colors.muted, fontSize: 11)),
-      trailing: Checkbox(value: participant.selected, activeColor: colors.primary, onChanged: (_) => onTap()),
+      leading: CircleAvatar(
+        backgroundColor: colors.primary.withAlpha(45),
+        child: Text(
+          initial,
+          style: TextStyle(color: colors.primary, fontWeight: FontWeight.w900),
+        ),
+      ),
+      title: Text(
+        participant.name,
+        style: TextStyle(
+          color: colors.text,
+          fontWeight: FontWeight.w800,
+          fontSize: 13,
+        ),
+      ),
+      subtitle: Text(
+        participant.role,
+        style: TextStyle(color: colors.muted, fontSize: 11),
+      ),
+      trailing: Checkbox(
+        value: participant.selected,
+        activeColor: colors.primary,
+        onChanged: (_) => onTap(),
+      ),
       onTap: onTap,
     );
   }
@@ -2044,7 +2996,11 @@ class _AgendaField extends StatelessWidget {
   final int index;
   final TextEditingController controller;
 
-  const _AgendaField({required this.colors, required this.index, required this.controller});
+  const _AgendaField({
+    required this.colors,
+    required this.index,
+    required this.controller,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2053,10 +3009,18 @@ class _AgendaField extends StatelessWidget {
       decoration: _box(colors),
       child: TextField(
         controller: controller,
-        style: TextStyle(color: colors.text, fontSize: 13, fontWeight: FontWeight.w700),
+        style: TextStyle(
+          color: colors.text,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
         decoration: InputDecoration(
           prefixText: '$index. ',
-          prefixStyle: TextStyle(color: colors.muted, fontSize: 13, fontWeight: FontWeight.w800),
+          prefixStyle: TextStyle(
+            color: colors.muted,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.all(13),
         ),
@@ -2071,7 +3035,12 @@ class _ReviewRow extends StatelessWidget {
   final String title;
   final String value;
 
-  const _ReviewRow({required this.colors, required this.icon, required this.title, required this.value});
+  const _ReviewRow({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2085,9 +3054,23 @@ class _ReviewRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: colors.muted, fontSize: 11, fontWeight: FontWeight.w800)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: colors.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(value, style: TextStyle(color: colors.text, fontSize: 13, fontWeight: FontWeight.w800)),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ],
             ),
           ),
@@ -2102,14 +3085,37 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final String? action;
 
-  const _SectionHeader({required this.colors, required this.title, this.action});
+  const _SectionHeader({
+    required this.colors,
+    required this.title,
+    this.action,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(child: Text(title, style: TextStyle(color: colors.text, fontSize: 14, fontWeight: FontWeight.w900))),
-      if (action != null) Text(action!, style: TextStyle(color: colors.muted, fontSize: 11, fontWeight: FontWeight.w700)),
-    ]);
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        if (action != null)
+          Text(
+            action!,
+            style: TextStyle(
+              color: colors.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -2118,13 +3124,25 @@ class _PageTitle extends StatelessWidget {
   final String title;
   final bool center;
 
-  const _PageTitle({required this.colors, required this.title, this.center = false});
+  const _PageTitle({
+    required this.colors,
+    required this.title,
+    this.center = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: Text(title, textAlign: center ? TextAlign.center : TextAlign.start, style: TextStyle(color: colors.text, fontSize: 20, fontWeight: FontWeight.w900)),
+      child: Text(
+        title,
+        textAlign: center ? TextAlign.center : TextAlign.start,
+        style: TextStyle(
+          color: colors.text,
+          fontSize: 20,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 }
@@ -2134,26 +3152,48 @@ class _Tabs extends StatelessWidget {
   final String selected;
   final ValueChanged<String> onChanged;
 
-  const _Tabs({required this.colors, required this.selected, required this.onChanged});
+  const _Tabs({
+    required this.colors,
+    required this.selected,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: colors.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: colors.border)),
-      child: Row(children: ['Upcoming', 'Past', 'Cancelled'].map((tab) {
-        final active = tab == selected;
-        return Expanded(child: InkWell(
-          onTap: () => onChanged(tab),
-          borderRadius: BorderRadius.circular(7),
-          child: Container(
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(color: active ? colors.primary : Colors.transparent, borderRadius: BorderRadius.circular(7)),
-            child: Text(tab, style: TextStyle(color: active ? Colors.white : colors.text, fontSize: 11, fontWeight: FontWeight.w800)),
-          ),
-        ));
-      }).toList()),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: ['Upcoming', 'Past', 'Cancelled'].map((tab) {
+          final active = tab == selected;
+          return Expanded(
+            child: InkWell(
+              onTap: () => onChanged(tab),
+              borderRadius: BorderRadius.circular(7),
+              child: Container(
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: active ? colors.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  tab,
+                  style: TextStyle(
+                    color: active ? Colors.white : colors.text,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }
@@ -2168,7 +3208,16 @@ class _SearchBox extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: _box(colors),
-      child: Row(children: [Icon(Icons.search_rounded, color: colors.muted, size: 18), const SizedBox(width: 8), Text('Search participants...', style: TextStyle(color: colors.muted, fontSize: 12))]),
+      child: Row(
+        children: [
+          Icon(Icons.search_rounded, color: colors.muted, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            'Search participants...',
+            style: TextStyle(color: colors.muted, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2183,8 +3232,19 @@ class _Pill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-      decoration: BoxDecoration(color: colors.surface, borderRadius: BorderRadius.circular(999), border: Border.all(color: colors.border)),
-      child: Text(text, style: TextStyle(color: colors.text, fontSize: 12, fontWeight: FontWeight.w800)),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colors.border),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: colors.text,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -2232,18 +3292,39 @@ class _InfoPanel extends StatelessWidget {
   final String title;
   final String value;
 
-  const _InfoPanel({required this.colors, required this.title, required this.value});
+  const _InfoPanel({
+    required this.colors,
+    required this.title,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: _box(colors),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: TextStyle(color: colors.muted, fontSize: 11, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 6),
-        Text(value, style: TextStyle(color: colors.text, fontSize: 14, fontWeight: FontWeight.w900)),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              color: colors.text,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2254,7 +3335,12 @@ class _ActionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _ActionButton({required this.colors, required this.icon, required this.label, required this.onTap});
+  const _ActionButton({
+    required this.colors,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2265,11 +3351,20 @@ class _ActionButton extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: Column(
-        children: [
-          Icon(icon, color: colors.primary, size: 22),
-          const SizedBox(height: 6),
-          FittedBox(child: Text(label, style: TextStyle(color: colors.text, fontSize: 11, fontWeight: FontWeight.w700))),
-        ],
+            children: [
+              Icon(icon, color: colors.primary, size: 22),
+              const SizedBox(height: 6),
+              FittedBox(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -2288,7 +3383,10 @@ class _IconBox extends StatelessWidget {
     return Container(
       width: 34,
       height: 34,
-      decoration: BoxDecoration(color: colors.primary.withAlpha(colors.isDark ? 55 : 28), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: colors.primary.withAlpha(colors.isDark ? 55 : 28),
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Icon(icon, color: colors.primary, size: 18),
     );
   }
@@ -2300,7 +3398,12 @@ class _PrimaryButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  const _PrimaryButton({required this.colors, required this.label, required this.icon, required this.onTap});
+  const _PrimaryButton({
+    required this.colors,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2309,7 +3412,12 @@ class _PrimaryButton extends StatelessWidget {
       child: ElevatedButton.icon(
         onPressed: onTap,
         icon: Icon(icon, size: 18),
-        label: FittedBox(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900))),
+        label: FittedBox(
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
         style: ElevatedButton.styleFrom(
           backgroundColor: colors.primary,
           foregroundColor: Colors.white,
@@ -2325,7 +3433,11 @@ class _SecondaryButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _SecondaryButton({required this.colors, required this.label, required this.onTap});
+  const _SecondaryButton({
+    required this.colors,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2333,8 +3445,17 @@ class _SecondaryButton extends StatelessWidget {
       height: 52,
       child: OutlinedButton(
         onPressed: onTap,
-        style: OutlinedButton.styleFrom(foregroundColor: colors.primary, side: BorderSide(color: colors.border), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-        child: FittedBox(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900))),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colors.primary,
+          side: BorderSide(color: colors.border),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: FittedBox(
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
       ),
     );
   }
@@ -2400,7 +3521,13 @@ class _MdColors {
       primary: const Color(0xFF0B63F6),
       success: const Color(0xFF10B981),
       danger: const Color(0xFFEF233C),
-      shadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 14, offset: const Offset(0, 6))],
+      shadow: [
+        BoxShadow(
+          color: Colors.black.withAlpha(10),
+          blurRadius: 14,
+          offset: const Offset(0, 6),
+        ),
+      ],
     );
   }
 }
