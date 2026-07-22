@@ -109,9 +109,14 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                     'value': '${item['value'] ?? ''}',
                     'label': '${item['value'] ?? ''}',
                     'employee_id': '${item['employee_id'] ?? ''}',
+                    'role': '${item['role'] ?? ''}',
                   },
                 )
-                .where((item) => item['value']!.isNotEmpty)
+                .where(
+                  (item) =>
+                      item['value']!.isNotEmpty &&
+                      item['role']!.toLowerCase() == 'tl',
+                )
                 .toList()
           : <Map<String, String>>[];
       setState(() {

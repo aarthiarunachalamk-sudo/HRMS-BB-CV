@@ -5915,25 +5915,22 @@ def get_registered_employees_view(request):
 def reporting_tls_view(request):
     department = (request.query_params.get('department') or '').strip()
 
-    # Senior designations that qualify as reporting managers
-    MANAGER_DESIGNATIONS = ['tl', 'manager', 'ceo', 'md', 'director', 'admin', 'hr']
-
-    base_qs = EmployeeAccount.objects.select_related('registration').filter(is_active=True)
+    # Reporting TL must always be an actual Team Lead, never an employee or
+    # another senior role.
+    base_qs = EmployeeAccount.objects.select_related('registration').filter(
+        is_active=True,
+        designation='tl',
+    )
     if department:
         base_qs = base_qs.filter(department=department)
 
-    # Try senior designations first
-    queryset = base_qs.filter(designation__in=MANAGER_DESIGNATIONS)
-
-    # If no seniors found in that department, fall back to all active employees in dept
-    if not queryset.exists() and department:
-        queryset = base_qs
-
-    # If still empty (no dept match at all), return all seniors across all departments
-    if not queryset.exists():
+    queryset = base_qs
+    # If the selected department has no TL, offer TLs from other departments;
+    # never fall back to ordinary employees.
+    if department and not queryset.exists():
         queryset = EmployeeAccount.objects.select_related('registration').filter(
             is_active=True,
-            designation__in=MANAGER_DESIGNATIONS,
+            designation='tl',
         )
 
     # Build a lookup of email -> user_id from User table for role-based IDs
@@ -5960,14 +5957,16 @@ def reporting_tls_view(request):
             'email': account.employee_email,
             'department': account.department,
             'department_label': account.get_department_display(),
+            'role': 'tl',
         })
         seen_emails.add(account.employee_email.lower())
 
     # Also include TL-role users who may not have an EmployeeAccount yet
-    tl_roles = ['tl', 'manager', 'hr', 'ceo', 'md', 'director', 'admin']
-    user_queryset = User.objects.filter(role__in=tl_roles, is_active=True)
+    user_queryset = User.objects.filter(role='tl', is_active=True)
     if department:
         user_queryset = user_queryset.filter(Q(department=department) | Q(department=''))
+        if not user_queryset.exists():
+            user_queryset = User.objects.filter(role='tl', is_active=True)
     for user in user_queryset.order_by('first_name', 'last_name'):
         if user.email.lower() in seen_emails:
             continue
@@ -5981,6 +5980,7 @@ def reporting_tls_view(request):
             'email': user.email,
             'department': department_value,
             'department_label': department_value.replace('_', ' ').title() if department_value else '',
+            'role': 'tl',
         })
 
     return Response({'success': True, 'tls': tls})
