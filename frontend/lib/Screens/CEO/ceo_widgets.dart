@@ -70,7 +70,7 @@ class CeoShell extends StatelessWidget {
                     return Row(
                       children: [
                         SizedBox(
-                          width: rightWidth,
+                          width: 42,
                           height: 42,
                           child: showBack
                               ? IconButton(
@@ -110,8 +110,12 @@ class CeoShell extends StatelessWidget {
                           child: Semantics(
                             label: title,
                             header: true,
-                            child: const Center(
-                              child: BitByteLogo(compact: true),
+                            child: const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: EdgeInsets.only(left: 2),
+                                child: BitByteLogo(compact: true),
+                              ),
                             ),
                           ),
                         ),

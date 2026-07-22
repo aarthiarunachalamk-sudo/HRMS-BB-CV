@@ -29,39 +29,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-const List<Map<String, dynamic>> _dummyCriticalAlerts = [
-  {
-    'type': 'project',
-    'module': 'PROJECTS',
-    'title': 'Priya Sharma - Project tasks at risk',
-    'subtitle': '3 Phoenix redesign tasks are overdue and need attention',
-    'severity': 'critical',
-    'status': 'open',
-    'date_group': 'Today',
-  },
-  {
-    'type': 'attendance',
-    'module': 'ATTENDANCE',
-    'title': 'Rahul Verma - Attendance review',
-    'subtitle': 'Absent for 3 consecutive working days without an update',
-    'severity': 'critical',
-    'status': 'open',
-    'date_group': 'Today',
-  },
-  {
-    'type': 'hiring',
-    'module': 'HIRING',
-    'title': 'Ananya Singh - Hiring SLA exceeded',
-    'subtitle': 'Senior Flutter Developer candidate is waiting for 8 days',
-    'severity': 'critical',
-    'status': 'open',
-    'date_group': 'Today',
-  },
-];
-
 List<Map<String, dynamic>> _criticalAlerts(dynamic value) {
-  final alerts = _mapList(value);
-  return alerts.isEmpty ? _dummyCriticalAlerts : alerts;
+  return _mapList(value);
 }
 
 class CeoDashboard extends StatefulWidget {
@@ -12882,7 +12851,7 @@ class _CeoShell extends StatelessWidget {
                     return Row(
                       children: [
                         SizedBox(
-                          width: rightWidth,
+                          width: 42,
                           height: 42,
                           child: showBack
                               ? IconButton(
@@ -12920,8 +12889,12 @@ class _CeoShell extends StatelessWidget {
                           child: Semantics(
                             label: title,
                             header: true,
-                            child: const Center(
-                              child: BitByteLogo(compact: true),
+                            child: const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: EdgeInsets.only(left: 2),
+                                child: BitByteLogo(compact: true),
+                              ),
                             ),
                           ),
                         ),
