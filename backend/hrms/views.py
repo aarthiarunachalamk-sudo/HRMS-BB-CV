@@ -6130,6 +6130,8 @@ def send_hr_correction_email(to_email, subject, html_content):
             html_content,
             resend_api_key_env='HR_RESEND_API_KEY',
             from_email_env='HR_EMAIL_FROM',
+            fallback_resend_api_key_env='RESEND_API_KEY',
+            fallback_from_email_env='EMAIL_FROM',
         )
         return True
     except Exception as e:

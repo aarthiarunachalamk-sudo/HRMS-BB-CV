@@ -8,6 +8,14 @@ from urllib import error, request
 logger = logging.getLogger(__name__)
 
 
+def _first_env_value(*names):
+    for name in names:
+        value = os.getenv(name, '').strip()
+        if value:
+            return value
+    return ''
+
+
 def email_is_configured():
     return bool(
         os.getenv('RESEND_API_KEY')
@@ -24,6 +32,9 @@ def send_email(
     resend_api_key_env='RESEND_API_KEY',
     from_email_env='EMAIL_FROM',
     sendgrid_api_key_env='SENDGRID_API_KEY',
+    fallback_resend_api_key_env='',
+    fallback_from_email_env='',
+    fallback_sendgrid_api_key_env='',
 ):
     """Send transactional email through Resend, with SendGrid as fallback."""
     recipients = [to] if isinstance(to, str) else list(to or [])
@@ -31,10 +42,10 @@ def send_email(
     if not recipients:
         raise ValueError('At least one recipient email is required.')
 
-    resend_key = os.getenv(resend_api_key_env, '').strip()
+    resend_key = _first_env_value(resend_api_key_env, fallback_resend_api_key_env)
     if resend_key:
         payload = {
-            'from': os.getenv(from_email_env, 'onboarding@resend.dev').strip(),
+            'from': _first_env_value(from_email_env, fallback_from_email_env) or 'onboarding@resend.dev',
             'to': recipients,
             'subject': subject,
             'html': html,
@@ -65,7 +76,7 @@ def send_email(
             logger.error('Resend rejected email (%s): %s', exc.code, details)
             raise RuntimeError(f'Resend rejected email with status {exc.code}.') from exc
 
-    sendgrid_key = os.getenv(sendgrid_api_key_env, '').strip()
+    sendgrid_key = _first_env_value(sendgrid_api_key_env, fallback_sendgrid_api_key_env)
     if sendgrid_key:
         from sendgrid import SendGridAPIClient
         from sendgrid.helpers.mail import (
@@ -73,7 +84,7 @@ def send_email(
         )
 
         message = Mail(
-            from_email=os.getenv(from_email_env, 'noreply@bitbyte.com'),
+            from_email=_first_env_value(from_email_env, fallback_from_email_env) or 'noreply@bitbyte.com',
             to_emails=recipients,
             subject=subject,
             html_content=html,
