@@ -6072,7 +6072,7 @@ def employee_document_action_view(request, pk):
             module='documents',
             reference_id=f'{emp.id}:{document_key}',
         )
-        email_sent = send_email(
+        email_sent = send_hr_correction_email(
             emp.personal_email,
             f'Action Required: {title} Flagged by HR',
             _document_flag_email_html(emp, title, details),
@@ -6119,6 +6119,21 @@ def send_email(to_email, subject, html_content):
         return True
     except Exception as e:
         print(f'Email delivery error: {e}')
+        return False
+
+
+def send_hr_correction_email(to_email, subject, html_content):
+    try:
+        send_transactional_email(
+            to_email,
+            subject,
+            html_content,
+            resend_api_key_env='HR_RESEND_API_KEY',
+            from_email_env='HR_EMAIL_FROM',
+        )
+        return True
+    except Exception as e:
+        print(f'HR correction email delivery error: {e}')
         return False
 
 

@@ -9,20 +9,32 @@ logger = logging.getLogger(__name__)
 
 
 def email_is_configured():
-    return bool(os.getenv('RESEND_API_KEY') or os.getenv('SENDGRID_API_KEY'))
+    return bool(
+        os.getenv('RESEND_API_KEY')
+        or os.getenv('HR_RESEND_API_KEY')
+        or os.getenv('SENDGRID_API_KEY')
+    )
 
 
-def send_email(to, subject, html, attachments=None):
+def send_email(
+    to,
+    subject,
+    html,
+    attachments=None,
+    resend_api_key_env='RESEND_API_KEY',
+    from_email_env='EMAIL_FROM',
+    sendgrid_api_key_env='SENDGRID_API_KEY',
+):
     """Send transactional email through Resend, with SendGrid as fallback."""
     recipients = [to] if isinstance(to, str) else list(to or [])
     recipients = [str(item).strip() for item in recipients if str(item).strip()]
     if not recipients:
         raise ValueError('At least one recipient email is required.')
 
-    resend_key = os.getenv('RESEND_API_KEY', '').strip()
+    resend_key = os.getenv(resend_api_key_env, '').strip()
     if resend_key:
         payload = {
-            'from': os.getenv('EMAIL_FROM', 'onboarding@resend.dev').strip(),
+            'from': os.getenv(from_email_env, 'onboarding@resend.dev').strip(),
             'to': recipients,
             'subject': subject,
             'html': html,
@@ -53,7 +65,7 @@ def send_email(to, subject, html, attachments=None):
             logger.error('Resend rejected email (%s): %s', exc.code, details)
             raise RuntimeError(f'Resend rejected email with status {exc.code}.') from exc
 
-    sendgrid_key = os.getenv('SENDGRID_API_KEY', '').strip()
+    sendgrid_key = os.getenv(sendgrid_api_key_env, '').strip()
     if sendgrid_key:
         from sendgrid import SendGridAPIClient
         from sendgrid.helpers.mail import (
@@ -61,7 +73,7 @@ def send_email(to, subject, html, attachments=None):
         )
 
         message = Mail(
-            from_email=os.getenv('EMAIL_FROM', 'noreply@bitbyte.com'),
+            from_email=os.getenv(from_email_env, 'noreply@bitbyte.com'),
             to_emails=recipients,
             subject=subject,
             html_content=html,

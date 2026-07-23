@@ -569,9 +569,13 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
           });
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Correction request sent to employee.'),
-            backgroundColor: Color(0xFFF7971E),
+          SnackBar(
+            content: Text(
+              '${data['message'] ?? 'Correction request sent to employee.'}',
+            ),
+            backgroundColor: data['email_sent'] == false
+                ? Colors.redAccent
+                : const Color(0xFFF7971E),
           ),
         );
         return true;
