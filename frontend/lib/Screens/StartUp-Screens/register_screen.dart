@@ -1,9 +1,11 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'theme_config.dart';
@@ -18,6 +20,8 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  static const int _maxUploadBytes = 25 * 1024 * 1024;
+
   final PageController _pageController = PageController();
   int _currentPage = 0;
   bool _isLoading = false;
@@ -276,14 +280,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       'SRM Institute of Science and Technology, Vadapalani',
       'Other',
     ],
-    'VIT University': [
-      'VIT Vellore',
-      'VIT Chennai',
-      'Other',
-    ],
-    'Other': [
-      'Other',
-    ],
+    'VIT University': ['VIT Vellore', 'VIT Chennai', 'Other'],
+    'Other': ['Other'],
   };
 
   final List<String> _legacyCollegeOptions = [
@@ -395,8 +393,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _pickFile(Map<String, File?> docMap, String key) async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) setState(() => docMap[key] = File(picked.path));
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 2000,
+      maxHeight: 2000,
+      imageQuality: 72,
+    );
+    if (picked != null && mounted) {
+      setState(() => docMap[key] = File(picked.path));
+    }
   }
 
   void _generateIfsc({bool force = false}) {
@@ -406,9 +411,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final current = _ifscCtrl.text.trim().toUpperCase();
     if (!force && current.isNotEmpty && current != _generatedIfsc) return;
 
-    final cleanBranch = _branchCtrl.text
-        .toUpperCase()
-        .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final cleanBranch = _branchCtrl.text.toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]'),
+      '',
+    );
     final branchCode = cleanBranch.isEmpty
         ? '000001'
         : cleanBranch.padRight(6, '0').substring(0, 6);
@@ -595,6 +601,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'doc_vaccination': _optionalDocs['Vaccination Certificate'],
       };
 
+      var totalUploadBytes = 0;
+      for (final file in allDocs.values.whereType<File>()) {
+        totalUploadBytes += await file.length();
+      }
+      if (totalUploadBytes > _maxUploadBytes) {
+        final sizeMb = (totalUploadBytes / (1024 * 1024)).toStringAsFixed(1);
+        throw FileSystemException(
+          'Selected documents total $sizeMb MB. Please reselect smaller images '
+          '(maximum 25 MB in total).',
+        );
+      }
+
       for (final entry in allDocs.entries) {
         if (entry.value != null) {
           request.files.add(
@@ -603,13 +621,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
         }
       }
 
+      // A registration can contain many full-resolution documents. Render can
+      // also need time to wake a sleeping service, so 90 seconds is too short
+      // on slower mobile connections.
       final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 90),
+        const Duration(minutes: 5),
       );
       final response = await http.Response.fromStream(streamedResponse);
-      final data = jsonDecode(response.body);
+      Map<String, dynamic> data;
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is! Map<String, dynamic>) {
+          throw const FormatException('Unexpected response format');
+        }
+        data = decoded;
+      } on FormatException {
+        throw http.ClientException(
+          'Server returned HTTP ${response.statusCode} instead of JSON.',
+          uri,
+        );
+      }
 
-      if (data['success'] == true) {
+      if (!mounted) return;
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          data['success'] == true) {
         showDialog(
           context: context,
           builder: (_) => AlertDialog(
@@ -667,12 +703,45 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         );
       }
-    } catch (e) {
+    } on TimeoutException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Upload timed out. Check your connection and try again.',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } on SocketException catch (e) {
+      if (!mounted) return;
+      final wasAborted = e.message.toLowerCase().contains('connection abort');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Cannot connect to backend at ${ApiConfig.baseUrl}. Check server, WiFi, and firewall.',
+            wasAborted
+                ? 'The server closed the upload. Reselect the documents to '
+                      'reduce their size, then try again.'
+                : 'Network error: ${e.message}. Please check Wi-Fi or mobile data.',
           ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } on FileSystemException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: Colors.redAccent),
+      );
+    } on http.ClientException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: Colors.redAccent),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Registration failed: $e'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -1299,7 +1368,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 4),
             Text(
               'Percentage and CGPA are auto-calculated from each other.',
-              style: TextStyle(color: ts, fontSize: 11, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: ts,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ]),
           const SizedBox(height: 20),
@@ -1897,7 +1970,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             Icons.keyboard_arrow_down_rounded,
             color: Colors.white70,
           ),
-          style: TextStyle(color: tp, fontSize: 13, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: tp,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
           validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
           hint: Align(
             alignment: Alignment.centerLeft,
@@ -2125,10 +2202,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Icon(icon, color: Colors.white70, size: 20),
         ),
       ),
-      prefixIconConstraints: const BoxConstraints(
-        minWidth: 58,
-        minHeight: 52,
-      ),
+      prefixIconConstraints: const BoxConstraints(minWidth: 58, minHeight: 52),
       suffixIcon: suffix,
     );
   }
@@ -2209,7 +2283,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       isExpanded: true,
       menuMaxHeight: 240,
       dropdownColor: cardBg,
-      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70),
+      icon: const Icon(
+        Icons.keyboard_arrow_down_rounded,
+        color: Colors.white70,
+      ),
       style: TextStyle(color: tp, fontSize: 13, fontWeight: FontWeight.w600),
       selectedItemBuilder: (context) => items.map((item) {
         final label = item[0].toUpperCase() + item.substring(1);
@@ -2219,7 +2296,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             label,
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
-            style: TextStyle(color: tp, fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: tp,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         );
       }).toList(),
@@ -2236,7 +2317,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 label,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
-                style: TextStyle(color: tp, fontSize: 13, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: tp,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -2245,7 +2330,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       onChanged: onChanged,
       decoration: _inputDec('', isDark, cb).copyWith(
         hintText: null,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
       ),
     );
   }
