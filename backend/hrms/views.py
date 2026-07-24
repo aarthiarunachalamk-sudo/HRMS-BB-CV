@@ -6012,15 +6012,102 @@ def reporting_tls_view(request):
     return Response({'success': True, 'tls': tls})
 
 
-@api_view(['PATCH'])
+HR_EDITABLE_REGISTRATION_FIELDS = {
+    'first_name',
+    'last_name',
+    'gender',
+    'dob',
+    'mobile',
+    'personal_email',
+    'marital_status',
+    'marital_other',
+    'blood_group',
+    'nationality',
+    'current_door',
+    'current_street',
+    'current_address2',
+    'current_city',
+    'current_state',
+    'permanent_door',
+    'permanent_street',
+    'permanent_address2',
+    'permanent_city',
+    'permanent_state',
+    'emergency_name',
+    'emergency_relationship',
+    'emergency_contact',
+    'aadhar',
+    'pan',
+    'passport',
+    'driving_license',
+    'qualification',
+    'college',
+    'year_of_passing',
+    'percentage',
+    'account_holder',
+    'bank_name',
+    'account_number',
+    'ifsc_code',
+    'branch_name',
+    'is_experienced',
+    'prev_company',
+    'prev_designation',
+    'prev_experience',
+    'prev_last_working_day',
+}
+
+
+def _employee_registration_payload(emp, editable=False):
+    data = EmployeeRegistrationSerializer(emp).data
+    if editable:
+        data['mobile'] = emp.mobile
+        data['emergency_contact'] = emp.emergency_contact
+    return data
+
+
+@api_view(['GET', 'PATCH'])
 def update_employee_status_view(request, pk):
     try:
         emp = EmployeeRegistration.objects.get(pk=pk)
-        emp.status = request.data.get('status', emp.status)
-        emp.save()
-        return Response({'success': True, 'message': 'Status updated!'})
     except EmployeeRegistration.DoesNotExist:
         return Response({'success': False, 'message': 'Not found'}, status=404)
+
+    if request.method == 'GET':
+        return Response({
+            'success': True,
+            'employee': _employee_registration_payload(emp, editable=True),
+        })
+
+    if emp.status == 'approved' and request.data.get('status') != emp.status:
+        return Response({
+            'success': False,
+            'message': 'Approved registrations cannot be edited here.',
+        }, status=400)
+
+    updated_fields = []
+    for field in HR_EDITABLE_REGISTRATION_FIELDS:
+        if field not in request.data:
+            continue
+        value = request.data.get(field)
+        if field == 'is_experienced':
+            value = str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+        elif value is not None:
+            value = str(value).strip()
+        if getattr(emp, field) != value:
+            setattr(emp, field, value)
+            updated_fields.append(field)
+
+    if 'status' in request.data:
+        emp.status = request.data.get('status', emp.status)
+
+    if updated_fields or 'status' in request.data:
+        emp.save()
+
+    return Response({
+        'success': True,
+        'message': 'Employee details updated.' if updated_fields else 'Status updated!',
+        'employee': _employee_registration_payload(emp, editable=True),
+    })
 
 
 @api_view(['POST'])

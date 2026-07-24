@@ -336,6 +336,9 @@ class _EmployeeDetailPage extends StatefulWidget {
 
 class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
   static const Color _green = Color(0xFF43E97B);
+  bool _savingEdit = false;
+
+  bool get _canEdit => '${widget.employee['status'] ?? 'pending'}' != 'approved';
 
   Future<void> _verifyEmployee() async {
     final changed = await Navigator.push<bool>(
@@ -348,6 +351,183 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
       setState(() => widget.employee['status'] = 'approved');
       Navigator.pop(context, true);
     }
+  }
+
+  Future<void> _editEmployeeDetails() async {
+    if (!_canEdit || _savingEdit) return;
+    setState(() => _savingEdit = true);
+    try {
+      final response = await http.get(
+        ApiConfig.uri('/registered-employees/${widget.employee['id']}/'),
+      );
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map || decoded['success'] != true || decoded['employee'] is! Map) {
+        throw Exception(decoded is Map ? decoded['message'] ?? 'Unable to load employee details.' : 'Unable to load employee details.');
+      }
+      if (!mounted) return;
+      final editable = Map<String, dynamic>.from(decoded['employee'] as Map);
+      final updated = await _showEmployeeEditSheet(editable);
+      if (updated == null) return;
+      final saveResponse = await http.patch(
+        ApiConfig.uri('/registered-employees/${widget.employee['id']}/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(updated),
+      );
+      final saveData = jsonDecode(saveResponse.body);
+      if (!mounted) return;
+      if (saveData is! Map ||
+          saveResponse.statusCode < 200 ||
+          saveResponse.statusCode >= 300 ||
+          saveData['success'] != true) {
+        throw Exception(
+          saveData is Map
+              ? saveData['message'] ?? 'Unable to save employee details.'
+              : 'Unable to save employee details.',
+        );
+      }
+      if (saveData['employee'] is Map) {
+        setState(() {
+          widget.employee
+            ..clear()
+            ..addAll(Map<String, dynamic>.from(saveData['employee'] as Map));
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${saveData['message'] ?? 'Employee details updated.'}'),
+          backgroundColor: _green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Edit failed: $e'), backgroundColor: Colors.redAccent),
+      );
+    } finally {
+      if (mounted) setState(() => _savingEdit = false);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _showEmployeeEditSheet(Map<String, dynamic> emp) async {
+    final controllers = <String, TextEditingController>{};
+    TextEditingController ctrl(String key) {
+      return controllers.putIfAbsent(
+        key,
+        () => TextEditingController(text: '${emp[key] ?? ''}'),
+      );
+    }
+
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ThemeConfig.getCardBg(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        final tp = ThemeConfig.getTextPrimary(sheetContext);
+        final ts = ThemeConfig.getTextSecondary(sheetContext);
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 16,
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Edit Employee Details',
+                        style: TextStyle(color: tp, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: Icon(Icons.close_rounded, color: ts),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _editGroup('Basic', [
+                  _editField('First Name', ctrl('first_name')),
+                  _editField('Last Name', ctrl('last_name')),
+                  _editField('Email', ctrl('personal_email'), keyboard: TextInputType.emailAddress),
+                  _editField('Mobile', ctrl('mobile'), keyboard: TextInputType.phone),
+                  _editField('Gender', ctrl('gender')),
+                  _editField('Date of Birth', ctrl('dob')),
+                  _editField('Blood Group', ctrl('blood_group')),
+                  _editField('Marital Status', ctrl('marital_status')),
+                  _editField('Nationality', ctrl('nationality')),
+                ]),
+                _editGroup('Current Address', [
+                  _editField('Door No', ctrl('current_door')),
+                  _editField('Street', ctrl('current_street')),
+                  _editField('Area / Landmark', ctrl('current_address2')),
+                  _editField('City', ctrl('current_city')),
+                  _editField('State', ctrl('current_state')),
+                ]),
+                _editGroup('Permanent Address', [
+                  _editField('Door No', ctrl('permanent_door')),
+                  _editField('Street', ctrl('permanent_street')),
+                  _editField('Area / Landmark', ctrl('permanent_address2')),
+                  _editField('City', ctrl('permanent_city')),
+                  _editField('State', ctrl('permanent_state')),
+                ]),
+                _editGroup('Emergency Contact', [
+                  _editField('Name', ctrl('emergency_name')),
+                  _editField('Relationship', ctrl('emergency_relationship')),
+                  _editField('Contact', ctrl('emergency_contact'), keyboard: TextInputType.phone),
+                ]),
+                _editGroup('Identity', [
+                  _editField('Aadhaar', ctrl('aadhar'), keyboard: TextInputType.number),
+                  _editField('PAN', ctrl('pan')),
+                  _editField('Passport', ctrl('passport')),
+                  _editField('Driving License', ctrl('driving_license')),
+                ]),
+                _editGroup('Education', [
+                  _editField('Qualification', ctrl('qualification')),
+                  _editField('College', ctrl('college')),
+                  _editField('Year of Passing', ctrl('year_of_passing'), keyboard: TextInputType.number),
+                  _editField('Percentage / CGPA', ctrl('percentage')),
+                ]),
+                _editGroup('Bank', [
+                  _editField('Account Holder', ctrl('account_holder')),
+                  _editField('Bank Name', ctrl('bank_name')),
+                  _editField('Account Number', ctrl('account_number'), keyboard: TextInputType.number),
+                  _editField('IFSC Code', ctrl('ifsc_code')),
+                  _editField('Branch', ctrl('branch_name')),
+                ]),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(sheetContext, {
+                      for (final entry in controllers.entries) entry.key: entry.value.text.trim(),
+                    });
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _green,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.save_rounded, size: 18),
+                  label: const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    for (final controller in controllers.values) {
+      controller.dispose();
+    }
+    return result;
   }
 
   Future<void> _rejectEmployee() async {
@@ -671,6 +851,21 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
                       ),
                     ),
                     const Spacer(),
+                    if (_canEdit) ...[
+                      IconButton(
+                        tooltip: 'Edit employee details',
+                        onPressed: _savingEdit ? null : _editEmployeeDetails,
+                        icon: _savingEdit
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.edit_rounded),
+                        color: const Color(0xFF4FACFE),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
                     _statusBadge(emp['status'] ?? 'pending'),
                   ],
                 ),
@@ -1112,67 +1307,117 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Approve / Reject buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _green.withAlpha(22),
-                                foregroundColor: _green,
-                                elevation: 0,
-                                side: BorderSide(color: _green.withAlpha(80)),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
+                      if (_canEdit)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _green.withAlpha(22),
+                                  foregroundColor: _green,
+                                  elevation: 0,
+                                  side: BorderSide(color: _green.withAlpha(80)),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                onPressed: _verifyEmployee,
+                                icon: const Icon(
+                                  Icons.verified_rounded,
+                                  size: 18,
                                 ),
-                              ),
-                              onPressed: _verifyEmployee,
-                              icon: const Icon(
-                                Icons.verified_rounded,
-                                size: 18,
-                              ),
-                              label: const Text(
-                                'Verify',
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                                label: const Text(
+                                  'Verify',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.redAccent.withAlpha(20),
-                                foregroundColor: Colors.redAccent,
-                                elevation: 0,
-                                side: BorderSide(
-                                  color: Colors.redAccent.withAlpha(75),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.redAccent.withAlpha(20),
+                                  foregroundColor: Colors.redAccent,
+                                  elevation: 0,
+                                  side: BorderSide(
+                                    color: Colors.redAccent.withAlpha(75),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                 ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
+                                onPressed: _rejectEmployee,
+                                icon: const Icon(Icons.close_rounded, size: 18),
+                                label: const Text(
+                                  'Reject',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              onPressed: _rejectEmployee,
-                              icon: const Icon(Icons.close_rounded, size: 18),
-                              label: const Text(
-                                'Reject',
-                                style: TextStyle(fontWeight: FontWeight.bold),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
                       const SizedBox(height: 24),
                     ],
                   ),
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _editGroup(String title, List<Widget> children) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: ThemeConfig.getTextPrimary(context),
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _editField(
+    String label,
+    TextEditingController controller, {
+    TextInputType? keyboard,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboard,
+        style: TextStyle(color: ThemeConfig.getTextPrimary(context)),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: ThemeConfig.getTextSecondary(context)),
+          filled: true,
+          fillColor: ThemeConfig.getCardBg(context),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: ThemeConfig.getCardBorder(context)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF4FACFE)),
           ),
         ),
       ),
