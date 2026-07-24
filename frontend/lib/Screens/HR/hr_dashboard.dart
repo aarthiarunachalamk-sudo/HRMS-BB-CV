@@ -1021,7 +1021,7 @@ const _titles = [
   'Dashboard',
   'Registered Employee',
   'Employees',
-  'Attendance',
+  'Employee Attendance',
   'Leave Requests',
   'Recruitment',
   'Meetings',

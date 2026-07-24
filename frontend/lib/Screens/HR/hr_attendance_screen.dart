@@ -13,6 +13,20 @@ class HrAttendanceScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
       children: [
+        Text(
+          'Team Attendance Overview',
+          style: TextStyle(
+            color: c.text,
+            fontSize: 15,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Review employee attendance here. To mark your own attendance, switch to the Employee role.',
+          style: TextStyle(color: c.muted, fontSize: 11, height: 1.4),
+        ),
+        const SizedBox(height: 14),
         Row(children: [
           Expanded(child: HrMetricCard(title: 'Present', value: hrText(data, 'present_today'), icon: Icons.verified_rounded, color: c.success)),
           const SizedBox(width: 10),
