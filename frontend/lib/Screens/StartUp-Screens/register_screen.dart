@@ -1027,19 +1027,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 10),
             _row([
               _addressDropdown(
-                'City *',
-                _currentCityCtrl,
-                _cityOptions,
-                isDark,
-                tp,
-                ts,
-                cardBg,
-                cardBorder,
-                onChanged: (value) {
-                  _setCurrentCity(value);
-                },
-              ),
-              _addressDropdown(
                 'State *',
                 _currentStateCtrl,
                 _stateOptions,
@@ -1049,6 +1036,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 cardBg,
                 cardBorder,
                 enabled: false,
+              ),
+              _addressDropdown(
+                'City *',
+                _currentCityCtrl,
+                _cityOptions,
+                isDark,
+                tp,
+                ts,
+                cardBg,
+                cardBorder,
+                onChanged: _setCurrentCity,
               ),
             ]),
             const SizedBox(height: 10),
@@ -1099,6 +1097,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 10),
             _row([
               _addressDropdown(
+                'State *',
+                _permanentStateCtrl,
+                _stateOptions,
+                isDark,
+                tp,
+                ts,
+                cardBg,
+                cardBorder,
+                enabled: false,
+              ),
+              _addressDropdown(
                 'City *',
                 _permanentCityCtrl,
                 _cityOptions,
@@ -1109,17 +1118,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 cardBorder,
                 enabled: !_sameAsCurrent,
                 onChanged: _setPermanentCity,
-              ),
-              _addressDropdown(
-                'State *',
-                _permanentStateCtrl,
-                _stateOptions,
-                isDark,
-                tp,
-                ts,
-                cardBg,
-                cardBorder,
-                enabled: false,
               ),
             ]),
             const SizedBox(height: 14),
@@ -1154,6 +1152,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               tp,
               cardBg,
               cardBorder,
+              showScrollbar: true,
             ),
             const SizedBox(height: 14),
             _field(
@@ -2276,12 +2275,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     bool isDark,
     Color tp,
     Color cardBg,
-    Color cb,
-  ) {
+    Color cb, {
+    bool showScrollbar = false,
+  }) {
     return AppDropdownButtonFormField<String>(
       value: value,
       isExpanded: true,
       menuMaxHeight: 240,
+      showScrollbar: showScrollbar,
       dropdownColor: cardBg,
       icon: const Icon(
         Icons.keyboard_arrow_down_rounded,

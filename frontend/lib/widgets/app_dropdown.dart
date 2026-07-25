@@ -13,6 +13,7 @@ Future<T?> _showAppDropdownMenu<T>({
   required Color? dropdownColor,
   required double? itemHeight,
   required double? menuMaxHeight,
+  bool showScrollbar = false,
 }) {
   final anchor = anchorContext.findRenderObject() as RenderBox;
   final overlay = Navigator.of(context).overlay!.context.findRenderObject()
@@ -29,6 +30,68 @@ Future<T?> _showAppDropdownMenu<T>({
   final borderColor = dark
       ? const Color(0xFF075777)
       : theme.colorScheme.outlineVariant;
+
+  if (showScrollbar) {
+    return showDialog<T>(
+      context: context,
+      barrierColor: Colors.transparent,
+      builder: (dialogContext) {
+        final controller = ScrollController();
+        return Stack(
+          children: [
+            Positioned(
+              left: origin.dx,
+              top: origin.dy,
+              width: anchor.size.width,
+              child: Material(
+                color: menuColor,
+                elevation: 10,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: borderColor),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: menuMaxHeight ?? 320),
+                  child: Scrollbar(
+                    controller: controller,
+                    thumbVisibility: true,
+                    trackVisibility: true,
+                    child: ListView(
+                      controller: controller,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      shrinkWrap: true,
+                      children: items.map((item) {
+                        final selected = item.value == value;
+                        return InkWell(
+                          onTap: item.enabled
+                              ? () => Navigator.pop(dialogContext, item.value)
+                              : null,
+                          child: SizedBox(
+                            height: itemHeight ?? 48,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              child: Row(
+                                children: [
+                                  Expanded(child: item.child),
+                                  if (selected)
+                                    Icon(Icons.check_rounded, color: theme.colorScheme.primary, size: 18),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   return showMenu<T>(
     context: context,
@@ -115,6 +178,7 @@ class AppDropdownButton<T> extends StatelessWidget {
   final AlignmentGeometry alignment;
   final List<Widget> Function(BuildContext)? selectedItemBuilder;
   final VoidCallback? onTap;
+  final bool showScrollbar;
 
   const AppDropdownButton({
     super.key,
@@ -133,6 +197,7 @@ class AppDropdownButton<T> extends StatelessWidget {
     this.alignment = AlignmentDirectional.centerStart,
     this.selectedItemBuilder,
     this.onTap,
+    this.showScrollbar = false,
   });
 
   @override
@@ -168,6 +233,7 @@ class AppDropdownButton<T> extends StatelessWidget {
                   dropdownColor: dropdownColor,
                   itemHeight: itemHeight,
                   menuMaxHeight: menuMaxHeight,
+                  showScrollbar: showScrollbar,
                 );
                 if (next != null) onChanged?.call(next);
               },
@@ -235,6 +301,7 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
   final FormFieldSetter<T>? onSaved;
   final AutovalidateMode? autovalidateMode;
   final VoidCallback? onTap;
+  final bool showScrollbar;
 
   const AppDropdownButtonFormField({
     super.key,
@@ -258,6 +325,7 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
     this.onSaved,
     this.autovalidateMode,
     this.onTap,
+    this.showScrollbar = false,
   });
 
   @override
@@ -300,6 +368,7 @@ class AppDropdownButtonFormField<T> extends StatelessWidget {
                       dropdownColor: dropdownColor,
                       itemHeight: itemHeight,
                       menuMaxHeight: menuMaxHeight,
+                      showScrollbar: showScrollbar,
                     );
                     if (next != null) {
                       field.didChange(next);
