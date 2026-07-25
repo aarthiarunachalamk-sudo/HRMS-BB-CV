@@ -4,6 +4,7 @@ import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/india_locations.dart';
 import 'ceo_widgets.dart';
 
 // ─── Role list ────────────────────────────────────────────────
@@ -54,36 +55,8 @@ const _kCountryCodes = [
   {'code': '+65', 'flag': '🇸🇬', 'name': 'Singapore'},
 ];
 
-const _kStates = [
-  'Andhra Pradesh',
-  'Karnataka',
-  'Kerala',
-  'Maharashtra',
-  'Tamil Nadu',
-  'Telangana',
-  'Uttar Pradesh',
-  'West Bengal',
-];
-
-const _kCitiesByState = {
-  'Andhra Pradesh': ['Visakhapatnam', 'Vijayawada', 'Guntur', 'Tirupati'],
-  'Karnataka': ['Bengaluru', 'Mysuru', 'Mangaluru', 'Hubballi'],
-  'Kerala': ['Kochi', 'Thiruvananthapuram', 'Kozhikode', 'Thrissur'],
-  'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Nashik'],
-  'Tamil Nadu': [
-    'Chennai',
-    'Coimbatore',
-    'Erode',
-    'Madurai',
-    'Salem',
-    'Tiruchirappalli',
-    'Tirunelveli',
-    'Vellore',
-  ],
-  'Telangana': ['Hyderabad', 'Warangal', 'Karimnagar', 'Nizamabad'],
-  'Uttar Pradesh': ['Lucknow', 'Noida', 'Kanpur', 'Varanasi', 'Agra'],
-  'West Bengal': ['Kolkata', 'Howrah', 'Durgapur', 'Siliguri'],
-};
+final _kStates = indiaStates;
+const _kCitiesByState = indiaCitiesByState;
 
 const _kCityAddressDefaults = {
   'Visakhapatnam': {'state': 'Andhra Pradesh', 'pincode': '530001'},

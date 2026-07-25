@@ -8,26 +8,9 @@ import 'package:http/http.dart' as http;
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/constellation_background.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/india_locations.dart';
 
-const Map<String, List<String>> _citiesByState = {
-  'Andhra Pradesh': ['Visakhapatnam', 'Vijayawada', 'Guntur', 'Tirupati'],
-  'Karnataka': ['Bengaluru', 'Mysuru', 'Mangaluru', 'Hubballi'],
-  'Kerala': ['Kochi', 'Thiruvananthapuram', 'Kozhikode', 'Thrissur'],
-  'Maharashtra': ['Mumbai', 'Pune', 'Nagpur', 'Nashik'],
-  'Tamil Nadu': [
-    'Chennai',
-    'Coimbatore',
-    'Erode',
-    'Madurai',
-    'Salem',
-    'Tiruchirappalli',
-    'Tirunelveli',
-    'Vellore',
-  ],
-  'Telangana': ['Hyderabad', 'Warangal', 'Karimnagar', 'Nizamabad'],
-  'Uttar Pradesh': ['Lucknow', 'Noida', 'Kanpur', 'Varanasi', 'Agra'],
-  'West Bengal': ['Kolkata', 'Howrah', 'Durgapur', 'Siliguri'],
-};
+const Map<String, List<String>> _citiesByState = indiaCitiesByState;
 
 class _UpperCaseFormatter extends TextInputFormatter {
   @override

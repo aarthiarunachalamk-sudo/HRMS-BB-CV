@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/india_locations.dart';
 import 'hr_shared.dart';
 
 class HrCreateEmployeeScreen extends StatefulWidget {
@@ -123,8 +124,32 @@ class _HrCreateEmployeeScreenState extends State<HrCreateEmployeeScreen> {
               _Field(label: 'Door No', controller: _doorNo),
               _Field(label: 'Street', controller: _street),
               _Field(label: 'Pincode', controller: _pincode, keyboardType: TextInputType.number),
-              _Field(label: 'City', controller: _city),
-              _Field(label: 'State', controller: _state),
+              AppDropdownButtonFormField<String>(
+                value: indiaStates.contains(_state.text) ? _state.text : null,
+                isExpanded: true,
+                menuMaxHeight: 300,
+                decoration: _decoration(context, 'State'),
+                dropdownColor: c.surface,
+                items: indiaStates.map((state) => DropdownMenuItem(value: state, child: Text(state))).toList(),
+                validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                onChanged: (value) => setState(() {
+                  _state.text = value ?? '';
+                  _city.clear();
+                }),
+              ),
+              const SizedBox(height: 10),
+              AppDropdownButtonFormField<String>(
+                value: indiaCitiesForState(_state.text).contains(_city.text) ? _city.text : null,
+                isExpanded: true,
+                menuMaxHeight: 300,
+                decoration: _decoration(context, 'City'),
+                dropdownColor: c.surface,
+                hint: Text(_state.text.isEmpty ? 'Select state first' : 'Select city'),
+                items: indiaCitiesForState(_state.text).map((city) => DropdownMenuItem(value: city, child: Text(city))).toList(),
+                validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                onChanged: (value) => setState(() => _city.text = value ?? ''),
+              ),
+              const SizedBox(height: 10),
               _Field(label: 'Occupation', controller: _occupation),
               _Field(label: 'PAN', controller: _pan),
               _Field(label: 'Aadhar', controller: _aadhar, keyboardType: TextInputType.number),

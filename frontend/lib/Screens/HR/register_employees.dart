@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/privacy_utils.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/india_locations.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/constellation_background.dart';
 import 'add_employees.dart';
@@ -425,9 +426,10 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (sheetContext) {
-        final tp = ThemeConfig.getTextPrimary(sheetContext);
-        final ts = ThemeConfig.getTextSecondary(sheetContext);
-        return SafeArea(
+        return StatefulBuilder(builder: (sheetContext, setSheetState) {
+          final tp = ThemeConfig.getTextPrimary(sheetContext);
+          final ts = ThemeConfig.getTextSecondary(sheetContext);
+          return SafeArea(
           child: Padding(
             padding: EdgeInsets.only(
               left: 20,
@@ -468,15 +470,29 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
                   _editField('Door No', ctrl('current_door')),
                   _editField('Street', ctrl('current_street')),
                   _editField('Area / Landmark', ctrl('current_address2')),
-                  _editField('City', ctrl('current_city')),
-                  _editField('State', ctrl('current_state')),
+                  _editLocationDropdown('State', ctrl('current_state'), indiaStates, (value) {
+                    setSheetState(() {
+                      ctrl('current_state').text = value;
+                      ctrl('current_city').clear();
+                    });
+                  }),
+                  _editLocationDropdown('City', ctrl('current_city'), indiaCitiesForState(ctrl('current_state').text), (value) {
+                    setSheetState(() => ctrl('current_city').text = value);
+                  }),
                 ]),
                 _editGroup('Permanent Address', [
                   _editField('Door No', ctrl('permanent_door')),
                   _editField('Street', ctrl('permanent_street')),
                   _editField('Area / Landmark', ctrl('permanent_address2')),
-                  _editField('City', ctrl('permanent_city')),
-                  _editField('State', ctrl('permanent_state')),
+                  _editLocationDropdown('State', ctrl('permanent_state'), indiaStates, (value) {
+                    setSheetState(() {
+                      ctrl('permanent_state').text = value;
+                      ctrl('permanent_city').clear();
+                    });
+                  }),
+                  _editLocationDropdown('City', ctrl('permanent_city'), indiaCitiesForState(ctrl('permanent_state').text), (value) {
+                    setSheetState(() => ctrl('permanent_city').text = value);
+                  }),
                 ]),
                 _editGroup('Emergency Contact', [
                   _editField('Name', ctrl('emergency_name')),
@@ -521,7 +537,8 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
               ],
             ),
           ),
-        );
+          );
+        });
       },
     );
     for (final controller in controllers.values) {
@@ -1420,6 +1437,35 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
             borderSide: const BorderSide(color: Color(0xFF4FACFE)),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _editLocationDropdown(
+    String label,
+    TextEditingController controller,
+    List<String> options,
+    ValueChanged<String> onChanged,
+  ) {
+    final value = options.contains(controller.text) ? controller.text : null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppDropdownButtonFormField<String>(
+        value: value,
+        isExpanded: true,
+        menuMaxHeight: 300,
+        dropdownColor: ThemeConfig.getCardBg(context),
+        decoration: InputDecoration(
+          labelText: label,
+          filled: true,
+          fillColor: ThemeConfig.getCardBg(context),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        hint: Text(label == 'City' && options.isEmpty ? 'Select state first' : 'Select $label'),
+        items: options.map((option) => DropdownMenuItem(value: option, child: Text(option))).toList(),
+        onChanged: (selected) {
+          if (selected != null) onChanged(selected);
+        },
       ),
     );
   }

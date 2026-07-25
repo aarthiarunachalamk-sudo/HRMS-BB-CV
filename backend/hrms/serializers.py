@@ -57,6 +57,17 @@ STATE_CITY_CHOICES = {
     'West Bengal': ['Kolkata', 'Howrah', 'Durgapur', 'Siliguri'],
 }
 
+INDIA_STATES_AND_UTS = {
+    'Andaman and Nicobar Islands', 'Andhra Pradesh', 'Arunachal Pradesh',
+    'Assam', 'Bihar', 'Chandigarh', 'Chhattisgarh',
+    'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Goa', 'Gujarat',
+    'Haryana', 'Himachal Pradesh', 'Jammu and Kashmir', 'Jharkhand',
+    'Karnataka', 'Kerala', 'Ladakh', 'Lakshadweep', 'Madhya Pradesh',
+    'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha',
+    'Puducherry', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
+    'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+}
+
 class LoginSerializer(serializers.Serializer):
     email = serializers.CharField()
     password = serializers.CharField()
@@ -101,12 +112,10 @@ class CreateUserSerializer(serializers.Serializer):
             raise serializers.ValidationError({'phone': 'Phone number must be 10 digits'})
         state = (data.get('state') or '').strip()
         city = (data.get('city') or '').strip()
-        if state not in STATE_CITY_CHOICES:
+        if state not in INDIA_STATES_AND_UTS:
             raise serializers.ValidationError({'state': 'Select a valid state'})
-        if city not in STATE_CITY_CHOICES[state]:
-            raise serializers.ValidationError({
-                'city': f'Select a valid city in {state}',
-            })
+        if not city:
+            raise serializers.ValidationError({'city': 'Select a city'})
         data['state'] = state
         data['city'] = city
         work_mode = (data.get('work_mode') or 'onsite').strip().lower()

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/india_locations.dart';
 import 'theme_config.dart';
 import 'constellation_background.dart';
 import 'login_screen.dart';
@@ -502,20 +503,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _isSyncingScores = false;
   }
 
-  String _stateForCity(String city) => _cityStateMap[city] ?? '';
+  void _setCurrentState(String state) {
+    setState(() {
+      _currentStateCtrl.text = state;
+      if (!indiaCitiesForState(state).contains(_currentCityCtrl.text)) {
+        _currentCityCtrl.clear();
+      }
+      if (_sameAsCurrent) {
+        _permanentStateCtrl.text = state;
+        _permanentCityCtrl.text = _currentCityCtrl.text;
+      }
+    });
+  }
 
   void _setCurrentCity(String city) {
-    _currentCityCtrl.text = city;
-    _currentStateCtrl.text = _stateForCity(city);
-    if (_sameAsCurrent) {
-      _permanentCityCtrl.text = _currentCityCtrl.text;
-      _permanentStateCtrl.text = _currentStateCtrl.text;
-    }
+    setState(() {
+      _currentCityCtrl.text = city;
+      if (_sameAsCurrent) _permanentCityCtrl.text = city;
+    });
+  }
+
+  void _setPermanentState(String state) {
+    setState(() {
+      _permanentStateCtrl.text = state;
+      if (!indiaCitiesForState(state).contains(_permanentCityCtrl.text)) {
+        _permanentCityCtrl.clear();
+      }
+    });
   }
 
   void _setPermanentCity(String city) {
-    _permanentCityCtrl.text = city;
-    _permanentStateCtrl.text = _stateForCity(city);
+    setState(() => _permanentCityCtrl.text = city);
   }
 
   void _viewFile(File file) {
@@ -1029,23 +1047,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
               _addressDropdown(
                 'State *',
                 _currentStateCtrl,
-                _stateOptions,
+                indiaStates,
                 isDark,
                 tp,
                 ts,
                 cardBg,
                 cardBorder,
-                enabled: false,
+                onChanged: _setCurrentState,
               ),
               _addressDropdown(
                 'City *',
                 _currentCityCtrl,
-                _cityOptions,
+                indiaCitiesForState(_currentStateCtrl.text),
                 isDark,
                 tp,
                 ts,
                 cardBg,
                 cardBorder,
+                enabled: _currentStateCtrl.text.isNotEmpty,
                 onChanged: _setCurrentCity,
               ),
             ]),
@@ -1099,18 +1118,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
               _addressDropdown(
                 'State *',
                 _permanentStateCtrl,
-                _stateOptions,
+                indiaStates,
                 isDark,
                 tp,
                 ts,
                 cardBg,
                 cardBorder,
-                enabled: false,
+                enabled: !_sameAsCurrent,
+                onChanged: _setPermanentState,
               ),
               _addressDropdown(
                 'City *',
                 _permanentCityCtrl,
-                _cityOptions,
+                indiaCitiesForState(_permanentStateCtrl.text),
                 isDark,
                 tp,
                 ts,
