@@ -4,7 +4,10 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.cache import cache
 from django.db.models import Count, Q, Sum
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
+from django.apps import apps
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.html import escape
 from django.utils.text import slugify
@@ -5551,6 +5554,59 @@ def admin_employees_view(request):
     return Response({'success': True, 'employees': _admin_employee_items()})
 
 
+@api_view(['GET', 'PATCH'])
+def hr_employee_identity_view(request, employee_id):
+    """Allow HR to maintain office identity without touching registration data."""
+    account = EmployeeAccount.objects.select_related('user').filter(employee_id=employee_id).first()
+    if account is None:
+        return Response({'success': False, 'message': 'Employee account not found.'}, status=404)
+
+    if request.method == 'GET':
+        return Response({
+            'success': True,
+            'employee': {
+                'employee_id': account.employee_id,
+                'employee_email': account.employee_email,
+            },
+        })
+
+    new_id = str(request.data.get('employee_id') or '').strip().upper()
+    office_email = str(request.data.get('employee_email') or '').strip().lower()
+    if not new_id or len(new_id) > 20:
+        return Response({'success': False, 'message': 'Enter a valid employee ID.'}, status=400)
+    try:
+        validate_email(office_email)
+    except ValidationError:
+        return Response({'success': False, 'message': 'Enter a valid office email address.'}, status=400)
+    if EmployeeAccount.objects.exclude(pk=account.pk).filter(employee_id__iexact=new_id).exists():
+        return Response({'success': False, 'message': 'Employee ID already exists.'}, status=409)
+    if EmployeeAccount.objects.exclude(pk=account.pk).filter(employee_email__iexact=office_email).exists():
+        return Response({'success': False, 'message': 'Office email already exists.'}, status=409)
+
+    old_id = account.employee_id
+    with transaction.atomic():
+        # Employee-related tables use string IDs rather than foreign keys.
+        # Keep those records attached when HR changes the employee ID.
+        if new_id != old_id:
+            for model in apps.get_models():
+                if model is EmployeeAccount:
+                    continue
+                if any(field.name == 'employee_id' for field in model._meta.fields):
+                    model.objects.filter(employee_id=old_id).update(employee_id=new_id)
+        account.employee_id = new_id
+        account.employee_email = office_email
+        account.save(update_fields=['employee_id', 'employee_email'])
+
+    return Response({
+        'success': True,
+        'message': 'Employee ID and office email updated.',
+        'employee': {
+            'employee_id': account.employee_id,
+            'employee_email': account.employee_email,
+        },
+    })
+
+
 @api_view(['GET'])
 def admin_employee_detail_view(request, employee_id):
     account = EmployeeAccount.objects.filter(employee_id=employee_id).select_related('registration').first()
@@ -6094,6 +6150,12 @@ def update_employee_status_view(request, pk):
             'success': True,
             'employee': _employee_registration_payload(emp, editable=True),
         })
+
+    if emp.status == 'approved' and request.data.get('status') != emp.status:
+        return Response({
+            'success': False,
+            'message': 'Approved registrations cannot be edited here.',
+        }, status=400)
 
     updated_fields = []
     for field in HR_EDITABLE_REGISTRATION_FIELDS:

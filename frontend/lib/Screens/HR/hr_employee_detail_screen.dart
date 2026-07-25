@@ -22,8 +22,8 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
   String _get(String key) => '${employee[key] ?? ''}';
 
   Future<void> _editEmployee() async {
-    final registrationId = int.tryParse(_get('registration_id'));
-    if (registrationId == null || _saving) {
+    final currentId = _get('id').isNotEmpty ? _get('id') : _get('trailing');
+    if (currentId.isEmpty || _saving) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('This employee record cannot be edited yet.')),
       );
@@ -31,37 +31,21 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
     }
     setState(() => _saving = true);
     try {
-      final loaded = await HrService().fetchEditableEmployee(registrationId);
+      final loaded = await HrService().fetchEmployeeIdentity(currentId);
       if (!mounted) return;
       final source = Map<String, dynamic>.from(loaded['employee'] as Map);
       final changes = await _showEditSheet(source);
       if (changes == null || !mounted) return;
-      final saved = await HrService().updateEmployee(registrationId, changes);
+      final saved = await HrService().updateEmployeeIdentity(currentId, changes);
       final updated = Map<String, dynamic>.from(saved['employee'] as Map);
       setState(() {
         employee.addAll({
-          'name': '${updated['first_name'] ?? ''} ${updated['last_name'] ?? ''}'.trim(),
-          'phone': updated['mobile'] ?? employee['phone'],
-          'gender': updated['gender'] ?? '',
-          'dob': updated['dob'] ?? '',
-          'blood_group': updated['blood_group'] ?? '',
-          'nationality': updated['nationality'] ?? '',
-          'marital_status': updated['marital_status'] ?? '',
-          'current_city': updated['current_city'] ?? '',
-          'current_state': updated['current_state'] ?? '',
-          'qualification': updated['qualification'] ?? '',
-          'college': updated['college'] ?? '',
-          'year_of_passing': updated['year_of_passing'] ?? '',
-          'bank_name': updated['bank_name'] ?? '',
-          'account_number': updated['account_number'] ?? '',
-          'ifsc_code': updated['ifsc_code'] ?? '',
-          'branch_name': updated['branch_name'] ?? '',
-          'aadhar': updated['aadhar'] ?? '',
-          'pan': updated['pan'] ?? '',
-          'doc_passport_photo': updated['doc_passport_photo'] ?? employee['doc_passport_photo'],
+          'id': updated['employee_id'],
+          'trailing': updated['employee_id'],
+          'email': updated['employee_email'],
         });
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Employee details updated.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Employee ID and office email updated.')));
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Edit failed: $error')));
     } finally {
@@ -70,19 +54,8 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
   }
 
   Future<Map<String, dynamic>?> _showEditSheet(Map<String, dynamic> source) async {
-    const fields = <(String, String)>[
-      ('first_name', 'First name'), ('last_name', 'Last name'),
-      ('personal_email', 'Personal email'), ('mobile', 'Mobile'),
-      ('gender', 'Gender'), ('dob', 'Date of birth'),
-      ('blood_group', 'Blood group'), ('marital_status', 'Marital status'),
-      ('nationality', 'Nationality'), ('current_city', 'Current city'),
-      ('current_state', 'Current state'), ('qualification', 'Qualification'),
-      ('college', 'College'), ('year_of_passing', 'Year of passing'),
-      ('bank_name', 'Bank name'), ('account_number', 'Account number'),
-      ('ifsc_code', 'IFSC code'), ('branch_name', 'Bank branch'),
-      ('aadhar', 'Aadhaar'), ('pan', 'PAN'),
-    ];
-    final controllers = {for (final field in fields) field.$1: TextEditingController(text: '${source[field.$1] ?? ''}')};
+    final idController = TextEditingController(text: '${source['employee_id'] ?? ''}');
+    final emailController = TextEditingController(text: '${source['employee_email'] ?? ''}');
     final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
@@ -92,15 +65,22 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
           child: ListView(
             children: [
               Row(children: [
-                const Expanded(child: Text('Edit Employee Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                const Expanded(child: Text('Edit Employment Identity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
                 IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
               ]),
-              ...fields.map((field) => Padding(
+              Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: TextField(controller: controllers[field.$1], decoration: InputDecoration(labelText: field.$2, border: const OutlineInputBorder())),
-              )),
+                child: TextField(controller: idController, decoration: const InputDecoration(labelText: 'Employee ID', border: OutlineInputBorder())),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: TextField(controller: emailController, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Office email', border: OutlineInputBorder())),
+              ),
               FilledButton.icon(
-                onPressed: () => Navigator.pop(sheetContext, {for (final entry in controllers.entries) entry.key: entry.value.text.trim()}),
+                onPressed: () => Navigator.pop(sheetContext, {
+                  'employee_id': idController.text.trim(),
+                  'employee_email': emailController.text.trim(),
+                }),
                 icon: const Icon(Icons.save_rounded),
                 label: const Text('Save changes'),
               ),
@@ -109,7 +89,8 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
         ),
       ),
     );
-    for (final controller in controllers.values) controller.dispose();
+    idController.dispose();
+    emailController.dispose();
     return result;
   }
 
@@ -144,7 +125,7 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
         title: const AppBarLogoTitle(title: 'Employee Details'),
         actions: [
           IconButton(
-            tooltip: 'Edit employee details',
+            tooltip: 'Edit employee ID and office email',
             onPressed: _saving ? null : _editEmployee,
             icon: _saving
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))

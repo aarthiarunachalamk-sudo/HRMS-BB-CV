@@ -18,25 +18,25 @@ class HrService {
     throw Exception(_payrollError(response, 'HR dashboard API failed'));
   }
 
-  Future<Map<String, dynamic>> fetchEditableEmployee(int registrationId) async {
+  Future<Map<String, dynamic>> fetchEmployeeIdentity(String employeeId) async {
     final response = await http
-        .get(ApiConfig.uri('/registered-employees/$registrationId/'))
+        .get(ApiConfig.uri('/hr/employees/$employeeId/identity/'))
         .timeout(_timeout);
-    return _decodeEmployeeResponse(response, 'Unable to load employee details');
+    return _decodeEmployeeResponse(response, 'Unable to load employee identity');
   }
 
-  Future<Map<String, dynamic>> updateEmployee(
-    int registrationId,
+  Future<Map<String, dynamic>> updateEmployeeIdentity(
+    String currentEmployeeId,
     Map<String, dynamic> changes,
   ) async {
     final response = await http
         .patch(
-          ApiConfig.uri('/registered-employees/$registrationId/'),
+          ApiConfig.uri('/hr/employees/$currentEmployeeId/identity/'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(changes),
         )
         .timeout(_timeout);
-    return _decodeEmployeeResponse(response, 'Unable to update employee details');
+    return _decodeEmployeeResponse(response, 'Unable to update employee identity');
   }
 
   Map<String, dynamic> _decodeEmployeeResponse(http.Response response, String fallback) {

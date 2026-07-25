@@ -67,6 +67,7 @@ urlpatterns = [
     path('superadmin/dashboard/', views.superadmin_dashboard_view, name='superadmin_dashboard'),
     path('superadmin/notifications/', views.superadmin_notifications_view, name='superadmin_notifications'),
     path('hr/dashboard/', views.hr_dashboard_view, name='hr_dashboard'),
+    path('hr/employees/<str:employee_id>/identity/', views.hr_employee_identity_view, name='hr_employee_identity'),
     path('hr/payroll/generate/', views.hr_generate_payroll_view, name='hr_generate_payroll'),
     path('hr/payroll/process/', views.hr_payroll_process_view, name='hr_payroll_process'),
     path('hr/payslip-pdf/upload/', views.hr_upload_payslip_pdf_view, name='hr_upload_payslip_pdf'),
