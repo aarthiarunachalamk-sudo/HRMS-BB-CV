@@ -426,10 +426,15 @@ class _EmploymentIdentityEditorState
               ),
             ),
             FilledButton.icon(
-              onPressed: () => Navigator.pop(context, {
-                'employee_id': _idController.text.trim(),
-                'employee_email': _emailController.text.trim(),
-              }),
+              onPressed: () {
+                final officeEmail = _emailController.text
+                    .replaceAll(RegExp(r'[\s\u200B-\u200D\uFEFF]'), '')
+                    .toLowerCase();
+                Navigator.pop(context, {
+                  'employee_id': _idController.text.trim(),
+                  'employee_email': officeEmail,
+                });
+              },
               icon: const Icon(Icons.save_rounded),
               label: const Text('Save changes'),
             ),

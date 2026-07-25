@@ -33,6 +33,7 @@ import calendar
 import csv
 import io
 import json
+import unicodedata
 
 @api_view(['POST'])
 def login_view(request):
@@ -5571,7 +5572,15 @@ def hr_employee_identity_view(request, employee_id):
         })
 
     new_id = str(request.data.get('employee_id') or '').strip().upper()
-    office_email = str(request.data.get('employee_email') or '').strip().lower()
+    raw_office_email = str(request.data.get('employee_email') or '')
+    # Mobile keyboards and copy/paste can insert non-breaking or zero-width
+    # characters that look invisible but make Django's email validator fail.
+    office_email = unicodedata.normalize('NFKC', raw_office_email)
+    office_email = ''.join(
+        character
+        for character in office_email
+        if not character.isspace() and character not in {'\u200b', '\u200c', '\u200d', '\ufeff'}
+    ).lower()
     if not new_id or len(new_id) > 20:
         return Response({'success': False, 'message': 'Enter a valid employee ID.'}, status=400)
     try:
