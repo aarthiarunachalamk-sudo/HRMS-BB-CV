@@ -31,6 +31,8 @@ def _employee_context(request):
     if user_id:
         user = User.objects.filter(user_id=user_id).first()
         account = EmployeeAccount.objects.filter(employee_id=user_id).select_related('registration').first()
+        if account is None and user is not None:
+            account = EmployeeAccount.objects.filter(user=user).select_related('registration').first()
     if account is None and email:
         account = (
             EmployeeAccount.objects.select_related('registration')
@@ -59,10 +61,12 @@ def _employee_context(request):
 
 def _employee_id(user, account, request):
     return (
-        request.data.get('user_id')
+        request.data.get('employee_id')
+        or request.query_params.get('employee_id')
+        or (account.employee_id if account else '')
+        or request.data.get('user_id')
         or request.query_params.get('user_id')
         or (user.user_id if user else '')
-        or (account.employee_id if account else '')
     )
 
 
@@ -726,6 +730,11 @@ def _employee_payload(user, account, request=None):
             'date_of_joining': str(account.date_of_joining) if account else '',
             'reporting_tl': account.reporting_tl if account else '',
             'work_location': account.work_location if account else '',
+            'doc_passport_photo': _document_url(
+                account.registration if account else None,
+                'doc_passport_photo',
+                request,
+            ),
         },
         'attendance': _attendance_payload(today_record),
         'leave_balances': _leave_balance_payload(employee_id, account),

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
@@ -92,7 +90,9 @@ class EmployeeHomeScreen extends StatelessWidget {
                                 profileImagePath!.isEmpty
                             ? null
                             : DecorationImage(
-                                image: FileImage(File(profileImagePath!)),
+                                image: employeeProfileImageProvider(
+                                  profileImagePath,
+                                )!,
                                 fit: BoxFit.cover,
                               ),
                       ),

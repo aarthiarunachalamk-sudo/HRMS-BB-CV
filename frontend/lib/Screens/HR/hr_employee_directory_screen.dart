@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'hr_employee_detail_screen.dart';
 import 'hr_shared.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 
 class HrEmployeeDirectoryScreen extends StatefulWidget {
   final List<Map<String, dynamic>> employees;
@@ -208,7 +209,6 @@ class _EmployeeCard extends StatelessWidget {
     final id = '${employee['trailing'] ?? employee['id'] ?? ''}';
     final status = '${employee['status'] ?? 'Active'}';
     final isActive = status == 'Active';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
     // subtitle may be "Associate · WebApp" already, extract dept if needed
     final displaySubtitle = dept.isNotEmpty ? '$role  ·  $dept' : role;
@@ -225,17 +225,12 @@ class _EmployeeCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            CircleAvatar(
+            EmployeeAvatar(
+              name: name,
+              photoUrl: '${employee['doc_passport_photo'] ?? ''}',
               radius: 22,
               backgroundColor: c.primary.withAlpha(30),
-              child: Text(
-                initial,
-                style: TextStyle(
-                  color: c.primary,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 16,
-                ),
-              ),
+              foregroundColor: c.primary,
             ),
             const SizedBox(width: 12),
             Expanded(

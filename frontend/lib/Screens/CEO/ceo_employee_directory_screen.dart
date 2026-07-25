@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 
 import 'ceo_employee_profile_screen.dart';
 import 'ceo_service.dart';
@@ -190,7 +191,6 @@ class _EmployeeCard extends StatelessWidget {
     final id = '${employee['id'] ?? ''}';
     final status = '${employee['status'] ?? 'Active'}';
     final isActive = status == 'Active';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
     return InkWell(
       onTap: onTap,
@@ -204,14 +204,12 @@ class _EmployeeCard extends StatelessWidget {
         ),
         child: Row(children: [
           // Avatar
-          CircleAvatar(
+          EmployeeAvatar(
+            name: name,
+            photoUrl: '${employee['doc_passport_photo'] ?? ''}',
             radius: 22,
             backgroundColor: CeoColors.cyan.withAlpha(30),
-            child: Text(initial,
-                style: const TextStyle(
-                    color: CeoColors.cyan,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16)),
+            foregroundColor: CeoColors.cyan,
           ),
           const SizedBox(width: 12),
           // Info

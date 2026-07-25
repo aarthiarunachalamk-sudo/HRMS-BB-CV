@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import 'package:flutter/services.dart';
@@ -395,10 +393,10 @@ class _HistoryAvatar extends StatelessWidget {
 
   ImageProvider? get _imageProvider {
     final path = filePath?.trim() ?? '';
-    if (path.isNotEmpty && File(path).existsSync()) {
-      return ResizeImage(FileImage(File(path)), width: 220, height: 220);
-    }
-    return null;
+    final provider = employeeProfileImageProvider(path);
+    return provider == null
+        ? null
+        : ResizeImage(provider, width: 220, height: 220);
   }
 }
 

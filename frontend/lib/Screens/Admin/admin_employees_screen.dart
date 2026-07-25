@@ -4,6 +4,7 @@ import 'admin_employee_detail_screen.dart';
 import 'admin_palette.dart';
 import 'admin_service.dart';
 import 'admin_widgets.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 
 class AdminEmployeesScreen extends StatelessWidget {
   final String userId;
@@ -89,13 +90,12 @@ class _EmployeeTile extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          CircleAvatar(
+          EmployeeAvatar(
+            name: employee.name,
+            photoUrl: employee.photoUrl,
             radius: 22,
             backgroundColor: c.primary.withOpacity(0.15),
-            child: Text(
-              employee.name.isNotEmpty ? employee.name[0].toUpperCase() : 'E',
-              style: TextStyle(color: c.primary, fontWeight: FontWeight.w800, fontSize: 16),
-            ),
+            foregroundColor: c.primary,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -122,8 +122,9 @@ class _Employee {
   final String id;
   final String department;
   final String status;
+  final String photoUrl;
 
-  const _Employee(this.name, this.role, this.email, this.id, this.department, this.status);
+  const _Employee(this.name, this.role, this.email, this.id, this.department, this.status, this.photoUrl);
 
   factory _Employee.fromMap(Map<String, dynamic> m) => _Employee(
         '${m['name'] ?? ''}',
@@ -132,6 +133,7 @@ class _Employee {
         '${m['id'] ?? ''}',
         '${m['department'] ?? ''}',
         '${m['status'] ?? 'Active'}',
+        '${m['doc_passport_photo'] ?? ''}',
       );
 
   Map<String, dynamic> toMap() => {
@@ -141,5 +143,6 @@ class _Employee {
         'id': id,
         'department': department,
         'status': status,
+        'doc_passport_photo': photoUrl,
       };
 }

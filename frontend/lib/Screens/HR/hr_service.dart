@@ -18,6 +18,45 @@ class HrService {
     throw Exception(_payrollError(response, 'HR dashboard API failed'));
   }
 
+  Future<Map<String, dynamic>> fetchEditableEmployee(int registrationId) async {
+    final response = await http
+        .get(ApiConfig.uri('/registered-employees/$registrationId/'))
+        .timeout(_timeout);
+    return _decodeEmployeeResponse(response, 'Unable to load employee details');
+  }
+
+  Future<Map<String, dynamic>> updateEmployee(
+    int registrationId,
+    Map<String, dynamic> changes,
+  ) async {
+    final response = await http
+        .patch(
+          ApiConfig.uri('/registered-employees/$registrationId/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(changes),
+        )
+        .timeout(_timeout);
+    return _decodeEmployeeResponse(response, 'Unable to update employee details');
+  }
+
+  Map<String, dynamic> _decodeEmployeeResponse(http.Response response, String fallback) {
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map &&
+          response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          decoded['success'] == true) {
+        return Map<String, dynamic>.from(decoded);
+      }
+      if (decoded is Map && decoded['message'] != null) {
+        throw Exception('${decoded['message']}');
+      }
+    } catch (error) {
+      if (error is Exception) rethrow;
+    }
+    throw Exception('$fallback (${response.statusCode})');
+  }
+
   Future<void> updateLeaveRequest(int leaveId, String status, String userId) async {
     final response = await http
         .post(

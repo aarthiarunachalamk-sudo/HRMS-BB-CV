@@ -289,6 +289,15 @@ class EmployeeAccount(models.Model):
     ]
 
     registration = models.OneToOneField(EmployeeRegistration, on_delete=models.CASCADE, related_name='account')
+    # Optional direct link for role-based users who also participate as employees.
+    # Existing employee accounts continue to resolve through email/user_id.
+    user = models.OneToOneField(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='employee_account',
+    )
     employee_id = models.CharField(max_length=20, unique=True, blank=True)
     employee_email = models.EmailField(unique=True)
     department = models.CharField(max_length=50, choices=DEPARTMENT_CHOICES)

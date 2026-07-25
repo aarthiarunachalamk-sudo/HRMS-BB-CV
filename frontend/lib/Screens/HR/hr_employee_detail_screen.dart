@@ -1,15 +1,117 @@
 import 'package:flutter/material.dart';
 
 import 'hr_shared.dart';
+import 'hr_service.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/privacy_utils.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 
-class HrEmployeeDetailScreen extends StatelessWidget {
+class HrEmployeeDetailScreen extends StatefulWidget {
   final Map<String, dynamic> employee;
 
   const HrEmployeeDetailScreen({super.key, required this.employee});
 
+  @override
+  State<HrEmployeeDetailScreen> createState() => _HrEmployeeDetailScreenState();
+}
+
+class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
+  late Map<String, dynamic> employee = Map<String, dynamic>.from(widget.employee);
+  bool _saving = false;
+
   String _get(String key) => '${employee[key] ?? ''}';
+
+  Future<void> _editEmployee() async {
+    final registrationId = int.tryParse(_get('registration_id'));
+    if (registrationId == null || _saving) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This employee record cannot be edited yet.')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final loaded = await HrService().fetchEditableEmployee(registrationId);
+      if (!mounted) return;
+      final source = Map<String, dynamic>.from(loaded['employee'] as Map);
+      final changes = await _showEditSheet(source);
+      if (changes == null || !mounted) return;
+      final saved = await HrService().updateEmployee(registrationId, changes);
+      final updated = Map<String, dynamic>.from(saved['employee'] as Map);
+      setState(() {
+        employee.addAll({
+          'name': '${updated['first_name'] ?? ''} ${updated['last_name'] ?? ''}'.trim(),
+          'phone': updated['mobile'] ?? employee['phone'],
+          'gender': updated['gender'] ?? '',
+          'dob': updated['dob'] ?? '',
+          'blood_group': updated['blood_group'] ?? '',
+          'nationality': updated['nationality'] ?? '',
+          'marital_status': updated['marital_status'] ?? '',
+          'current_city': updated['current_city'] ?? '',
+          'current_state': updated['current_state'] ?? '',
+          'qualification': updated['qualification'] ?? '',
+          'college': updated['college'] ?? '',
+          'year_of_passing': updated['year_of_passing'] ?? '',
+          'bank_name': updated['bank_name'] ?? '',
+          'account_number': updated['account_number'] ?? '',
+          'ifsc_code': updated['ifsc_code'] ?? '',
+          'branch_name': updated['branch_name'] ?? '',
+          'aadhar': updated['aadhar'] ?? '',
+          'pan': updated['pan'] ?? '',
+          'doc_passport_photo': updated['doc_passport_photo'] ?? employee['doc_passport_photo'],
+        });
+      });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Employee details updated.')));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Edit failed: $error')));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _showEditSheet(Map<String, dynamic> source) async {
+    const fields = <(String, String)>[
+      ('first_name', 'First name'), ('last_name', 'Last name'),
+      ('personal_email', 'Personal email'), ('mobile', 'Mobile'),
+      ('gender', 'Gender'), ('dob', 'Date of birth'),
+      ('blood_group', 'Blood group'), ('marital_status', 'Marital status'),
+      ('nationality', 'Nationality'), ('current_city', 'Current city'),
+      ('current_state', 'Current state'), ('qualification', 'Qualification'),
+      ('college', 'College'), ('year_of_passing', 'Year of passing'),
+      ('bank_name', 'Bank name'), ('account_number', 'Account number'),
+      ('ifsc_code', 'IFSC code'), ('branch_name', 'Bank branch'),
+      ('aadhar', 'Aadhaar'), ('pan', 'PAN'),
+    ];
+    final controllers = {for (final field in fields) field.$1: TextEditingController(text: '${source[field.$1] ?? ''}')};
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(18, 16, 18, MediaQuery.viewInsetsOf(sheetContext).bottom + 16),
+          child: ListView(
+            children: [
+              Row(children: [
+                const Expanded(child: Text('Edit Employee Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
+                IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
+              ]),
+              ...fields.map((field) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: TextField(controller: controllers[field.$1], decoration: InputDecoration(labelText: field.$2, border: const OutlineInputBorder())),
+              )),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(sheetContext, {for (final entry in controllers.entries) entry.key: entry.value.text.trim()}),
+                icon: const Icon(Icons.save_rounded),
+                label: const Text('Save changes'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    for (final controller in controllers.values) controller.dispose();
+    return result;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +131,6 @@ class HrEmployeeDetailScreen extends StatelessWidget {
     final id = _get('id').isNotEmpty ? _get('id') : _get('trailing');
     final status = _get('status').isEmpty ? 'Active' : _get('status');
     final isActive = status == 'Active';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -41,6 +142,15 @@ class HrEmployeeDetailScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: const AppBarLogoTitle(title: 'Employee Details'),
+        actions: [
+          IconButton(
+            tooltip: 'Edit employee details',
+            onPressed: _saving ? null : _editEmployee,
+            icon: _saving
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : Icon(Icons.edit_rounded, color: c.primary),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(color: c.border, height: 1),
@@ -54,17 +164,12 @@ class HrEmployeeDetailScreen extends StatelessWidget {
             Center(
               child: Column(
                 children: [
-                  CircleAvatar(
+                  EmployeeAvatar(
+                    name: name,
+                    photoUrl: _get('doc_passport_photo'),
                     radius: 36,
                     backgroundColor: c.primary.withAlpha(30),
-                    child: Text(
-                      initial,
-                      style: TextStyle(
-                        color: c.primary,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 26,
-                      ),
-                    ),
+                    foregroundColor: c.primary,
                   ),
                   const SizedBox(height: 12),
                   Text(

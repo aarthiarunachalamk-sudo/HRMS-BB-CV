@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'admin_palette.dart';
 import 'admin_widgets.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 
 // The employee model is shared via a simple map for decoupling.
 class AdminEmployeeDetailScreen extends StatelessWidget {
@@ -36,17 +37,12 @@ class AdminEmployeeDetailScreen extends StatelessWidget {
           padding: const EdgeInsets.all(18),
           child: Column(
             children: [
-              CircleAvatar(
+              EmployeeAvatar(
+                name: name,
+                photoUrl: _get('doc_passport_photo'),
                 radius: 38,
                 backgroundColor: c.primary.withOpacity(0.15),
-                child: Text(
-                  name[0].toUpperCase(),
-                  style: TextStyle(
-                    color: c.primary,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                foregroundColor: c.primary,
               ),
               const SizedBox(height: 12),
               adminTitle(name, 18, c),

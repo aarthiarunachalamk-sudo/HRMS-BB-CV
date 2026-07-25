@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:flutter/services.dart';
@@ -6489,15 +6490,13 @@ class _EmployeeDetails extends StatelessWidget {
         TlCard(
           child: Row(
             children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: c.primary.withAlpha(26),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: c.primary.withAlpha(80)),
-                ),
-                child: Icon(Icons.person_rounded, color: c.primary, size: 28),
+              EmployeeAvatar(
+                name: '${item['title'] ?? 'Employee'}',
+                photoUrl: '${item['doc_passport_photo'] ?? ''}',
+                radius: 27,
+                backgroundColor: c.primary.withAlpha(26),
+                foregroundColor: c.primary,
+                borderRadius: BorderRadius.circular(12),
               ),
               const SizedBox(width: 12),
               Expanded(

@@ -18,6 +18,7 @@ from .mailer import email_is_configured, send_email as send_transactional_email
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Attachment, Disposition, FileContent, FileName, FileType, Mail
 from .models import EmployeeAccount
+from .leadership_employees import ensure_leadership_employee_account
 from .serializers import EmployeeAccountSerializer
 import random
 import string
@@ -45,6 +46,17 @@ def login_view(request):
         matching_users = [user for user in candidates if user.check_password(password)]
         if len(matching_users) == 1:
             user = matching_users[0]
+            employee_account = ensure_leadership_employee_account(user)
+            requested_role = str(
+                serializer.validated_data.get('selected_role')
+                or serializer.validated_data.get('login_as')
+                or ''
+            ).strip().lower()
+            login_role = (
+                'employee'
+                if requested_role == 'employee' and employee_account is not None
+                else user.role
+            )
                 # Check if employee account exists and OTC is still active
             try:
                 from .models import EmployeeAccount
@@ -60,10 +72,12 @@ def login_view(request):
                 pass
             return Response({
                 'success': True,
-                'role': user.role,
+                'role': login_role,
+                'account_role': user.role,
                 'email': user.email,
                 'first_name': user.first_name,
                 'user_id': user.user_id,
+                'employee_id': employee_account.employee_id if employee_account else user.user_id,
             })
         if not candidates:
             return Response({'success': False, 'message': 'User not found'}, status=404)
@@ -1590,11 +1604,7 @@ def _employee_directory_items(include_attendance=False, limit=None):
     items = []
     for account in employees:
         registration = account.registration
-        registration_data = (
-            EmployeeRegistrationSerializer(registration).data
-            if include_attendance
-            else {}
-        )
+        registration_data = EmployeeRegistrationSerializer(registration).data
         name = f'{registration.first_name} {registration.last_name}'.strip()
         attendance = (
             _ceo_employee_attendance_payload(account.employee_id)
@@ -2083,6 +2093,7 @@ def _tl_team_items(user_id=''):
     items = []
     for account in _tl_team_queryset(user_id).order_by('-created_at')[:50]:
         registration = account.registration
+        registration_data = EmployeeRegistrationSerializer(registration).data
         name = f'{registration.first_name} {registration.last_name}'.strip() or account.employee_email
         today = timezone.localdate()
         from_date = today - timedelta(days=29)
@@ -2130,6 +2141,7 @@ def _tl_team_items(user_id=''):
             'trailing': account.employee_id,
             'score': f'{performance_score}%',
             'status': 'Active' if account.is_active else 'Inactive',
+            'doc_passport_photo': registration_data.get('doc_passport_photo') or '',
             'attendance_summary': {
                 'present': present_count,
                 'late': late_count,
@@ -2830,6 +2842,7 @@ def hr_dashboard_view(request):
         for acc in accounts:
             reg = acc.registration
             result.append({
+                'registration_id': reg.id,
                 'name': f'{reg.first_name} {reg.last_name}'.strip() or acc.employee_email,
                 'subtitle': f'{acc.get_designation_display()} · {acc.get_department_display()}',
                 'trailing': acc.employee_id,
@@ -2860,6 +2873,7 @@ def hr_dashboard_view(request):
                 'qualification': reg.qualification or '',
                 'college': reg.college or '',
                 'year_of_passing': reg.year_of_passing or '',
+                'doc_passport_photo': EmployeeRegistrationSerializer(reg).data.get('doc_passport_photo') or '',
             })
         return result
 
@@ -5401,6 +5415,7 @@ def _admin_employee_payload_from_account(account):
         'phone': mask_phone_number(getattr(registration, 'mobile', '') or ''),
         'date_of_joining': account.date_of_joining.isoformat() if account.date_of_joining else '',
         'reporting_manager': account.reporting_tl,
+        'doc_passport_photo': EmployeeRegistrationSerializer(registration).data.get('doc_passport_photo') or '',
     }
 
 
@@ -5418,6 +5433,7 @@ def _admin_employee_payload_from_user(user):
         'phone': mask_phone_number(f'{user.country_code} {user.phone}' if user.phone else ''),
         'date_of_joining': '',
         'reporting_manager': '',
+        'doc_passport_photo': _passport_photo_for_email(user.email),
     }
 
 
@@ -5866,6 +5882,7 @@ def create_user_view(request):
         )
         user.set_password(data['password'])
         user.save()
+        employee_account = ensure_leadership_employee_account(user)
         creator_id = data.get('created_by', '').strip()
         if creator_id:
             member_name = f'{user.first_name} {user.last_name}'.strip() or user.email
@@ -5883,7 +5900,7 @@ def create_user_view(request):
         return Response({
             'success': True,
             'user_id': user.user_id,
-            'employee_id': user.user_id,
+            'employee_id': employee_account.employee_id if employee_account else user.user_id,
             'designation': user.occupation,
             'department': user.department,
             'work_mode': user.work_mode,
@@ -6077,12 +6094,6 @@ def update_employee_status_view(request, pk):
             'success': True,
             'employee': _employee_registration_payload(emp, editable=True),
         })
-
-    if emp.status == 'approved' and request.data.get('status') != emp.status:
-        return Response({
-            'success': False,
-            'message': 'Approved registrations cannot be edited here.',
-        }, status=400)
 
     updated_fields = []
     for field in HR_EDITABLE_REGISTRATION_FIELDS:

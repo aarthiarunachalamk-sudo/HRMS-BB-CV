@@ -60,6 +60,10 @@ STATE_CITY_CHOICES = {
 class LoginSerializer(serializers.Serializer):
     email = serializers.CharField()
     password = serializers.CharField()
+    # Optional dashboard context. Existing clients continue to receive the
+    # account's actual role when this field is omitted.
+    selected_role = serializers.CharField(required=False, allow_blank=True)
+    login_as = serializers.CharField(required=False, allow_blank=True)
 
 class CreateUserSerializer(serializers.Serializer):
     first_name = serializers.CharField()

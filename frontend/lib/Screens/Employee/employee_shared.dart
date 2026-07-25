@@ -1,5 +1,18 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
+
+/// Supports both a backend URL and a photo selected from the device.
+ImageProvider<Object>? employeeProfileImageProvider(String? source) {
+  final value = source?.trim() ?? '';
+  if (value.isEmpty || value == 'null') return null;
+  final uri = Uri.tryParse(value);
+  if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+    return NetworkImage(value);
+  }
+  return FileImage(File(value));
+}
 
 class EmployeeColors {
   static const blue = Color(0xFF4FACFE);

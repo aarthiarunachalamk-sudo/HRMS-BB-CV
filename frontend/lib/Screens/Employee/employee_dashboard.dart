@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
@@ -65,7 +63,17 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   Future<void> _load() async {
     try {
       final data = await _service.fetchDashboard(widget.userId, widget.email);
-      if (mounted) setState(() => _data = data);
+      if (mounted) {
+        final backendPhoto = '${data.profile['doc_passport_photo'] ?? ''}'.trim();
+        setState(() {
+          _data = data;
+          if ((_profileImagePath == null || _profileImagePath!.isEmpty) &&
+              backendPhoto.isNotEmpty &&
+              backendPhoto != 'null') {
+            _profileImagePath = backendPhoto;
+          }
+        });
+      }
     } catch (_) {
       // Fallback data keeps the employee screens usable while the backend is offline.
     } finally {
@@ -687,7 +695,9 @@ class _EmployeeDrawer extends StatelessWidget {
                                     profileImagePath!.isEmpty
                                 ? null
                                 : DecorationImage(
-                                    image: FileImage(File(profileImagePath!)),
+                                    image: employeeProfileImageProvider(
+                                      profileImagePath,
+                                    )!,
                                     fit: BoxFit.cover,
                                   ),
                           ),

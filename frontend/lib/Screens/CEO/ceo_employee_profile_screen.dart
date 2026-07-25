@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'ceo_widgets.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/privacy_utils.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 
 class CeoEmployeeProfileScreen extends StatelessWidget {
   final Map<String, dynamic> employee;
@@ -18,7 +19,6 @@ class CeoEmployeeProfileScreen extends StatelessWidget {
     final id = _get('id');
     final status = _get('status').isEmpty ? 'Active' : _get('status');
     final isActive = status == 'Active';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
     return CeoShell(
       title: 'Employee Details',
@@ -28,17 +28,12 @@ class CeoEmployeeProfileScreen extends StatelessWidget {
           Center(
             child: Column(
               children: [
-                CircleAvatar(
+                EmployeeAvatar(
+                  name: name,
+                  photoUrl: _get('doc_passport_photo'),
                   radius: 36,
                   backgroundColor: CeoColors.cyan.withAlpha(30),
-                  child: Text(
-                    initial,
-                    style: const TextStyle(
-                      color: CeoColors.cyan,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 26,
-                    ),
-                  ),
+                  foregroundColor: CeoColors.cyan,
                 ),
                 const SizedBox(height: 12),
                 title(name, 18),
