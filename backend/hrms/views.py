@@ -5584,6 +5584,7 @@ def hr_employee_identity_view(request, employee_id):
         return Response({'success': False, 'message': 'Office email already exists.'}, status=409)
 
     old_id = account.employee_id
+    old_email = account.employee_email
     with transaction.atomic():
         # Employee-related tables use string IDs rather than foreign keys.
         # Keep those records attached when HR changes the employee ID.
@@ -5593,6 +5594,66 @@ def hr_employee_identity_view(request, employee_id):
                     continue
                 if any(field.name == 'employee_id' for field in model._meta.fields):
                     model.objects.filter(employee_id=old_id).update(employee_id=new_id)
+            TeamTask.objects.filter(assignee_id=old_id).update(assignee_id=new_id)
+            Project.objects.filter(manager_id=old_id).update(manager_id=new_id)
+            AppNotification.objects.filter(recipient_user_id=old_id).update(
+                recipient_user_id=new_id,
+            )
+        if office_email != old_email:
+            TeamTask.objects.filter(assignee_email__iexact=old_email).update(
+                assignee_email=office_email,
+            )
+            Project.objects.filter(manager_email__iexact=old_email).update(
+                manager_email=office_email,
+            )
+
+        # Meetings and projects keep participant/member identities as JSON.
+        # Replace only identity values, leaving all other embedded data intact.
+        identity_keys = {'id', 'employee_id', 'assignee_id', 'manager_id'}
+        email_keys = {'email', 'employee_email', 'assignee_email', 'manager_email'}
+
+        def replace_identity(value):
+            changed = False
+            if isinstance(value, str):
+                if value == old_id:
+                    return new_id, True
+                if value.lower() == old_email.lower():
+                    return office_email, True
+                return value, False
+            if isinstance(value, list):
+                updated = []
+                for item in value:
+                    replacement, item_changed = replace_identity(item)
+                    updated.append(replacement)
+                    changed = changed or item_changed
+                return updated, changed
+            if isinstance(value, dict):
+                updated = {}
+                for key, item in value.items():
+                    if key in identity_keys and str(item) == old_id:
+                        updated[key] = new_id
+                        changed = True
+                    elif key in email_keys and str(item).lower() == old_email.lower():
+                        updated[key] = office_email
+                        changed = True
+                    else:
+                        replacement, item_changed = replace_identity(item)
+                        updated[key] = replacement
+                        changed = changed or item_changed
+                return updated, changed
+            return value, False
+
+        for meeting in MdMeeting.objects.exclude(participants=[]).iterator():
+            participants, changed = replace_identity(meeting.participants)
+            if changed:
+                meeting.participants = participants
+                meeting.save(update_fields=['participants'])
+        for project in Project.objects.exclude(team=[]).iterator():
+            team, changed = replace_identity(project.team)
+            if changed:
+                project.team = team
+                project.save(update_fields=['team'])
+
         account.employee_id = new_id
         account.employee_email = office_email
         account.save(update_fields=['employee_id', 'employee_email'])

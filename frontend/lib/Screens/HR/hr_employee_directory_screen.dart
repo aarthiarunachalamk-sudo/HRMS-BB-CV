@@ -173,12 +173,15 @@ class _HrEmployeeDirectoryScreenState extends State<HrEmployeeDirectoryScreen> {
                       return _EmployeeCard(
                         employee: emp,
                         palette: c,
-                        onTap: () => Navigator.of(ctx).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                HrEmployeeDetailScreen(employee: emp),
-                          ),
-                        ),
+                        onTap: () async {
+                          await Navigator.of(ctx).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  HrEmployeeDetailScreen(employee: emp),
+                            ),
+                          );
+                          if (mounted) setState(() {});
+                        },
                       );
                     },
                   ),

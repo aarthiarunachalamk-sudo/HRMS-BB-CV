@@ -39,11 +39,13 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
       final saved = await HrService().updateEmployeeIdentity(currentId, changes);
       final updated = Map<String, dynamic>.from(saved['employee'] as Map);
       setState(() {
-        employee.addAll({
+        final corrections = <String, dynamic>{
           'id': updated['employee_id'],
           'trailing': updated['employee_id'],
           'email': updated['employee_email'],
-        });
+        };
+        employee.addAll(corrections);
+        widget.employee.addAll(corrections);
       });
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Employee ID and office email updated.')));
     } catch (error) {
@@ -54,44 +56,14 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
   }
 
   Future<Map<String, dynamic>?> _showEditSheet(Map<String, dynamic> source) async {
-    final idController = TextEditingController(text: '${source['employee_id'] ?? ''}');
-    final emailController = TextEditingController(text: '${source['employee_email'] ?? ''}');
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
+    return showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(18, 16, 18, MediaQuery.viewInsetsOf(sheetContext).bottom + 16),
-          child: ListView(
-            children: [
-              Row(children: [
-                const Expanded(child: Text('Edit Employment Identity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
-                IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
-              ]),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: TextField(controller: idController, decoration: const InputDecoration(labelText: 'Employee ID', border: OutlineInputBorder())),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: TextField(controller: emailController, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Office email', border: OutlineInputBorder())),
-              ),
-              FilledButton.icon(
-                onPressed: () => Navigator.pop(sheetContext, {
-                  'employee_id': idController.text.trim(),
-                  'employee_email': emailController.text.trim(),
-                }),
-                icon: const Icon(Icons.save_rounded),
-                label: const Text('Save changes'),
-              ),
-            ],
-          ),
-        ),
+      builder: (_) => _EmploymentIdentityEditor(
+        employeeId: '${source['employee_id'] ?? ''}',
+        officeEmail: '${source['employee_email'] ?? ''}',
       ),
     );
-    idController.dispose();
-    emailController.dispose();
-    return result;
   }
 
   @override
@@ -367,6 +339,102 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _EmploymentIdentityEditor extends StatefulWidget {
+  final String employeeId;
+  final String officeEmail;
+
+  const _EmploymentIdentityEditor({
+    required this.employeeId,
+    required this.officeEmail,
+  });
+
+  @override
+  State<_EmploymentIdentityEditor> createState() =>
+      _EmploymentIdentityEditorState();
+}
+
+class _EmploymentIdentityEditorState
+    extends State<_EmploymentIdentityEditor> {
+  late final TextEditingController _idController;
+  late final TextEditingController _emailController;
+
+  @override
+  void initState() {
+    super.initState();
+    _idController = TextEditingController(text: widget.employeeId);
+    _emailController = TextEditingController(text: widget.officeEmail);
+  }
+
+  @override
+  void dispose() {
+    _idController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          16,
+          18,
+          MediaQuery.viewInsetsOf(context).bottom + 16,
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Edit Employment Identity',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: TextField(
+                controller: _idController,
+                decoration: const InputDecoration(
+                  labelText: 'Employee ID',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Office email',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, {
+                'employee_id': _idController.text.trim(),
+                'employee_email': _emailController.text.trim(),
+              }),
+              icon: const Icon(Icons.save_rounded),
+              label: const Text('Save changes'),
+            ),
+          ],
+        ),
       ),
     );
   }
