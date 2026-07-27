@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'employee_service.dart';
@@ -39,6 +40,7 @@ class _EmployeeSelfieAttendanceScreenState
 
   String? _capturedPath;
   Position? _position;
+  String? _gpsAddress;
   Map<String, dynamic>? _result;
   String? _error;
   bool _submitting = false;
@@ -163,6 +165,7 @@ class _EmployeeSelfieAttendanceScreenState
         _loadingLocation = false;
         _error = null;
       });
+      await _loadAddress(position);
       await _initCamera();
     } catch (_) {
       if (mounted) {
@@ -171,6 +174,34 @@ class _EmployeeSelfieAttendanceScreenState
           _error = 'Unable to capture GPS location.';
         });
       }
+    }
+  }
+
+  Future<void> _loadAddress(Position position) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      if (placemarks.isEmpty || !mounted) return;
+      final place = placemarks.first;
+      final parts = <String>[
+        place.street ?? '',
+        place.subLocality ?? '',
+        place.locality ?? '',
+        place.administrativeArea ?? '',
+        place.postalCode ?? '',
+        place.country ?? '',
+      ].map((part) => part.trim()).where((part) => part.isNotEmpty).toList();
+      final uniqueParts = <String>[];
+      for (final part in parts) {
+        if (!uniqueParts.contains(part)) uniqueParts.add(part);
+      }
+      if (uniqueParts.isNotEmpty) {
+        setState(() => _gpsAddress = uniqueParts.join(', '));
+      }
+    } catch (_) {
+      // Coordinates remain available when reverse geocoding is unavailable.
     }
   }
 
@@ -246,7 +277,12 @@ class _EmployeeSelfieAttendanceScreenState
     // Correct orientation using EXIF data captured by the camera sensor.
     decoded = img.bakeOrientation(decoded);
 
-    final watermarked = _drawWatermark(decoded, _position, DateTime.now());
+    final watermarked = _drawWatermark(
+      decoded,
+      _position,
+      DateTime.now(),
+      _gpsAddress,
+    );
 
     final directory = await getTemporaryDirectory();
     final outPath =
@@ -255,7 +291,12 @@ class _EmployeeSelfieAttendanceScreenState
     return outPath;
   }
 
-  img.Image _drawWatermark(img.Image photo, Position? position, DateTime now) {
+  img.Image _drawWatermark(
+    img.Image photo,
+    Position? position,
+    DateTime now,
+    String? gpsAddress,
+  ) {
     final w = photo.width;
     final h = photo.height;
     final bandHeight = (h * 0.24).round();
@@ -283,8 +324,8 @@ class _EmployeeSelfieAttendanceScreenState
       }
     }
 
-    final latitude = position?.latitude ?? 11.686539;
-    final longitude = position?.longitude ?? 78.12028;
+    final latitude = position?.latitude;
+    final longitude = position?.longitude;
 
     final mapSize = (h * 0.14).round().clamp(76, 190) as int;
     final mapLeft = (w * 0.04).round();
@@ -295,16 +336,18 @@ class _EmployeeSelfieAttendanceScreenState
     final textLeft = mapLeft + mapSize + (w * 0.04).round();
     int textY = mapTop + (h * 0.005).round();
 
-    const place = 'Salem, Tamil Nadu, India';
-    const address =
-        '1550-4, Subbarayan Nagar, Jagir Ammapalayam, Salem, Tamil Nadu 636302, India';
+    final address = gpsAddress?.trim().isNotEmpty == true
+        ? gpsAddress!.trim()
+        : 'GPS location';
     final latLong =
-        'Lat ${latitude.toStringAsFixed(6)}\u00B0 Long ${longitude.toStringAsFixed(5)}\u00B0';
+        latitude != null && longitude != null
+        ? 'Lat ${latitude.toStringAsFixed(6)}\u00B0 Long ${longitude.toStringAsFixed(6)}\u00B0'
+        : 'GPS coordinates unavailable';
     final timestamp = _formatTimestamp(now);
 
     img.drawString(
       photo,
-      place,
+      address,
       font: img.arial24,
       x: textLeft,
       y: textY,
@@ -314,7 +357,7 @@ class _EmployeeSelfieAttendanceScreenState
 
     img.drawString(
       photo,
-      address,
+      latLong,
       font: img.arial14,
       x: textLeft,
       y: textY,
@@ -322,16 +365,6 @@ class _EmployeeSelfieAttendanceScreenState
       wrap: true,
     );
     textY += 38;
-
-    img.drawString(
-      photo,
-      latLong,
-      font: img.arial14,
-      x: textLeft,
-      y: textY,
-      color: img.ColorRgb8(255, 255, 255),
-    );
-    textY += 20;
 
     img.drawString(
       photo,
@@ -857,7 +890,7 @@ class _EmployeeSelfieAttendanceScreenState
           ],
           if (_isCheckIn) ...[
             const SizedBox(height: 22),
-            _LocationRows(result: result),
+            _LocationRows(result: result, gpsAddress: _gpsAddress),
           ],
           const SizedBox(height: 24),
           SizedBox(
@@ -892,8 +925,9 @@ class _EmployeeSelfieAttendanceScreenState
 
 class _LocationRows extends StatelessWidget {
   final Map<String, dynamic> result;
+  final String? gpsAddress;
 
-  const _LocationRows({required this.result});
+  const _LocationRows({required this.result, required this.gpsAddress});
 
   @override
   Widget build(BuildContext context) {
@@ -902,7 +936,9 @@ class _LocationRows extends StatelessWidget {
         _LocationRow(
           icon: Icons.location_on_rounded,
           label: 'Location',
-          value: 'Gandhipet, Hyd, India',
+          value: gpsAddress?.trim().isNotEmpty == true
+              ? gpsAddress!.trim()
+              : 'Lat ${result['latitude'] ?? '--'}, Long ${result['longitude'] ?? '--'}',
         ),
         _LocationRow(
           icon: Icons.my_location_rounded,
@@ -917,10 +953,15 @@ class _LocationRows extends StatelessWidget {
         _LocationRow(
           icon: Icons.adjust_rounded,
           label: 'Accuracy',
-          value: '${result['accuracy'] ?? '--'} meters',
+          value: _accuracyText(result['accuracy']),
         ),
       ],
     );
+  }
+
+  String _accuracyText(dynamic value) {
+    final text = '${value ?? '--'}'.trim();
+    return text.toLowerCase().contains('meter') ? text : '$text meters';
   }
 }
 
