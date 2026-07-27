@@ -7,6 +7,7 @@ import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/india_locations.dart';
 import 'theme_config.dart';
@@ -350,6 +351,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _nextPage() {
+    final error = _currentPage == _totalPages - 1
+        ? _validateAllRegistrationPages()
+        : _validateRegistrationPage(_logicalPageForIndex(_currentPage));
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
     if (_currentPage < _totalPages - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 350),
@@ -358,6 +371,189 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => _currentPage++);
     } else {
       _submitForm();
+    }
+  }
+
+  int _logicalPageForIndex(int index) {
+    if (!_isExperienced && index == 3) return 4;
+    return index;
+  }
+
+  String? _validateAllRegistrationPages() {
+    final pages = <int>[0, 1, 2, if (_isExperienced) 3, 4];
+    for (final page in pages) {
+      final error = _validateRegistrationPage(page);
+      if (error != null) return error;
+    }
+    return null;
+  }
+
+  String? _validateRegistrationPage(int page) {
+    String value(TextEditingController controller) => controller.text.trim();
+    bool isName(String text) =>
+        RegExp(r"^[A-Za-z][A-Za-z .'-]{1,79}$").hasMatch(text);
+
+    if (page == 0) {
+      if (!isName(value(_firstNameCtrl))) return 'Enter a valid first name.';
+      if (!isName(value(_lastNameCtrl))) return 'Enter a valid last name.';
+      final dob = _parseRegistrationDate(value(_dobCtrl));
+      if (dob == null) return 'Select a valid date of birth.';
+      final today = DateTime.now();
+      var age = today.year - dob.year;
+      if (today.month < dob.month ||
+          (today.month == dob.month && today.day < dob.day)) {
+        age--;
+      }
+      if (age < 18) return 'Employee must be at least 18 years old.';
+      if (!RegExp(r'^[6-9]\d{9}$').hasMatch(value(_mobileCtrl))) {
+        return 'Enter a valid 10-digit Indian mobile number.';
+      }
+      if (!RegExp(
+        r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$",
+      ).hasMatch(value(_emailCtrl))) {
+        return 'Enter a valid personal email address.';
+      }
+      if (value(_currentDoorCtrl).isEmpty ||
+          value(_currentStreetCtrl).isEmpty ||
+          value(_currentAddress2Ctrl).isEmpty ||
+          value(_currentCityCtrl).isEmpty ||
+          value(_currentStateCtrl).isEmpty) {
+        return 'Complete the current address.';
+      }
+      if (value(_permanentDoorCtrl).isEmpty ||
+          value(_permanentStreetCtrl).isEmpty ||
+          value(_permanentAddress2Ctrl).isEmpty ||
+          value(_permanentCityCtrl).isEmpty ||
+          value(_permanentStateCtrl).isEmpty) {
+        return 'Complete the permanent address.';
+      }
+      if (_maritalStatus == 'other' && value(_maritalOtherCtrl).isEmpty) {
+        return 'Enter the marital status.';
+      }
+      if (value(_nationalityCtrl).isEmpty) return 'Enter nationality.';
+    }
+
+    if (page == 1) {
+      if (!isName(value(_emergencyNameCtrl))) {
+        return 'Enter a valid emergency contact name.';
+      }
+      if (value(_emergencyRelCtrl).length < 2) {
+        return 'Enter the emergency contact relationship.';
+      }
+      if (!RegExp(r'^[6-9]\d{9}$').hasMatch(value(_emergencyContactCtrl))) {
+        return 'Enter a valid emergency mobile number.';
+      }
+      if (!RegExp(r'^\d{12}$').hasMatch(value(_aadharCtrl))) {
+        return 'Aadhaar number must contain exactly 12 digits.';
+      }
+      if (!RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$')
+          .hasMatch(value(_panCtrl).toUpperCase())) {
+        return 'Enter a valid PAN number, for example ABCDE1234F.';
+      }
+      final passport = value(_passportCtrl).toUpperCase();
+      if (passport.isNotEmpty &&
+          !RegExp(r'^[A-Z][0-9]{7}$').hasMatch(passport)) {
+        return 'Enter a valid passport number or leave it blank.';
+      }
+      final driving = value(_drivingCtrl).toUpperCase();
+      if (driving.isNotEmpty &&
+          !RegExp(r'^[A-Z]{2}[0-9]{2}[A-Z0-9]{7,13}$').hasMatch(driving)) {
+        return 'Enter a valid driving licence number or leave it blank.';
+      }
+    }
+
+    if (page == 2) {
+      if (value(_qualificationCtrl).isEmpty) return 'Select qualification.';
+      if (value(_universityCtrl).isEmpty) return 'Select university.';
+      if (_selectedCollegeName.isEmpty) return 'Select or enter college name.';
+      final year = int.tryParse(value(_yearCtrl));
+      final currentYear = DateTime.now().year;
+      if (year == null || year < 1950 || year > currentYear) {
+        return 'Select a valid year of passing.';
+      }
+      final percentage = double.tryParse(value(_percentageCtrl));
+      if (percentage == null || percentage < 0 || percentage > 100) {
+        return 'Percentage must be between 0 and 100.';
+      }
+      final cgpa = double.tryParse(value(_cgpaCtrl));
+      if (cgpa == null || cgpa < 0 || cgpa > 10) {
+        return 'CGPA must be between 0 and 10.';
+      }
+      if (!isName(value(_accountHolderCtrl))) {
+        return 'Enter a valid account holder name.';
+      }
+      if (value(_bankNameCtrl).isEmpty) return 'Select bank name.';
+      if (!RegExp(r'^\d{9,18}$').hasMatch(value(_accountNumberCtrl))) {
+        return 'Bank account number must contain 9 to 18 digits.';
+      }
+      final ifsc = value(_ifscCtrl).toUpperCase();
+      if (!_isValidIfsc(ifsc)) return 'Enter a valid 11-character IFSC code.';
+      final selectedBankCode = _bankIfscCodes[value(_bankNameCtrl)];
+      if (selectedBankCode != null && !ifsc.startsWith(selectedBankCode)) {
+        return 'IFSC code does not match the selected bank.';
+      }
+      if (value(_branchCtrl).length < 2) return 'Enter the bank branch name.';
+    }
+
+    if (page == 3) {
+      if (value(_prevCompanyCtrl).length < 2) {
+        return 'Enter the previous company name.';
+      }
+      if (value(_prevDesignationCtrl).length < 2) {
+        return 'Enter the previous designation.';
+      }
+      final experience = double.tryParse(value(_prevExperienceCtrl));
+      if (experience == null || experience <= 0 || experience > 60) {
+        return 'Experience must be greater than 0 and not more than 60 years.';
+      }
+      if (_parseRegistrationDate(value(_prevLastDayCtrl)) == null) {
+        return 'Select a valid last working day.';
+      }
+    }
+
+    if (page == 4) {
+      final missingMandatory = _mandatoryDocs.entries
+          .where((entry) => entry.value == null)
+          .map((entry) => entry.key)
+          .toList();
+      if (missingMandatory.isNotEmpty) {
+        return 'Upload required document: ${missingMandatory.first}.';
+      }
+      final missingEducation = _educationDocs.entries
+          .where((entry) => entry.value == null)
+          .map((entry) => entry.key)
+          .toList();
+      if (missingEducation.isNotEmpty) {
+        return 'Upload education document: ${missingEducation.first}.';
+      }
+      if (_isExperienced) {
+        final missingExperience = _experiencedDocs.entries
+            .where((entry) => entry.value == null)
+            .map((entry) => entry.key)
+            .toList();
+        if (missingExperience.isNotEmpty) {
+          return 'Upload experience document: ${missingExperience.first}.';
+        }
+      }
+    }
+    return null;
+  }
+
+  DateTime? _parseRegistrationDate(String input) {
+    final parts = input.split('/');
+    if (parts.length != 3) return null;
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (day == null || month == null || year == null) return null;
+    try {
+      final date = DateTime(year, month, day);
+      if (date.day != day || date.month != month || date.year != year) {
+        return null;
+      }
+      return date;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -400,9 +596,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
       maxHeight: 2000,
       imageQuality: 72,
     );
-    if (picked != null && mounted) {
-      setState(() => docMap[key] = File(picked.path));
-    }
+    if (picked == null || !mounted) return;
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: picked.path,
+      compressQuality: 90,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Crop Document',
+          toolbarColor: ThemeConfig.blueAccent,
+          toolbarWidgetColor: Colors.white,
+          lockAspectRatio: false,
+        ),
+        IOSUiSettings(title: 'Crop Document'),
+      ],
+    );
+    if (!mounted) return;
+    setState(() => docMap[key] = File(cropped?.path ?? picked.path));
   }
 
   void _generateIfsc({bool force = false}) {
@@ -970,13 +1179,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           margin: const EdgeInsets.only(right: 6),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
-                            color: _gender == g
-                                ? ThemeConfig.blueAccent
-                                : cardBg,
+                            gradient: _gender == g
+                                ? ThemeConfig.blueGradient
+                                : null,
+                            color: _gender == g ? null : cardBg,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: _gender == g
-                                  ? ThemeConfig.blueAccent
+                                  ? ThemeConfig.loginButtonColor
                                   : cardBorder,
                             ),
                           ),
@@ -1500,13 +1710,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: !_isExperienced
-                            ? ThemeConfig.blueAccent
-                            : cardBg,
+                        gradient: !_isExperienced
+                            ? ThemeConfig.blueGradient
+                            : null,
+                        color: !_isExperienced ? null : cardBg,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: !_isExperienced
-                              ? ThemeConfig.blueAccent
+                              ? ThemeConfig.loginButtonColor
                               : cardBorder,
                         ),
                       ),
@@ -1529,11 +1740,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: _isExperienced ? ThemeConfig.blueAccent : cardBg,
+                        gradient: _isExperienced
+                            ? ThemeConfig.blueGradient
+                            : null,
+                        color: _isExperienced ? null : cardBg,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: _isExperienced
-                              ? ThemeConfig.blueAccent
+                              ? ThemeConfig.loginButtonColor
                               : cardBorder,
                         ),
                       ),

@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: hrms-bitbyte-mobileapp
+    runtime: python
+    plan: free
+    rootDir: backend
+    branch: develop2
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: python manage.py migrate
+    startCommand: gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --timeout 300 --graceful-timeout 30
+    autoDeployTrigger: commit

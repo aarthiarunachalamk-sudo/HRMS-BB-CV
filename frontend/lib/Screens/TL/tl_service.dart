@@ -66,6 +66,26 @@ class TlService {
     }
   }
 
+  Future<void> updateCheckoutPermission(
+    int permissionId,
+    String status,
+    String userId, {
+    String rejectionReason = '',
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/checkout-permissions/$permissionId/'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'status': status,
+        'user_id': userId,
+        'review_note': rejectionReason,
+      }),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(_errorMessage(response, 'Check-out permission approval failed'));
+    }
+  }
+
   String _errorMessage(http.Response response, String fallback) {
     try {
       final decoded = jsonDecode(response.body);

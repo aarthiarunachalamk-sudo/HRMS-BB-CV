@@ -526,8 +526,8 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
                     });
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _green,
-                    foregroundColor: Colors.black,
+                    backgroundColor: ThemeConfig.loginButtonColor,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),

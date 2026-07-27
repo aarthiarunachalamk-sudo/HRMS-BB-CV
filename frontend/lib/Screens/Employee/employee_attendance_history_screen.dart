@@ -341,7 +341,8 @@ class _ModeTab extends StatelessWidget {
           height: double.infinity,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? EmployeeColors.blue : Colors.transparent,
+            gradient: selected ? ThemeConfig.blueGradient : null,
+            color: selected ? null : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: selected
                 ? null

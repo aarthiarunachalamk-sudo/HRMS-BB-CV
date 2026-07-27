@@ -35,12 +35,16 @@ dependencies:
   http: ^1.2.0
   video_player: ^2.10.0
   image_picker: ^1.1.2
+  image_cropper: ^12.2.1
+  file_selector: ^1.1.0
   geolocator: ^13.0.2
-  geocoding: ^3.0.0
+  geocoding: ^5.0.0
   camera: ^0.12.0+1
   image: ^4.2.0
   path_provider: ^2.1.4
   firebase_core: ^4.0.0
+  firebase_messaging: ^16.0.0
+  flutter_local_notifications: ^19.0.0
   cloud_firestore: ^6.0.0
   pdf: ^3.11.1
   flutter_secure_storage: ^10.3.1

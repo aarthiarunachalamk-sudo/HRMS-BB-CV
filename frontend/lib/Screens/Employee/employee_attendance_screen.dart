@@ -56,7 +56,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
     final hasCheckIn = _hasAttendanceTime(checkIn);
     final attendanceCompleted = _isAttendanceCompleted(attendance, checkOut);
     final workingHours = attendanceCompleted
-        ? _workingDuration(checkIn, checkOut)
+        ? _displayWorkingHours(attendance, checkIn, checkOut)
         : '${attendance['working_hours'] ?? '--'}';
     final lateEntry = '${attendance['late_entry'] ?? '--'}';
     final overtime = '${attendance['overtime'] ?? '00h 00m'}';
@@ -71,9 +71,15 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
     final nextAction = needsCheckIn
         ? EmployeeAttendanceAction.checkIn
         : EmployeeAttendanceAction.checkOut;
-    final primaryButtonLabel = needsCheckIn ? 'Check In' : 'Check Out';
+    final primaryButtonLabel = attendanceCompleted
+        ? 'Attendance Completed'
+        : needsCheckIn
+        ? 'Check In'
+        : 'Check Out';
     final centerTimeLabel = attendanceCompleted ? 'Checked Out' : 'Checked In';
     final centerTimeValue = attendanceCompleted ? checkOut : checkIn;
+    final circlePrimaryText = attendanceCompleted ? workingHours : status;
+    final circleLabel = attendanceCompleted ? 'Working Hours' : centerTimeLabel;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
@@ -110,7 +116,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    status,
+                    circlePrimaryText,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: statusColor,
@@ -120,7 +126,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    centerTimeLabel,
+                    circleLabel,
                     style: TextStyle(fontSize: 12, color: textSecondary),
                   ),
                   Text(
@@ -266,6 +272,20 @@ String _workingDuration(String checkIn, String checkOut) {
   final hours = duration.inHours;
   final minutes = duration.inMinutes.remainder(60);
   return '${hours.toString().padLeft(2, '0')}h ${minutes.toString().padLeft(2, '0')}m';
+}
+
+String _displayWorkingHours(
+  Map<String, dynamic> attendance,
+  String checkIn,
+  String checkOut,
+) {
+  final backendValue = '${attendance['working_hours'] ?? ''}'.trim();
+  if (backendValue.isNotEmpty &&
+      backendValue != '--' &&
+      backendValue.toLowerCase() != 'null') {
+    return backendValue;
+  }
+  return _workingDuration(checkIn, checkOut);
 }
 
 DateTime? _timeOfDayToDateTime(String value) {

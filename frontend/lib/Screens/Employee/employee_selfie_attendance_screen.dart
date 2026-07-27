@@ -38,6 +38,7 @@ class _EmployeeSelfieAttendanceScreenState
     with WidgetsBindingObserver {
   CameraController? _cameraController;
   Future<void>? _initializeControllerFuture;
+  final Geocoding _geocoding = Geocoding();
 
   String? _capturedPath;
   Position? _position;
@@ -182,7 +183,7 @@ class _EmployeeSelfieAttendanceScreenState
 
   Future<void> _loadAddress(Position position) async {
     try {
-      final placemarks = await placemarkFromCoordinates(
+      final placemarks = await _geocoding.placemarkFromCoordinates(
         position.latitude,
         position.longitude,
       );
@@ -626,6 +627,9 @@ class _EmployeeSelfieAttendanceScreenState
 
   String get _successTitle {
     if (_result != null) {
+      if (_result?['permission_required'] == true) {
+        return 'Permission Requested';
+      }
       return _isCheckIn ? 'Check-In Success' : 'Check-Out Success';
     }
     if (!_locationReady) return 'Capturing Location';
@@ -803,17 +807,24 @@ class _EmployeeSelfieAttendanceScreenState
 
   Widget _successBody() {
     final result = _result!;
+    final permissionRequired = result['permission_required'] == true;
     final time = _isCheckIn
         ? '${result['check_in'] ?? '--:--'}'
         : '${result['check_out'] ?? '--:--'}';
     final date = '${result['date'] ?? '17 Jun 2026, Monday'}';
-    final successText = _isCheckIn
+    final successText = permissionRequired
+        ? 'Permission Request Sent!'
+        : _isCheckIn
         ? 'Check-In Successful!'
         : 'Check-Out Successful!';
-    final confirmTitle = _isCheckIn
+    final confirmTitle = permissionRequired
+        ? 'Approval Pending'
+        : _isCheckIn
         ? 'Check-in Confirmed'
         : 'Check-Out Confirmed';
-    final confirmMessage = _isCheckIn
+    final confirmMessage = permissionRequired
+        ? '${result['message'] ?? 'Your request is waiting for TL or HR approval.'}'
+        : _isCheckIn
         ? 'Your attendance has been recorded successfully.'
         : 'You have successfully checked out.';
     final statusText = '${result['status'] ?? _policyStatus ?? 'Present'}';

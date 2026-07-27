@@ -71,13 +71,18 @@ class _SegTab extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? c.primary.withOpacity(0.15) : Colors.transparent,
+          gradient: selected
+              ? const LinearGradient(
+                  colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
+                )
+              : null,
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: selected ? c.primary : c.muted,
+              color: selected ? Colors.white : c.muted,
               fontWeight: FontWeight.w700,
               fontSize: 12,
             )),

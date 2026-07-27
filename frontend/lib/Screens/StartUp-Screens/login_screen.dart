@@ -25,6 +25,7 @@ import 'Change_Password.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Employee_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/meeting_notification_gate.dart';
+import 'package:hrms_mobileapp_bitbyte/Services/push_notification_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -224,6 +225,17 @@ class _LoginScreenState extends State<LoginScreen> {
         await _updateRememberedCredentials();
         if (!mounted) return;
         final role = _normalizeRole(data['role']);
+        final sessionUserId = '${data['user_id'] ?? ''}';
+        final employeeId = '${data['employee_id'] ?? sessionUserId}';
+        final notificationUserId = role == 'employee'
+            ? employeeId
+            : sessionUserId;
+        unawaited(
+          PushNotificationService.instance.registerForUser(
+            notificationUserId,
+            role,
+          ),
+        );
         Widget dashboard;
         if (role == 'superadmin' || role == 'super_admin') {
           dashboard = SuperAdminDashboard(
@@ -297,7 +309,7 @@ class _LoginScreenState extends State<LoginScreen> {
           dashboard = EmployeeDashboard(
             email: data['email'],
             firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
+            userId: employeeId,
           );
         } else {
           dashboard = SuperAdminDashboard(
@@ -308,7 +320,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
 
         dashboard = MeetingNotificationGate(
-          userId: '${data['user_id'] ?? ''}',
+          userId: notificationUserId,
           role: role,
           child: dashboard,
         );

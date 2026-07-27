@@ -62,7 +62,41 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
 
   Future<void> _load() async {
     try {
-      final data = await _service.fetchDashboard(widget.userId, widget.email);
+      var data = await _service.fetchDashboard(widget.userId, widget.email);
+      final dashboardCheckIn = '${data.attendance['check_in'] ?? ''}'.trim();
+      final dashboardHasAttendance = dashboardCheckIn.isNotEmpty &&
+          dashboardCheckIn != '--' &&
+          dashboardCheckIn != '--:--' &&
+          dashboardCheckIn.toLowerCase() != 'null';
+      if (!dashboardHasAttendance) {
+        try {
+          final today = DateTime.now();
+          final history = await _service.fetchAttendanceHistory(
+            widget.userId,
+            today,
+            today,
+          );
+          if (history.isNotEmpty) {
+            final persistedAttendance = history.firstWhere(
+              (record) => '${record['date'] ?? ''}' == _dateParam(today),
+              orElse: () => history.first,
+            );
+            data = EmployeeDashboardData(
+              profile: data.profile,
+              attendance: persistedAttendance,
+              leaveBalances: data.leaveBalances,
+              leaves: data.leaves,
+              notifications: data.notifications,
+              meetings: data.meetings,
+              tasks: data.tasks,
+              payslip: data.payslip,
+              documents: data.documents,
+            );
+          }
+        } catch (_) {
+          // Keep the dashboard response when attendance history is unavailable.
+        }
+      }
       if (mounted) {
         final backendPhoto = '${data.profile['doc_passport_photo'] ?? ''}'.trim();
         setState(() {
@@ -79,6 +113,12 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  String _dateParam(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year}-$month-$day';
   }
 
   void _updateAttendance(Map<String, dynamic> result) {
@@ -345,6 +385,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
           onSelect: (index) {
             Navigator.of(context).pop();
             setState(() => _selectedIndex = index);
+            if (index == 0) _load();
           },
           onLogout: _logout,
         ),
@@ -473,13 +514,18 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     final selected = _selectedIndex == index;
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _selectedIndex = index),
+        onTap: () {
+          setState(() => _selectedIndex = index);
+          if (index == 0) _load();
+        },
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               selected ? activeIcon : icon,
-              color: selected ? EmployeeColors.blue : Colors.grey,
+              color: selected
+                  ? Theme.of(context).colorScheme.secondary
+                  : Colors.grey,
               size: 22,
             ),
             const SizedBox(height: 3),

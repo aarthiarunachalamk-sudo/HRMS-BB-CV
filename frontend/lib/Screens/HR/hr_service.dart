@@ -70,6 +70,23 @@ class HrService {
     }
   }
 
+  Future<void> updateCheckoutPermission(
+    int permissionId,
+    String status,
+    String userId,
+  ) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/checkout-permissions/$permissionId/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'status': status, 'user_id': userId}),
+        )
+        .timeout(_timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Check-out permission approval failed (${response.statusCode})');
+    }
+  }
+
   Future<Map<String, dynamic>> generatePayroll(String userId, DateTime month) async {
     final response = await http
         .post(

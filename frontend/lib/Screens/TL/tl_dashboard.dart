@@ -3797,6 +3797,9 @@ class _ApprovalsState extends State<_Approvals> {
     _pending = tlList(widget.data, 'approvals');
     _approved = tlList(widget.data, 'leaves_approved');
     _rejected = tlList(widget.data, 'leaves_rejected');
+    _pending = [..._pending, ...tlList(widget.data, 'checkout_permissions')];
+    _approved = [..._approved, ...tlList(widget.data, 'checkout_permissions_approved')];
+    _rejected = [..._rejected, ...tlList(widget.data, 'checkout_permissions_rejected')];
     _loadApprovals();
   }
 
@@ -3810,9 +3813,18 @@ class _ApprovalsState extends State<_Approvals> {
       final result = await TlService().fetchApprovals(widget.userId);
       if (!mounted) return;
       setState(() {
-        _pending = _asList(result['pending']);
-        _approved = _asList(result['approved']);
-        _rejected = _asList(result['rejected']);
+        _pending = [
+          ..._asList(result['pending']),
+          ..._asList(result['checkout_permissions']),
+        ];
+        _approved = [
+          ..._asList(result['approved']),
+          ..._asList(result['checkout_permissions_approved']),
+        ];
+        _rejected = [
+          ..._asList(result['rejected']),
+          ..._asList(result['checkout_permissions_rejected']),
+        ];
       });
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -3922,12 +3934,21 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
     if (id == null || _savingId != null) return;
     setState(() => _savingId = id);
     try {
-      await TlService().updateLeaveRequest(
-        id,
-        status,
-        widget.userId,
-        rejectionReason: rejectionReason,
-      );
+      if (leave['approval_type'] == 'early_checkout') {
+        await TlService().updateCheckoutPermission(
+          id,
+          status,
+          widget.userId,
+          rejectionReason: rejectionReason,
+        );
+      } else {
+        await TlService().updateLeaveRequest(
+          id,
+          status,
+          widget.userId,
+          rejectionReason: rejectionReason,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -3951,7 +3972,7 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
   Future<void> _openDetails(Map<String, dynamic> leave) async {
     final id = int.tryParse('${leave['id'] ?? ''}');
     setState(() => _selected = leave);
-    if (id == null) return;
+    if (id == null || leave['approval_type'] == 'early_checkout') return;
     try {
       final response = await TlService().fetchLeaveRequest(id);
       final detail = response['leave'];
@@ -4146,15 +4167,20 @@ class _LeaveTab extends StatelessWidget {
           height: 38,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: active ? c.primary.withAlpha(30) : c.row,
+            gradient: active
+                ? const LinearGradient(
+                    colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
+                  )
+                : null,
+            color: active ? null : c.row,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: c.border),
+            border: Border.all(color: active ? c.primary : c.border),
           ),
           child: Text(
             label,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: active ? c.primary : c.muted,
+              color: active ? Colors.white : c.muted,
               fontSize: 11,
               fontWeight: FontWeight.w900,
             ),

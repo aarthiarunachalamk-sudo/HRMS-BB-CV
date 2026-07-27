@@ -150,6 +150,7 @@ class MdDashboardData {
   final String totalEmployees;
   final int pendingApprovals;
   final int meetingsToday;
+  final int notificationCount;
   final List<MdMeeting> meetings;
   final List<MdParticipant> participants;
 
@@ -158,6 +159,7 @@ class MdDashboardData {
     required this.totalEmployees,
     required this.pendingApprovals,
     required this.meetingsToday,
+    required this.notificationCount,
     required this.meetings,
     required this.participants,
   });
@@ -167,6 +169,7 @@ class MdDashboardData {
     totalEmployees: '0',
     pendingApprovals: 0,
     meetingsToday: 0,
+    notificationCount: 0,
     meetings: <MdMeeting>[],
     participants: <MdParticipant>[],
   );
@@ -179,6 +182,9 @@ class MdDashboardData {
       totalEmployees: json['total_employees']?.toString() ?? '0',
       pendingApprovals: int.tryParse('${json['pending_approvals'] ?? 0}') ?? 0,
       meetingsToday: int.tryParse('${json['meetings_today'] ?? 0}') ?? 0,
+      notificationCount: json['notifications'] is List
+          ? (json['notifications'] as List).length
+          : 0,
       meetings: meetingsJson is List
           ? meetingsJson
               .whereType<Map>()

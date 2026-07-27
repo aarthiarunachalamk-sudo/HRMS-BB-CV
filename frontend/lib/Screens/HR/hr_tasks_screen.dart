@@ -42,8 +42,8 @@ class _TaskTab extends StatelessWidget {
       child: Container(
         height: 34,
         alignment: Alignment.center,
-        decoration: BoxDecoration(color: active ? c.primary.withAlpha(30) : c.row, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
-        child: Text(label, style: TextStyle(color: active ? c.primary : c.muted, fontSize: 11, fontWeight: FontWeight.w900)),
+        decoration: BoxDecoration(gradient: active ? const LinearGradient(colors: [Color(0xFF00C6FF), Color(0xFF0072FF)]) : null, color: active ? null : c.row, borderRadius: BorderRadius.circular(8), border: Border.all(color: active ? c.primary : c.border)),
+        child: Text(label, style: TextStyle(color: active ? Colors.white : c.muted, fontSize: 11, fontWeight: FontWeight.w900)),
       ),
     );
   }

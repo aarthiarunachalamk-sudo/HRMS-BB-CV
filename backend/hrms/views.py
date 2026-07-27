@@ -13,8 +13,8 @@ from django.utils.html import escape
 from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
 from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
-from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement
-from .employee_views import _leave_balance_payload
+from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, AttendanceRegularizationRequest
+from .employee_views import _attendance_calculation, _leave_balance_payload, _notify_employee_presence
 from .payroll import generate_payroll_for_month, payslip_payload
 import os
 from .mailer import email_is_configured, send_email as send_transactional_email
@@ -214,7 +214,10 @@ def _create_notification(*, user_id='', role='', title, message, notification_ty
         module=module,
         reference_id=str(reference_id or ''),
     )
-    # Mobile push delivery can be attached here when FCM credentials are configured.
+    from .push_notifications import send_mobile_push
+    notification.push_sent = send_mobile_push(notification)
+    if notification.push_sent:
+        notification.save(update_fields=['push_sent'])
     return notification
 
 
@@ -2612,7 +2615,7 @@ def _leave_dashboard_item(leave):
         'tl_status': leave.tl_status.title(),
         'hr_status': leave.hr_status.title(),
         'reason': leave.reason,
-        'session': 'Full Day',
+        'session': leave.session,
         'medical_certificate': certificate_name,
         'medical_certificate_url': certificate_url,
         'document_name': certificate_name,
@@ -2688,6 +2691,7 @@ def _tl_all_approval_payload(user_id=''):
     pending = _tl_pending_leave_items(user_id)
     approved = _tl_reviewed_leave_items(user_id, 'approved')
     rejected = _tl_reviewed_leave_items(user_id, 'rejected')
+    team_employee_ids = _tl_team_employee_ids(user_id)
     urgent = [
         item for item in pending
         if _approval_days(item) >= 2
@@ -2699,6 +2703,9 @@ def _tl_all_approval_payload(user_id=''):
         'urgent': urgent,
         'approved': approved,
         'rejected': rejected,
+        'checkout_permissions': _checkout_permissions('pending', team_employee_ids),
+        'checkout_permissions_approved': _checkout_permissions('approved', team_employee_ids),
+        'checkout_permissions_rejected': _checkout_permissions('rejected', team_employee_ids),
         'summary': {
             'pending': len(pending),
             'urgent': len(urgent),
@@ -2734,6 +2741,83 @@ def _tl_notified_leave_ids(user_id=''):
 
 def _hr_pending_leave_items():
     return [_leave_dashboard_item(leave) for leave in EmployeeLeaveRequest.objects.filter(status='pending', tl_status='approved', hr_status='pending')[:20]]
+
+
+def _checkout_permission_item(item):
+    employee_name = _employee_name(item.employee_id)
+    return {
+        'id': item.id,
+        'approval_type': 'early_checkout',
+        'employee_id': item.employee_id,
+        'name': employee_name,
+        'initials': _initials(employee_name),
+        'title': f'{employee_name} - Early Check-Out',
+        'subtitle': f'Early check-out permission - {item.attendance_date:%d %b %Y}',
+        'days': 'Permission',
+        'duration': 'Permission',
+        'session': 'Early Check-Out',
+        'tl_status': '',
+        'hr_status': '',
+        'attendance_date': item.attendance_date.isoformat(),
+        'requested_check_out': item.requested_check_out.isoformat() if item.requested_check_out else '',
+        'reason': item.reason,
+        'status': item.status.title(),
+        'reviewed_by': item.reviewed_by,
+        'reviewed_at': item.reviewed_at.isoformat() if item.reviewed_at else '',
+    }
+
+
+def _checkout_permissions(status_value='pending', employee_ids=None):
+    records = AttendanceRegularizationRequest.objects.filter(
+        request_type='early_checkout',
+        status=status_value,
+    )
+    if employee_ids is not None:
+        records = records.filter(employee_id__in=employee_ids)
+    return [_checkout_permission_item(item) for item in records[:30]]
+
+
+def _checkout_permission_decision(request, pk, role):
+    decision = request.data.get('status')
+    if decision not in ('approved', 'rejected'):
+        return Response({'success': False, 'message': 'Status must be approved or rejected.'}, status=400)
+    try:
+        permission = AttendanceRegularizationRequest.objects.get(
+            pk=pk,
+            request_type='early_checkout',
+        )
+    except AttendanceRegularizationRequest.DoesNotExist:
+        return Response({'success': False, 'message': 'Check-out permission was not found.'}, status=404)
+    if permission.status != 'pending':
+        return Response({'success': False, 'message': 'This permission has already been reviewed.'}, status=409)
+
+    permission.status = decision
+    permission.reviewed_by = request.data.get('reviewed_by') or request.data.get('user_id') or role.upper()
+    permission.reviewed_at = timezone.now()
+    permission.review_note = request.data.get('review_note') or request.data.get('reason') or ''
+    permission.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_note'])
+
+    _create_notification(
+        user_id=permission.employee_id,
+        title=f'Early Check-Out {decision.title()}',
+        message=(
+            'Your early check-out permission was approved. You can now complete check-out from the Employee attendance screen.'
+            if decision == 'approved'
+            else f'Your early check-out permission was rejected by {role.upper()}.'
+        ),
+        notification_type='success' if decision == 'approved' else 'error',
+        module='attendance_permission',
+        reference_id=permission.id,
+    )
+    return Response({
+        'success': True,
+        'message': (
+            'Permission approved. The employee must now complete check-out.'
+            if decision == 'approved'
+            else f'Early check-out rejected by {role.upper()}.'
+        ),
+        'permission': _checkout_permission_item(permission),
+    })
 
 
 def _leave_decision(request, pk, role):
@@ -2803,6 +2887,7 @@ def hr_dashboard_view(request):
     pending_leaves = _hr_pending_leave_items()
     approved_leaves = [_leave_dashboard_item(leave) for leave in EmployeeLeaveRequest.objects.filter(status='approved')[:20]]
     rejected_leaves = [_leave_dashboard_item(leave) for leave in EmployeeLeaveRequest.objects.filter(status='rejected')[:20]]
+    pending_checkout_permissions = _checkout_permissions('pending')
     payroll_month = timezone.localdate()
     month_payslips = list(
         Payslip.objects.filter(year=payroll_month.year, month=payroll_month.month)
@@ -2910,6 +2995,9 @@ def hr_dashboard_view(request):
         'leave_requests': pending_leaves,
         'leave_requests_approved': approved_leaves,
         'leave_requests_rejected': rejected_leaves,
+        'checkout_permissions': pending_checkout_permissions,
+        'checkout_permissions_approved': _checkout_permissions('approved'),
+        'checkout_permissions_rejected': _checkout_permissions('rejected'),
         'notifications': notifications,
         'upcoming': [],
         'tasks': [],
@@ -3228,6 +3316,10 @@ def tl_dashboard_view(request):
     pending_leaves = _tl_pending_leave_items(user_id)
     approved_leaves = _tl_reviewed_leave_items(user_id, 'approved')
     rejected_leaves = _tl_reviewed_leave_items(user_id, 'rejected')
+    team_employee_ids = _tl_team_employee_ids(user_id)
+    pending_checkout_permissions = _checkout_permissions(
+        'pending', team_employee_ids,
+    )
     team_queryset = _tl_team_queryset(user_id)
     total_employees = team_queryset.count()
     active_team_count = team_queryset.filter(is_active=True).count()
@@ -3268,6 +3360,9 @@ def tl_dashboard_view(request):
         'leaves': pending_leaves,
         'leaves_approved': approved_leaves,
         'leaves_rejected': rejected_leaves,
+        'checkout_permissions': pending_checkout_permissions,
+        'checkout_permissions_approved': _checkout_permissions('approved', team_employee_ids),
+        'checkout_permissions_rejected': _checkout_permissions('rejected', team_employee_ids),
         'notifications': notifications,
         'team': team,
         'tasks': tasks,
@@ -3406,6 +3501,12 @@ def _ceo_home_payload(user_id=''):
         'employee_categories': _ceo_employee_category_summary(),
         'role_members': _ceo_role_members(user_id),
         'critical_alerts': _ceo_critical_alerts(today),
+        'notifications': [
+            _notification_payload(item)
+            for item in AppNotification.objects.filter(
+                Q(recipient_role='ceo') | Q(recipient_user_id=user_id)
+            )[:30]
+        ],
         'recent_members': _ceo_recent_members(user_id),
     }
 
@@ -3578,6 +3679,7 @@ def md_dashboard_view(request):
     meetings = [_md_meeting_payload(item) for item in meeting_queryset[:30]]
     today_label = timezone.localdate().strftime('%d-%m-%Y')
     revenue = _ceo_monthly_revenue()
+    dashboard_role = 'director' if '/director/' in request.path else 'md'
     return Response({
         'success': True,
         'total_revenue': revenue.get('revenue', 'Rs. 0'),
@@ -3592,6 +3694,12 @@ def md_dashboard_view(request):
                 'selected': False,
             }
             for item in _employee_directory_items(include_attendance=False, limit=100)
+        ],
+        'notifications': [
+            _notification_payload(item)
+            for item in AppNotification.objects.filter(
+                Q(recipient_role=dashboard_role) | Q(recipient_user_id=user_id)
+            )[:30]
         ],
     })
 
@@ -5547,6 +5655,7 @@ def admin_dashboard_view(request):
         'attendance_bars': bars,
         'attendance_trend': '',
         'recent_activity': activity[:8],
+        'notifications': _notifications_for_role('admin'),
     })
 
 
@@ -5970,6 +6079,16 @@ def tl_leave_decision_view(request, pk):
 @api_view(['POST'])
 def hr_leave_decision_view(request, pk):
     return _leave_decision(request, pk, 'hr')
+
+
+@api_view(['POST'])
+def tl_checkout_permission_decision_view(request, pk):
+    return _checkout_permission_decision(request, pk, 'tl')
+
+
+@api_view(['POST'])
+def hr_checkout_permission_decision_view(request, pk):
+    return _checkout_permission_decision(request, pk, 'hr')
 
 @api_view(['POST'])
 def create_user_view(request):

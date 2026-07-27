@@ -2031,12 +2031,20 @@ class _StepPersonalState extends State<_StepPersonal> {
                         duration: const Duration(milliseconds: 160),
                         height: 42,
                         decoration: BoxDecoration(
-                          color: selected
-                              ? CeoColors.cyan.withValues(alpha: 0.15)
-                              : CeoColors.cardAlt,
+                          gradient: selected
+                              ? const LinearGradient(
+                                  colors: [
+                                    Color(0xFF00C6FF),
+                                    Color(0xFF0072FF),
+                                  ],
+                                )
+                              : null,
+                          color: selected ? null : CeoColors.cardAlt,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                            color: selected ? CeoColors.cyan : CeoColors.border,
+                            color: selected
+                                ? const Color(0xFF0072FF)
+                                : CeoColors.border,
                             width: selected ? 1.5 : 1,
                           ),
                         ),
@@ -2044,7 +2052,7 @@ class _StepPersonalState extends State<_StepPersonal> {
                           child: Text(
                             '${g[0].toUpperCase()}${g.substring(1)}',
                             style: TextStyle(
-                              color: selected ? CeoColors.cyan : Colors.white,
+                              color: Colors.white,
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),

@@ -38,6 +38,8 @@ class ThemeConfig {
   // Theme Accent Colors
   static const Color blueAccent = Color(0xFF00C6FF);
   static const Color blueSecondary = Color(0xFF0072FF);
+  // Solid equivalent of the Login button gradient for Material buttons.
+  static const Color loginButtonColor = blueSecondary;
 
   static const Color purpleAccent = Color(0xFF9F3BFF);
   static const Color purpleSecondary = Color(0xFF6C1BFF);

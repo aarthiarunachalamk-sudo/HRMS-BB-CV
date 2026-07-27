@@ -52,7 +52,7 @@ class SaPalette {
         border: Color(0xFF17405A),
         text: Color(0xFFF8FAFC),
         muted: Color(0xFF8DA1B7),
-        primary: Color(0xFF19D3E8),
+        primary: Color(0xFF0072FF),
         success: Color(0xFF22C55E),
         danger: Color(0xFFEF4444),
         warning: Color(0xFFF59E0B),
@@ -72,7 +72,7 @@ class SaPalette {
       border: const Color(0xFFE1E8F3),
       text: const Color(0xFF0F172A),
       muted: const Color(0xFF64748B),
-      primary: const Color(0xFF1677FF),
+      primary: const Color(0xFF0072FF),
       success: const Color(0xFF16A34A),
       danger: const Color(0xFFEF4444),
       warning: const Color(0xFFF59E0B),
@@ -267,7 +267,13 @@ class SaBottomNav extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(item.icon, color: active ? colors.primary : colors.muted, size: 19),
+                Icon(
+                  item.icon,
+                  color: active
+                      ? Theme.of(context).colorScheme.secondary
+                      : colors.muted,
+                  size: 19,
+                ),
                 const SizedBox(height: 3),
                 FittedBox(child: Text(item.label, style: TextStyle(color: active ? colors.primary : colors.muted, fontSize: 10, fontWeight: FontWeight.w800))),
               ],

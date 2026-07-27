@@ -4,8 +4,14 @@
 <dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera access is required to capture your attendance selfie.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is required to select and crop document images.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Location access is required for GPS attendance tracking.</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

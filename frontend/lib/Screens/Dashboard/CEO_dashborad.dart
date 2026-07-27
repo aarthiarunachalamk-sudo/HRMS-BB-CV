@@ -61,7 +61,7 @@ class _CeoDashboardState extends State<CeoDashboard> {
   static const Color _cardAlt = Color(0xFF0A121E);
   static const Color _border = Color(0xFF1E2E44);
   static const Color _gold = Color(0xFFD7932E);
-  static const Color _cyan = Color(0xFF00C6FF);
+  static const Color _cyan = Color(0xFF0072FF);
   static const Color _green = Color(0xFF13D989);
   static const Color _purple = Color(0xFF9F3BFF);
   static const Color _pink = Color(0xFFFF3D8F);
@@ -4754,18 +4754,33 @@ class _AttendanceFilterTab extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: .12) : Colors.transparent,
+          gradient: selected ? ThemeConfig.blueGradient : null,
+          color: Colors.transparent,
           border: Border(
             bottom: BorderSide(
-              color: selected ? color : _CeoDashboardState._border,
+              color: selected
+                  ? ThemeConfig.loginButtonColor
+                  : _CeoDashboardState._border,
               width: selected ? 2 : 1,
             ),
           ),
         ),
         child: Column(
           children: [
-            Text(label, style: TextStyle(color: color, fontSize: 8.5)),
-            Text(value, style: _CeoText.titleFor(context, 10.5)),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? Colors.white : color,
+                fontSize: 8.5,
+              ),
+            ),
+            Text(
+              value,
+              style: _CeoText.titleFor(
+                context,
+                10.5,
+              ).copyWith(color: selected ? Colors.white : null),
+            ),
           ],
         ),
       ),
@@ -8132,8 +8147,8 @@ class _DepartmentFilterTabs extends StatelessWidget {
                   gradient: active
                       ? const LinearGradient(
                           colors: [
-                            _CeoDashboardState._cyan,
-                            _CeoDashboardState._purple,
+                            Color(0xFF00C6FF),
+                            Color(0xFF0072FF),
                           ],
                         )
                       : null,
@@ -10282,25 +10297,18 @@ class _OrganizationSegmentedTabs extends StatelessWidget {
                   duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: selected == entry.key
-                        ? _CeoDashboardState._cyan.withValues(alpha: .10)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(6),
-                    border: selected == entry.key
-                        ? const Border(
-                            bottom: BorderSide(
-                              color: _CeoDashboardState._cyan,
-                              width: 2,
-                            ),
-                          )
+                    gradient: selected == entry.key
+                        ? ThemeConfig.blueGradient
                         : null,
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     entry.value,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: selected == entry.key
-                          ? _CeoDashboardState._cyan
+                          ? Colors.white
                           : _CeoDashboardState._muted,
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -13071,7 +13079,8 @@ class _BottomNavBar extends StatelessWidget {
     const bgColor = Color(0xF2071A2D);
     const borderColor = Color(0xFF123A5C);
     const textSecondary = _CeoDashboardState._muted;
-    const selectedColor = _CeoDashboardState._cyan;
+    final selectedColor = Theme.of(context).colorScheme.primary;
+    final selectedIconColor = Theme.of(context).colorScheme.secondary;
 
     return Container(
       decoration: BoxDecoration(
@@ -13095,7 +13104,7 @@ class _BottomNavBar extends StatelessWidget {
                       Icon(
                         selected ? item.activeIcon : item.icon,
                         color: selected
-                            ? selectedColor
+                            ? selectedIconColor
                             : _CeoDashboardState._muted,
                         size: 21,
                       ),
@@ -15593,7 +15602,7 @@ class _TabLabel extends StatelessWidget {
           text,
           style: TextStyle(
             color: active
-                ? _CeoDashboardState._pink
+                ? ThemeConfig.loginButtonColor
                 : _CeoDashboardState._muted,
             fontWeight: FontWeight.w800,
             fontSize: 12,
@@ -15606,7 +15615,7 @@ class _TabLabel extends StatelessWidget {
             color: active ? null : inactive.withAlpha(70),
             gradient: active
                 ? const LinearGradient(
-                    colors: [_CeoDashboardState._pink, Color(0xFFFF6BB7)],
+                    colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
                   )
                 : null,
           ),

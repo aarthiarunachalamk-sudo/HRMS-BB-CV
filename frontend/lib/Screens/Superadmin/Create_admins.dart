@@ -503,15 +503,18 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
                                             vertical: 10,
                                           ),
                                           decoration: BoxDecoration(
+                                            gradient: _selectedGender == g
+                                                ? ThemeConfig.blueGradient
+                                                : null,
                                             color: _selectedGender == g
-                                                ? ThemeConfig.blueAccent
+                                                ? null
                                                 : cardBg,
                                             borderRadius: BorderRadius.circular(
                                               10,
                                             ),
                                             border: Border.all(
                                               color: _selectedGender == g
-                                                  ? ThemeConfig.blueAccent
+                                                  ? ThemeConfig.loginButtonColor
                                                   : cardBorder,
                                             ),
                                           ),

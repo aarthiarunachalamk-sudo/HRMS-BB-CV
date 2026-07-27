@@ -9,7 +9,7 @@ class CeoColors {
   static const card = Color(0xFF071A2D);
   static const cardAlt = Color(0xFF0A2238);
   static const border = Color(0xFF123A5C);
-  static const cyan = Color(0xFF00C6FF); // unified primary
+  static const cyan = Color(0xFF0072FF); // Login-button blue
   static const green = Color(0xFF13D989);
   static const purple = Color(0xFF8B5CFF);
   static const gold = Color(0xFFD7932E);

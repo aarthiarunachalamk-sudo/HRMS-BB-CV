@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/splash_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  _initializeFirebase();
+  await _initializeFirebase();
   runApp(const MyApp());
+}
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
 }
 
 Future<void> _initializeFirebase() async {
   try {
     await Firebase.initializeApp().timeout(const Duration(seconds: 6));
+    FirebaseMessaging.onBackgroundMessage(
+      _firebaseMessagingBackgroundHandler,
+    );
   } catch (error) {
     debugPrint('Firebase initialization skipped: $error');
   }
@@ -122,7 +132,7 @@ class MyApp extends StatelessWidget {
     final muted = isDark ? const Color(0xFF8E9CAE) : const Color(0xFF607086);
     final fill = isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9);
     final surface = isDark ? card : Colors.white;
-    const primary = Color(0xFF0072FF);
+    const primary = ThemeConfig.loginButtonColor;
     final onPrimary = Colors.white;
     final outline = isDark ? const Color(0xFF1E2E44) : const Color(0xFFD8E1EC);
     final textTheme = _appTextTheme(text, muted);
@@ -228,9 +238,13 @@ class MyApp extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       ),
       tabBarTheme: TabBarThemeData(
-        labelColor: primary,
+        labelColor: Colors.white,
         unselectedLabelColor: muted,
-        indicatorColor: primary,
+        indicator: BoxDecoration(
+          gradient: ThemeConfig.blueGradient,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: surface,
@@ -242,7 +256,7 @@ class MyApp extends StatelessWidget {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: surface,
-        indicatorColor: primary.withAlpha(isDark ? 45 : 28),
+        indicatorColor: ThemeConfig.blueAccent.withAlpha(isDark ? 55 : 35),
         iconTheme: WidgetStateProperty.resolveWith((states) {
           return IconThemeData(
             color: states.contains(WidgetState.selected) ? primary : muted,
@@ -254,9 +268,18 @@ class MyApp extends StatelessWidget {
           );
         }),
       ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: surface,
+        indicatorColor: ThemeConfig.blueAccent.withAlpha(isDark ? 55 : 35),
+        selectedIconTheme: const IconThemeData(color: primary),
+        unselectedIconTheme: IconThemeData(color: muted),
+        selectedLabelTextStyle: textTheme.labelSmall!.copyWith(color: primary),
+        unselectedLabelTextStyle: textTheme.labelSmall!.copyWith(color: muted),
+      ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: primary,
+          disabledForegroundColor: muted,
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -282,9 +305,35 @@ class MyApp extends StatelessWidget {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: text,
-          side: BorderSide(color: outline),
+          foregroundColor: primary,
+          disabledForegroundColor: muted,
+          side: const BorderSide(color: primary),
           textStyle: textTheme.labelLarge,
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: primary,
+          disabledForegroundColor: muted,
+        ),
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: primary,
+        foregroundColor: Colors.white,
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? Colors.white
+                : primary,
+          ),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? primary
+                : Colors.transparent,
+          ),
+          side: const WidgetStatePropertyAll(BorderSide(color: primary)),
         ),
       ),
     );

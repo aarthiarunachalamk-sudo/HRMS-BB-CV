@@ -1743,20 +1743,20 @@ class _Tabs extends StatelessWidget {
                     }
                   },
             child: Container(
-              padding: const EdgeInsets.only(bottom: 9),
+              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
               decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: selected ? _HrDocColors.primary : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
+                gradient: selected
+                    ? const LinearGradient(
+                        colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
+                      )
+                    : null,
+                borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 tab,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: selected ? _HrDocColors.primary : _HrDocColors.muted,
+                  color: selected ? Colors.white : _HrDocColors.muted,
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                 ),
@@ -2457,7 +2457,7 @@ class _HrDocColors {
   static const bgAlt = Color(0xFF061B2D);
   static const surface = Color(0xFF0A2034);
   static const border = Color(0xFF1D3E58);
-  static const primary = Color(0xFF0EA5FF);
+  static const primary = Color(0xFF0072FF);
   static const success = Color(0xFF08D967);
   static const danger = Color(0xFFFF3B4F);
   static const warning = Color(0xFFF59E0B);

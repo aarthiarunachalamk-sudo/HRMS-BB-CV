@@ -47,7 +47,18 @@ class EmployeeHomeScreen extends StatelessWidget {
       hasCheckOut: attendanceCompleted,
     );
     final attendanceStatusColor = employeeStatusColor(attendanceStatus);
-    final primaryActionLabel = hasCheckIn ? 'Check Out' : 'Check In';
+    final primaryActionLabel = attendanceCompleted
+        ? 'Attendance Completed'
+        : hasCheckIn
+        ? 'Check Out'
+        : 'Check In';
+    final workingHours = _displayWorkingHours(attendance, checkIn, checkOut);
+    final circlePrimaryText = attendanceCompleted
+        ? workingHours
+        : attendanceStatus;
+    final circleSecondaryText = attendanceCompleted
+        ? 'Working Hours'
+        : 'Today';
     final unreadNotifications = data.notifications
         .where((item) => item['is_read'] != true)
         .length;
@@ -187,11 +198,11 @@ class EmployeeHomeScreen extends StatelessWidget {
                       ),
                       child: Center(
                         child: Text(
-                          '$attendanceStatus\nToday',
+                          '$circlePrimaryText\n$circleSecondaryText',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: attendanceStatusColor,
-                            fontSize: 11,
+                            fontSize: attendanceCompleted ? 12 : 11,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -228,7 +239,7 @@ class EmployeeHomeScreen extends StatelessWidget {
                 if (attendanceCompleted) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Working time: ${_workingDuration(checkIn, checkOut)}',
+                    'Working hours: $workingHours',
                     style: TextStyle(color: textSecondary, fontSize: 11),
                   ),
                 ],
@@ -461,6 +472,20 @@ String _workingDuration(String checkIn, String checkOut) {
   final hours = duration.inHours;
   final minutes = duration.inMinutes.remainder(60);
   return '${hours.toString().padLeft(2, '0')}h ${minutes.toString().padLeft(2, '0')}m';
+}
+
+String _displayWorkingHours(
+  Map<String, dynamic> attendance,
+  String checkIn,
+  String checkOut,
+) {
+  final backendValue = '${attendance['working_hours'] ?? ''}'.trim();
+  if (backendValue.isNotEmpty &&
+      backendValue != '--' &&
+      backendValue.toLowerCase() != 'null') {
+    return backendValue;
+  }
+  return _workingDuration(checkIn, checkOut);
 }
 
 DateTime? _timeOfDayToDateTime(String value) {

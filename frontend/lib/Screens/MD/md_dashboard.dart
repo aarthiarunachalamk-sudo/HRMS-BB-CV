@@ -196,6 +196,7 @@ class _MdDashboardState extends State<MdDashboard> {
           totalEmployees: _data.totalEmployees,
           pendingApprovals: _data.pendingApprovals,
           meetingsToday: _data.meetingsToday + 1,
+          notificationCount: _data.notificationCount,
           meetings: [
             scheduled,
             ..._data.meetings.where((item) => item.id != scheduled.id),
@@ -500,7 +501,7 @@ class _MdDashboardState extends State<MdDashboard> {
           userId: widget.userId,
           profileImage: _profileImage,
           pendingApprovals: _data.pendingApprovals,
-          alertCount: 3,
+          alertCount: _data.notificationCount,
           onNavigate: (step) => setState(() {
             _step = step;
             _bottomIndex =
@@ -2690,7 +2691,9 @@ class _BottomNav extends StatelessWidget {
                   children: [
                     Icon(
                       items[index].icon,
-                      color: selected ? colors.primary : colors.muted,
+                      color: selected
+                          ? Theme.of(context).colorScheme.secondary
+                          : colors.muted,
                       size: 18,
                     ),
                     const SizedBox(height: 3),
@@ -3178,7 +3181,12 @@ class _Tabs extends StatelessWidget {
                 alignment: Alignment.center,
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                  color: active ? colors.primary : Colors.transparent,
+                  gradient: active
+                      ? const LinearGradient(
+                          colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
+                        )
+                      : null,
+                  color: Colors.transparent,
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: Text(
@@ -3505,7 +3513,7 @@ class _MdColors {
         text: Color(0xFFF8FAFC),
         muted: Color(0xFF8A9AAF),
         border: Color(0xFF20334B),
-        primary: Color(0xFF7C3AED),
+        primary: Color(0xFF0072FF),
         success: Color(0xFF34D399),
         danger: Color(0xFFFF5A70),
         shadow: [],
@@ -3518,7 +3526,7 @@ class _MdColors {
       text: const Color(0xFF0F172A),
       muted: const Color(0xFF64748B),
       border: const Color(0xFFE2E8F0),
-      primary: const Color(0xFF0B63F6),
+      primary: const Color(0xFF0072FF),
       success: const Color(0xFF10B981),
       danger: const Color(0xFFEF233C),
       shadow: [

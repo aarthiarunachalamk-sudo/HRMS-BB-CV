@@ -15,7 +15,7 @@ ImageProvider<Object>? employeeProfileImageProvider(String? source) {
 }
 
 class EmployeeColors {
-  static const blue = Color(0xFF4FACFE);
+  static const blue = Color(0xFF0072FF);
   static const green = Color(0xFF00D46A);
   static const purple = Color(0xFF8B5CFF);
   static const gold = Color(0xFFFF9F1C);

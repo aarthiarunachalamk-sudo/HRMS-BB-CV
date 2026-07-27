@@ -44,7 +44,7 @@ class TlPalette {
         border: Color(0xFF1C405A),
         text: Color(0xFFF8FAFC),
         muted: Color(0xFF93A9BC),
-        primary: Color(0xFF00C6FF),
+        primary: Color(0xFF0072FF),
         success: Color(0xFF22C55E),
         danger: Color(0xFFEF4444),
         warning: Color(0xFFF59E0B),

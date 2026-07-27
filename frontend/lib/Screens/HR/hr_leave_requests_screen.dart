@@ -22,7 +22,11 @@ class _HrLeaveRequestsScreenState extends State<HrLeaveRequestsScreen> {
     if (id == null || _savingId != null) return;
     setState(() => _savingId = id);
     try {
-      await HrService().updateLeaveRequest(id, status, widget.userId);
+      if (leave['approval_type'] == 'early_checkout') {
+        await HrService().updateCheckoutPermission(id, status, widget.userId);
+      } else {
+        await HrService().updateLeaveRequest(id, status, widget.userId);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Leave ${status == 'approved' ? 'approved' : 'rejected'} by HR')));
       widget.onChanged();
@@ -36,9 +40,18 @@ class _HrLeaveRequestsScreenState extends State<HrLeaveRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
-    final pending = hrList(widget.data, 'leave_requests');
-    final approved = hrList(widget.data, 'leave_requests_approved');
-    final rejected = hrList(widget.data, 'leave_requests_rejected');
+    final pending = [
+      ...hrList(widget.data, 'leave_requests'),
+      ...hrList(widget.data, 'checkout_permissions'),
+    ];
+    final approved = [
+      ...hrList(widget.data, 'leave_requests_approved'),
+      ...hrList(widget.data, 'checkout_permissions_approved'),
+    ];
+    final rejected = [
+      ...hrList(widget.data, 'leave_requests_rejected'),
+      ...hrList(widget.data, 'checkout_permissions_rejected'),
+    ];
     final leaves = switch (_tab) {
       'approved' => approved,
       'rejected' => rejected,
@@ -76,8 +89,11 @@ class _HrLeaveRequestsScreenState extends State<HrLeaveRequestsScreen> {
                   _Detail(label: 'Reason', value: '${leave['reason'] ?? ''}'),
                   if ('${leave['medical_certificate'] ?? leave['document_name'] ?? ''}'.trim().isNotEmpty)
                     _Detail(label: 'Medical Certificate', value: '${leave['medical_certificate'] ?? leave['document_name']}'),
-                  _Detail(label: 'TL Status', value: '${leave['tl_status'] ?? ''}'),
-                  _Detail(label: 'HR Status', value: '${leave['hr_status'] ?? ''}'),
+                  if (leave['approval_type'] != 'early_checkout') ...[
+                    _Detail(label: 'TL Status', value: '${leave['tl_status'] ?? ''}'),
+                    _Detail(label: 'HR Status', value: '${leave['hr_status'] ?? ''}'),
+                  ] else
+                    _Detail(label: 'Requested Check-Out', value: '${leave['requested_check_out'] ?? ''}'),
                   if (_tab == 'pending') ...[
                     const SizedBox(height: 10),
                     Builder(builder: (context) {
@@ -131,8 +147,8 @@ class _Tab extends StatelessWidget {
         child: Container(
         height: 34,
         alignment: Alignment.center,
-        decoration: BoxDecoration(color: active ? c.primary.withAlpha(30) : c.row, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border)),
-        child: Text(label, overflow: TextOverflow.ellipsis, style: TextStyle(color: active ? c.primary : c.muted, fontSize: 11, fontWeight: FontWeight.w900)),
+        decoration: BoxDecoration(gradient: active ? const LinearGradient(colors: [Color(0xFF00C6FF), Color(0xFF0072FF)]) : null, color: active ? null : c.row, borderRadius: BorderRadius.circular(8), border: Border.all(color: active ? c.primary : c.border)),
+        child: Text(label, overflow: TextOverflow.ellipsis, style: TextStyle(color: active ? Colors.white : c.muted, fontSize: 11, fontWeight: FontWeight.w900)),
         ),
       ),
     );

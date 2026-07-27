@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone as datetime_timezone
+from pathlib import Path
 
 import cloudinary
 from django.conf import settings
@@ -13,6 +14,7 @@ from .models import (
     EmployeeAccount,
     EmployeeAttendanceRecord,
     EmployeeLeaveRequest,
+    AttendanceRegularizationRequest,
     MdMeeting,
     EmployeeRegistration,
     TeamTask,
@@ -196,7 +198,7 @@ def _meeting_start_at(date_label, time_label):
 
 
 def _create_notification(*, user_id='', role='', title, message, notification_type='info', module='', reference_id=''):
-    return AppNotification.objects.create(
+    notification = AppNotification.objects.create(
         recipient_user_id=user_id,
         recipient_role=role,
         title=title,
@@ -205,6 +207,60 @@ def _create_notification(*, user_id='', role='', title, message, notification_ty
         module=module,
         reference_id=str(reference_id or ''),
     )
+    from .push_notifications import send_mobile_push
+    notification.push_sent = send_mobile_push(notification)
+    if notification.push_sent:
+        notification.save(update_fields=['push_sent'])
+    return notification
+
+
+ATTENDANCE_MONITOR_ROLES = ('superadmin', 'admin', 'ceo', 'md', 'director', 'hr')
+
+
+def _notify_employee_presence(record, event):
+    employee_name = _employee_name(record.employee_id)
+    event_label = 'checked in' if event == 'check_in' else 'checked out'
+    event_time = record.check_in if event == 'check_in' else record.check_out
+    offset = (
+        record.check_in_timezone_offset_minutes
+        if event == 'check_in'
+        else record.check_out_timezone_offset_minutes
+    )
+    message = (
+        f'{employee_name} ({record.employee_id}) {event_label} at '
+        f'{_format_time(event_time, offset)}. Status: {record.status}.'
+    )
+    event_key = 'in' if event == 'check_in' else 'out'
+    reference_id = f'{record.employee_id}:{record.attendance_date:%Y%m%d}:{event_key}'
+    for role in ATTENDANCE_MONITOR_ROLES:
+        exists = AppNotification.objects.filter(
+            recipient_role=role,
+            module='attendance_presence',
+            reference_id=reference_id,
+        ).exists()
+        if not exists:
+            _create_notification(
+                role=role,
+                title='Employee Attendance',
+                message=message,
+                notification_type='success' if event == 'check_in' else 'info',
+                module='attendance_presence',
+                reference_id=reference_id,
+            )
+    tl_recipient = _tl_recipient_for_employee(record.employee_id)
+    if tl_recipient and not AppNotification.objects.filter(
+        recipient_user_id=tl_recipient,
+        module='attendance_presence',
+        reference_id=reference_id,
+    ).exists():
+        _create_notification(
+            user_id=tl_recipient,
+            title='Team Attendance',
+            message=message,
+            notification_type='success' if event == 'check_in' else 'info',
+            module='attendance_presence',
+            reference_id=reference_id,
+        )
 
 
 def _identity_filter(value):
@@ -271,6 +327,42 @@ DOCUMENT_FIELD_LABELS = {
     'doc_vaccination': 'Vaccination Certificate',
 }
 
+IMAGE_UPLOAD_EXTENSIONS = {'.jpg', '.jpeg', '.png'}
+DOCUMENT_UPLOAD_EXTENSIONS = {'.pdf', '.doc'}
+
+
+def _validated_document_upload(upload):
+    extension = Path(upload.name or '').suffix.lower()
+    if extension not in IMAGE_UPLOAD_EXTENSIONS | DOCUMENT_UPLOAD_EXTENSIONS:
+        return '', 'Invalid file. Use JPG, JPEG, PNG, PDF, or DOC.'
+
+    try:
+        header = upload.read(16)
+        upload.seek(0)
+        if extension in {'.jpg', '.jpeg'}:
+            valid = header.startswith(b'\xff\xd8\xff')
+            file_type = 'image'
+        elif extension == '.png':
+            valid = header.startswith(b'\x89PNG\r\n\x1a\n')
+            file_type = 'image'
+        elif extension == '.pdf':
+            valid = header.startswith(b'%PDF-')
+            file_type = 'document'
+        elif extension == '.doc':
+            valid = header.startswith(b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1')
+            file_type = 'document'
+        else:
+            valid = False
+            file_type = 'document'
+    except (OSError, ValueError):
+        upload.seek(0)
+        valid = False
+        file_type = ''
+
+    if not valid:
+        return '', 'The selected file content does not match its extension.'
+    return file_type, ''
+
 
 def _document_url(registration, field_name, request=None):
     if not registration:
@@ -308,7 +400,7 @@ def _registration_documents(registration, request=None):
             'document_key': key,
             'title': title,
             'date': state.get('reviewed_at') or state.get('reuploaded_at') or '',
-            'type': 'Image',
+            'type': state.get('file_type') or 'Image',
             'url': url,
             'status': status_value,
             'issue_type': state.get('issue_type', ''),
@@ -368,6 +460,34 @@ LUNCH_END_HOUR = 14
 GRACE_MINUTES = 10
 FULL_DAY_MINUTES = 8 * 60
 HALF_DAY_MINUTES = 4 * 60
+AUTO_CHECKOUT_HOUR = 18
+AUTO_CHECKOUT_MINUTE = 30
+EARLY_CHECKOUT_CUTOFF_HOUR = 17
+EARLY_CHECKOUT_CUTOFF_MINUTE = 30
+HALF_DAY_CHECKOUT_HOUR = 13
+
+
+def _attendance_today():
+    return timezone.now().astimezone(
+        datetime_timezone(timedelta(hours=5, minutes=30)),
+    ).date()
+
+
+def _approved_leave_for_day(employee_id, attendance_date):
+    return EmployeeLeaveRequest.objects.filter(
+        employee_id=employee_id,
+        status='approved',
+        hr_status='approved',
+        from_date__lte=attendance_date,
+        to_date__gte=attendance_date,
+    ).first()
+
+
+def _is_before_checkout_cutoff(value):
+    return (value.hour, value.minute) < (
+        EARLY_CHECKOUT_CUTOFF_HOUR,
+        EARLY_CHECKOUT_CUTOFF_MINUTE,
+    )
 
 
 def _format_minutes(minutes):
@@ -589,6 +709,7 @@ def _leave_payload(record, request=None):
         'date': f'{record.from_date.isoformat()} - {record.to_date.isoformat()}',
         'days': record.total_days,
         'reason': record.reason,
+        'session': record.session,
         'medical_certificate': _certificate_name(record),
         'medical_certificate_url': _certificate_url(record, request),
         'document_name': _certificate_name(record),
@@ -701,16 +822,31 @@ def _leave_balance_payload(employee_id, account=None):
 
 
 def _employee_payload(user, account, request=None):
-    today = date.today()
+    today = _attendance_today()
     first_name = user.first_name if user else ''
     last_name = user.last_name if user else ''
     full_name = f'{first_name} {last_name}'.strip() or 'Employee'
 
-    employee_id = (user.user_id if user else '') or (account.employee_id if account else '')
-    today_record = EmployeeAttendanceRecord.objects.filter(
-        employee_id=employee_id,
+    # Employee-owned records are keyed by EmployeeAccount.employee_id. This can
+    # differ from User.user_id when a leadership account opens Employee mode.
+    employee_id = (account.employee_id if account else '') or (user.user_id if user else '')
+    attendance_ids = {
+        value
+        for value in (
+            employee_id,
+            account.employee_id if account else '',
+            user.user_id if user else '',
+        )
+        if value
+    }
+    today_records = EmployeeAttendanceRecord.objects.filter(
+        employee_id__in=attendance_ids,
         attendance_date=today,
-    ).first() if employee_id else None
+    ) if attendance_ids else EmployeeAttendanceRecord.objects.none()
+    today_record = (
+        today_records.filter(employee_id=employee_id).first()
+        or today_records.first()
+    )
     leave_records = EmployeeLeaveRequest.objects.filter(employee_id=employee_id)[:10] if employee_id else []
     employee_email = user.email if user else account.employee_email if account else ''
     task_owner = Q(pk__isnull=True)
@@ -724,7 +860,7 @@ def _employee_payload(user, account, request=None):
             'name': full_name,
             'first_name': first_name,
             'email': employee_email,
-            'employee_id': user.user_id if user else account.employee_id if account else '',
+            'employee_id': employee_id,
             'department': account.get_department_display() if account else 'Operations',
             'designation': account.get_designation_display() if account else 'Employee',
             'date_of_joining': str(account.date_of_joining) if account else '',
@@ -869,12 +1005,31 @@ def employee_document_reupload_view(request):
     if upload is None:
         return Response({'success': False, 'message': 'Document file is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    file_type, validation_error = _validated_document_upload(upload)
+    if validation_error:
+        return Response(
+            {'success': False, 'message': validation_error},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    requested_type = (request.data.get('file_type') or '').strip().lower()
+    if requested_type and requested_type != file_type:
+        return Response(
+            {'success': False, 'message': 'The selected file type does not match the uploaded file.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if document_key == 'doc_passport_photo' and file_type != 'image':
+        return Response(
+            {'success': False, 'message': 'Passport Size Photo must be a JPG, JPEG, or PNG image.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     registration = account.registration
     setattr(registration, document_key, upload)
     statuses = dict(registration.document_statuses or {})
     statuses[document_key] = {
         **statuses.get(document_key, {}),
         'status': 'pending',
+        'file_type': file_type.title(),
         'reuploaded_at': timezone.now().isoformat(),
         'remark': '',
     }
@@ -946,6 +1101,7 @@ def employee_check_in_view(request):
     record.check_in_accuracy = request.data.get('accuracy') or ''
     record.check_in_selfie = selfie
     record.save()
+    _notify_employee_presence(record, 'check_in')
 
     return Response({
         'success': True,
@@ -981,6 +1137,70 @@ def employee_check_out_view(request):
         attendance_date=now.date(),
         defaults={'status': 'Present'},
     )
+    if record.check_out:
+        return Response({
+            'success': True,
+            'message': 'Check-out has already been recorded.',
+            **_attendance_payload(record, request),
+        })
+
+    approved_leave = _approved_leave_for_day(employee_id, now.date())
+    afternoon_half_day = bool(
+        approved_leave and approved_leave.session == 'Second Half'
+    )
+    if _is_before_checkout_cutoff(now) and not (
+        afternoon_half_day and now.hour >= HALF_DAY_CHECKOUT_HOUR
+    ):
+        approved_permission = AttendanceRegularizationRequest.objects.filter(
+            employee_id=employee_id,
+            attendance_date=now.date(),
+            request_type='early_checkout',
+            status='approved',
+        ).order_by('-reviewed_at').first()
+        if approved_permission is None:
+            permission, created = AttendanceRegularizationRequest.objects.get_or_create(
+                employee_id=employee_id,
+                attendance_date=now.date(),
+                request_type='early_checkout',
+                status='pending',
+                defaults={
+                    'requested_check_out': now,
+                    'reason': request.data.get('reason') or (
+                        'Early checkout permission requested from attendance screen.'
+                    ),
+                },
+            )
+            if created:
+                tl_recipient = _tl_recipient_for_employee(employee_id)
+                message = (
+                    f'{_employee_name(employee_id)} requested permission to '
+                    f'check out at {_format_time(now, offset_minutes)}.'
+                )
+                _create_notification(
+                    user_id=tl_recipient,
+                    role='' if tl_recipient else 'tl',
+                    title='Early Check-Out Permission',
+                    message=message,
+                    notification_type='warning',
+                    module='attendance_permission',
+                    reference_id=permission.id,
+                )
+                _create_notification(
+                    role='hr',
+                    title='Early Check-Out Permission',
+                    message=message,
+                    notification_type='warning',
+                    module='attendance_permission',
+                    reference_id=permission.id,
+                )
+            return Response({
+                'success': True,
+                'permission_required': True,
+                'permission_status': permission.status,
+                'permission_id': permission.id,
+                'message': 'Early check-out permission was sent to TL and HR for approval.',
+                **_attendance_payload(record, request),
+            }, status=status.HTTP_202_ACCEPTED)
     if not record.check_in:
         record.check_in = now.replace(hour=SHIFT_START_HOUR, minute=0, second=0, microsecond=0)
         record.check_in_timezone_offset_minutes = offset_minutes
@@ -994,6 +1214,7 @@ def employee_check_out_view(request):
     record.check_out_accuracy = request.data.get('accuracy') or ''
     record.check_out_selfie = selfie
     record.save()
+    _notify_employee_presence(record, 'check_out')
 
     return Response({
         'success': True,
@@ -1033,6 +1254,7 @@ def employee_leave_request_view(request):
     leave = EmployeeLeaveRequest.objects.create(
         employee_id=employee_id,
         leave_type=request.data.get('leave_type') or 'Leave',
+        session=request.data.get('session') or 'Full Day',
         from_date=from_date,
         to_date=to_date,
         total_days=(to_date - from_date).days + 1,

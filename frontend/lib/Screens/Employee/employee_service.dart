@@ -115,6 +115,7 @@ class EmployeeService {
     String userId,
     String documentKey,
     String filePath,
+    String fileType,
   ) async {
     final request = http.MultipartRequest(
       'POST',
@@ -122,6 +123,7 @@ class EmployeeService {
     );
     request.fields['user_id'] = userId;
     request.fields['document_key'] = documentKey;
+    request.fields['file_type'] = fileType;
     request.files.add(await http.MultipartFile.fromPath('document', filePath));
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
