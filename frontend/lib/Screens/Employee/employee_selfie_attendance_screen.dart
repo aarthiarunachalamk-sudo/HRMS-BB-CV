@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -93,7 +94,7 @@ class _EmployeeSelfieAttendanceScreenState
       );
       final controller = CameraController(
         frontCamera,
-        ResolutionPreset.high,
+        ResolutionPreset.medium,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.jpeg,
       );
@@ -165,7 +166,9 @@ class _EmployeeSelfieAttendanceScreenState
         _loadingLocation = false;
         _error = null;
       });
-      await _loadAddress(position);
+      // Address lookup can be slow on some devices. It is not required to
+      // start the camera, so run it in the background.
+      unawaited(_loadAddress(position));
       await _initCamera();
     } catch (_) {
       if (mounted) {
@@ -252,7 +255,12 @@ class _EmployeeSelfieAttendanceScreenState
 
     try {
       final rawFile = await readyController.takePicture();
-      final watermarkedPath = await _burnWatermark(rawFile.path);
+      final watermarkedPath = await _burnWatermark(
+        rawFile.path,
+        flipHorizontally:
+            readyController.description.lensDirection ==
+            CameraLensDirection.front,
+      );
       if (!mounted) return;
       setState(() {
         _capturedPath = watermarkedPath;
@@ -269,13 +277,22 @@ class _EmployeeSelfieAttendanceScreenState
     }
   }
 
-  Future<String> _burnWatermark(String rawPath) async {
+  Future<String> _burnWatermark(
+    String rawPath, {
+    required bool flipHorizontally,
+  }) async {
     final bytes = await File(rawPath).readAsBytes();
     img.Image? decoded = img.decodeImage(bytes);
     if (decoded == null) return rawPath;
 
     // Correct orientation using EXIF data captured by the camera sensor.
     decoded = img.bakeOrientation(decoded);
+    // Some devices save front-camera captures as the mirrored sensor image.
+    // Normalize it before watermarking so the uploaded and fetched selfie has
+    // the same natural, non-mirrored orientation as a regular photograph.
+    if (flipHorizontally) {
+      decoded = img.flipHorizontal(decoded);
+    }
 
     final watermarked = _drawWatermark(
       decoded,
