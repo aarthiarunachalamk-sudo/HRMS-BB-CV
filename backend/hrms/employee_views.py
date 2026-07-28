@@ -19,8 +19,170 @@ from .models import (
     EmployeeRegistration,
     TeamTask,
     User,
+    EmployeeApprovalRequest,
 )
 from .payroll import latest_payslip_for_employee
+
+
+def _approval_payload(item):
+    stages = [
+        {'stage': 1, 'label': 'Team Lead', 'roles': ['tl']},
+        {'stage': 2, 'label': 'CEO Final Approval', 'roles': ['ceo']},
+    ]
+    return {
+        'id': item.id,
+        'title': item.title,
+        'request_type': item.request_type,
+        'sender_role': item.sender_role,
+        'department': item.department,
+        'assigned_tl_user_id': item.assigned_tl_user_id,
+        'date': str(item.request_date),
+        'session': item.session,
+        'task_details': item.task_details,
+        'expected_result': item.expected_result,
+        'actual_result': item.actual_result,
+        'approvers': item.approvers,
+        'decisions': item.decisions,
+        'current_stage': item.current_stage,
+        'approval_stages': stages,
+        'status': item.status.title(),
+        'created_at': timezone.localtime(item.created_at).isoformat(),
+    }
+
+
+@api_view(['GET', 'POST'])
+def employee_approvals_view(request):
+    user_id = str(request.query_params.get('user_id') or request.data.get('user_id') or '').strip()
+    if not user_id:
+        return Response({'success': False, 'message': 'Employee ID is required.'}, status=400)
+    if request.method == 'GET':
+        sent = EmployeeApprovalRequest.objects.filter(employee_id=user_id)[:100]
+        user = User.objects.filter(user_id=user_id).first()
+        role = user.role if user else 'employee'
+        received = []
+        if role in {'tl', 'ceo'}:
+            stage = 0 if role == 'tl' else 1
+            queryset = EmployeeApprovalRequest.objects.filter(status='requested', current_stage=stage)
+            if role == 'tl':
+                queryset = queryset.filter(assigned_tl_user_id=user_id)
+            received = [item for item in queryset[:100] if not any(
+                decision.get('role') == role for decision in (item.decisions or [])
+            )]
+        return Response({'success': True, 'received': [_approval_payload(item) for item in received], 'sent': [_approval_payload(item) for item in sent]})
+
+    required = ['title', 'date', 'session', 'task_details', 'expected_result', 'actual_result']
+    missing = [key for key in required if not str(request.data.get(key) or '').strip()]
+    if missing:
+        return Response({'success': False, 'message': 'Complete all required fields.'}, status=400)
+    try:
+        request_date = date.fromisoformat(str(request.data['date']))
+    except ValueError:
+        return Response({'success': False, 'message': 'Select a valid date.'}, status=400)
+    sender = User.objects.filter(user_id=user_id).first()
+    account = EmployeeAccount.objects.filter(employee_id=user_id).first()
+    sender_role = sender.role if sender else 'employee'
+    department = (account.department if account else '') or (sender.department if sender else '')
+    assigned_tl = None
+    reporting_tl = str(account.reporting_tl if account else '').strip()
+    if reporting_tl:
+        assigned_tl = User.objects.filter(role='tl', is_active=True).filter(
+            Q(user_id__iexact=reporting_tl) |
+            Q(email__iexact=reporting_tl) |
+            Q(first_name__iexact=reporting_tl)
+        ).first()
+    if assigned_tl is None:
+        tl_candidates = User.objects.filter(role='tl', is_active=True).exclude(user_id=user_id)
+        if department:
+            assigned_tl = tl_candidates.filter(department=department).first()
+        if assigned_tl is None:
+            assigned_tl = tl_candidates.first()
+    if assigned_tl is None:
+        return Response({'success': False, 'message': 'No Team Lead is configured for this department.'}, status=400)
+
+    item = EmployeeApprovalRequest.objects.create(
+        employee_id=user_id,
+        sender_role=sender_role,
+        department=department,
+        assigned_tl_user_id=assigned_tl.user_id,
+        title=str(request.data['title']).strip(),
+        request_date=request_date,
+        session=str(request.data['session']).strip(),
+        task_details=str(request.data['task_details']).strip(),
+        expected_result=str(request.data['expected_result']).strip(),
+        actual_result=str(request.data['actual_result']).strip(),
+        approvers=['Team Lead', 'CEO'],
+    )
+    AppNotification.objects.create(
+        recipient_user_id=assigned_tl.user_id,
+        title='Daily Report Approval',
+        message=f'{item.title} is waiting for Team Lead approval.',
+        notification_type='info',
+        module='approval',
+        reference_id=str(item.id),
+    )
+    return Response({'success': True, 'message': 'Approval request sent.', 'approval': _approval_payload(item)}, status=201)
+
+
+@api_view(['POST'])
+def employee_approval_action_view(request, pk):
+    item = EmployeeApprovalRequest.objects.filter(pk=pk).first()
+    if item is None:
+        return Response({'success': False, 'message': 'Approval request not found.'}, status=404)
+    user_id = str(request.data.get('user_id') or '').strip()
+    action = str(request.data.get('action') or '').strip().lower()
+    user = User.objects.filter(user_id=user_id).first()
+    role = user.role if user else 'employee'
+
+    if action == 'cancel' and item.employee_id == user_id and item.status == 'requested':
+        item.status = 'cancelled'
+        item.save(update_fields=['status', 'updated_at'])
+        return Response({'success': True, 'message': 'Request cancelled.', 'approval': _approval_payload(item)})
+    if action not in {'approve', 'reject'} or role not in {'tl', 'ceo'}:
+        return Response({'success': False, 'message': 'You cannot perform this action.'}, status=403)
+    expected_stage = 0 if role == 'tl' else 1
+    if role == 'tl' and item.assigned_tl_user_id != user_id:
+        return Response({'success': False, 'message': 'This request is assigned to another Team Lead.'}, status=403)
+    if item.status != 'requested' or item.current_stage != expected_stage:
+        return Response({'success': False, 'message': 'This request is not awaiting your approval.'}, status=409)
+
+    decisions = list(item.decisions or [])
+    if any(decision.get('role') == role for decision in decisions):
+        return Response({'success': False, 'message': 'You already reviewed this request.'}, status=409)
+    decisions.append({
+        'role': role,
+        'approver': user_id,
+        'action': action,
+        'comment': str(request.data.get('comment') or '').strip(),
+        'decided_at': timezone.now().isoformat(),
+    })
+    item.decisions = decisions
+    if action == 'reject':
+        item.status = 'rejected'
+    elif role == 'tl':
+        item.current_stage = 1
+        AppNotification.objects.create(
+            recipient_role='ceo',
+            title='Daily Report Final Approval',
+            message=f'{item.title} passed Team Lead review and needs CEO approval.',
+            notification_type='info',
+            module='approval',
+            reference_id=str(item.id),
+        )
+    elif role == 'ceo':
+        item.status = 'approved'
+        item.current_stage = 2
+    item.save(update_fields=['decisions', 'status', 'current_stage', 'updated_at'])
+    if item.status in {'approved', 'rejected'}:
+        AppNotification.objects.create(
+            recipient_user_id=item.employee_id,
+            title=f'Approval Request {item.status.title()}',
+            message=f'{item.title} was {item.status}.',
+            notification_type='success' if item.status == 'approved' else 'error',
+            module='approval',
+            reference_id=str(item.id),
+        )
+    message = 'Request approved.' if action == 'approve' else 'Request rejected.'
+    return Response({'success': True, 'message': message, 'approval': _approval_payload(item)})
 
 
 def _employee_context(request):

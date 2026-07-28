@@ -137,6 +137,29 @@ class EmployeeService {
     return _post('/task-complete/', {'user_id': userId, 'task_id': taskId});
   }
 
+  Future<Map<String, dynamic>> fetchApprovals(String userId) async {
+    final response = await http.get(Uri.parse('$_baseUrl/approvals/').replace(queryParameters: {'user_id': userId}));
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return _decodeMap(response, 'Employee approvals API returned invalid data');
+    }
+    throw Exception(_responseError(response, 'Employee approvals API failed'));
+  }
+
+  Future<Map<String, dynamic>> submitDailyApproval(String userId, Map<String, dynamic> request) {
+    return _post('/approvals/', {'user_id': userId, ...request});
+  }
+
+  Future<Map<String, dynamic>> updateApproval(
+    String userId,
+    Object approvalId,
+    String action, {
+    String comment = '',
+  }) => _post('/approvals/$approvalId/action/', {
+    'user_id': userId,
+    'action': action,
+    'comment': comment,
+  });
+
   Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> payload,

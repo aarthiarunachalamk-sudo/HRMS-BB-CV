@@ -1,4 +1,5 @@
 export 'employee_attendance_screen.dart';
+export 'employee_approvals_screen.dart';
 export 'employee_attendance_history_screen.dart';
 export 'employee_calendar_range.dart';
 export 'employee_dashboard.dart';

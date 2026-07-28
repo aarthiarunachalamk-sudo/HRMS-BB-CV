@@ -1,9 +1,9 @@
 from datetime import date
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 from django.core.cache import cache
 from rest_framework import serializers
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory
 from unittest.mock import Mock, patch
 
 from .serializers import (
@@ -14,7 +14,68 @@ from .serializers import (
 )
 from .views import _attendance_credit, _working_dates
 from . import views
-from .models import User
+from .models import User, EmployeeApprovalRequest
+
+
+class DailyApprovalFlowTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.employee = User.objects.create_user('employee@flow.test', 'Password1!', role='employee')
+        self.employee.department = 'web_application_development'
+        self.employee.save()
+        self.tl = User.objects.create_user('tl@flow.test', 'Password1!', role='tl')
+        self.tl.department = 'web_application_development'
+        self.tl.save()
+        self.ceo = User.objects.create_user('ceo@flow.test', 'Password1!', role='ceo')
+
+    def _submit(self, sender):
+        return self.client.post('/api/employee/approvals/', {
+            'user_id': sender.user_id,
+            'title': 'Morning Report',
+            'date': '2026-07-28',
+            'session': 'Forenoon',
+            'task_details': 'Completed module testing.',
+            'expected_result': 'All flows pass.',
+            'actual_result': 'All flows pass.',
+        }, format='json')
+
+    def test_employee_requires_tl_then_ceo_final_approval(self):
+        submitted = self._submit(self.employee)
+        self.assertEqual(submitted.status_code, 201)
+        approval_id = submitted.data['approval']['id']
+        request = EmployeeApprovalRequest.objects.get(pk=approval_id)
+        self.assertEqual(request.assigned_tl_user_id, self.tl.user_id)
+        self.assertEqual(request.current_stage, 0)
+
+        premature_ceo = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.ceo.user_id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(premature_ceo.status_code, 409)
+
+        tl_result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.tl.user_id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(tl_result.status_code, 200)
+        request.refresh_from_db()
+        self.assertEqual(request.current_stage, 1)
+        self.assertEqual(request.status, 'requested')
+
+        ceo_result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.ceo.user_id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(ceo_result.status_code, 200)
+        request.refresh_from_db()
+        self.assertEqual(request.status, 'approved')
+        self.assertEqual(request.current_stage, 2)
+
+    def test_tl_sender_cannot_be_assigned_to_self(self):
+        second_tl = User.objects.create_user('tl2@flow.test', 'Password1!', role='tl')
+        second_tl.department = self.tl.department
+        second_tl.save()
+        submitted = self._submit(self.tl)
+        self.assertEqual(submitted.status_code, 201)
+        assigned = submitted.data['approval']['assigned_tl_user_id']
+        self.assertNotEqual(assigned, self.tl.user_id)
 
 
 class PhonePrivacyTests(SimpleTestCase):
@@ -54,7 +115,7 @@ class SharedAdminEmailLoginTests(SimpleTestCase):
             views.EmployeeAccount.objects,
             'get',
             side_effect=views.EmployeeAccount.DoesNotExist,
-        ):
+        ), patch.object(views, 'ensure_leadership_employee_account', return_value=None):
             response = views.login_view(request)
 
         self.assertEqual(response.status_code, 200)

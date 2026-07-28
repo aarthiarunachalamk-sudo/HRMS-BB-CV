@@ -13,8 +13,8 @@ from django.utils.html import escape
 from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
 from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
-from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, AttendanceRegularizationRequest
-from .employee_views import _attendance_calculation, _leave_balance_payload, _notify_employee_presence
+from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, AttendanceRegularizationRequest, EmployeeApprovalRequest
+from .employee_views import _attendance_calculation, _leave_balance_payload, _notify_employee_presence, _approval_payload
 from .payroll import generate_payroll_for_month, payslip_payload
 import os
 from .mailer import email_is_configured, send_email as send_transactional_email
@@ -3478,7 +3478,30 @@ def tl_tasks_view(request):
 @api_view(['GET'])
 def tl_approvals_view(request):
     user_id = request.query_params.get('user_id') or ''
-    return Response(_tl_all_approval_payload(user_id))
+    payload = _tl_all_approval_payload(user_id)
+    assigned = list(EmployeeApprovalRequest.objects.filter(assigned_tl_user_id=user_id)[:100])
+
+    def daily_item(item):
+        return dict(
+            _approval_payload(item),
+            approval_type='daily_report',
+            name=item.title,
+            employee_id=item.employee_id,
+            subtitle=f'{item.request_date} · {item.session}',
+        )
+
+    payload['pending'] = list(payload.get('pending') or []) + [
+        daily_item(item) for item in assigned
+        if item.status == 'requested' and item.current_stage == 0
+    ]
+    payload['approved'] = list(payload.get('approved') or []) + [
+        daily_item(item) for item in assigned
+        if any(decision.get('role') == 'tl' and decision.get('action') == 'approve' for decision in (item.decisions or []))
+    ]
+    payload['rejected'] = list(payload.get('rejected') or []) + [
+        daily_item(item) for item in assigned if item.status == 'rejected'
+    ]
+    return Response(payload)
 
 
 @api_view(['GET'])
@@ -3941,11 +3964,31 @@ def ceo_approvals_view(request):
         Q(status='pending', to_date__lt=today)
     ).order_by('-from_date')[:50]
     history = [_leave_dashboard_item(item) for item in history_queryset]
+    daily_pending = [
+        dict(
+            _approval_payload(item),
+            approval_type='daily_report',
+            subtitle=f'Daily report · {item.request_date} · TL approved',
+        )
+        for item in EmployeeApprovalRequest.objects.filter(
+            status='requested', current_stage=1,
+        )[:50]
+    ]
+    daily_history = [
+        dict(
+            _approval_payload(item),
+            approval_type='daily_report',
+            subtitle=f'Daily report · {item.request_date}',
+        )
+        for item in EmployeeApprovalRequest.objects.filter(
+            status__in=['approved', 'rejected', 'cancelled'],
+        )[:50]
+    ]
     return Response({
         'success': True,
         'summary': _ceo_approvals_summary(),
-        'approvals': approvals,
-        'history': history,
+        'approvals': daily_pending + approvals,
+        'history': daily_history + history,
     })
 
 

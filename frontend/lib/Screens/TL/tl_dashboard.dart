@@ -6,6 +6,8 @@ import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_approvals_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/TL/tl_service.dart';
@@ -3970,6 +3972,25 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
   }
 
   Future<void> _openDetails(Map<String, dynamic> leave) async {
+    if (leave['approval_type'] == 'daily_report') {
+      final changed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => EmployeeApprovalDetailScreen(
+            item: leave,
+            userId: widget.userId,
+            service: EmployeeService(),
+            received:
+                '${leave['status'] ?? ''}'.toLowerCase() == 'requested' &&
+                '${leave['current_stage'] ?? ''}' == '0',
+          ),
+        ),
+      );
+      if (changed == true) {
+        widget.onChanged();
+        widget.onRefresh?.call();
+      }
+      return;
+    }
     final id = int.tryParse('${leave['id'] ?? ''}');
     setState(() => _selected = leave);
     if (id == null || leave['approval_type'] == 'early_checkout') return;

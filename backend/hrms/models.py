@@ -1496,3 +1496,36 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f'{self.module} - {self.action}'
+
+
+class EmployeeApprovalRequest(models.Model):
+    STATUS_CHOICES = [
+        ('requested', 'Requested'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    employee_id = models.CharField(max_length=40, db_index=True)
+    sender_role = models.CharField(max_length=20, default='employee')
+    department = models.CharField(max_length=80, blank=True)
+    assigned_tl_user_id = models.CharField(max_length=40, blank=True, db_index=True)
+    request_type = models.CharField(max_length=50, default='daily_report')
+    title = models.CharField(max_length=180)
+    request_date = models.DateField()
+    session = models.CharField(max_length=20)
+    task_details = models.TextField()
+    expected_result = models.TextField()
+    actual_result = models.TextField()
+    approvers = models.JSONField(default=list)
+    decisions = models.JSONField(default=list)
+    current_stage = models.PositiveSmallIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='requested')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.employee_id} - {self.title}'

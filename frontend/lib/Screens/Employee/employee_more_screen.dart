@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 
 import 'employee_documents_screen.dart';
+import 'employee_approvals_screen.dart';
 import 'employee_meetings_screen.dart';
 import 'employee_models.dart';
 import 'employee_notifications_screen.dart';
@@ -35,6 +36,13 @@ class EmployeeMoreScreen extends StatelessWidget {
     return EmployeePage(
       title: 'More',
       children: [
+        _tile(
+          context,
+          Icons.approval_rounded,
+          'Approvals',
+          EmployeeColors.purple,
+          EmployeeApprovalsScreen(userId: userId, service: service),
+        ),
         _tile(
           context,
           Icons.notifications_active_rounded,

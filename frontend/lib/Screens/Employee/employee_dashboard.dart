@@ -8,6 +8,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:image_picker/image_picker.dart';
 import 'employee_attendance_screen.dart';
+import 'employee_approvals_screen.dart';
 import 'employee_documents_screen.dart';
 import 'employee_home_screen.dart';
 import 'employee_leave_screen.dart';
@@ -217,7 +218,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
         );
         return;
       }
-      setState(() => _selectedIndex = 3);
+      setState(() => _selectedIndex = 4);
       return;
     }
     if (text.contains('leave')) {
@@ -232,7 +233,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
       setState(() => _selectedIndex = 1);
       return;
     }
-    setState(() => _selectedIndex = 3);
+    if (text.contains('approval')) {
+      setState(() => _selectedIndex = 3);
+      return;
+    }
+    setState(() => _selectedIndex = 4);
   }
 
   void _openEmployeeScreen(String title, Widget screen) {
@@ -352,6 +357,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
         data: _data,
         service: _service,
       ),
+      EmployeeApprovalsScreen(userId: widget.userId, service: _service),
       EmployeeMoreScreen(
         userId: widget.userId,
         data: _data,
@@ -493,6 +499,12 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                           ),
                           _navItem(
                             3,
+                            Icons.approval_outlined,
+                            Icons.approval_rounded,
+                            'Approvals',
+                          ),
+                          _navItem(
+                            4,
                             Icons.more_horiz_rounded,
                             Icons.more_rounded,
                             'More',
@@ -837,22 +849,28 @@ class _EmployeeDrawer extends StatelessWidget {
                         onTap: () => onSelect(2),
                       ),
                       _DrawerItem(
+                        icon: Icons.approval_rounded,
+                        title: 'Approvals',
+                        color: EmployeeColors.purple,
+                        onTap: () => onSelect(3),
+                      ),
+                      _DrawerItem(
                         icon: Icons.payments_rounded,
                         title: 'Payslip',
                         color: EmployeeColors.purple,
-                        onTap: () => onSelect(3),
+                        onTap: () => onSelect(4),
                       ),
                       _DrawerItem(
                         icon: Icons.description_rounded,
                         title: 'Documents',
                         color: EmployeeColors.gold,
-                        onTap: () => onSelect(3),
+                        onTap: () => onSelect(4),
                       ),
                       _DrawerItem(
                         icon: Icons.person_rounded,
                         title: 'Profile',
                         color: EmployeeColors.blue,
-                        onTap: () => onSelect(3),
+                        onTap: () => onSelect(4),
                       ),
                       const SizedBox(height: 6),
                       Divider(color: borderColor),

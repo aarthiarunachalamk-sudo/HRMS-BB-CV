@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_approvals_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_service.dart';
 
 import 'ceo_leave_request_screen.dart';
 import 'ceo_service.dart';
@@ -70,14 +72,24 @@ class _CeoApprovalsScreenState extends State<CeoApprovalsScreen> {
               titleText: '${map['title'] ?? 'Approval'}',
               subtitle: '${map['subtitle'] ?? 'Pending'}',
               color: CeoColors.purple,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => CeoLeaveRequestScreen(
-                    approvalId: '${map['id'] ?? ''}',
-                    userId: widget.userId,
+              onTap: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                  builder: (_) => map['approval_type'] == 'daily_report'
+                      ? EmployeeApprovalDetailScreen(
+                          item: map,
+                          userId: widget.userId,
+                          service: EmployeeService(),
+                          received: !_showHistory,
+                        )
+                      : CeoLeaveRequestScreen(
+                          approvalId: '${map['id'] ?? ''}',
+                          userId: widget.userId,
+                        ),
                   ),
-                ),
-              ),
+                );
+                if (mounted) setState(() {});
+              },
             );
           }),
         ]);

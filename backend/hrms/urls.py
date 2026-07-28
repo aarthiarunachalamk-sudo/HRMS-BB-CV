@@ -88,4 +88,6 @@ urlpatterns = [
     path('employee/leave-request/', employee_views.employee_leave_request_view, name='employee_leave_request'),
     path('employee/leave-history/', employee_views.employee_leave_history_view, name='employee_leave_history'),
     path('employee/task-complete/', employee_views.employee_task_complete_view, name='employee_task_complete'),
+    path('employee/approvals/', employee_views.employee_approvals_view, name='employee_approvals'),
+    path('employee/approvals/<int:pk>/action/', employee_views.employee_approval_action_view, name='employee_approval_action'),
 ]

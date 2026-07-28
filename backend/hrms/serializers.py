@@ -116,6 +116,11 @@ class CreateUserSerializer(serializers.Serializer):
             raise serializers.ValidationError({'state': 'Select a valid state'})
         if not city:
             raise serializers.ValidationError({'city': 'Select a city'})
+        valid_cities = STATE_CITY_CHOICES.get(state)
+        if valid_cities is not None and city not in valid_cities:
+            raise serializers.ValidationError({
+                'city': 'Select a city that belongs to the selected state',
+            })
         data['state'] = state
         data['city'] = city
         work_mode = (data.get('work_mode') or 'onsite').strip().lower()
