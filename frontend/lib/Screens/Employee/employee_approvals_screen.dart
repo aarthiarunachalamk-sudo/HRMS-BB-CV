@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import 'employee_service.dart';
 import 'employee_shared.dart';
@@ -277,6 +276,14 @@ class _DailyApprovalFormState extends State<_DailyApprovalForm> {
 
   String? _required(String? value) => value == null || value.trim().isEmpty ? 'Required' : null;
 
+  String _apiDate(DateTime value) =>
+      '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+  String _displayDate(DateTime value) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${value.day.toString().padLeft(2, '0')} ${months[value.month - 1]} ${value.year}';
+  }
+
   Future<void> _send() async {
     if (!_formKey.currentState!.validate() || _date == null || _session == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Complete all required fields.')));
@@ -285,7 +292,7 @@ class _DailyApprovalFormState extends State<_DailyApprovalForm> {
     setState(() => _saving = true);
     try {
       await widget.service.submitDailyApproval(widget.userId, {
-        'title': _title.text.trim(), 'date': DateFormat('yyyy-MM-dd').format(_date!), 'session': _session,
+        'title': _title.text.trim(), 'date': _apiDate(_date!), 'session': _session,
         'task_details': _tasks.text.trim(), 'expected_result': _expected.text.trim(), 'actual_result': _actual.text.trim(),
         'approvers': const ['Team Lead', 'CEO'],
       });
@@ -339,7 +346,7 @@ class _DailyApprovalFormState extends State<_DailyApprovalForm> {
       const SizedBox(height: 16), const Text('Approvers *', style: TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 8),
       const Wrap(spacing: 7, runSpacing: 7, children: [Chip(label: Text('1  Team Lead')), Chip(label: Text('2  CEO • Final'))]),
       const SizedBox(height: 16),
-      ListTile(contentPadding: EdgeInsets.zero, title: const Text('Date *'), subtitle: Text(_date == null ? 'Select a date' : DateFormat('dd MMM yyyy').format(_date!)), trailing: const Icon(Icons.calendar_month_rounded), onTap: () async { final value = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime.now().subtract(const Duration(days: 30)), lastDate: DateTime.now().add(const Duration(days: 30))); if (value != null) setState(() => _date = value); }),
+      ListTile(contentPadding: EdgeInsets.zero, title: const Text('Date *'), subtitle: Text(_date == null ? 'Select a date' : _displayDate(_date!)), trailing: const Icon(Icons.calendar_month_rounded), onTap: () async { final value = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime.now().subtract(const Duration(days: 30)), lastDate: DateTime.now().add(const Duration(days: 30))); if (value != null) setState(() => _date = value); }),
       const Text('Session *', style: TextStyle(fontWeight: FontWeight.w800)),
       RadioListTile(value: 'Forenoon', groupValue: _session, title: const Text('Forenoon'), onChanged: (value) => setState(() => _session = value)),
       RadioListTile(value: 'Afternoon', groupValue: _session, title: const Text('Afternoon'), onChanged: (value) => setState(() => _session = value)),
