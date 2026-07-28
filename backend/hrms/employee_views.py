@@ -169,9 +169,12 @@ def employee_approvals_view(request):
         'leave_request': 'Leave Request',
     }.get(request_type, 'Daily Report')
     _create_notification(
-        user_id=assigned_tl.user_id,
-        title=f'{request_label} Approval',
-        message=f'{item.title} is waiting for Team Lead approval.',
+        role='tl',
+        title=f'New {request_label} Approval',
+        message=(
+            f'{item.title} was sent for Team Lead approval. '
+            f'Assigned reviewer: {assigned_tl.first_name or assigned_tl.user_id}.'
+        ),
         notification_type='info',
         module='approval',
         reference_id=str(item.id),
@@ -270,6 +273,19 @@ def employee_approval_action_view(request, pk):
             module='approval',
             reference_id=str(item.id),
         )
+        request_label = {
+            'social_media_post': 'Social Media Post',
+            'leave_request': 'Leave Request',
+        }.get(item.request_type, 'Daily Report')
+        for leadership_role in ('ceo', 'md'):
+            _create_notification(
+                role=leadership_role,
+                title=f'{request_label} {item.status.title()}',
+                message=f'{item.title} was {item.status} by {reviewer_label}.',
+                notification_type='success' if item.status == 'approved' else 'error',
+                module='approval',
+                reference_id=str(item.id),
+            )
     message = 'Request approved.' if action == 'approve' else 'Request rejected.'
     return Response({'success': True, 'message': message, 'approval': _approval_payload(item)})
 

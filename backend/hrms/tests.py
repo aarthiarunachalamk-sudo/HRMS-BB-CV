@@ -28,6 +28,7 @@ class DailyApprovalFlowTests(TestCase):
         self.tl.department = 'web_application_development'
         self.tl.save()
         self.ceo = User.objects.create_user('ceo@flow.test', 'Password1!', role='ceo')
+        self.md = User.objects.create_user('md@flow.test', 'Password1!', role='md')
 
     def _submit(self, sender):
         return self.client.post('/api/employee/approvals/', {
@@ -86,11 +87,42 @@ class DailyApprovalFlowTests(TestCase):
         notifications = AppNotification.objects.filter(
             module='approval', reference_id=approval_id,
         )
-        self.assertTrue(notifications.filter(recipient_user_id=self.tl.user_id).exists())
+        self.assertTrue(notifications.filter(recipient_role='tl').exists())
         self.assertTrue(notifications.filter(recipient_role='md').exists())
         self.assertTrue(notifications.filter(recipient_role='ceo').exists())
         self.assertEqual(notifications.filter(push_sent=True).count(), 3)
         self.assertEqual(push.call_count, 3)
+
+        tl_dashboard = self.client.get('/api/tl/dashboard/', {'user_id': self.tl.user_id})
+        self.assertEqual(tl_dashboard.status_code, 200)
+        self.assertTrue(any(
+            item.get('module') == 'approval'
+            for item in tl_dashboard.data['notifications']
+        ))
+        self.assertTrue(any(
+            item.get('id') == int(approval_id)
+            for item in tl_dashboard.data['approvals']
+        ))
+        self.assertGreaterEqual(tl_dashboard.data['pending_approvals'], 1)
+
+        ceo_dashboard = self.client.get('/api/ceo/home/', {'user_id': self.ceo.user_id})
+        self.assertTrue(any(
+            item.get('module') == 'approval'
+            for item in ceo_dashboard.data['notifications']
+        ))
+
+        md_dashboard = self.client.get('/api/md/dashboard/', {'user_id': self.md.user_id})
+        self.assertTrue(any(
+            item.get('module') == 'approval'
+            for item in md_dashboard.data['notifications']
+        ))
+        md_alerts = self.client.get('/api/md/modules/critical-alerts/', {
+            'user_id': self.md.user_id,
+        })
+        self.assertTrue(any(
+            item.get('module') == 'approval'
+            for item in md_alerts.data['items']
+        ))
 
     @patch('hrms.push_notifications.send_mobile_push', return_value=True)
     def test_tl_approval_notifies_ceo_for_action_and_md_of_progress(self, push):
@@ -138,7 +170,32 @@ class DailyApprovalFlowTests(TestCase):
             title='Approval Request Approved by CEO',
             push_sent=True,
         ).exists())
-        self.assertEqual(push.call_count, 1)
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_role='ceo', title='Daily Report Approved', push_sent=True,
+        ).exists())
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_role='md', title='Daily Report Approved', push_sent=True,
+        ).exists())
+        self.assertEqual(push.call_count, 3)
+
+    @patch('hrms.push_notifications.send_mobile_push', return_value=True)
+    def test_tl_rejection_notifies_ceo_and_md(self, push):
+        submitted = self._submit(self.employee)
+        approval_id = submitted.data['approval']['id']
+        AppNotification.objects.all().delete()
+        push.reset_mock()
+
+        result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.tl.user_id, 'action': 'reject', 'comment': 'Needs revision',
+        }, format='json')
+
+        self.assertEqual(result.status_code, 200)
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_role='ceo', title='Daily Report Rejected', push_sent=True,
+        ).exists())
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_role='md', title='Daily Report Rejected', push_sent=True,
+        ).exists())
 
     def test_shared_notification_api_includes_and_reads_role_notifications(self):
         notification = AppNotification.objects.create(
@@ -178,6 +235,10 @@ class DailyApprovalFlowTests(TestCase):
         self.assertEqual(approval.scheduled_post, 'Yes')
         self.assertTrue(bool(approval.attachment))
         self.assertEqual(approval.current_stage, 0)
+        recipients = set(AppNotification.objects.filter(
+            reference_id=str(approval.id), module='approval',
+        ).values_list('recipient_role', flat=True))
+        self.assertTrue({'tl', 'ceo', 'md'}.issubset(recipients))
         self.assertEqual(push.call_count, 3)
 
     @patch('hrms.push_notifications.send_mobile_push', return_value=True)
@@ -201,6 +262,10 @@ class DailyApprovalFlowTests(TestCase):
         self.assertEqual(str(approval.leave_end_date), '2026-08-05')
         self.assertTrue(bool(approval.attachment))
         self.assertEqual(approval.current_stage, 0)
+        recipients = set(AppNotification.objects.filter(
+            reference_id=str(approval.id), module='approval',
+        ).values_list('recipient_role', flat=True))
+        self.assertTrue({'tl', 'ceo', 'md'}.issubset(recipients))
         self.assertEqual(push.call_count, 3)
 
     def test_leave_request_rejects_end_date_before_start_date(self):

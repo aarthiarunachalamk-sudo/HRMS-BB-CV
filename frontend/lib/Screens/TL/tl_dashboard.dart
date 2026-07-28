@@ -301,6 +301,9 @@ class _Dashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     final meetings = tlList(data, 'meetings');
+    final unreadNotifications = tlList(data, 'notifications')
+        .where((item) => item['is_read'] != true)
+        .toList();
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
       children: [
@@ -402,6 +405,36 @@ class _Dashboard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
+        if (unreadNotifications.isNotEmpty) ...[
+          TlCard(
+            child: InkWell(
+              onTap: () => open(13),
+              borderRadius: BorderRadius.circular(14),
+              child: Row(children: [
+                Stack(clipBehavior: Clip.none, children: [
+                  Icon(Icons.notifications_active_rounded, color: c.warning, size: 30),
+                  Positioned(
+                    right: -8,
+                    top: -8,
+                    child: CircleAvatar(
+                      radius: 9,
+                      backgroundColor: c.danger,
+                      child: Text('${unreadNotifications.length}', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                ]),
+                const SizedBox(width: 16),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${unreadNotifications.first['title'] ?? 'New notification'}', style: TextStyle(color: c.text, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 3),
+                  Text('${unreadNotifications.first['message'] ?? unreadNotifications.first['subtitle'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.muted, fontSize: 11)),
+                ])),
+                Icon(Icons.chevron_right_rounded, color: c.muted),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
         _ApprovalBoard(
           data: data,
           open: () => open(12),
@@ -5259,7 +5292,7 @@ class _Notifications extends StatelessWidget {
       icon: Icons.notifications_rounded,
       color: c.danger,
       onTap: (item) {
-        if (_isLeaveNotification(item)) {
+        if (_isLeaveNotification(item) || item['module'] == 'approval') {
           openApprovals();
         }
       },

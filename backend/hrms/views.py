@@ -3347,6 +3347,21 @@ def tl_dashboard_view(request):
     user_id = request.GET.get('user_id', '').strip()
     today = timezone.localdate()
     pending_leaves = _tl_pending_leave_items(user_id)
+    pending_team_reports = list(EmployeeApprovalRequest.objects.filter(
+        assigned_tl_user_id=user_id,
+        status='requested',
+        current_stage=0,
+    )[:100])
+    team_report_items = [
+        dict(
+            _approval_payload(item),
+            approval_type=item.request_type,
+            name=item.title,
+            employee_id=item.employee_id,
+            subtitle=f'Team report · {item.request_date}',
+        )
+        for item in pending_team_reports
+    ]
     approved_leaves = _tl_reviewed_leave_items(user_id, 'approved')
     rejected_leaves = _tl_reviewed_leave_items(user_id, 'rejected')
     team_employee_ids = _tl_team_employee_ids(user_id)
@@ -3369,14 +3384,18 @@ def tl_dashboard_view(request):
         for item in team
         if int(item.get('task_summary', {}).get('completion_rate') or 0) >= 75
     )
-    notifications = _notifications_for_user(user_id)
+    notification_queryset = AppNotification.objects.filter(
+        Q(recipient_user_id=user_id) | Q(recipient_role='tl')
+    )
+    notifications = [_notification_payload(item) for item in notification_queryset[:30]]
     return Response({
         'success': True,
         'my_tasks': len(tasks),
         'members_count': total_employees,
         'total_employees': total_employees,
         'projects_count': len(projects),
-        'pending_approvals': len(pending_leaves),
+        'pending_approvals': len(pending_leaves) + len(team_report_items),
+        'unread_notifications': notification_queryset.filter(is_read=False).count(),
         'tasks_progress': round((completed_tasks_count / created_tasks_count) * 100) if created_tasks_count else (100 if not tasks else 0),
         'tasks_done': completed_tasks_count,
         'tasks_total': created_tasks_count,
@@ -3389,7 +3408,7 @@ def tl_dashboard_view(request):
         'work_type': '',
         'calendar_month': today.strftime('%B %Y'),
         'calendar_day': today.day,
-        'approvals': pending_leaves,
+        'approvals': team_report_items + pending_leaves,
         'leaves': pending_leaves,
         'leaves_approved': approved_leaves,
         'leaves_rejected': rejected_leaves,
@@ -3401,7 +3420,7 @@ def tl_dashboard_view(request):
         'tasks': tasks,
         'projects': projects,
         'meetings': meetings,
-        'reports': _tl_report_items(total_employees, len(pending_leaves), len(meetings)),
+        'reports': _tl_report_items(total_employees, len(pending_leaves) + len(team_report_items), len(meetings)),
     })
 
 
@@ -3538,6 +3557,9 @@ def _ceo_home_payload(user_id=''):
     today = timezone.localdate()
     ceo = User.objects.filter(user_id=user_id, role='ceo').first()
     ceo_name = f'{ceo.first_name} {ceo.last_name}'.strip() or ceo.email if ceo else 'CEO'
+    notification_queryset = AppNotification.objects.filter(
+        Q(recipient_role='ceo') | Q(recipient_user_id=user_id)
+    )
     return {
         'success': True,
         'profile': {
@@ -3559,10 +3581,9 @@ def _ceo_home_payload(user_id=''):
         'critical_alerts': _ceo_critical_alerts(today),
         'notifications': [
             _notification_payload(item)
-            for item in AppNotification.objects.filter(
-                Q(recipient_role='ceo') | Q(recipient_user_id=user_id)
-            )[:30]
+            for item in notification_queryset[:30]
         ],
+        'unread_notifications': notification_queryset.filter(is_read=False).count(),
         'recent_members': _ceo_recent_members(user_id),
     }
 
@@ -3740,7 +3761,10 @@ def md_dashboard_view(request):
         'success': True,
         'total_revenue': revenue.get('revenue', 'Rs. 0'),
         'total_employees': _employee_count(),
-        'pending_approvals': EmployeeLeaveRequest.objects.filter(status='pending').count(),
+        'pending_approvals': (
+            EmployeeLeaveRequest.objects.filter(status='pending').count()
+            + EmployeeApprovalRequest.objects.filter(status='requested').count()
+        ),
         'meetings_today': meeting_queryset.filter(date_label=today_label).count(),
         'meetings': meetings,
         'participants': [
@@ -3757,6 +3781,10 @@ def md_dashboard_view(request):
                 Q(recipient_role=dashboard_role) | Q(recipient_user_id=user_id)
             )[:30]
         ],
+        'unread_notifications': AppNotification.objects.filter(
+            Q(recipient_role=dashboard_role) | Q(recipient_user_id=user_id),
+            is_read=False,
+        ).count(),
     })
 
 
@@ -3846,6 +3874,18 @@ def md_module_view(request, module):
         items = [
             {
                 'title': item.title,
+                'subtitle': f'{item.employee_id} · {item.request_type.replace("_", " ").title()}',
+                'detail': (
+                    'Waiting for Team Lead' if item.current_stage == 0
+                    else 'Waiting for CEO final approval'
+                ),
+                'module': 'approval',
+                'reference_id': str(item.id),
+            }
+            for item in EmployeeApprovalRequest.objects.filter(status='requested')[:50]
+        ] + [
+            {
+                'title': item.title,
                 'subtitle': f'{item.requester_name or item.requester_user_id} · {item.priority}',
                 'detail': item.status.title(),
             }
@@ -3870,7 +3910,20 @@ def md_module_view(request, module):
             for item in User.objects.filter(role__in=['ceo', 'md', 'director', 'hr', 'manager', 'tl'])[:50]
         ]
     elif module == 'critical-alerts':
+        dashboard_role = 'director' if '/director/' in request.path else 'md'
         items = [
+            {
+                'title': item.title,
+                'subtitle': item.message,
+                'detail': 'Unread' if not item.is_read else 'Read',
+                'module': item.module,
+                'reference_id': item.reference_id,
+                'is_read': item.is_read,
+            }
+            for item in AppNotification.objects.filter(
+                Q(recipient_role=dashboard_role) | Q(recipient_user_id=user_id)
+            )[:50]
+        ] + [
             {
                 'title': item.get('title', ''),
                 'subtitle': item.get('subtitle', ''),
