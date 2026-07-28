@@ -2926,6 +2926,12 @@ def hr_dashboard_view(request):
     on_leave_count = len(on_leave_ids)
     absent_today = max(total_employees - present_today - on_leave_count, 0)
 
+    recent_attendance = list(
+        EmployeeAttendanceRecord.objects.filter(
+            employee_id__in=[account.employee_id for account in all_active_accounts]
+        ).order_by('-attendance_date', '-updated_at')[:100]
+    )
+
     def _emp_list(accounts):
         result = []
         for acc in accounts:
@@ -2966,6 +2972,25 @@ def hr_dashboard_view(request):
             })
         return result
 
+    employee_details = {
+        item['id']: item for item in _emp_list(all_active_accounts)
+    }
+    attendance_records = []
+    for record in recent_attendance:
+        details = employee_details.get(record.employee_id, {})
+        attendance_records.append({
+            **details,
+            'employee_id': record.employee_id,
+            'name': details.get('name') or record.employee_id,
+            'subtitle': f"{record.attendance_date} · {record.status}",
+            'time': timezone.localtime(record.check_in).strftime('%I:%M %p') if record.check_in else '--',
+            'attendance_date': str(record.attendance_date),
+            'attendance_status': record.status,
+            'check_in': timezone.localtime(record.check_in).strftime('%I:%M %p') if record.check_in else '',
+            'check_out': timezone.localtime(record.check_out).strftime('%I:%M %p') if record.check_out else '',
+            'working_hours': record.working_hours or '',
+        })
+
     # Per-stat employee lists
     present_accounts = [a for a in all_active_accounts if a.employee_id in present_ids]
     on_leave_accounts = [a for a in all_active_accounts if a.employee_id in on_leave_ids]
@@ -2992,6 +3017,14 @@ def hr_dashboard_view(request):
         'present_today_list': _emp_list(present_accounts),
         'absent_today_list': _emp_list(absent_accounts),
         'on_leave_list': _emp_list(on_leave_accounts),
+        'employees': _emp_list(all_active_accounts),
+        'attendance_records': attendance_records,
+        'late_entry': EmployeeAttendanceRecord.objects.filter(
+            attendance_date=today, status__icontains='late'
+        ).count(),
+        'wfh': EmployeeAttendanceRecord.objects.filter(
+            attendance_date=today, status__in=['WFH', 'Work From Home', 'Hybrid']
+        ).count(),
         'leave_requests': pending_leaves,
         'leave_requests_approved': approved_leaves,
         'leave_requests_rejected': rejected_leaves,

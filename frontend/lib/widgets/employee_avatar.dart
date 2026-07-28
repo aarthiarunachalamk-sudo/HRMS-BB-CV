@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 /// Employee photo with an initials fallback for missing or broken URLs.
 class EmployeeAvatar extends StatelessWidget {
@@ -27,7 +28,11 @@ class EmployeeAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = (photoUrl ?? '').trim();
+    final rawUrl = (photoUrl ?? '').trim();
+    final apiUri = Uri.parse(ApiConfig.baseUrl);
+    final url = rawUrl.startsWith('/')
+        ? apiUri.replace(path: rawUrl, query: null, fragment: null).toString()
+        : rawUrl;
     final validUrl = url.isNotEmpty && url.toLowerCase() != 'null';
     final fallback = Center(
       child: Text(

@@ -89,10 +89,19 @@ class _EmployeeSelfieAttendanceScreenState
         }
         return;
       }
-      final frontCamera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.front,
-        orElse: () => cameras.first,
+      final frontCameras = cameras.where(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
       );
+      if (frontCameras.isEmpty) {
+        if (mounted) {
+          setState(
+            () => _error =
+                'A front-facing camera is required for selfie attendance.',
+          );
+        }
+        return;
+      }
+      final frontCamera = frontCameras.first;
       final controller = CameraController(
         frontCamera,
         ResolutionPreset.medium,

@@ -9,6 +9,11 @@ class HrMeetingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
+    final meetingNotifications = hrList(data, 'notifications').where((item) {
+      final module = '${item['module'] ?? ''}'.toLowerCase();
+      final text = '${item['title'] ?? ''} ${item['subtitle'] ?? item['message'] ?? ''}'.toLowerCase();
+      return module == 'meeting' || module == 'meetings' || text.contains('meeting');
+    });
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
       children: [
@@ -22,10 +27,10 @@ class HrMeetingsScreen extends StatelessWidget {
           })),
         ])),
         const SizedBox(height: 14),
-        if (hrList(data, 'notifications').isNotEmpty) ...[
+        if (meetingNotifications.isNotEmpty) ...[
           Text('TL Meeting Notifications', style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
-          ...hrList(data, 'notifications').map((item) => Padding(
+          ...meetingNotifications.map((item) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: HrListTile(icon: Icons.notifications_active_rounded, title: '${item['title']}', subtitle: '${item['subtitle']}', trailing: '${item['time']}', color: c.danger),
               )),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'hr_employee_detail_screen.dart';
 import 'hr_shared.dart';
 
 class HrEmployeesScreen extends StatelessWidget {
@@ -9,7 +10,9 @@ class HrEmployeesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
-    final employees = hrList(data, 'employees');
+    final employees = hrList(data, 'employees').isNotEmpty
+        ? hrList(data, 'employees')
+        : hrList(data, 'total_employees_list');
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
       children: [
@@ -25,6 +28,11 @@ class HrEmployeesScreen extends StatelessWidget {
                 subtitle: '${employee['subtitle']}',
                 trailing: '${employee['trailing']}',
                 color: c.primary,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => HrEmployeeDetailScreen(employee: employee),
+                  ),
+                ),
               ),
             )),
       ],
