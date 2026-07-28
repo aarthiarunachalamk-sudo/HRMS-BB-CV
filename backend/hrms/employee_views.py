@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone as datetime_timezone
+import json
 from pathlib import Path
 
 import cloudinary
@@ -29,6 +30,12 @@ def _approval_payload(item):
         {'stage': 1, 'label': 'Team Lead', 'roles': ['tl']},
         {'stage': 2, 'label': 'CEO Final Approval', 'roles': ['ceo']},
     ]
+    attachment_url = ''
+    if item.attachment:
+        try:
+            attachment_url = item.attachment.url
+        except (ValueError, AttributeError):
+            attachment_url = ''
     return {
         'id': item.id,
         'title': item.title,
@@ -41,6 +48,13 @@ def _approval_payload(item):
         'task_details': item.task_details,
         'expected_result': item.expected_result,
         'actual_result': item.actual_result,
+        'platforms': item.platforms,
+        'posted_by': item.posted_by,
+        'scheduled_post': item.scheduled_post,
+        'leave_type': item.leave_type,
+        'leave_end_date': str(item.leave_end_date) if item.leave_end_date else '',
+        'attachment_name': item.attachment.name.rsplit('/', 1)[-1] if item.attachment else '',
+        'attachment_url': attachment_url,
         'approvers': item.approvers,
         'decisions': item.decisions,
         'current_stage': item.current_stage,
@@ -70,14 +84,45 @@ def employee_approvals_view(request):
             )]
         return Response({'success': True, 'received': [_approval_payload(item) for item in received], 'sent': [_approval_payload(item) for item in sent]})
 
-    required = ['title', 'date', 'session', 'task_details', 'expected_result', 'actual_result']
+    request_type = str(request.data.get('request_type') or 'daily_report').strip()
+    if request_type not in {'daily_report', 'social_media_post', 'leave_request'}:
+        return Response({'success': False, 'message': 'Unsupported approval request type.'}, status=400)
+    if request_type == 'social_media_post':
+        required = ['title', 'date', 'posted_by', 'scheduled_post']
+    elif request_type == 'leave_request':
+        required = ['title', 'date', 'leave_end_date', 'leave_type', 'task_details']
+    else:
+        required = ['title', 'date', 'session', 'task_details', 'expected_result', 'actual_result']
     missing = [key for key in required if not str(request.data.get(key) or '').strip()]
     if missing:
         return Response({'success': False, 'message': 'Complete all required fields.'}, status=400)
+    platforms = request.data.get('platforms', [])
+    if isinstance(platforms, str):
+        try:
+            platforms = json.loads(platforms)
+        except json.JSONDecodeError:
+            platforms = []
+    if request_type == 'social_media_post':
+        if not isinstance(platforms, list) or not any(str(value).strip() for value in platforms):
+            return Response({'success': False, 'message': 'Select at least one social media platform.'}, status=400)
+        if request.data.get('scheduled_post') not in {'Yes', 'No', 'Maybe'}:
+            return Response({'success': False, 'message': 'Select whether this is a scheduled post.'}, status=400)
+        if request.FILES.get('attachment') is None:
+            return Response({'success': False, 'message': 'Attachment is required.'}, status=400)
+    if request_type == 'leave_request' and request.FILES.get('attachment') is None:
+        return Response({'success': False, 'message': 'Attachment is required.'}, status=400)
     try:
         request_date = date.fromisoformat(str(request.data['date']))
     except ValueError:
         return Response({'success': False, 'message': 'Select a valid date.'}, status=400)
+    leave_end_date = None
+    if request_type == 'leave_request':
+        try:
+            leave_end_date = date.fromisoformat(str(request.data['leave_end_date']))
+        except ValueError:
+            return Response({'success': False, 'message': 'Select a valid leave end date.'}, status=400)
+        if leave_end_date < request_date:
+            return Response({'success': False, 'message': 'Leave end date cannot be before start date.'}, status=400)
     sender = User.objects.filter(user_id=user_id).first()
     account = EmployeeAccount.objects.filter(employee_id=user_id).first()
     sender_role = sender.role if sender else 'employee'
@@ -104,22 +149,45 @@ def employee_approvals_view(request):
         sender_role=sender_role,
         department=department,
         assigned_tl_user_id=assigned_tl.user_id,
+        request_type=request_type,
         title=str(request.data['title']).strip(),
         request_date=request_date,
-        session=str(request.data['session']).strip(),
-        task_details=str(request.data['task_details']).strip(),
-        expected_result=str(request.data['expected_result']).strip(),
-        actual_result=str(request.data['actual_result']).strip(),
+        session=str(request.data.get('session') or 'Not applicable').strip(),
+        task_details=str(request.data.get('task_details') or 'Social media post approval').strip(),
+        expected_result=str(request.data.get('expected_result') or 'Approved content for selected platforms').strip(),
+        actual_result=str(request.data.get('actual_result') or 'Pending approval').strip(),
+        platforms=[str(value).strip() for value in platforms if str(value).strip()],
+        posted_by=str(request.data.get('posted_by') or '').strip(),
+        scheduled_post=str(request.data.get('scheduled_post') or '').strip(),
+        leave_type=str(request.data.get('leave_type') or '').strip(),
+        leave_end_date=leave_end_date,
+        attachment=request.FILES.get('attachment'),
         approvers=['Team Lead', 'CEO'],
     )
-    AppNotification.objects.create(
-        recipient_user_id=assigned_tl.user_id,
-        title='Daily Report Approval',
+    request_label = {
+        'social_media_post': 'Social Media Post',
+        'leave_request': 'Leave Request',
+    }.get(request_type, 'Daily Report')
+    _create_notification(
+        user_id=assigned_tl.user_id,
+        title=f'{request_label} Approval',
         message=f'{item.title} is waiting for Team Lead approval.',
         notification_type='info',
         module='approval',
         reference_id=str(item.id),
     )
+    for leadership_role in ('md', 'ceo'):
+        _create_notification(
+            role=leadership_role,
+            title=f'New {request_label} Approval',
+            message=(
+                f'{item.title} was submitted for approval and is awaiting '
+                'Team Lead review.'
+            ),
+            notification_type='info',
+            module='approval',
+            reference_id=str(item.id),
+        )
     return Response({'success': True, 'message': 'Approval request sent.', 'approval': _approval_payload(item)}, status=201)
 
 
@@ -160,10 +228,30 @@ def employee_approval_action_view(request, pk):
         item.status = 'rejected'
     elif role == 'tl':
         item.current_stage = 1
-        AppNotification.objects.create(
-            recipient_role='ceo',
-            title='Daily Report Final Approval',
+        request_label = {
+            'social_media_post': 'Social Media Post',
+            'leave_request': 'Leave Request',
+        }.get(item.request_type, 'Daily Report')
+        _create_notification(
+            user_id=item.employee_id,
+            title=f'{request_label} Approved by Team Lead',
+            message=f'{item.title} passed Team Lead approval and was sent to CEO for final approval.',
+            notification_type='success',
+            module='approval',
+            reference_id=str(item.id),
+        )
+        _create_notification(
+            role='ceo',
+            title=f'{request_label} Final Approval',
             message=f'{item.title} passed Team Lead review and needs CEO approval.',
+            notification_type='info',
+            module='approval',
+            reference_id=str(item.id),
+        )
+        _create_notification(
+            role='md',
+            title=f'{request_label} Passed Team Lead Review',
+            message=f'{item.title} is now awaiting final CEO approval.',
             notification_type='info',
             module='approval',
             reference_id=str(item.id),
@@ -173,10 +261,11 @@ def employee_approval_action_view(request, pk):
         item.current_stage = 2
     item.save(update_fields=['decisions', 'status', 'current_stage', 'updated_at'])
     if item.status in {'approved', 'rejected'}:
-        AppNotification.objects.create(
-            recipient_user_id=item.employee_id,
-            title=f'Approval Request {item.status.title()}',
-            message=f'{item.title} was {item.status}.',
+        reviewer_label = 'Team Lead' if role == 'tl' else 'CEO'
+        _create_notification(
+            user_id=item.employee_id,
+            title=f'Approval Request {item.status.title()} by {reviewer_label}',
+            message=f'{item.title} was {item.status} by {reviewer_label}.',
             notification_type='success' if item.status == 'approved' else 'error',
             module='approval',
             reference_id=str(item.id),

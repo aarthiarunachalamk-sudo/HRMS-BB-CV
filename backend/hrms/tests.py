@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.test import SimpleTestCase, TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.cache import cache
 from rest_framework import serializers
 from rest_framework.test import APIClient, APIRequestFactory
@@ -14,7 +15,7 @@ from .serializers import (
 )
 from .views import _attendance_credit, _working_dates
 from . import views
-from .models import User, EmployeeApprovalRequest
+from .models import AppNotification, User, EmployeeApprovalRequest
 
 
 class DailyApprovalFlowTests(TestCase):
@@ -76,6 +77,146 @@ class DailyApprovalFlowTests(TestCase):
         self.assertEqual(submitted.status_code, 201)
         assigned = submitted.data['approval']['assigned_tl_user_id']
         self.assertNotEqual(assigned, self.tl.user_id)
+
+    @patch('hrms.push_notifications.send_mobile_push', return_value=True)
+    def test_submission_notifies_tl_md_and_ceo_in_app_and_by_push(self, push):
+        submitted = self._submit(self.employee)
+        self.assertEqual(submitted.status_code, 201)
+        approval_id = str(submitted.data['approval']['id'])
+        notifications = AppNotification.objects.filter(
+            module='approval', reference_id=approval_id,
+        )
+        self.assertTrue(notifications.filter(recipient_user_id=self.tl.user_id).exists())
+        self.assertTrue(notifications.filter(recipient_role='md').exists())
+        self.assertTrue(notifications.filter(recipient_role='ceo').exists())
+        self.assertEqual(notifications.filter(push_sent=True).count(), 3)
+        self.assertEqual(push.call_count, 3)
+
+    @patch('hrms.push_notifications.send_mobile_push', return_value=True)
+    def test_tl_approval_notifies_ceo_for_action_and_md_of_progress(self, push):
+        submitted = self._submit(self.employee)
+        approval_id = submitted.data['approval']['id']
+        AppNotification.objects.all().delete()
+        push.reset_mock()
+
+        result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.tl.user_id, 'action': 'approve',
+        }, format='json')
+
+        self.assertEqual(result.status_code, 200)
+        notifications = AppNotification.objects.filter(reference_id=str(approval_id))
+        self.assertTrue(notifications.filter(
+            recipient_role='ceo', title='Daily Report Final Approval', push_sent=True,
+        ).exists())
+        self.assertTrue(notifications.filter(
+            recipient_role='md', title='Daily Report Passed Team Lead Review', push_sent=True,
+        ).exists())
+        self.assertTrue(notifications.filter(
+            recipient_user_id=self.employee.user_id,
+            title='Daily Report Approved by Team Lead',
+            push_sent=True,
+        ).exists())
+        self.assertEqual(push.call_count, 3)
+
+    @patch('hrms.push_notifications.send_mobile_push', return_value=True)
+    def test_ceo_final_action_notifies_employee(self, push):
+        submitted = self._submit(self.employee)
+        approval_id = submitted.data['approval']['id']
+        self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.tl.user_id, 'action': 'approve',
+        }, format='json')
+        AppNotification.objects.all().delete()
+        push.reset_mock()
+
+        result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.ceo.user_id, 'action': 'approve',
+        }, format='json')
+
+        self.assertEqual(result.status_code, 200)
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_user_id=self.employee.user_id,
+            title='Approval Request Approved by CEO',
+            push_sent=True,
+        ).exists())
+        self.assertEqual(push.call_count, 1)
+
+    def test_shared_notification_api_includes_and_reads_role_notifications(self):
+        notification = AppNotification.objects.create(
+            recipient_role='ceo', title='Final approval required',
+            message='A report is ready.', module='approval', reference_id='123',
+        )
+
+        listed = self.client.get('/api/notifications/', {'user_id': self.ceo.user_id})
+        self.assertEqual(listed.status_code, 200)
+        self.assertIn(notification.id, [item['id'] for item in listed.data['notifications']])
+
+        marked = self.client.post(f'/api/notifications/{notification.id}/read/', {
+            'user_id': self.ceo.user_id,
+        }, format='json')
+        self.assertEqual(marked.status_code, 200)
+        notification.refresh_from_db()
+        self.assertTrue(notification.is_read)
+
+    @patch('hrms.push_notifications.send_mobile_push', return_value=True)
+    def test_employee_can_submit_social_media_post_for_tl_ceo_flow(self, push):
+        submitted = self.client.post('/api/employee/approvals/', {
+            'user_id': self.employee.user_id,
+            'request_type': 'social_media_post',
+            'title': 'Product launch post',
+            'date': '2026-07-30',
+            'platforms': '["Instagram", "LinkedIn"]',
+            'posted_by': 'Employee Name',
+            'scheduled_post': 'Yes',
+            'attachment': SimpleUploadedFile('post.jpg', b'fake-image', content_type='image/jpeg'),
+        }, format='multipart')
+
+        self.assertEqual(submitted.status_code, 201)
+        approval = EmployeeApprovalRequest.objects.get(pk=submitted.data['approval']['id'])
+        self.assertEqual(approval.request_type, 'social_media_post')
+        self.assertEqual(approval.platforms, ['Instagram', 'LinkedIn'])
+        self.assertEqual(approval.posted_by, 'Employee Name')
+        self.assertEqual(approval.scheduled_post, 'Yes')
+        self.assertTrue(bool(approval.attachment))
+        self.assertEqual(approval.current_stage, 0)
+        self.assertEqual(push.call_count, 3)
+
+    @patch('hrms.push_notifications.send_mobile_push', return_value=True)
+    def test_employee_can_submit_leave_request_for_tl_ceo_flow(self, push):
+        submitted = self.client.post('/api/employee/approvals/', {
+            'user_id': self.employee.user_id,
+            'request_type': 'leave_request',
+            'title': 'Family event leave',
+            'leave_type': 'Casual Leave',
+            'task_details': 'Attending a family event.',
+            'date': '2026-08-03',
+            'leave_end_date': '2026-08-05',
+            'attachment': SimpleUploadedFile('proof.jpg', b'fake-image', content_type='image/jpeg'),
+        }, format='multipart')
+
+        self.assertEqual(submitted.status_code, 201)
+        approval = EmployeeApprovalRequest.objects.get(pk=submitted.data['approval']['id'])
+        self.assertEqual(approval.request_type, 'leave_request')
+        self.assertEqual(approval.leave_type, 'Casual Leave')
+        self.assertEqual(str(approval.request_date), '2026-08-03')
+        self.assertEqual(str(approval.leave_end_date), '2026-08-05')
+        self.assertTrue(bool(approval.attachment))
+        self.assertEqual(approval.current_stage, 0)
+        self.assertEqual(push.call_count, 3)
+
+    def test_leave_request_rejects_end_date_before_start_date(self):
+        submitted = self.client.post('/api/employee/approvals/', {
+            'user_id': self.employee.user_id,
+            'request_type': 'leave_request',
+            'title': 'Invalid leave dates',
+            'leave_type': 'Casual Leave',
+            'task_details': 'Invalid range.',
+            'date': '2026-08-05',
+            'leave_end_date': '2026-08-03',
+            'attachment': SimpleUploadedFile('proof.jpg', b'fake-image', content_type='image/jpeg'),
+        }, format='multipart')
+
+        self.assertEqual(submitted.status_code, 400)
+        self.assertIn('cannot be before', submitted.data['message'])
 
 
 class PhonePrivacyTests(SimpleTestCase):

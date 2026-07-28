@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'employee_service.dart';
 import 'employee_shared.dart';
@@ -158,9 +159,23 @@ class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
         const SizedBox(height: 5),
         Text('$status • ${widget.item['date'] ?? ''} • ${widget.item['session'] ?? ''}'),
         const SizedBox(height: 20),
-        _detail('Task details', widget.item['task_details']),
-        _detail('Expected result', widget.item['expected_result']),
-        _detail('Actual result', widget.item['actual_result']),
+        if (widget.item['request_type'] == 'social_media_post') ...[
+          _detail('Platforms', widget.item['platforms'] is List ? (widget.item['platforms'] as List).join(', ') : '-'),
+          _detail('Date to be posted', widget.item['date']),
+          _detail('To be posted by', widget.item['posted_by']),
+          _detail('Scheduled post', widget.item['scheduled_post']),
+          _detail('Attachment', widget.item['attachment_name']),
+        ] else if (widget.item['request_type'] == 'leave_request') ...[
+          _detail('Leave type', widget.item['leave_type']),
+          _detail('Details about the leave', widget.item['task_details']),
+          _detail('Leave start date', widget.item['date']),
+          _detail('Leave end date', widget.item['leave_end_date']),
+          _detail('Attachment', widget.item['attachment_name']),
+        ] else ...[
+          _detail('Task details', widget.item['task_details']),
+          _detail('Expected result', widget.item['expected_result']),
+          _detail('Actual result', widget.item['actual_result']),
+        ],
         const SizedBox(height: 8),
         const Text('Approval flow', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
         const SizedBox(height: 10),
@@ -213,8 +228,8 @@ class _ApprovalTemplatesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final templates = [
       ('Daily Reports', 'Daily work report for employees', Icons.today_rounded, true),
-      ('Social Media Posts', 'Social media post approval', Icons.campaign_rounded, false),
-      ('Leave Request', 'Employee leave approval', Icons.beach_access_rounded, false),
+      ('Social Media Posts', 'Social media post approval', Icons.campaign_rounded, true),
+      ('Leave Request', 'Employee leave approval', Icons.beach_access_rounded, true),
       ('Notice Period Serving', 'Notice period workflow', Icons.event_busy_rounded, false),
       ('Project Documentation', 'Project document approval', Icons.folder_copy_rounded, false),
       ('Purchase Order', 'Purchase order approval', Icons.shopping_cart_rounded, false),
@@ -235,7 +250,13 @@ class _ApprovalTemplatesScreen extends StatelessWidget {
               subtitle: Text(template.$2),
               trailing: template.$4 ? const Icon(Icons.chevron_right_rounded) : const Text('Soon'),
               onTap: template.$4 ? () async {
-                final sent = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => _DailyApprovalForm(userId: userId, service: service)));
+                final social = template.$1 == 'Social Media Posts';
+                final leave = template.$1 == 'Leave Request';
+                final sent = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => social
+                    ? _SocialMediaApprovalForm(userId: userId, service: service)
+                    : leave
+                        ? _LeaveApprovalForm(userId: userId, service: service)
+                        : _DailyApprovalForm(userId: userId, service: service)));
                 if (sent == true && context.mounted) Navigator.of(context).pop(true);
               } : null,
             ),
@@ -354,6 +375,219 @@ class _DailyApprovalFormState extends State<_DailyApprovalForm> {
       TextFormField(controller: _tasks, validator: _required, onChanged: (_) => setState(() {}), minLines: 3, maxLines: 5, decoration: _fieldDecoration('Tasks Details - Brief Description *', 'Enter your response')), const SizedBox(height: 16),
       TextFormField(controller: _expected, validator: _required, onChanged: (_) => setState(() {}), minLines: 2, maxLines: 3, decoration: _fieldDecoration('Expected Result *', 'Enter your response')), const SizedBox(height: 16),
       TextFormField(controller: _actual, validator: _required, onChanged: (_) => setState(() {}), minLines: 2, maxLines: 3, decoration: _fieldDecoration('Actual Result (With Justification) *', 'Enter your response')), const SizedBox(height: 24),
+    ])),
+  );
+}
+
+class _SocialMediaApprovalForm extends StatefulWidget {
+  final String userId;
+  final EmployeeService service;
+  const _SocialMediaApprovalForm({required this.userId, required this.service});
+  @override State<_SocialMediaApprovalForm> createState() => _SocialMediaApprovalFormState();
+}
+
+class _SocialMediaApprovalFormState extends State<_SocialMediaApprovalForm> {
+  static const _options = ['Facebook', 'WhatsApp', 'Instagram', 'LinkedIn', 'Snapchat', 'X (formerly Twitter)', 'YouTube Shorts', 'Other'];
+  final _formKey = GlobalKey<FormState>();
+  final _title = TextEditingController();
+  final _postedBy = TextEditingController();
+  final _other = TextEditingController();
+  final Set<String> _platforms = {};
+  DateTime? _date;
+  String? _scheduled;
+  XFile? _attachment;
+  bool _saving = false;
+
+  bool get _canSend => !_saving && _title.text.trim().isNotEmpty && _postedBy.text.trim().isNotEmpty &&
+      _date != null && _scheduled != null && _platforms.isNotEmpty && _attachment != null &&
+      (!_platforms.contains('Other') || _other.text.trim().isNotEmpty);
+
+  @override void dispose() { _title.dispose(); _postedBy.dispose(); _other.dispose(); super.dispose(); }
+  String? _required(String? value) => value == null || value.trim().isEmpty ? 'Required' : null;
+  String _apiDate(DateTime value) => '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+  String _displayDate(DateTime value) => '${value.day.toString().padLeft(2, '0')}-${value.month.toString().padLeft(2, '0')}-${value.year}';
+
+  Future<void> _pickAttachment() async {
+    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (file != null && mounted) setState(() => _attachment = file);
+  }
+
+  Future<void> _send() async {
+    if (!_formKey.currentState!.validate() || !_canSend) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Complete all required fields and add an attachment.')));
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await widget.service.submitSocialMediaApproval(widget.userId, {
+        'request_type': 'social_media_post',
+        'title': _title.text.trim(),
+        'date': _apiDate(_date!),
+        'platforms': _platforms.map((value) => value == 'Other' ? _other.text.trim() : value).toList(),
+        'posted_by': _postedBy.text.trim(),
+        'scheduled_post': _scheduled!,
+      }, _attachment!.path);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to send: $error')));
+    } finally { if (mounted) setState(() => _saving = false); }
+  }
+
+  InputDecoration _decoration(String label, String hint) => InputDecoration(
+    labelText: label, hintText: hint, filled: true,
+    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(110),
+    border: const OutlineInputBorder(borderSide: BorderSide.none),
+  );
+
+  @override Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Social Media Posts')),
+    bottomNavigationBar: SafeArea(child: Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 16, 12),
+      child: Row(children: [
+        TextButton.icon(onPressed: _saving ? null : () => Navigator.pop(context, false), icon: const Icon(Icons.chevron_left), label: const Text('Back')),
+        const Spacer(),
+        SizedBox(width: 120, child: FilledButton(onPressed: _canSend ? _send : null, child: Text(_saving ? 'Sending...' : 'Send'))),
+      ]),
+    )),
+    body: Form(key: _formKey, child: ListView(padding: const EdgeInsets.all(18), children: [
+      const Text('BBT Approvals - Social Media Posts Approval Flow', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+      const Text('Social Media Posts - Approval Flow for all Platforms'),
+      const SizedBox(height: 18),
+      TextFormField(controller: _title, validator: _required, onChanged: (_) => setState(() {}), decoration: _decoration('Name of request *', 'Use a name that is easy to understand')),
+      const SizedBox(height: 16),
+      const Text('Approvers *', style: TextStyle(fontWeight: FontWeight.w800)),
+      const Wrap(spacing: 7, runSpacing: 7, children: [Chip(label: Text('1  Digital Marketing Team Lead')), Chip(label: Text('2  CEO • Final')), Chip(label: Text('MD • Notified'))]),
+      const SizedBox(height: 16),
+      const Text('Platforms *', style: TextStyle(fontWeight: FontWeight.w800)),
+      ..._options.map((platform) => CheckboxListTile(
+        contentPadding: EdgeInsets.zero, dense: true, value: _platforms.contains(platform), title: Text(platform),
+        onChanged: (checked) => setState(() { checked == true ? _platforms.add(platform) : _platforms.remove(platform); }),
+      )),
+      if (_platforms.contains('Other')) TextFormField(controller: _other, validator: _required, onChanged: (_) => setState(() {}), decoration: _decoration('Other platform *', 'Enter platform name')),
+      const SizedBox(height: 10),
+      ListTile(contentPadding: EdgeInsets.zero, title: const Text('Date to be Posted *'), subtitle: Text(_date == null ? 'Select a date' : _displayDate(_date!)), trailing: const Icon(Icons.calendar_month), onTap: () async {
+        final now = DateTime.now();
+        final value = await showDatePicker(context: context, initialDate: now, firstDate: DateTime(now.year, now.month, now.day), lastDate: now.add(const Duration(days: 365)));
+        if (value != null) setState(() => _date = value);
+      }),
+      TextFormField(controller: _postedBy, validator: _required, onChanged: (_) => setState(() {}), decoration: _decoration('To be posted by (Employee Name) *', 'Enter employee name')),
+      const SizedBox(height: 16),
+      const Text('Is it Scheduled post? *', style: TextStyle(fontWeight: FontWeight.w800)),
+      ...['Yes', 'No', 'Maybe'].map((value) => RadioListTile<String>(contentPadding: EdgeInsets.zero, value: value, groupValue: _scheduled, title: Text(value), onChanged: (selected) => setState(() => _scheduled = selected))),
+      const SizedBox(height: 8),
+      ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.attach_file), title: const Text('Attachment *'), subtitle: Text(_attachment?.name ?? 'Add image attachment'), trailing: TextButton(onPressed: _saving ? null : _pickAttachment, child: Text(_attachment == null ? 'Add attachment' : 'Change'))),
+      const SizedBox(height: 24),
+    ])),
+  );
+}
+
+class _LeaveApprovalForm extends StatefulWidget {
+  final String userId;
+  final EmployeeService service;
+  const _LeaveApprovalForm({required this.userId, required this.service});
+  @override State<_LeaveApprovalForm> createState() => _LeaveApprovalFormState();
+}
+
+class _LeaveApprovalFormState extends State<_LeaveApprovalForm> {
+  static const _leaveTypes = ['Casual Leave', 'Sick Leave', 'Earned Leave', 'Early Off', 'Emergency Leave', 'Others'];
+  final _formKey = GlobalKey<FormState>();
+  final _title = TextEditingController();
+  final _details = TextEditingController();
+  String? _leaveType;
+  DateTime? _startDate;
+  DateTime? _endDate;
+  XFile? _attachment;
+  bool _saving = false;
+
+  bool get _canSend => !_saving && _title.text.trim().isNotEmpty && _details.text.trim().isNotEmpty &&
+      _leaveType != null && _startDate != null && _endDate != null && _attachment != null;
+
+  @override void dispose() { _title.dispose(); _details.dispose(); super.dispose(); }
+  String? _required(String? value) => value == null || value.trim().isEmpty ? 'Required' : null;
+  String _apiDate(DateTime value) => '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+  String _displayDate(DateTime value) => '${value.day.toString().padLeft(2, '0')}-${value.month.toString().padLeft(2, '0')}-${value.year}';
+
+  Future<void> _pickAttachment() async {
+    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 90);
+    if (file != null && mounted) setState(() => _attachment = file);
+  }
+
+  Future<DateTime?> _pickDate(DateTime? initial, {DateTime? firstDate}) {
+    final now = DateTime.now();
+    return showDatePicker(
+      context: context,
+      initialDate: initial ?? firstDate ?? now,
+      firstDate: firstDate ?? DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 730)),
+    );
+  }
+
+  Future<void> _send() async {
+    if (!_formKey.currentState!.validate() || !_canSend) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Complete all required fields and add an attachment.')));
+      return;
+    }
+    if (_endDate!.isBefore(_startDate!)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Leave end date cannot be before start date.')));
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await widget.service.submitApprovalWithAttachment(widget.userId, {
+        'request_type': 'leave_request',
+        'title': _title.text.trim(),
+        'leave_type': _leaveType!,
+        'task_details': _details.text.trim(),
+        'date': _apiDate(_startDate!),
+        'leave_end_date': _apiDate(_endDate!),
+      }, _attachment!.path);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to send: $error')));
+    } finally { if (mounted) setState(() => _saving = false); }
+  }
+
+  InputDecoration _decoration(String label, String hint) => InputDecoration(
+    labelText: label, hintText: hint, filled: true,
+    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha(110),
+    border: const OutlineInputBorder(borderSide: BorderSide.none),
+  );
+
+  @override Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Leave Request')),
+    bottomNavigationBar: SafeArea(child: Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 16, 12),
+      child: Row(children: [
+        TextButton.icon(onPressed: _saving ? null : () => Navigator.pop(context, false), icon: const Icon(Icons.chevron_left), label: const Text('Back')),
+        const Spacer(),
+        SizedBox(width: 120, child: FilledButton(onPressed: _canSend ? _send : null, child: Text(_saving ? 'Sending...' : 'Send'))),
+      ]),
+    )),
+    body: Form(key: _formKey, child: ListView(padding: const EdgeInsets.all(18), children: [
+      const Text('BBT Approvals - Leave Request', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+      const Text('All Leave Approvals for the organization'),
+      const SizedBox(height: 18),
+      TextFormField(controller: _title, validator: _required, onChanged: (_) => setState(() {}), decoration: _decoration('Name of request *', 'Use a name that is easy to understand')),
+      const SizedBox(height: 16),
+      const Text('Approvers *', style: TextStyle(fontWeight: FontWeight.w800)),
+      const Wrap(spacing: 7, runSpacing: 7, children: [Chip(label: Text('1  Department Team Lead')), Chip(label: Text('2  CEO • Final')), Chip(label: Text('MD • Notified'))]),
+      const SizedBox(height: 16),
+      const Text('Leave Type *', style: TextStyle(fontWeight: FontWeight.w800)),
+      ..._leaveTypes.map((value) => RadioListTile<String>(contentPadding: EdgeInsets.zero, dense: true, value: value, groupValue: _leaveType, title: Text(value), onChanged: (selected) => setState(() => _leaveType = selected))),
+      const SizedBox(height: 8),
+      TextFormField(controller: _details, validator: _required, onChanged: (_) => setState(() {}), minLines: 2, maxLines: 4, decoration: _decoration('Details about the Leave *', 'Enter your response')),
+      const SizedBox(height: 12),
+      ListTile(contentPadding: EdgeInsets.zero, title: const Text('Leave Start Date *'), subtitle: Text(_startDate == null ? 'Select a date' : _displayDate(_startDate!)), trailing: const Icon(Icons.calendar_month), onTap: () async {
+        final value = await _pickDate(_startDate);
+        if (value != null) setState(() { _startDate = value; if (_endDate != null && _endDate!.isBefore(value)) _endDate = value; });
+      }),
+      ListTile(contentPadding: EdgeInsets.zero, title: const Text('Leave End Date *'), subtitle: Text(_endDate == null ? 'Select a date' : _displayDate(_endDate!)), trailing: const Icon(Icons.calendar_month), onTap: _startDate == null ? null : () async {
+        final value = await _pickDate(_endDate, firstDate: _startDate);
+        if (value != null) setState(() => _endDate = value);
+      }),
+      const SizedBox(height: 8),
+      ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.attach_file), title: const Text('Attachment *'), subtitle: Text(_attachment?.name ?? 'Add supporting image'), trailing: TextButton(onPressed: _saving ? null : _pickAttachment, child: Text(_attachment == null ? 'Add attachment' : 'Change'))),
+      const SizedBox(height: 24),
     ])),
   );
 }

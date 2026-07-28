@@ -75,7 +75,7 @@ class _CeoApprovalsScreenState extends State<CeoApprovalsScreen> {
               onTap: () async {
                 await Navigator.of(context).push(
                   MaterialPageRoute(
-                  builder: (_) => map['approval_type'] == 'daily_report'
+                  builder: (_) => const {'daily_report', 'social_media_post', 'leave_request'}.contains(map['approval_type'])
                       ? EmployeeApprovalDetailScreen(
                           item: map,
                           userId: widget.userId,

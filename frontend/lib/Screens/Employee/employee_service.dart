@@ -149,6 +149,34 @@ class EmployeeService {
     return _post('/approvals/', {'user_id': userId, ...request});
   }
 
+  Future<Map<String, dynamic>> submitSocialMediaApproval(
+    String userId,
+    Map<String, dynamic> fields,
+    String attachmentPath,
+  ) async {
+    return submitApprovalWithAttachment(userId, fields, attachmentPath);
+  }
+
+  Future<Map<String, dynamic>> submitApprovalWithAttachment(
+    String userId,
+    Map<String, dynamic> fields,
+    String attachmentPath,
+  ) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/approvals/'));
+    request.fields['user_id'] = userId;
+    for (final entry in fields.entries) {
+      request.fields[entry.key] = entry.value is List
+          ? jsonEncode(entry.value)
+          : '${entry.value}';
+    }
+    request.files.add(await http.MultipartFile.fromPath('attachment', attachmentPath));
+    final response = await http.Response.fromStream(await request.send());
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return _decodeMap(response, 'Employee approvals API returned invalid data');
+    }
+    throw Exception(_responseError(response, 'Employee approvals API failed'));
+  }
+
   Future<Map<String, dynamic>> updateApproval(
     String userId,
     Object approvalId,

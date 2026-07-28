@@ -3972,7 +3972,7 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
   }
 
   Future<void> _openDetails(Map<String, dynamic> leave) async {
-    if (leave['approval_type'] == 'daily_report') {
+    if (const {'daily_report', 'social_media_post', 'leave_request'}.contains(leave['approval_type'])) {
       final changed = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => EmployeeApprovalDetailScreen(

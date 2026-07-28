@@ -3484,7 +3484,7 @@ def tl_approvals_view(request):
     def daily_item(item):
         return dict(
             _approval_payload(item),
-            approval_type='daily_report',
+            approval_type=item.request_type,
             name=item.title,
             employee_id=item.employee_id,
             subtitle=f'{item.request_date} · {item.session}',
@@ -3967,7 +3967,7 @@ def ceo_approvals_view(request):
     daily_pending = [
         dict(
             _approval_payload(item),
-            approval_type='daily_report',
+            approval_type=item.request_type,
             subtitle=f'Daily report · {item.request_date} · TL approved',
         )
         for item in EmployeeApprovalRequest.objects.filter(
@@ -3977,7 +3977,7 @@ def ceo_approvals_view(request):
     daily_history = [
         dict(
             _approval_payload(item),
-            approval_type='daily_report',
+            approval_type=item.request_type,
             subtitle=f'Daily report · {item.request_date}',
         )
         for item in EmployeeApprovalRequest.objects.filter(
@@ -6098,7 +6098,18 @@ def admin_create_employee_view(request):
 def notifications_view(request):
     user_id = request.query_params.get('user_id') or ''
     role = request.query_params.get('role') or ''
-    notifications = _notifications_for_user(user_id) if user_id else _notifications_for_role(role)
+    if user_id:
+        user = User.objects.filter(user_id=user_id).only('role').first()
+        role = role or (user.role if user else '')
+        target = Q(recipient_user_id=user_id)
+        if role:
+            target |= Q(recipient_role=role)
+        notifications = [
+            _notification_payload(item)
+            for item in AppNotification.objects.filter(target)[:30]
+        ]
+    else:
+        notifications = _notifications_for_role(role)
     return Response({'success': True, 'notifications': notifications})
 
 
@@ -6106,6 +6117,9 @@ def notifications_view(request):
 def notification_read_view(request, pk):
     user_id = (request.data.get('user_id') or '').strip()
     role = (request.data.get('role') or '').strip()
+    if user_id and not role:
+        user = User.objects.filter(user_id=user_id).only('role').first()
+        role = user.role if user else ''
     query = Q(pk=pk)
     target = Q()
     if user_id:
