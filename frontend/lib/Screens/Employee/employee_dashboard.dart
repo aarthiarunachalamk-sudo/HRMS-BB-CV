@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
@@ -41,7 +43,8 @@ class EmployeeDashboard extends StatefulWidget {
   State<EmployeeDashboard> createState() => _EmployeeDashboardState();
 }
 
-class _EmployeeDashboardState extends State<EmployeeDashboard> {
+class _EmployeeDashboardState extends State<EmployeeDashboard>
+    with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final EmployeeService _service = EmployeeService();
   final ImagePicker _imagePicker = ImagePicker();
@@ -49,16 +52,75 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   int _selectedIndex = 0;
   bool _loading = true;
   String? _profileImagePath;
+  Timer? _refreshTimer;
+  bool _refreshing = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _data = EmployeeDashboardData.fallback(
       email: widget.email,
       firstName: widget.firstName,
       userId: widget.userId,
     );
     _load();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _refreshDashboardSilently(),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshDashboardSilently();
+    }
+  }
+
+  Future<void> _refreshDashboardSilently() async {
+    if (_refreshing || !mounted) return;
+    _refreshing = true;
+    try {
+      final data = await _service.fetchDashboard(widget.userId, widget.email);
+      if (!mounted) return;
+      final existingIds = _data.notifications
+          .map((item) => '${item['id'] ?? ''}')
+          .toSet();
+      Map<String, dynamic>? newApprovalNotification;
+      for (final item in data.notifications) {
+        if ('${item['module'] ?? ''}'.toLowerCase() == 'approval' &&
+            item['is_read'] != true &&
+            !existingIds.contains('${item['id'] ?? ''}')) {
+          newApprovalNotification = item;
+          break;
+        }
+      }
+      setState(() => _data = data);
+      if (newApprovalNotification != null && mounted) {
+        final notification = newApprovalNotification;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${notification['message'] ?? notification['title'] ?? 'Approval updated'}'),
+            action: SnackBarAction(
+              label: 'View',
+              onPressed: () => _openNotification(notification),
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      // Keep current dashboard data and retry on the next lifecycle/poll event.
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _load() async {
