@@ -75,8 +75,8 @@ class _EmployeeApprovalsScreenState extends State<EmployeeApprovalsScreen> {
         if (!_loading && _error == null && items.isEmpty)
           EmployeeListTile(icon: Icons.approval_outlined, title: 'No ${_sent ? 'sent' : 'received'} approvals', subtitle: _sent ? 'Tap New to create an approval request' : 'Requests assigned to you will appear here', trailing: '', color: EmployeeColors.purple),
         ...items.map((item) {
-          final status = '${item['status'] ?? 'Requested'}';
-          final color = status.toLowerCase() == 'approved' ? EmployeeColors.green : status.toLowerCase() == 'cancelled' ? EmployeeColors.red : EmployeeColors.purple;
+          final status = _approvalWorkflowStatus(item);
+          final color = status == 'Approved' ? EmployeeColors.green : status == 'Rejected' || status == 'Cancelled' ? EmployeeColors.red : EmployeeColors.purple;
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: EmployeeListTile(
@@ -167,7 +167,8 @@ class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final status = '${widget.item['status'] ?? 'Requested'}';
+    final rawStatus = '${widget.item['status'] ?? 'Requested'}';
+    final status = _approvalWorkflowStatus(widget.item);
     final currentStage = int.tryParse('${widget.item['current_stage'] ?? 0}') ?? 0;
     return Scaffold(
       appBar: AppBar(title: const Text('Approval Details')),
@@ -196,8 +197,8 @@ class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
         const SizedBox(height: 8),
         const Text('Approval flow', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
         const SizedBox(height: 10),
-        _stage('1', 'Team Lead', _stageStatus('tl', status, currentStage, 0)),
-        _stage('2', 'CEO (Final Approval)', _stageStatus('ceo', status, currentStage, 1)),
+        _stage('1', 'Team Lead', _stageStatus('tl', rawStatus, currentStage, 0)),
+        _stage('2', 'CEO (Final Approval)', _stageStatus('ceo', rawStatus, currentStage, 1)),
         ..._decisions.map((decision) => ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Icon(decision['action'] == 'approve' ? Icons.check_circle_rounded : Icons.cancel_rounded, color: decision['action'] == 'approve' ? EmployeeColors.green : EmployeeColors.red),
@@ -205,7 +206,7 @@ class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
           subtitle: Text('${decision['action'] ?? ''}${'${decision['comment'] ?? ''}'.isEmpty ? '' : ' • ${decision['comment']}'}'),
         )),
         const SizedBox(height: 18),
-        if (widget.received && status.toLowerCase() == 'requested') ...[
+        if (widget.received && rawStatus.toLowerCase() == 'requested') ...[
           TextField(
             controller: _reply,
             minLines: 3,
@@ -224,7 +225,7 @@ class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
             Expanded(child: FilledButton(onPressed: _busy || _reply.text.trim().isEmpty ? null : () => _action('approve'), child: Text(_busy ? 'Updating...' : 'Approve'))),
           ]),
         ],
-        if (!widget.received && status.toLowerCase() == 'requested') OutlinedButton.icon(onPressed: _busy ? null : () => _action('cancel'), icon: const Icon(Icons.close_rounded), label: const Text('Cancel Request')),
+        if (!widget.received && rawStatus.toLowerCase() == 'requested') OutlinedButton.icon(onPressed: _busy ? null : () => _action('cancel'), icon: const Icon(Icons.close_rounded), label: const Text('Cancel Request')),
       ]),
     );
   }
@@ -248,6 +249,23 @@ class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
     if (current == stage && overall.toLowerCase() == 'requested') return 'PENDING';
     return current > stage || overall.toLowerCase() == 'approved' ? 'APPROVED' : 'WAITING';
   }
+}
+
+String _approvalWorkflowStatus(Map<String, dynamic> item) {
+  final status = '${item['status'] ?? 'requested'}'.toLowerCase();
+  if (status == 'approved') return 'Approved';
+  if (status == 'rejected') return 'Rejected';
+  if (status == 'cancelled') return 'Cancelled';
+
+  final stage = int.tryParse('${item['current_stage'] ?? 0}') ?? 0;
+  final rawApprovers = item['approvers'];
+  final approvers = rawApprovers is List
+      ? rawApprovers.map((value) => '$value'.trim()).toList()
+      : const <String>[];
+  if (stage >= 0 && stage < approvers.length && approvers[stage].isNotEmpty) {
+    return 'Pending ${approvers[stage]} Approval';
+  }
+  return stage > 0 ? 'Pending Final Approval' : 'Pending TL Approval';
 }
 
 class _ApprovalTemplatesScreen extends StatelessWidget {

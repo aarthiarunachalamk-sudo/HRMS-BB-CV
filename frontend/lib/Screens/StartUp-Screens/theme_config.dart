@@ -36,8 +36,10 @@ class ThemeConfig {
   }
   
   // Theme Accent Colors
-  static const Color blueAccent = Color(0xFF7894FF);
-  static const Color blueSecondary = Color(0xFF4F6BED);
+  // Shared action palette. This matches the active tab treatment used across
+  // the dashboards, so tabs and primary buttons feel like one design system.
+  static const Color blueAccent = Color(0xFF00C6FF);
+  static const Color blueSecondary = Color(0xFF0072FF);
   // Solid equivalent of the Login button gradient for Material buttons.
   static const Color loginButtonColor = blueSecondary;
 

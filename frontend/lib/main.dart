@@ -36,8 +36,8 @@ class MyApp extends StatelessWidget {
   );
 
   static const String _fontFamily = 'Roboto';
-  static const Color _brand = Color(0xFF4F6BED);
-  static const Color _brandDark = Color(0xFF7894FF);
+  static const Color _brand = Color(0xFF0072FF);
+  static const Color _brandDark = Color(0xFF0072FF);
   static const Color _accent = Color(0xFF20B8A6);
 
   static TextTheme _appTextTheme(Color text, Color muted) {
@@ -314,7 +314,7 @@ class MyApp extends StatelessWidget {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: primary,
+          backgroundColor: ThemeConfig.blueSecondary,
           foregroundColor: onPrimary,
           disabledBackgroundColor:
               isDark ? const Color(0xFF1E2E44) : const Color(0xFFE2E8F0),
@@ -327,7 +327,7 @@ class MyApp extends StatelessWidget {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primary,
+          backgroundColor: ThemeConfig.blueSecondary,
           foregroundColor: onPrimary,
           disabledBackgroundColor:
               isDark ? const Color(0xFF1E2E44) : const Color(0xFFE2E8F0),
@@ -341,9 +341,9 @@ class MyApp extends StatelessWidget {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: primary,
+          foregroundColor: ThemeConfig.blueSecondary,
           disabledForegroundColor: muted,
-          side: BorderSide(color: primary),
+          side: const BorderSide(color: ThemeConfig.blueSecondary),
           textStyle: textTheme.labelLarge,
           minimumSize: const Size(64, 52),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),

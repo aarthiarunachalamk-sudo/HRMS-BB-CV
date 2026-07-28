@@ -4346,6 +4346,7 @@ class _ApprovalRequestCard extends StatelessWidget {
     final submittedLine = isTemplateApproval
         ? '${leave['created_at'] ?? ''}'
         : '${leave['submitted_on'] ?? leave['applied_on'] ?? ''}';
+    final workflowStatus = _approvalWorkflowLabel(leave, urgent: urgent);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TlCard(
@@ -4373,9 +4374,13 @@ class _ApprovalRequestCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        urgent ? 'Urgent' : '${leave['status'] ?? 'Pending'}',
+                        workflowStatus,
                         style: TextStyle(
-                          color: urgent ? c.danger : c.warning,
+                          color: workflowStatus == 'Rejected'
+                              ? c.danger
+                              : workflowStatus == 'Approved'
+                              ? c.success
+                              : c.warning,
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                         ),
@@ -7364,6 +7369,27 @@ bool _approvalIsUrgent(Map<String, dynamic> item) {
       .first;
   final days = double.tryParse(daysText) ?? 0;
   return reason.contains('urgent') || status.contains('urgent') || days >= 2;
+}
+
+String _approvalWorkflowLabel(
+  Map<String, dynamic> item, {
+  bool urgent = false,
+}) {
+  final status = '${item['status'] ?? 'requested'}'.toLowerCase();
+  if (status == 'approved') return 'Approved';
+  if (status == 'rejected') return 'Rejected';
+  if (status == 'cancelled') return 'Cancelled';
+
+  final stage = int.tryParse('${item['current_stage'] ?? 0}') ?? 0;
+  final rawApprovers = item['approvers'];
+  final approvers = rawApprovers is List
+      ? rawApprovers.map((value) => '$value'.trim()).toList()
+      : const <String>[];
+  if (stage >= 0 && stage < approvers.length && approvers[stage].isNotEmpty) {
+    return 'Pending ${approvers[stage]} Approval';
+  }
+  if (stage == 1) return 'Pending CEO Approval';
+  return urgent ? 'Urgent' : 'Pending TL Approval';
 }
 
 InputDecoration _fieldDecoration(BuildContext context, String label) {
