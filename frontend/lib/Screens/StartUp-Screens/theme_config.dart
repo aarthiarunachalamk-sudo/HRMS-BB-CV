@@ -8,23 +8,23 @@ class ThemeConfig {
 
   // Background Gradient Colors
   static Color getBgStart(BuildContext context) =>
-      isDark(context) ? const Color(0xFF070D19) : const Color(0xFFF8FAFC);
+      isDark(context) ? const Color(0xFF0B1020) : const Color(0xFFF7F8FC);
   static Color getBgEnd(BuildContext context) =>
-      isDark(context) ? const Color(0xFF0F223D) : const Color(0xFFE2E8F0);
+      isDark(context) ? const Color(0xFF111A2D) : const Color(0xFFEEF1F7);
 
   // Core Text Colors
   static Color getTextPrimary(BuildContext context) =>
-      isDark(context) ? Colors.white : const Color(0xFF1F3654);
+      isDark(context) ? const Color(0xFFF4F7FF) : const Color(0xFF172033);
   static Color getTextSecondary(BuildContext context) =>
-      isDark(context) ? const Color(0xFF8E9CAE) : const Color(0xFF475569);
+      isDark(context) ? const Color(0xFFA4AEC0) : const Color(0xFF667085);
   static Color getTextMuted(BuildContext context) =>
-      isDark(context) ? const Color(0xFF5A6A80) : const Color(0xFF64748B);
+      isDark(context) ? const Color(0xFF778197) : const Color(0xFF7B8496);
 
   // Card Styles
   static Color getCardBg(BuildContext context) =>
-      isDark(context) ? const Color(0xFF0F1B2E) : Colors.white;
+      isDark(context) ? const Color(0xFF121A2B) : Colors.white;
   static Color getCardBorder(BuildContext context) =>
-      isDark(context) ? const Color(0xFF1E2E44) : const Color(0xFFD7E1EE);
+      isDark(context) ? const Color(0xFF283247) : const Color(0xFFE0E5EE);
 
   // Network Painter Colors
   static const Color lightPainterColor = Color(0xFF147893); // Hex #147893
@@ -36,8 +36,8 @@ class ThemeConfig {
   }
   
   // Theme Accent Colors
-  static const Color blueAccent = Color(0xFF00C6FF);
-  static const Color blueSecondary = Color(0xFF0072FF);
+  static const Color blueAccent = Color(0xFF7894FF);
+  static const Color blueSecondary = Color(0xFF4F6BED);
   // Solid equivalent of the Login button gradient for Material buttons.
   static const Color loginButtonColor = blueSecondary;
 
@@ -47,8 +47,8 @@ class ThemeConfig {
   static const Color greenAccent = Color(0xFF00F2FE);
   static const Color greenSecondary = Color(0xFF4FACFE);
   
-  static const Color greenThemeAccent = Color(0xFF00FF9D);
-  static const Color greenThemeSecondary = Color(0xFF00B876);
+  static const Color greenThemeAccent = Color(0xFF3DD6C5);
+  static const Color greenThemeSecondary = Color(0xFF159A8C);
 
   // Gradients for Buttons
   static const Gradient blueGradient = LinearGradient(
@@ -79,9 +79,9 @@ class ThemeConfig {
   static List<BoxShadow> getPremiumShadow(BuildContext context) => [
         BoxShadow(
           color: isDark(context) ? const Color(0x66000000) : const Color(0x0F000000),
-          blurRadius: 20,
-          spreadRadius: 2,
-          offset: const Offset(0, 10),
+          blurRadius: 24,
+          spreadRadius: 0,
+          offset: const Offset(0, 8),
         ),
       ];
 

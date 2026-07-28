@@ -4324,6 +4324,28 @@ class _ApprovalRequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
+    final approvalType = '${leave['approval_type'] ?? ''}';
+    final isTemplateApproval = const {
+      'daily_report',
+      'social_media_post',
+      'leave_request',
+    }.contains(approvalType);
+    final session = '${leave['session'] ?? ''}'.toLowerCase();
+    final badgeLabel = switch (approvalType) {
+      'daily_report' => session.contains('after') ? 'Evening Report' : 'Morning Report',
+      'social_media_post' => 'Social Media Poster',
+      'leave_request' => '${leave['leave_type'] ?? 'Leave Request'}',
+      _ => '${leave['leave_type'] ?? 'Leave Request'}',
+    };
+    final dateLine = isTemplateApproval
+        ? '${leave['date'] ?? ''}${approvalType == 'daily_report' ? ' · ${leave['session'] ?? ''}' : ''}'
+        : '${leave['from_date'] ?? ''} to ${leave['to_date'] ?? ''} (${leave['days'] ?? ''})';
+    final detailsLine = isTemplateApproval
+        ? '${leave['task_details'] ?? leave['platforms'] ?? ''}'
+        : '${leave['reason'] ?? ''}';
+    final submittedLine = isTemplateApproval
+        ? '${leave['created_at'] ?? ''}'
+        : '${leave['submitted_on'] ?? leave['applied_on'] ?? ''}';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TlCard(
@@ -4371,23 +4393,22 @@ class _ApprovalRequestCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   _ApprovalPill(
-                    label: '${leave['leave_type'] ?? 'Leave Request'}',
+                    label: badgeLabel,
                     color: c.success,
                   ),
                   const SizedBox(height: 8),
                   _TinyIconLine(
                     icon: Icons.calendar_today_rounded,
-                    text:
-                        '${leave['from_date'] ?? ''} to ${leave['to_date'] ?? ''} (${leave['days'] ?? ''})',
+                    text: dateLine,
                   ),
                   const SizedBox(height: 5),
                   _TinyIconLine(
                     icon: Icons.device_hub_rounded,
-                    text: '${leave['reason'] ?? ''}',
+                    text: detailsLine,
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Submitted on ${leave['submitted_on'] ?? leave['applied_on'] ?? ''}',
+                    'Submitted on $submittedLine',
                     style: TextStyle(
                       color: c.muted,
                       fontSize: 10,

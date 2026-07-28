@@ -120,6 +120,13 @@ class EmployeeApprovalDetailScreen extends StatefulWidget {
 
 class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
   bool _busy = false;
+  final _reply = TextEditingController();
+
+  @override
+  void dispose() {
+    _reply.dispose();
+    super.dispose();
+  }
 
   List<Map<String, dynamic>> get _decisions {
     final value = widget.item['decisions'];
@@ -127,30 +134,33 @@ class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
   }
 
   Future<void> _action(String action) async {
-    final comment = TextEditingController();
-    final needsReply = true;
-    if (needsReply) {
-      final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
-        title: Text(action == 'approve' ? 'Reply and approve' : 'Reply and reject'),
-        content: TextField(controller: comment, maxLines: 4, decoration: InputDecoration(labelText: action == 'approve' ? 'Reply to employee *' : 'Rejection reason *', border: const OutlineInputBorder())),
-        actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Back')), FilledButton(onPressed: () {
-          if (comment.text.trim().isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a reply before continuing.')));
-            return;
-          }
-          Navigator.pop(context, true);
-        }, child: Text(action == 'approve' ? 'Approve' : 'Reject'))],
-      ));
-      if (confirmed != true) { comment.dispose(); return; }
+    if (_reply.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a reply to the employee before continuing.')),
+      );
+      return;
+    }
+    if (action == 'reject') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Reject this request?'),
+          content: const Text('Your reply will be sent to the employee.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Back')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Reject')),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
     }
     setState(() => _busy = true);
     try {
-      await widget.service.updateApproval(widget.userId, widget.item['id']!, action, comment: comment.text.trim());
+      await widget.service.updateApproval(widget.userId, widget.item['id']!, action, comment: _reply.text.trim());
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to update request: $error')));
     } finally {
-      comment.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -195,11 +205,25 @@ class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
           subtitle: Text('${decision['action'] ?? ''}${'${decision['comment'] ?? ''}'.isEmpty ? '' : ' • ${decision['comment']}'}'),
         )),
         const SizedBox(height: 18),
-        if (widget.received && status.toLowerCase() == 'requested') Row(children: [
-          Expanded(child: OutlinedButton(onPressed: _busy ? null : () => _action('reject'), child: const Text('Reject'))),
-          const SizedBox(width: 12),
-          Expanded(child: FilledButton(onPressed: _busy ? null : () => _action('approve'), child: Text(_busy ? 'Updating...' : 'Approve'))),
-        ]),
+        if (widget.received && status.toLowerCase() == 'requested') ...[
+          TextField(
+            controller: _reply,
+            minLines: 3,
+            maxLines: 5,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(
+              labelText: 'Reply to employee *',
+              hintText: 'Enter feedback about the submitted task',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(children: [
+            Expanded(child: OutlinedButton(onPressed: _busy || _reply.text.trim().isEmpty ? null : () => _action('reject'), child: const Text('Reject'))),
+            const SizedBox(width: 12),
+            Expanded(child: FilledButton(onPressed: _busy || _reply.text.trim().isEmpty ? null : () => _action('approve'), child: Text(_busy ? 'Updating...' : 'Approve'))),
+          ]),
+        ],
         if (!widget.received && status.toLowerCase() == 'requested') OutlinedButton.icon(onPressed: _busy ? null : () => _action('cancel'), icon: const Icon(Icons.close_rounded), label: const Text('Cancel Request')),
       ]),
     );
