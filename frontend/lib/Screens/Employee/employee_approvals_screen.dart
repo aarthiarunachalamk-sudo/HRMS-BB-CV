@@ -128,11 +128,19 @@ class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
 
   Future<void> _action(String action) async {
     final comment = TextEditingController();
-    if (action == 'reject') {
+    final currentStage = int.tryParse('${widget.item['current_stage'] ?? 0}') ?? 0;
+    final needsReply = currentStage == 0 || action == 'reject';
+    if (needsReply) {
       final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
-        title: const Text('Reject request'),
-        content: TextField(controller: comment, maxLines: 3, decoration: const InputDecoration(labelText: 'Reason', border: OutlineInputBorder())),
-        actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Back')), FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Reject'))],
+        title: Text(action == 'approve' ? 'Reply and approve' : 'Reply and reject'),
+        content: TextField(controller: comment, maxLines: 4, decoration: InputDecoration(labelText: action == 'approve' ? 'Reply to employee *' : 'Rejection reason *', border: const OutlineInputBorder())),
+        actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Back')), FilledButton(onPressed: () {
+          if (comment.text.trim().isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a reply before continuing.')));
+            return;
+          }
+          Navigator.pop(context, true);
+        }, child: Text(action == 'approve' ? 'Approve' : 'Reject'))],
       ));
       if (confirmed != true) { comment.dispose(); return; }
     }

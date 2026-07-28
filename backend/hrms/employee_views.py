@@ -215,6 +215,9 @@ def employee_approval_action_view(request, pk):
         return Response({'success': False, 'message': 'This request is assigned to another Team Lead.'}, status=403)
     if item.status != 'requested' or item.current_stage != expected_stage:
         return Response({'success': False, 'message': 'This request is not awaiting your approval.'}, status=409)
+    comment = str(request.data.get('comment') or '').strip()
+    if role == 'tl' and not comment:
+        return Response({'success': False, 'message': 'Team Lead reply is required.'}, status=400)
 
     decisions = list(item.decisions or [])
     if any(decision.get('role') == role for decision in decisions):
@@ -223,7 +226,7 @@ def employee_approval_action_view(request, pk):
         'role': role,
         'approver': user_id,
         'action': action,
-        'comment': str(request.data.get('comment') or '').strip(),
+        'comment': comment,
         'decided_at': timezone.now().isoformat(),
     })
     item.decisions = decisions
@@ -238,7 +241,10 @@ def employee_approval_action_view(request, pk):
         _create_notification(
             user_id=item.employee_id,
             title=f'{request_label} Approved by Team Lead',
-            message=f'{item.title} passed Team Lead approval and was sent to CEO for final approval.',
+            message=(
+                f'{item.title} passed Team Lead approval and was sent to CEO '
+                f'for final approval. TL reply: {comment}'
+            ),
             notification_type='success',
             module='approval',
             reference_id=str(item.id),
@@ -265,10 +271,11 @@ def employee_approval_action_view(request, pk):
     item.save(update_fields=['decisions', 'status', 'current_stage', 'updated_at'])
     if item.status in {'approved', 'rejected'}:
         reviewer_label = 'Team Lead' if role == 'tl' else 'CEO'
+        reply_suffix = f' Reply: {comment}' if comment else ''
         _create_notification(
             user_id=item.employee_id,
             title=f'Approval Request {item.status.title()} by {reviewer_label}',
-            message=f'{item.title} was {item.status} by {reviewer_label}.',
+            message=f'{item.title} was {item.status} by {reviewer_label}.{reply_suffix}',
             notification_type='success' if item.status == 'approved' else 'error',
             module='approval',
             reference_id=str(item.id),

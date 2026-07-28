@@ -173,7 +173,12 @@ class _TLDashboardState extends State<TLDashboard> {
               userId: widget.userId,
               onChanged: _refreshDashboard,
             ),
-            _Notifications(data: data, openApprovals: () => _setIndex(12)),
+            _Notifications(
+              data: data,
+              userId: widget.userId,
+              onChanged: _refreshDashboard,
+              openApprovals: () => _setIndex(12),
+            ),
             _TaskDetails(item: _selected, update: () => _setIndex(2)),
             _CreateTask(
               data: data,
@@ -408,7 +413,13 @@ class _Dashboard extends StatelessWidget {
         if (unreadNotifications.isNotEmpty) ...[
           TlCard(
             child: InkWell(
-              onTap: () => open(13),
+              onTap: () => _openTlApprovalNotification(
+                context,
+                data,
+                userId,
+                unreadNotifications.first,
+                onChanged,
+              ),
               borderRadius: BorderRadius.circular(14),
               child: Row(children: [
                 Stack(clipBehavior: Clip.none, children: [
@@ -5279,9 +5290,16 @@ class _DecisionButton extends StatelessWidget {
 
 class _Notifications extends StatelessWidget {
   final Map<String, dynamic> data;
+  final String userId;
+  final VoidCallback onChanged;
   final VoidCallback openApprovals;
 
-  const _Notifications({required this.data, required this.openApprovals});
+  const _Notifications({
+    required this.data,
+    required this.userId,
+    required this.onChanged,
+    required this.openApprovals,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -5292,12 +5310,69 @@ class _Notifications extends StatelessWidget {
       icon: Icons.notifications_rounded,
       color: c.danger,
       onTap: (item) {
-        if (_isLeaveNotification(item) || item['module'] == 'approval') {
+        if (item['module'] == 'approval') {
+          _openTlApprovalNotification(context, data, userId, item, onChanged);
+        } else if (_isLeaveNotification(item)) {
           openApprovals();
         }
       },
     );
   }
+}
+
+Future<void> _openTlApprovalNotification(
+  BuildContext context,
+  Map<String, dynamic> dashboardData,
+  String userId,
+  Map<String, dynamic> notification,
+  VoidCallback onChanged,
+) async {
+  final referenceId = '${notification['reference_id'] ?? ''}';
+  Map<String, dynamic>? approval;
+  for (final item in tlList(dashboardData, 'approvals')) {
+    if ('${item['id'] ?? ''}' == referenceId && item['approval_type'] != null) {
+      approval = item;
+      break;
+    }
+  }
+  if (approval == null) {
+    try {
+      final result = await TlService().fetchApprovals(userId);
+      for (final key in ['pending', 'approved', 'rejected']) {
+        final values = result[key];
+        if (values is! List) continue;
+        for (final raw in values.whereType<Map>()) {
+          final item = Map<String, dynamic>.from(raw);
+          if ('${item['id'] ?? ''}' == referenceId && item['approval_type'] != null) {
+            approval = item;
+            break;
+          }
+        }
+        if (approval != null) break;
+      }
+    } catch (_) {
+      // The approvals page remains available if this notification is stale.
+    }
+  }
+  if (!context.mounted) return;
+  if (approval == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('This approval is no longer awaiting your action.')),
+    );
+    return;
+  }
+  final changed = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (_) => EmployeeApprovalDetailScreen(
+        item: approval!,
+        userId: userId,
+        service: EmployeeService(),
+        received: '${approval!['status'] ?? ''}'.toLowerCase() == 'requested' &&
+            '${approval!['current_stage'] ?? ''}' == '0',
+      ),
+    ),
+  );
+  if (changed == true) onChanged();
 }
 
 class _TaskDetails extends StatelessWidget {

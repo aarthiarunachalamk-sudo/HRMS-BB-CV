@@ -19,6 +19,8 @@ import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_local_documents.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/create_admins.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_approvals_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
@@ -12099,6 +12101,57 @@ class _NotificationsDynamicPage extends StatefulWidget {
 class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
   bool _unreadOnly = false;
 
+  Future<void> _openApprovalNotification(Map<String, dynamic> notification) async {
+    final referenceId = '${notification['reference_id'] ?? ''}';
+    try {
+      final data = await CeoService().fetchApprovals(widget.userId);
+      Map<String, dynamic>? approval;
+      for (final key in ['approvals', 'history']) {
+        final values = data[key];
+        if (values is! List) continue;
+        for (final raw in values.whereType<Map>()) {
+          final item = Map<String, dynamic>.from(raw);
+          if ('${item['id'] ?? ''}' == referenceId &&
+              const {'daily_report', 'social_media_post', 'leave_request'}
+                  .contains(item['approval_type'])) {
+            approval = item;
+            break;
+          }
+        }
+        if (approval != null) break;
+      }
+      if (!mounted) return;
+      if (approval == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This approval is not awaiting CEO action.')),
+        );
+        return;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => EmployeeApprovalDetailScreen(
+            item: approval!,
+            userId: widget.userId,
+            service: EmployeeService(),
+            received: '${approval!['status'] ?? ''}'.toLowerCase() == 'requested' &&
+                '${approval!['current_stage'] ?? ''}' == '1',
+          ),
+        ),
+      );
+      final notificationId = notification['id'];
+      if (notificationId is int) {
+        await CeoService().markNotificationRead(notificationId, widget.userId);
+      }
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to open approval: $error')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return _CeoShell(
@@ -12169,18 +12222,7 @@ class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
                   ),
                   _notificationColor(type),
                   onTap: _displayText(map['module']) == 'approval'
-                      ? () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => CeoApprovalCategoryScreen(
-                              category: _displayText(map['reference_id']),
-                              title: _displayText(
-                                map['category_title'],
-                                fallback: 'Approval',
-                              ),
-                              userId: widget.userId,
-                            ),
-                          ),
-                        )
+                      ? () => _openApprovalNotification(map)
                       : null,
                 );
               }),

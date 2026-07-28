@@ -55,7 +55,7 @@ class DailyApprovalFlowTests(TestCase):
         self.assertEqual(premature_ceo.status_code, 409)
 
         tl_result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
-            'user_id': self.tl.user_id, 'action': 'approve',
+            'user_id': self.tl.user_id, 'action': 'approve', 'comment': 'Reviewed and approved.',
         }, format='json')
         self.assertEqual(tl_result.status_code, 200)
         request.refresh_from_db()
@@ -78,6 +78,15 @@ class DailyApprovalFlowTests(TestCase):
         self.assertEqual(submitted.status_code, 201)
         assigned = submitted.data['approval']['assigned_tl_user_id']
         self.assertNotEqual(assigned, self.tl.user_id)
+
+    def test_tl_must_reply_before_approving_or_rejecting(self):
+        submitted = self._submit(self.employee)
+        approval_id = submitted.data['approval']['id']
+        result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.tl.user_id, 'action': 'approve',
+        }, format='json')
+        self.assertEqual(result.status_code, 400)
+        self.assertIn('reply is required', result.data['message'])
 
     @patch('hrms.push_notifications.send_mobile_push', return_value=True)
     def test_submission_notifies_tl_md_and_ceo_in_app_and_by_push(self, push):
@@ -132,7 +141,7 @@ class DailyApprovalFlowTests(TestCase):
         push.reset_mock()
 
         result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
-            'user_id': self.tl.user_id, 'action': 'approve',
+            'user_id': self.tl.user_id, 'action': 'approve', 'comment': 'Good progress.',
         }, format='json')
 
         self.assertEqual(result.status_code, 200)
@@ -155,7 +164,7 @@ class DailyApprovalFlowTests(TestCase):
         submitted = self._submit(self.employee)
         approval_id = submitted.data['approval']['id']
         self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
-            'user_id': self.tl.user_id, 'action': 'approve',
+            'user_id': self.tl.user_id, 'action': 'approve', 'comment': 'Approved for CEO review.',
         }, format='json')
         AppNotification.objects.all().delete()
         push.reset_mock()
