@@ -63,7 +63,7 @@ class DailyApprovalFlowTests(TestCase):
         self.assertEqual(request.status, 'requested')
 
         ceo_result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
-            'user_id': self.ceo.user_id, 'action': 'approve',
+            'user_id': self.ceo.user_id, 'action': 'approve', 'comment': 'Final approval granted.',
         }, format='json')
         self.assertEqual(ceo_result.status_code, 200)
         request.refresh_from_db()
@@ -200,7 +200,7 @@ class DailyApprovalFlowTests(TestCase):
         push.reset_mock()
 
         result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
-            'user_id': self.ceo.user_id, 'action': 'approve',
+            'user_id': self.ceo.user_id, 'action': 'approve', 'comment': 'Approved by CEO.',
         }, format='json')
 
         self.assertEqual(result.status_code, 200)
@@ -216,6 +216,22 @@ class DailyApprovalFlowTests(TestCase):
             recipient_role='md', title='Daily Report Approved', push_sent=True,
         ).exists())
         self.assertEqual(push.call_count, 3)
+
+    def test_ceo_must_reply_before_final_decision(self):
+        submitted = self._submit(self.employee)
+        approval_id = submitted.data['approval']['id']
+        self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.tl.user_id,
+            'action': 'approve',
+            'comment': 'TL review completed.',
+        }, format='json')
+
+        result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.ceo.user_id,
+            'action': 'approve',
+        }, format='json')
+        self.assertEqual(result.status_code, 400)
+        self.assertIn('CEO reply is required', result.data['message'])
 
     @patch('hrms.push_notifications.send_mobile_push', return_value=True)
     def test_tl_rejection_notifies_ceo_and_md(self, push):

@@ -128,8 +128,7 @@ class _ApprovalDetailScreenState extends State<EmployeeApprovalDetailScreen> {
 
   Future<void> _action(String action) async {
     final comment = TextEditingController();
-    final currentStage = int.tryParse('${widget.item['current_stage'] ?? 0}') ?? 0;
-    final needsReply = currentStage == 0 || action == 'reject';
+    final needsReply = true;
     if (needsReply) {
       final confirmed = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
         title: Text(action == 'approve' ? 'Reply and approve' : 'Reply and reject'),

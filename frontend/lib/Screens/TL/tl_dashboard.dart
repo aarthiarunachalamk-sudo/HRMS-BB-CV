@@ -410,46 +410,11 @@ class _Dashboard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        if (unreadNotifications.isNotEmpty) ...[
-          TlCard(
-            child: InkWell(
-              onTap: () => _openTlApprovalNotification(
-                context,
-                data,
-                userId,
-                unreadNotifications.first,
-                onChanged,
-              ),
-              borderRadius: BorderRadius.circular(14),
-              child: Row(children: [
-                Stack(clipBehavior: Clip.none, children: [
-                  Icon(Icons.notifications_active_rounded, color: c.warning, size: 30),
-                  Positioned(
-                    right: -8,
-                    top: -8,
-                    child: CircleAvatar(
-                      radius: 9,
-                      backgroundColor: c.danger,
-                      child: Text('${unreadNotifications.length}', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
-                    ),
-                  ),
-                ]),
-                const SizedBox(width: 16),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('${unreadNotifications.first['title'] ?? 'New notification'}', style: TextStyle(color: c.text, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 3),
-                  Text('${unreadNotifications.first['message'] ?? unreadNotifications.first['subtitle'] ?? ''}', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.muted, fontSize: 11)),
-                ])),
-                Icon(Icons.chevron_right_rounded, color: c.muted),
-              ]),
-            ),
-          ),
-          const SizedBox(height: 14),
-        ],
-        _ApprovalBoard(
+        _CompactApprovalInbox(
           data: data,
-          open: () => open(12),
           userId: userId,
+          unreadCount: unreadNotifications.length,
+          openAll: () => open(12),
           onChanged: onChanged,
         ),
         const SizedBox(height: 14),
@@ -536,6 +501,95 @@ class _Dashboard extends StatelessWidget {
               '${tlText(data, 'on_track')} employee(s) on track by task completion',
         ),
       ],
+    );
+  }
+}
+
+class _CompactApprovalInbox extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final String userId;
+  final int unreadCount;
+  final VoidCallback openAll;
+  final VoidCallback onChanged;
+
+  const _CompactApprovalInbox({
+    required this.data,
+    required this.userId,
+    required this.unreadCount,
+    required this.openAll,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TlPalette.of(context);
+    final approvals = tlList(data, 'approvals');
+    return TlCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: c.primary.withAlpha(28),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(Icons.inbox_rounded, color: c.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Approval Inbox', style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w900)),
+            Text('${approvals.length} awaiting action${unreadCount > 0 ? ' · $unreadCount unread' : ''}', style: TextStyle(color: c.muted, fontSize: 11, fontWeight: FontWeight.w700)),
+          ])),
+          TextButton(onPressed: openAll, child: const Text('View all')),
+        ]),
+        if (approvals.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Text('No employee requests need your action.', style: TextStyle(color: c.muted, fontSize: 12)),
+          )
+        else ...[
+          const SizedBox(height: 12),
+          ...approvals.take(3).map((item) {
+            final approvalType = '${item['approval_type'] ?? ''}';
+            final label = switch (approvalType) {
+              'daily_report' => 'Daily Report',
+              'social_media_post' => 'Social Media Post',
+              'leave_request' => 'Leave Request',
+              _ => '${item['leave_type'] ?? 'Employee Request'}',
+            };
+            return InkWell(
+              onTap: approvalType.isEmpty
+                  ? openAll
+                  : () => _openTlApprovalNotification(
+                        context,
+                        data,
+                        userId,
+                        {'reference_id': '${item['id'] ?? ''}', 'module': 'approval'},
+                        onChanged,
+                      ),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 9),
+                child: Row(children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: c.warning.withAlpha(25),
+                    child: Icon(Icons.description_outlined, color: c.warning, size: 19),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${item['title'] ?? item['name'] ?? 'Approval request'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontWeight: FontWeight.w900, fontSize: 13)),
+                    const SizedBox(height: 2),
+                    Text('$label · ${item['employee_id'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.muted, fontSize: 10)),
+                  ])),
+                  Icon(Icons.chevron_right_rounded, color: c.muted),
+                ]),
+              ),
+            );
+          }),
+        ],
+      ]),
     );
   }
 }

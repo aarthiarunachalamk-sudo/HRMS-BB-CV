@@ -216,8 +216,9 @@ def employee_approval_action_view(request, pk):
     if item.status != 'requested' or item.current_stage != expected_stage:
         return Response({'success': False, 'message': 'This request is not awaiting your approval.'}, status=409)
     comment = str(request.data.get('comment') or '').strip()
-    if role == 'tl' and not comment:
-        return Response({'success': False, 'message': 'Team Lead reply is required.'}, status=400)
+    if role in {'tl', 'ceo'} and not comment:
+        reviewer_label = 'Team Lead' if role == 'tl' else 'CEO'
+        return Response({'success': False, 'message': f'{reviewer_label} reply is required.'}, status=400)
 
     decisions = list(item.decisions or [])
     if any(decision.get('role') == role for decision in decisions):
