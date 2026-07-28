@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -20,6 +21,9 @@ class PushNotificationService {
   final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+  StreamSubscription<String>? _tokenRefreshSubscription;
+  String? _registeredUserId;
+  String? _registeredRole;
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -49,14 +53,32 @@ class PushNotificationService {
   }
 
   Future<void> registerForUser(String userId, String role) async {
-    if (userId.trim().isEmpty) return;
+    final normalizedUserId = userId.trim();
+    final normalizedRole = role.trim().toLowerCase();
+    if (normalizedUserId.isEmpty) return;
     try {
       await initialize();
       final token = await FirebaseMessaging.instance.getToken();
-      if (token != null) await _registerToken(userId, role, token);
-      FirebaseMessaging.instance.onTokenRefresh.listen(
-        (token) => _registerToken(userId, role, token),
-      );
+      if (token == null || token.isEmpty) {
+        debugPrint('Push token is not available for $normalizedUserId.');
+        return;
+      }
+      await _registerToken(normalizedUserId, normalizedRole, token);
+
+      if (_registeredUserId != normalizedUserId ||
+          _registeredRole != normalizedRole) {
+        await _tokenRefreshSubscription?.cancel();
+        _registeredUserId = normalizedUserId;
+        _registeredRole = normalizedRole;
+        _tokenRefreshSubscription = FirebaseMessaging.instance.onTokenRefresh
+            .listen(
+              (refreshedToken) => _registerToken(
+                normalizedUserId,
+                normalizedRole,
+                refreshedToken,
+              ),
+            );
+      }
     } catch (error) {
       debugPrint('Push notification initialization failed: $error');
     }
@@ -64,7 +86,7 @@ class PushNotificationService {
 
   Future<void> _registerToken(String userId, String role, String token) async {
     try {
-      await http.post(
+      final response = await http.post(
         ApiConfig.uri('/notifications/device-token/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -74,6 +96,11 @@ class PushNotificationService {
           'platform': kIsWeb ? 'web' : Platform.operatingSystem,
         }),
       );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException(
+          'Server returned ${response.statusCode}: ${response.body}',
+        );
+      }
     } catch (error) {
       debugPrint('Push token registration failed: $error');
     }

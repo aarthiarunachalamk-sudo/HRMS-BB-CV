@@ -8,6 +8,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
+import 'package:hrms_mobileapp_bitbyte/Services/push_notification_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'employee_attendance_screen.dart';
 import 'employee_approvals_screen.dart';
@@ -65,6 +66,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
       userId: widget.userId,
     );
     _load();
+    unawaited(_registerForNotifications());
     _refreshTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => _refreshDashboardSilently(),
@@ -74,8 +76,16 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      unawaited(_registerForNotifications());
       _refreshDashboardSilently();
     }
+  }
+
+  Future<void> _registerForNotifications() {
+    return PushNotificationService.instance.registerForUser(
+      widget.userId,
+      'employee',
+    );
   }
 
   Future<void> _refreshDashboardSilently() async {
