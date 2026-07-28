@@ -12120,6 +12120,14 @@ class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
         }
         if (approval != null) break;
       }
+      if (approval == null && referenceId.isNotEmpty) {
+        final result = await EmployeeService().fetchApproval(
+          widget.userId,
+          referenceId,
+        );
+        final value = result['approval'];
+        if (value is Map) approval = Map<String, dynamic>.from(value);
+      }
       if (!mounted) return;
       if (approval == null) {
         ScaffoldMessenger.of(context).showSnackBar(

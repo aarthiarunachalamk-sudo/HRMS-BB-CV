@@ -88,6 +88,36 @@ class DailyApprovalFlowTests(TestCase):
         self.assertEqual(result.status_code, 400)
         self.assertIn('reply is required', result.data['message'])
 
+    def test_any_notified_tl_can_view_reply_and_take_first_action(self):
+        other_tl = User.objects.create_user('other-tl@flow.test', 'Password1!', role='tl')
+        submitted = self._submit(self.employee)
+        approval_id = submitted.data['approval']['id']
+
+        details = self.client.get(
+            f'/api/employee/approvals/{approval_id}/action/',
+            {'user_id': other_tl.user_id},
+        )
+        self.assertEqual(details.status_code, 200)
+        self.assertEqual(details.data['approval']['id'], approval_id)
+        self.assertEqual(details.data['approval']['assigned_tl_user_id'], self.tl.user_id)
+
+        action = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': other_tl.user_id,
+            'action': 'approve',
+            'comment': 'Reviewed and approved by Selva.',
+        }, format='json')
+        self.assertEqual(action.status_code, 200)
+        approval = EmployeeApprovalRequest.objects.get(pk=approval_id)
+        self.assertEqual(approval.current_stage, 1)
+        self.assertEqual(approval.decisions[0]['approver'], other_tl.user_id)
+
+        second_action = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.tl.user_id,
+            'action': 'reject',
+            'comment': 'A second TL decision must not be accepted.',
+        }, format='json')
+        self.assertEqual(second_action.status_code, 409)
+
     @patch('hrms.push_notifications.send_mobile_push', return_value=True)
     def test_submission_notifies_tl_md_and_ceo_in_app_and_by_push(self, push):
         submitted = self._submit(self.employee)

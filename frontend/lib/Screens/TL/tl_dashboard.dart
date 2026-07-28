@@ -5354,6 +5354,17 @@ Future<void> _openTlApprovalNotification(
       // The approvals page remains available if this notification is stale.
     }
   }
+  if (approval == null && referenceId.isNotEmpty) {
+    try {
+      final result = await EmployeeService().fetchApproval(userId, referenceId);
+      final value = result['approval'];
+      if (value is Map) {
+        approval = Map<String, dynamic>.from(value);
+      }
+    } catch (_) {
+      // A deleted or inaccessible request is handled below.
+    }
+  }
   if (!context.mounted) return;
   if (approval == null) {
     ScaffoldMessenger.of(context).showSnackBar(

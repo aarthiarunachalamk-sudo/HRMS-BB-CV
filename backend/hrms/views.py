@@ -3348,7 +3348,6 @@ def tl_dashboard_view(request):
     today = timezone.localdate()
     pending_leaves = _tl_pending_leave_items(user_id)
     pending_team_reports = list(EmployeeApprovalRequest.objects.filter(
-        assigned_tl_user_id=user_id,
         status='requested',
         current_stage=0,
     )[:100])
@@ -3498,7 +3497,7 @@ def tl_tasks_view(request):
 def tl_approvals_view(request):
     user_id = request.query_params.get('user_id') or ''
     payload = _tl_all_approval_payload(user_id)
-    assigned = list(EmployeeApprovalRequest.objects.filter(assigned_tl_user_id=user_id)[:100])
+    assigned = list(EmployeeApprovalRequest.objects.all()[:100])
 
     def daily_item(item):
         return dict(

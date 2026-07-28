@@ -77,8 +77,6 @@ def employee_approvals_view(request):
         if role in {'tl', 'ceo'}:
             stage = 0 if role == 'tl' else 1
             queryset = EmployeeApprovalRequest.objects.filter(status='requested', current_stage=stage)
-            if role == 'tl':
-                queryset = queryset.filter(assigned_tl_user_id=user_id)
             received = [item for item in queryset[:100] if not any(
                 decision.get('role') == role for decision in (item.decisions or [])
             )]
@@ -173,7 +171,7 @@ def employee_approvals_view(request):
         title=f'New {request_label} Approval',
         message=(
             f'{item.title} was sent for Team Lead approval. '
-            f'Assigned reviewer: {assigned_tl.first_name or assigned_tl.user_id}.'
+            'Any Team Lead can reply, approve, or reject.'
         ),
         notification_type='info',
         module='approval',
@@ -194,15 +192,19 @@ def employee_approvals_view(request):
     return Response({'success': True, 'message': 'Approval request sent.', 'approval': _approval_payload(item)}, status=201)
 
 
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 def employee_approval_action_view(request, pk):
     item = EmployeeApprovalRequest.objects.filter(pk=pk).first()
     if item is None:
         return Response({'success': False, 'message': 'Approval request not found.'}, status=404)
-    user_id = str(request.data.get('user_id') or '').strip()
-    action = str(request.data.get('action') or '').strip().lower()
+    user_id = str(request.query_params.get('user_id') or request.data.get('user_id') or '').strip()
     user = User.objects.filter(user_id=user_id).first()
     role = user.role if user else 'employee'
+    if request.method == 'GET':
+        if role not in {'tl', 'ceo', 'md'} and item.employee_id != user_id:
+            return Response({'success': False, 'message': 'You cannot view this approval.'}, status=403)
+        return Response({'success': True, 'approval': _approval_payload(item)})
+    action = str(request.data.get('action') or '').strip().lower()
 
     if action == 'cancel' and item.employee_id == user_id and item.status == 'requested':
         item.status = 'cancelled'
@@ -211,8 +213,6 @@ def employee_approval_action_view(request, pk):
     if action not in {'approve', 'reject'} or role not in {'tl', 'ceo'}:
         return Response({'success': False, 'message': 'You cannot perform this action.'}, status=403)
     expected_stage = 0 if role == 'tl' else 1
-    if role == 'tl' and item.assigned_tl_user_id != user_id:
-        return Response({'success': False, 'message': 'This request is assigned to another Team Lead.'}, status=403)
     if item.status != 'requested' or item.current_stage != expected_stage:
         return Response({'success': False, 'message': 'This request is not awaiting your approval.'}, status=409)
     comment = str(request.data.get('comment') or '').strip()

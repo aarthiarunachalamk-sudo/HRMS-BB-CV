@@ -188,6 +188,18 @@ class EmployeeService {
     'comment': comment,
   });
 
+  Future<Map<String, dynamic>> fetchApproval(String userId, Object approvalId) async {
+    final response = await http.get(
+      Uri.parse('$_baseUrl/approvals/$approvalId/action/').replace(
+        queryParameters: {'user_id': userId},
+      ),
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return _decodeMap(response, 'Approval details API returned invalid data');
+    }
+    throw Exception(_responseError(response, 'Unable to load approval details'));
+  }
+
   Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> payload,
