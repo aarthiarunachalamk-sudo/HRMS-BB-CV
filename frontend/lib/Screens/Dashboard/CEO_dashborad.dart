@@ -5066,13 +5066,96 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
         }
 
         final categories = _mapList(snapshot.data!['summary']);
+        final employeeApprovals = _mapList(snapshot.data!['approvals'])
+            .where(
+              (item) => const {
+                'daily_report',
+                'social_media_post',
+                'leave_request',
+              }.contains('${item['approval_type'] ?? item['request_type'] ?? ''}'),
+            )
+            .toList();
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
           children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Employee Report Approvals',
+                    style: _CeoText.titleFor(context, 16),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0072FF).withAlpha(35),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${employeeApprovals.length} pending',
+                    style: const TextStyle(
+                      color: Color(0xFF00C6FF),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (employeeApprovals.isEmpty)
+              _GlassCard(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: Text(
+                      'No employee reports awaiting CEO approval',
+                      style: _CeoText.mutedFor(context, 12),
+                    ),
+                  ),
+                ),
+              ),
+            ...employeeApprovals.map((approval) {
+              final type = '${approval['approval_type'] ?? approval['request_type'] ?? ''}';
+              final typeLabel = switch (type) {
+                'daily_report' => 'Daily Report',
+                'social_media_post' => 'Social Media Post',
+                'leave_request' => 'Leave Request',
+                _ => 'Employee Approval',
+              };
+              return _ApprovalTile(
+                type == 'social_media_post'
+                    ? Icons.campaign_rounded
+                    : type == 'leave_request'
+                    ? Icons.beach_access_rounded
+                    : Icons.description_rounded,
+                _displayText(approval['title'], fallback: typeLabel),
+                '$typeLabel - TL approved - CEO action required',
+                const Color(0xFF00C6FF),
+                () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => EmployeeApprovalDetailScreen(
+                        item: approval,
+                        userId: widget.userId,
+                        service: EmployeeService(),
+                        received: true,
+                      ),
+                    ),
+                  );
+                  if (mounted) setState(() {});
+                },
+              );
+            }),
+            const SizedBox(height: 18),
             _GlassCard(
               child: Text(
-                'Select an approval category to view its pending records and history.',
+                'Other approval categories and history',
                 style: _CeoText.mutedFor(context, 12),
               ),
             ),

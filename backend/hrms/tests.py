@@ -190,7 +190,7 @@ class DailyApprovalFlowTests(TestCase):
         self.assertEqual(push.call_count, 3)
 
     @patch('hrms.push_notifications.send_mobile_push', return_value=True)
-    def test_ceo_final_action_notifies_employee(self, push):
+    def test_ceo_final_action_notifies_employee_and_tl(self, push):
         submitted = self._submit(self.employee)
         approval_id = submitted.data['approval']['id']
         self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
@@ -215,7 +215,39 @@ class DailyApprovalFlowTests(TestCase):
         self.assertTrue(AppNotification.objects.filter(
             recipient_role='md', title='Daily Report Approved', push_sent=True,
         ).exists())
-        self.assertEqual(push.call_count, 3)
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_role='tl', title='Daily Report Approved', push_sent=True,
+        ).exists())
+        self.assertEqual(push.call_count, 4)
+
+    @patch('hrms.push_notifications.send_mobile_push', return_value=True)
+    def test_ceo_final_rejection_notifies_employee_and_tl(self, push):
+        submitted = self._submit(self.employee)
+        approval_id = submitted.data['approval']['id']
+        self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.tl.user_id,
+            'action': 'approve',
+            'comment': 'Approved for CEO review.',
+        }, format='json')
+        AppNotification.objects.all().delete()
+        push.reset_mock()
+
+        result = self.client.post(f'/api/employee/approvals/{approval_id}/action/', {
+            'user_id': self.ceo.user_id,
+            'action': 'reject',
+            'comment': 'Please revise and resubmit.',
+        }, format='json')
+
+        self.assertEqual(result.status_code, 200)
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_user_id=self.employee.user_id,
+            title='Approval Request Rejected by CEO',
+            push_sent=True,
+        ).exists())
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_role='tl', title='Daily Report Rejected', push_sent=True,
+        ).exists())
+        self.assertEqual(push.call_count, 4)
 
     def test_ceo_must_reply_before_final_decision(self):
         submitted = self._submit(self.employee)

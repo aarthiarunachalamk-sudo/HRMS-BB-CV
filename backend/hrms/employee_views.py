@@ -285,7 +285,10 @@ def employee_approval_action_view(request, pk):
             'social_media_post': 'Social Media Post',
             'leave_request': 'Leave Request',
         }.get(item.request_type, 'Daily Report')
-        for leadership_role in ('ceo', 'md'):
+        # Once CEO makes the final decision, notify every Team Lead as well as
+        # the employee so the whole review chain sees the final outcome.
+        leadership_roles = ('ceo', 'md', 'tl') if role == 'ceo' else ('ceo', 'md')
+        for leadership_role in leadership_roles:
             _create_notification(
                 role=leadership_role,
                 title=f'{request_label} {item.status.title()}',
