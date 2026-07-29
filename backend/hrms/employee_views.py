@@ -397,7 +397,35 @@ def _notifications_for_employee(employee_id, employee_email=''):
     if not employee_id:
         return []
     _ensure_meeting_reminders(employee_id, employee_email)
-    return [_notification_payload(item) for item in AppNotification.objects.filter(recipient_user_id=employee_id)[:30]]
+    recipient_ids = {str(employee_id).strip()}
+    normalized_email = str(employee_email or '').strip()
+    account = (
+        EmployeeAccount.objects.select_related('user')
+        .filter(
+            Q(employee_id=employee_id)
+            | Q(employee_email__iexact=normalized_email)
+            | Q(registration__personal_email__iexact=normalized_email)
+        )
+        .first()
+    )
+    if account is not None:
+        recipient_ids.add(account.employee_id)
+        if account.user_id and account.user is not None:
+            recipient_ids.add(account.user.user_id)
+    if normalized_email:
+        recipient_ids.update(
+            User.objects.filter(email__iexact=normalized_email).values_list(
+                'user_id',
+                flat=True,
+            )
+        )
+    recipient_ids.discard('')
+    return [
+        _notification_payload(item)
+        for item in AppNotification.objects.filter(
+            recipient_user_id__in=recipient_ids,
+        )[:30]
+    ]
 
 
 def _ensure_meeting_reminders(employee_id, employee_email=''):

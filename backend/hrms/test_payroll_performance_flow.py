@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from .models import (
     CompanyLeave,
+    AppNotification,
     EmployeeAccount,
     EmployeeAttendanceRecord,
     EmployeeLeaveRequest,
@@ -14,8 +15,10 @@ from .models import (
     EmployeeRegistration,
     PayrollProcess,
     SalaryStructure,
+    User,
 )
 from .payroll import calculate_employee_payslip
+from .employee_views import _notifications_for_employee
 
 
 class PerformanceLinkedPayrollTests(TestCase):
@@ -164,3 +167,26 @@ class PerformanceLinkedPayrollTests(TestCase):
         self.assertTrue(PayrollProcess.objects.filter(
             year=2026, month=2, status='published',
         ).exists())
+
+    def test_employee_notifications_include_login_and_employee_id_aliases(self):
+        login_user = User.objects.create_user(
+            'payroll.employee@bitbyte.com',
+            'Password1!',
+            role='employee',
+        )
+        AppNotification.objects.create(
+            recipient_user_id=login_user.user_id,
+            title='Approval Request Approved by CEO',
+            message='Your report was approved by CEO.',
+            module='approval',
+        )
+
+        notifications = _notifications_for_employee(
+            self.account.employee_id,
+            self.account.employee_email,
+        )
+
+        self.assertIn(
+            'Approval Request Approved by CEO',
+            [item['title'] for item in notifications],
+        )

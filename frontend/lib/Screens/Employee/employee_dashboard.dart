@@ -112,7 +112,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         final notification = newApprovalNotification;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${notification['message'] ?? notification['title'] ?? 'Approval updated'}'),
+            content: Text(
+              '${notification['message'] ?? notification['title'] ?? 'Approval updated'}',
+            ),
             action: SnackBarAction(
               label: 'View',
               onPressed: () => _openNotification(notification),
@@ -138,7 +140,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     try {
       var data = await _service.fetchDashboard(widget.userId, widget.email);
       final dashboardCheckIn = '${data.attendance['check_in'] ?? ''}'.trim();
-      final dashboardHasAttendance = dashboardCheckIn.isNotEmpty &&
+      final dashboardHasAttendance =
+          dashboardCheckIn.isNotEmpty &&
           dashboardCheckIn != '--' &&
           dashboardCheckIn != '--:--' &&
           dashboardCheckIn.toLowerCase() != 'null';
@@ -172,7 +175,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         }
       }
       if (mounted) {
-        final backendPhoto = '${data.profile['doc_passport_photo'] ?? ''}'.trim();
+        final backendPhoto = '${data.profile['doc_passport_photo'] ?? ''}'
+            .trim();
         setState(() {
           _data = data;
           if ((_profileImagePath == null || _profileImagePath!.isEmpty) &&
@@ -330,7 +334,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     );
   }
 
-  void _openNotifications() {
+  void _openNotifications() async {
+    await _refreshDashboardSilently();
+    if (!mounted) return;
     _openEmployeeScreen(
       'Notifications',
       EmployeeNotificationsScreen(
