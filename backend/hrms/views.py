@@ -27,6 +27,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Attachment, Disposition, FileContent, FileName, FileType, Mail
 from .models import EmployeeAccount
 from .leadership_employees import ensure_leadership_employee_account
+from .role_permissions import permissions_for_role
 from .serializers import EmployeeAccountSerializer
 import random
 import string
@@ -87,6 +88,7 @@ def login_view(request):
                 'first_name': user.first_name,
                 'user_id': user.user_id,
                 'employee_id': employee_account.employee_id if employee_account else user.user_id,
+                'permissions': permissions_for_role(login_role),
             })
         if not candidates:
             return Response({'success': False, 'message': 'User not found'}, status=404)
@@ -6575,6 +6577,20 @@ def notifications_view(request):
     else:
         notifications = _notifications_for_role(role)
     return Response({'success': True, 'notifications': notifications})
+
+
+@api_view(['GET'])
+def role_permissions_view(request):
+    user_id = str(request.query_params.get('user_id') or '').strip()
+    user = User.objects.filter(user_id=user_id, is_active=True).only('user_id', 'role').first()
+    if user is None:
+        return Response({'success': False, 'message': 'Active user not found.'}, status=404)
+    return Response({
+        'success': True,
+        'user_id': user.user_id,
+        'role': user.role,
+        'permissions': permissions_for_role(user.role),
+    })
 
 
 @api_view(['POST'])

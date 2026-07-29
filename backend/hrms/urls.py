@@ -18,6 +18,7 @@ urlpatterns = [
     path('notifications/', views.notifications_view, name='notifications'),
     path('notifications/<int:pk>/read/', views.notification_read_view, name='notification_read'),
     path('notifications/device-token/', views.register_device_token_view, name='register_device_token'),
+    path('role-permissions/', views.role_permissions_view, name='role_permissions'),
     path('ceo/dashboard/', views.ceo_dashboard_view, name='ceo_dashboard'),
     path('ceo/home/', views.ceo_home_view, name='ceo_home'),
     path('ceo/profile/', views.ceo_profile_view, name='ceo_profile'),
