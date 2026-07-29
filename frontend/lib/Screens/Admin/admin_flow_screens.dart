@@ -7,9 +7,29 @@ import 'admin_service.dart';
 import 'admin_success_screen.dart';
 import 'admin_widgets.dart';
 
-class AdminTasksScreen extends StatelessWidget {
+class AdminTasksScreen extends StatefulWidget {
   final String userId;
   const AdminTasksScreen({super.key, required this.userId});
+
+  @override
+  State<AdminTasksScreen> createState() => _AdminTasksScreenState();
+}
+
+class _AdminTasksScreenState extends State<AdminTasksScreen> {
+  late Future<Map<String, dynamic>> _future;
+  int _selectedFilter = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = AdminService().fetchTasks(widget.userId);
+  }
+
+  Future<void> _refresh() async {
+    final future = AdminService().fetchTasks(widget.userId);
+    setState(() => _future = future);
+    await future;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,14 +43,45 @@ class AdminTasksScreen extends StatelessWidget {
         ),
       ),
       child: FutureBuilder<Map<String, dynamic>>(
-        future: AdminService().fetchTasks(userId),
+        future: _future,
         builder: (context, snapshot) {
           final tasks = _mapList(snapshot.data?['tasks']);
-          return adminPageList([
-            _Segment(['All', 'In Progress', 'Completed'], 0, c),
-            if (tasks.isEmpty)
-              AdminCard(child: Center(child: adminMuted('No tasks found', 12, c))),
-            ...tasks.map((task) {
+          final filtered = tasks.where((task) {
+            final status = _text(task['status']).toLowerCase();
+            if (_selectedFilter == 1) return status == 'in_progress';
+            if (_selectedFilter == 2) return status == 'completed';
+            return true;
+          }).toList();
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError || snapshot.data?['success'] != true) {
+            return _AdminTaskMessage(
+              icon: Icons.cloud_off_rounded,
+              title: 'Unable to load tasks',
+              message: _text(snapshot.data?['message'], 'Check your connection and try again.'),
+              actionLabel: 'Retry',
+              onAction: _refresh,
+            );
+          }
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            child: adminPageList([
+            _Segment(
+              const ['All', 'In Progress', 'Completed'],
+              _selectedFilter,
+              c,
+              onSelected: (index) => setState(() => _selectedFilter = index),
+            ),
+            if (filtered.isEmpty)
+              _AdminTaskMessage(
+                icon: tasks.isEmpty ? Icons.task_alt_rounded : Icons.filter_alt_off_rounded,
+                title: tasks.isEmpty ? 'No tasks assigned yet' : 'No matching tasks',
+                message: tasks.isEmpty
+                    ? 'Tap the + button to create and assign the first task.'
+                    : 'Choose another status to view available tasks.',
+              ),
+            ...filtered.map((task) {
               final title = _text(task['title'], 'Task');
               final assignee = _text(task['assignee'], 'Unassigned');
               final priority = _text(task['priority'], 'Medium');
@@ -67,8 +118,48 @@ class AdminTasksScreen extends StatelessWidget {
                 ),
               );
             }),
-          ]);
+          ]),
+          );
         },
+      ),
+    );
+  }
+}
+
+class _AdminTaskMessage extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final Future<void> Function()? onAction;
+
+  const _AdminTaskMessage({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AdminPalette.of(context);
+    return AdminCard(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          children: [
+            Icon(icon, color: c.primary, size: 38),
+            const SizedBox(height: 10),
+            adminTitle(title, 14, c),
+            const SizedBox(height: 6),
+            Text(message, textAlign: TextAlign.center, style: TextStyle(color: c.muted, fontSize: 12)),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 12),
+              TextButton(onPressed: onAction, child: Text(actionLabel!)),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -85,7 +176,10 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
   final _title = TextEditingController();
   final _description = TextEditingController();
   String _assignee = '';
+  String _assigneeId = '';
+  String _assigneeEmail = '';
   String _priority = 'High';
+  DateTime? _dueDate;
   bool _saving = false;
 
   @override
@@ -101,14 +195,27 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
     return FutureBuilder<Map<String, dynamic>>(
       future: AdminService().fetchEmployees(''),
       builder: (context, snapshot) {
-        final employees = _mapList(snapshot.data?['employees'])
-            .map((item) => _text(item['name']))
-            .where((name) => name.isNotEmpty)
-            .toList();
-        final assignees = employees.isEmpty ? ['Unassigned'] : employees;
+        final employees = _mapList(snapshot.data?['employees']);
+        final employeeByLabel = <String, Map<String, dynamic>>{
+          for (final employee in employees)
+            if (_text(employee['name']).isNotEmpty)
+              '${_text(employee['name'])} (${_text(employee['employee_id'], _text(employee['user_id']))})': employee,
+        };
+        final assignees = employeeByLabel.isEmpty ? ['Unassigned'] : employeeByLabel.keys.toList();
         final selectedAssignee =
             assignees.contains(_assignee) ? _assignee : assignees.first;
-        if (_assignee != selectedAssignee) _assignee = selectedAssignee;
+        if (_assignee != selectedAssignee) {
+          _assignee = selectedAssignee;
+          final employee = employeeByLabel[selectedAssignee];
+          _assigneeId = _text(
+            employee?['employee_id'],
+            _text(employee?['user_id']),
+          );
+          _assigneeEmail = _text(
+            employee?['email'],
+            _text(employee?['employee_email']),
+          );
+        }
         return AdminShell(
           title: 'Create Task',
           child: adminPageList([
@@ -126,7 +233,14 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
           items: assignees,
           icon: Icons.person_outline_rounded,
           c: c,
-          onChanged: (v) => setState(() => _assignee = v),
+          onChanged: (v) {
+            final employee = employeeByLabel[v];
+            setState(() {
+              _assignee = v;
+              _assigneeId = _text(employee?['employee_id'], _text(employee?['user_id']));
+              _assigneeEmail = _text(employee?['email'], _text(employee?['employee_email']));
+            });
+          },
         ),
         _DropdownBlock(
           label: 'Priority',
@@ -136,7 +250,12 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
           c: c,
           onChanged: (v) => setState(() => _priority = v),
         ),
-        _DateCard('Due Date', 'Select due date', c),
+        _DateCard(
+          'Due Date',
+          _dueDate == null ? 'Select due date' : _dueDate!.toIso8601String().split('T').first,
+          c,
+          onTap: _selectDueDate,
+        ),
         AdminPrimaryButton(
           label: _saving ? 'Assigning...' : 'Assign Task',
           icon: Icons.send_rounded,
@@ -154,8 +273,11 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
     final response = await AdminService().createTask({
       'title': _title.text.trim(),
       'description': _description.text.trim(),
-      'assignee_name': _assignee,
+      'assignee_name': _assignee.replaceFirst(RegExp(r'\s*\([^)]*\)$'), ''),
+      'assignee_id': _assigneeId,
+      'assignee_email': _assigneeEmail,
       'priority': _priority,
+      'due_date': _dueDate?.toIso8601String().split('T').first ?? '',
       'created_by': 'admin',
     });
     if (!mounted) return;
@@ -179,6 +301,17 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _selectDueDate() async {
+    final today = DateTime.now();
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _dueDate ?? today,
+      firstDate: today,
+      lastDate: DateTime(today.year + 3),
+    );
+    if (selected != null && mounted) setState(() => _dueDate = selected);
   }
 }
 
@@ -749,8 +882,9 @@ class _Segment extends StatelessWidget {
   final List<String> labels;
   final int selected;
   final AdminPalette c;
+  final ValueChanged<int>? onSelected;
 
-  const _Segment(this.labels, this.selected, this.c);
+  const _Segment(this.labels, this.selected, this.c, {this.onSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -760,19 +894,23 @@ class _Segment extends StatelessWidget {
         children: List.generate(labels.length, (index) {
           final isSelected = index == selected;
           return Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? c.primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                labels[index],
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : c.muted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: onSelected == null ? null : () => onSelected!(index),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? c.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  labels[index],
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : c.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),
@@ -972,12 +1110,14 @@ class _DateCard extends StatelessWidget {
   final String label;
   final String value;
   final AdminPalette c;
+  final VoidCallback? onTap;
 
-  const _DateCard(this.label, this.value, this.c);
+  const _DateCard(this.label, this.value, this.c, {this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return AdminCard(
+      onTap: onTap,
       child: Row(
         children: [
           Icon(Icons.calendar_month_rounded, color: c.primary, size: 20),

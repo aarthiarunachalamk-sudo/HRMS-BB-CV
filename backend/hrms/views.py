@@ -6291,6 +6291,15 @@ def admin_tasks_view(request):
             project=str(request.data.get('project') or '').strip(),
             created_by=str(request.data.get('created_by') or request.data.get('user_id') or 'admin').strip(),
         )
+        if task.assignee_id or task.assignee_email:
+            _create_notification(
+                user_id=task.assignee_id or task.assignee_email,
+                title='New Task Assigned',
+                message=f'{task.title} has been assigned to you by Admin.',
+                notification_type='info',
+                module='tasks',
+                reference_id=task.id,
+            )
         return Response({
             'success': True,
             'message': 'Task created successfully.',
