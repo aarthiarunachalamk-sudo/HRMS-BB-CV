@@ -174,7 +174,7 @@ class PerformanceLinkedPayrollTests(TestCase):
             'Password1!',
             role='employee',
         )
-        AppNotification.objects.create(
+        notification = AppNotification.objects.create(
             recipient_user_id=login_user.user_id,
             title='Approval Request Approved by CEO',
             message='Your report was approved by CEO.',
@@ -190,3 +190,11 @@ class PerformanceLinkedPayrollTests(TestCase):
             'Approval Request Approved by CEO',
             [item['title'] for item in notifications],
         )
+        marked = self.client.post(
+            f'/api/notifications/{notification.id}/read/',
+            {'user_id': self.account.employee_id, 'role': 'employee'},
+            format='json',
+        )
+        self.assertEqual(marked.status_code, 200)
+        notification.refresh_from_db()
+        self.assertTrue(notification.is_read)

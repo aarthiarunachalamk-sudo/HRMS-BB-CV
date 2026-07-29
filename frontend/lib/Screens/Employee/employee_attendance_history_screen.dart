@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
@@ -287,77 +288,14 @@ class _ModeTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardBg = ThemeConfig.getCardBg(context);
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: EmployeeColors.blue.withAlpha(55)),
-      ),
-      child: Row(
-        children: [
-          _ModeTab(
-            label: 'Weekly',
-            selected: mode == EmployeeCalendarMode.weekly,
-            onTap: () => onChanged(EmployeeCalendarMode.weekly),
-          ),
-          _ModeTab(
-            label: 'Monthly',
-            selected: mode == EmployeeCalendarMode.monthly,
-            onTap: () => onChanged(EmployeeCalendarMode.monthly),
-          ),
-          _ModeTab(
-            label: 'Yearly',
-            selected: mode == EmployeeCalendarMode.yearly,
-            onTap: () => onChanged(EmployeeCalendarMode.yearly),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeTab extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ModeTab({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = ThemeConfig.getTextSecondary(context);
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          height: double.infinity,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: selected ? ThemeConfig.blueGradient : null,
-            color: selected ? null : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: selected
-                ? null
-                : Border.all(color: EmployeeColors.blue.withAlpha(40)),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : muted,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ),
+    return AppModuleTabs<EmployeeCalendarMode>(
+      tabs: const [
+        AppModuleTab(EmployeeCalendarMode.weekly, 'Weekly'),
+        AppModuleTab(EmployeeCalendarMode.monthly, 'Monthly'),
+        AppModuleTab(EmployeeCalendarMode.yearly, 'Yearly'),
+      ],
+      selected: mode,
+      onSelected: onChanged,
     );
   }
 }

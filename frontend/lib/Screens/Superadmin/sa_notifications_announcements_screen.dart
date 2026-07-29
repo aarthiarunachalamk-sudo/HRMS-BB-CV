@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'sa_service.dart';
 import 'sa_shared.dart';
 
@@ -25,11 +26,15 @@ class SaNotificationsAnnouncementsScreen extends StatelessWidget {
                 border: Border.all(color: c.border),
               ),
               padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-              child: Row(children: [
-                _SegTab('All', true, c),
-                _SegTab('Announcements', false, c),
-                _SegTab('Alerts', false, c),
-              ]),
+              child: AppModuleTabs<String>(
+                tabs: const [
+                  AppModuleTab('all', 'All'),
+                  AppModuleTab('announcements', 'Announcements'),
+                  AppModuleTab('alerts', 'Alerts'),
+                ],
+                selected: 'all',
+                onSelected: (_) {},
+              ),
             ),
             const SizedBox(height: 12),
 
@@ -92,41 +97,9 @@ class SaNotificationsAnnouncementsScreen extends StatelessWidget {
     final raw = data['notifications'];
     if (raw is! List) return [];
     return raw
-        .map((e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{})
+        .map(
+          (e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{},
+        )
         .toList();
-  }
-}
-
-class _SegTab extends StatelessWidget {
-  final String label;
-  final bool active;
-  final SaPalette c;
-  const _SegTab(this.label, this.active, this.c);
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          gradient: active
-              ? const LinearGradient(
-                  colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
-                )
-              : null,
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: active ? Colors.white : c.muted,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-    );
   }
 }

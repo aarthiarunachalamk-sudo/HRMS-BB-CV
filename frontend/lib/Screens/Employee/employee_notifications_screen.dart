@@ -6,11 +6,13 @@ import 'employee_shared.dart';
 class EmployeeNotificationsScreen extends StatelessWidget {
   final EmployeeDashboardData data;
   final ValueChanged<Map<String, dynamic>>? onNotificationTap;
+  final Future<void> Function()? onMarkAllRead;
 
   const EmployeeNotificationsScreen({
     super.key,
     required this.data,
     this.onNotificationTap,
+    this.onMarkAllRead,
   });
 
   @override
@@ -18,9 +20,11 @@ class EmployeeNotificationsScreen extends StatelessWidget {
     return EmployeePage(
       title: 'Notifications',
       action: TextButton(
-        onPressed: () {
+        onPressed: () async {
+          await onMarkAllRead?.call();
+          if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('All notifications are already visible.')),
+            const SnackBar(content: Text('All notifications marked as read.')),
           );
         },
         child: const Text('Mark All'),

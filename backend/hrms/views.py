@@ -2750,17 +2750,19 @@ def _hr_pending_leave_items():
 
 def _checkout_permission_item(item):
     employee_name = _employee_name(item.employee_id)
+    is_morning = item.request_type == 'late_check_in'
+    permission_label = 'Morning Permission' if is_morning else 'Early Check-Out'
     return {
         'id': item.id,
         'approval_type': 'early_checkout',
         'employee_id': item.employee_id,
         'name': employee_name,
         'initials': _initials(employee_name),
-        'title': f'{employee_name} - Early Check-Out',
-        'subtitle': f'Early check-out permission - {item.attendance_date:%d %b %Y}',
+        'title': f'{employee_name} - {permission_label}',
+        'subtitle': f'{permission_label} - {item.attendance_date:%d %b %Y}',
         'days': 'Permission',
         'duration': 'Permission',
-        'session': 'Early Check-Out',
+        'session': 'First Half' if is_morning else 'Second Half',
         'tl_status': '',
         'hr_status': '',
         'attendance_date': item.attendance_date.isoformat(),
@@ -2770,6 +2772,46 @@ def _checkout_permission_item(item):
         'reviewed_by': item.reviewed_by,
         'reviewed_at': item.reviewed_at.isoformat() if item.reviewed_at else '',
     }
+
+
+def _create_half_day_leave_for_permission(permission, reviewer):
+    """Convert an approved attendance permission into one paid half-day leave."""
+    session = 'First Half' if permission.request_type == 'late_check_in' else 'Second Half'
+    existing = EmployeeLeaveRequest.objects.filter(
+        employee_id=permission.employee_id,
+        from_date=permission.attendance_date,
+        to_date=permission.attendance_date,
+        session=session,
+    ).exclude(status='rejected').first()
+    if existing is not None:
+        return existing, False
+
+    leave = EmployeeLeaveRequest.objects.create(
+        employee_id=permission.employee_id,
+        leave_type='Casual Leave',
+        session=session,
+        from_date=permission.attendance_date,
+        to_date=permission.attendance_date,
+        total_days=Decimal('0.50'),
+        reason=(
+            f'Automatically created from approved {"morning" if session == "First Half" else "early check-out"} '
+            f'permission #{permission.id}. {permission.reason}'.strip()
+        ),
+        status='approved',
+        tl_status='approved',
+        hr_status='approved',
+        approved_by=reviewer,
+        tl_approved_by=reviewer if reviewer.lower().startswith('tl') else 'Permission workflow',
+        hr_approved_by=reviewer if reviewer.lower().startswith('hr') else 'Permission workflow',
+        tl_reviewed_at=permission.reviewed_at,
+        hr_reviewed_at=permission.reviewed_at,
+        reviewed_at=permission.reviewed_at,
+    )
+    EmployeeAttendanceRecord.objects.filter(
+        employee_id=permission.employee_id,
+        attendance_date=permission.attendance_date,
+    ).update(status='Half Day')
+    return leave, True
 
 
 def _checkout_permissions(status_value='pending', employee_ids=None):
@@ -2789,7 +2831,7 @@ def _checkout_permission_decision(request, pk, role):
     try:
         permission = AttendanceRegularizationRequest.objects.get(
             pk=pk,
-            request_type='early_checkout',
+            request_type__in=['early_checkout', 'late_check_in'],
         )
     except AttendanceRegularizationRequest.DoesNotExist:
         return Response({'success': False, 'message': 'Check-out permission was not found.'}, status=404)
@@ -2802,11 +2844,19 @@ def _checkout_permission_decision(request, pk, role):
     permission.review_note = request.data.get('review_note') or request.data.get('reason') or ''
     permission.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_note'])
 
+    half_day_leave = None
+    leave_created = False
+    if decision == 'approved':
+        half_day_leave, leave_created = _create_half_day_leave_for_permission(
+            permission,
+            permission.reviewed_by,
+        )
+
     _create_notification(
         user_id=permission.employee_id,
         title=f'Early Check-Out {decision.title()}',
         message=(
-            'Your early check-out permission was approved. You can now complete check-out from the Employee attendance screen.'
+            'Your permission was approved and 0.5 day Casual Leave was automatically applied.'
             if decision == 'approved'
             else f'Your early check-out permission was rejected by {role.upper()}.'
         ),
@@ -2817,11 +2867,13 @@ def _checkout_permission_decision(request, pk, role):
     return Response({
         'success': True,
         'message': (
-            'Permission approved. The employee must now complete check-out.'
+            'Permission approved. A 0.5 day Casual Leave was applied automatically.'
             if decision == 'approved'
             else f'Early check-out rejected by {role.upper()}.'
         ),
         'permission': _checkout_permission_item(permission),
+        'half_day_leave_id': half_day_leave.id if half_day_leave else None,
+        'half_day_leave_created': leave_created,
     })
 
 
@@ -6366,10 +6418,25 @@ def notification_read_view(request, pk):
     if user_id and not role:
         user = User.objects.filter(user_id=user_id).only('role').first()
         role = user.role if user else ''
+    recipient_ids = {user_id} if user_id else set()
+    if user_id:
+        account = EmployeeAccount.objects.select_related('user').filter(
+            Q(employee_id=user_id) | Q(user__user_id=user_id)
+        ).first()
+        if account is not None:
+            recipient_ids.add(account.employee_id)
+            if account.user is not None:
+                recipient_ids.add(account.user.user_id)
+            if account.employee_email:
+                recipient_ids.update(
+                    User.objects.filter(email__iexact=account.employee_email)
+                    .values_list('user_id', flat=True)
+                )
+    recipient_ids.discard('')
     query = Q(pk=pk)
     target = Q()
-    if user_id:
-        target |= Q(recipient_user_id=user_id)
+    if recipient_ids:
+        target |= Q(recipient_user_id__in=recipient_ids)
     if role:
         target |= Q(recipient_role=role)
     if target:

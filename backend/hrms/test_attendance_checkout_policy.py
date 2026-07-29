@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone as datetime_timezone
+from decimal import Decimal
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -10,6 +11,7 @@ from .models import (
     EmployeeAttendanceRecord,
     EmployeeLeaveRequest,
 )
+from .employee_views import _leave_balance_payload
 
 
 class AttendanceCheckoutPolicyTests(TestCase):
@@ -90,6 +92,14 @@ class AttendanceCheckoutPolicyTests(TestCase):
             format='json',
         )
         self.assertEqual(approval.status_code, 200)
+        leave = EmployeeLeaveRequest.objects.get(
+            employee_id=self.employee_id,
+            from_date=local_now.date(),
+            session='Second Half',
+        )
+        self.assertEqual(leave.total_days, Decimal('0.50'))
+        self.assertEqual(leave.status, 'approved')
+        self.assertEqual(_leave_balance_payload(self.employee_id)['used_this_year'], 0.5)
         record.refresh_from_db()
         self.assertIsNone(record.check_out)
 
@@ -111,6 +121,42 @@ class AttendanceCheckoutPolicyTests(TestCase):
         self.assertFalse(checkout.data.get('permission_required', False))
         record.refresh_from_db()
         self.assertIsNotNone(record.check_out)
+
+    def test_morning_permission_approval_creates_only_one_first_half_leave(self):
+        permission = AttendanceRegularizationRequest.objects.create(
+            employee_id=self.employee_id,
+            attendance_date=datetime(2026, 7, 28).date(),
+            request_type='late_check_in',
+            requested_check_in=datetime(2026, 7, 28, 13, 30, tzinfo=IST),
+            reason='Morning personal permission',
+        )
+        approval = self.client.post(
+            f'/api/tl/checkout-permissions/{permission.id}/',
+            {'status': 'approved', 'user_id': 'TL-01'},
+            format='json',
+        )
+        self.assertEqual(approval.status_code, 200)
+        self.assertTrue(approval.data['half_day_leave_created'])
+        leave = EmployeeLeaveRequest.objects.get(
+            employee_id=self.employee_id,
+            from_date=permission.attendance_date,
+            session='First Half',
+        )
+        self.assertEqual(leave.total_days, Decimal('0.50'))
+        self.assertEqual(leave.tl_status, 'approved')
+        self.assertEqual(leave.hr_status, 'approved')
+
+        repeated = self.client.post(
+            f'/api/tl/checkout-permissions/{permission.id}/',
+            {'status': 'approved', 'user_id': 'TL-01'},
+            format='json',
+        )
+        self.assertEqual(repeated.status_code, 409)
+        self.assertEqual(EmployeeLeaveRequest.objects.filter(
+            employee_id=self.employee_id,
+            from_date=permission.attendance_date,
+            session='First Half',
+        ).count(), 1)
 
     def test_normal_attendance_auto_checks_out_at_630_pm(self):
         local_now = datetime(2026, 7, 27, 18, 30, tzinfo=IST)

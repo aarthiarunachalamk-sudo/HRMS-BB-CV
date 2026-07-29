@@ -6,6 +6,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_shared.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_shared.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Superadmin/sa_shared.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/TL/tl_shared.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 
 void main() {
   const longTitle =
@@ -100,5 +101,22 @@ void main() {
         trailing: 'Restricted',
       ),
     );
+  });
+
+  testWidgets('Shared module tabs fit a narrow phone', (tester) async {
+    await pumpNarrow(
+      tester,
+      AppModuleTabs<String>(
+        tabs: const [
+          AppModuleTab('pending', 'Pending (120)'),
+          AppModuleTab('urgent', 'Urgent (20)'),
+          AppModuleTab('approved', 'Approved (300)'),
+          AppModuleTab('rejected', 'Rejected (15)'),
+        ],
+        selected: 'approved',
+        onSelected: (_) {},
+      ),
+    );
+    expect(find.text('Approved (300)'), findsOneWidget);
   });
 }

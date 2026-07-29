@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_approvals_screen.dart';
@@ -4352,32 +4353,15 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
           ),
           const SizedBox(height: 12),
         ],
-        Row(
-          children: [
-            _LeaveTab(
-              label: 'Pending (${widget.pending.length})',
-              active: _tab == 'pending',
-              onTap: () => setState(() => _tab = 'pending'),
-            ),
-            const SizedBox(width: 8),
-            _LeaveTab(
-              label: 'Urgent (${urgent.length})',
-              active: _tab == 'urgent',
-              onTap: () => setState(() => _tab = 'urgent'),
-            ),
-            const SizedBox(width: 8),
-            _LeaveTab(
-              label: 'Approved (${widget.approved.length})',
-              active: _tab == 'approved',
-              onTap: () => setState(() => _tab = 'approved'),
-            ),
-            const SizedBox(width: 8),
-            _LeaveTab(
-              label: 'Rejected (${widget.rejected.length})',
-              active: _tab == 'rejected',
-              onTap: () => setState(() => _tab = 'rejected'),
-            ),
+        AppModuleTabs<String>(
+          tabs: [
+            AppModuleTab('pending', 'Pending (${widget.pending.length})'),
+            AppModuleTab('urgent', 'Urgent (${urgent.length})'),
+            AppModuleTab('approved', 'Approved (${widget.approved.length})'),
+            AppModuleTab('rejected', 'Rejected (${widget.rejected.length})'),
           ],
+          selected: _tab,
+          onSelected: (value) => setState(() => _tab = value),
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty)
@@ -4404,52 +4388,6 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _LeaveTab extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _LeaveTab({
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final c = TlPalette.of(context);
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          height: 38,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: active
-                ? const LinearGradient(
-                    colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
-                  )
-                : null,
-            color: active ? null : c.row,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: active ? c.primary : c.border),
-          ),
-          child: Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: active ? Colors.white : c.muted,
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

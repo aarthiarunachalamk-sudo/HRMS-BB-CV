@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 
 import 'employee_service.dart';
 import 'employee_shared.dart';
@@ -121,14 +122,13 @@ class _EmployeeApprovalsScreenState extends State<EmployeeApprovalsScreen> {
         Row(
           children: [
             Expanded(
-              child: SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: false, label: Text('Received')),
-                  ButtonSegment(value: true, label: Text('Sent')),
+              child: AppModuleTabs<bool>(
+                tabs: const [
+                  AppModuleTab(false, 'Received'),
+                  AppModuleTab(true, 'Sent'),
                 ],
-                selected: {_sent},
-                onSelectionChanged: (value) =>
-                    setState(() => _sent = value.first),
+                selected: _sent,
+                onSelected: (value) => setState(() => _sent = value),
               ),
             ),
             const SizedBox(width: 10),

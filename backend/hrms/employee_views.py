@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone as datetime_timezone
+from decimal import Decimal
 import json
 from pathlib import Path
 
@@ -1651,13 +1652,16 @@ def employee_leave_request_view(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    session = request.data.get('session') or 'Full Day'
+    calendar_days = (to_date - from_date).days + 1
+    total_days = Decimal('0.50') if session in {'First Half', 'Second Half'} else Decimal(calendar_days)
     leave = EmployeeLeaveRequest.objects.create(
         employee_id=employee_id,
         leave_type=request.data.get('leave_type') or 'Leave',
-        session=request.data.get('session') or 'Full Day',
+        session=session,
         from_date=from_date,
         to_date=to_date,
-        total_days=(to_date - from_date).days + 1,
+        total_days=total_days,
         reason=request.data.get('reason') or '',
         medical_certificate=request.FILES.get('medical_certificate'),
     )

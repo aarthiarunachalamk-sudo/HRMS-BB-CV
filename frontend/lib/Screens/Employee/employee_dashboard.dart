@@ -280,7 +280,28 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     }
   }
 
-  void _openNotification(Map<String, dynamic> notification) {
+  Future<void> _markNotificationRead(Map<String, dynamic> notification) async {
+    final id = notification['id'];
+    if (id == null || notification['is_read'] == true) return;
+    try {
+      await _service.markNotificationRead(widget.userId, id);
+      await _refreshDashboardSilently();
+    } catch (_) {
+      // Opening the destination must remain available during a network retry.
+    }
+  }
+
+  Future<void> _markAllNotificationsRead() async {
+    final unread = _data.notifications
+        .where((item) => item['is_read'] != true && item['id'] != null)
+        .toList();
+    await Future.wait(unread.map(_markNotificationRead));
+    await _refreshDashboardSilently();
+  }
+
+  Future<void> _openNotification(Map<String, dynamic> notification) async {
+    await _markNotificationRead(notification);
+    if (!mounted) return;
     final module = '${notification['module'] ?? ''}'.toLowerCase();
     final title = '${notification['title'] ?? ''}'.toLowerCase();
     final message = '${notification['message'] ?? ''}'.toLowerCase();
@@ -341,6 +362,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
       'Notifications',
       EmployeeNotificationsScreen(
         data: _data,
+        onMarkAllRead: _markAllNotificationsRead,
         onNotificationTap: (item) {
           Navigator.of(context).pop();
           _openNotification(item);

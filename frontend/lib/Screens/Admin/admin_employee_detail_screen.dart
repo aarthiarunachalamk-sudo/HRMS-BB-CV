@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'admin_palette.dart';
 import 'admin_widgets.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
@@ -62,7 +63,7 @@ class AdminEmployeeDetailScreen extends StatelessWidget {
         ),
 
         // Segment tabs
-        _SegmentRow(c: c),
+        const _SegmentRow(),
 
         const SizedBox(height: 8),
         const AdminSectionTitle('Personal Details'),
@@ -146,54 +147,21 @@ class AdminEmployeeDetailScreen extends StatelessWidget {
 }
 
 class _SegmentRow extends StatelessWidget {
-  final AdminPalette c;
-  const _SegmentRow({required this.c});
+  const _SegmentRow();
 
   @override
   Widget build(BuildContext context) {
     return AdminCard(
       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-      child: Row(
-        children: [
-          _Tab('Attendance', true, c),
-          _Tab('Leaves', false, c),
-          _Tab('Tasks', false, c),
-          _Tab('More', false, c),
+      child: AppModuleTabs<String>(
+        tabs: const [
+          AppModuleTab('attendance', 'Attendance'),
+          AppModuleTab('leaves', 'Leaves'),
+          AppModuleTab('tasks', 'Tasks'),
+          AppModuleTab('more', 'More'),
         ],
-      ),
-    );
-  }
-}
-
-class _Tab extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final AdminPalette c;
-  const _Tab(this.label, this.selected, this.c);
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          gradient: selected
-              ? const LinearGradient(
-                  colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
-                )
-              : null,
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: selected ? Colors.white : c.muted,
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-          ),
-        ),
+        selected: 'attendance',
+        onSelected: (_) {},
       ),
     );
   }

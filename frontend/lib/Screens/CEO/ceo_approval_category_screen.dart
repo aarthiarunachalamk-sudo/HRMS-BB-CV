@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 
 import 'ceo_leave_request_screen.dart';
 import 'ceo_service.dart';
@@ -117,24 +118,13 @@ class _CeoApprovalCategoryScreenState extends State<CeoApprovalCategoryScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _FilterButton(
-                    label: 'Pending',
-                    selected: !_history,
-                    onTap: () => _selectHistory(false),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _FilterButton(
-                    label: 'History',
-                    selected: _history,
-                    onTap: () => _selectHistory(true),
-                  ),
-                ),
+            child: AppModuleTabs<bool>(
+              tabs: const [
+                AppModuleTab(false, 'Pending'),
+                AppModuleTab(true, 'History'),
               ],
+              selected: _history,
+              onSelected: _selectHistory,
             ),
           ),
           if (_history)
@@ -284,33 +274,6 @@ class CeoApprovalDetailScreen extends StatelessWidget {
                 ),
         ),
       ]),
-    );
-  }
-}
-
-class _FilterButton extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FilterButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: selected ? CeoColors.cyan : CeoColors.muted,
-        backgroundColor: selected
-            ? CeoColors.cyan.withValues(alpha: 0.10)
-            : Colors.transparent,
-        side: BorderSide(color: selected ? CeoColors.cyan : CeoColors.border),
-      ),
-      child: Text(label),
     );
   }
 }

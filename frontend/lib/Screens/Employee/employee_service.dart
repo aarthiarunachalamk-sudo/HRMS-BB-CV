@@ -55,11 +55,18 @@ class EmployeeService {
     DateTime fromDate,
     DateTime toDate,
   ) async {
-    final body = await _getRecordBody('/leave-history/', userId, fromDate, toDate);
+    final body = await _getRecordBody(
+      '/leave-history/',
+      userId,
+      fromDate,
+      toDate,
+    );
     return EmployeeLeaveHistoryResult(
       records: _recordsFromBody(body),
       leaveBalances: Map<String, dynamic>.from(
-        body['leave_balances'] is Map ? body['leave_balances'] as Map : const {},
+        body['leave_balances'] is Map
+            ? body['leave_balances'] as Map
+            : const {},
       ),
     );
   }
@@ -84,10 +91,7 @@ class EmployeeService {
       }
     }
     request.files.add(
-      await http.MultipartFile.fromPath(
-        'medical_certificate',
-        certificatePath,
-      ),
+      await http.MultipartFile.fromPath('medical_certificate', certificatePath),
     );
 
     final streamed = await request.send();
@@ -100,13 +104,18 @@ class EmployeeService {
 
   Future<Map<String, dynamic>> fetchPayslip(String userId) async {
     final response = await http.get(
-      Uri.parse('$_baseUrl/payslip/').replace(
-        queryParameters: {'user_id': userId},
-      ),
+      Uri.parse(
+        '$_baseUrl/payslip/',
+      ).replace(queryParameters: {'user_id': userId}),
     );
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      final body = _decodeMap(response, 'Employee payslip API returned invalid data');
-      return Map<String, dynamic>.from(body['payslip'] is Map ? body['payslip'] as Map : const {});
+      final body = _decodeMap(
+        response,
+        'Employee payslip API returned invalid data',
+      );
+      return Map<String, dynamic>.from(
+        body['payslip'] is Map ? body['payslip'] as Map : const {},
+      );
     }
     throw Exception(_responseError(response, 'Employee payslip API failed'));
   }
@@ -128,7 +137,10 @@ class EmployeeService {
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return _decodeMap(response, 'Employee document API returned invalid data');
+      return _decodeMap(
+        response,
+        'Employee document API returned invalid data',
+      );
     }
     throw Exception(_responseError(response, 'Employee document API failed'));
   }
@@ -138,14 +150,42 @@ class EmployeeService {
   }
 
   Future<Map<String, dynamic>> fetchApprovals(String userId) async {
-    final response = await http.get(Uri.parse('$_baseUrl/approvals/').replace(queryParameters: {'user_id': userId}));
+    final response = await http.get(
+      Uri.parse(
+        '$_baseUrl/approvals/',
+      ).replace(queryParameters: {'user_id': userId}),
+    );
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return _decodeMap(response, 'Employee approvals API returned invalid data');
+      return _decodeMap(
+        response,
+        'Employee approvals API returned invalid data',
+      );
     }
     throw Exception(_responseError(response, 'Employee approvals API failed'));
   }
 
-  Future<Map<String, dynamic>> submitDailyApproval(String userId, Map<String, dynamic> request) {
+  Future<void> markNotificationRead(
+    String userId,
+    Object notificationId,
+  ) async {
+    final response = await http
+        .post(
+          ApiConfig.uri('/notifications/$notificationId/read/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'user_id': userId, 'role': 'employee'}),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        _responseError(response, 'Unable to mark notification as read'),
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> submitDailyApproval(
+    String userId,
+    Map<String, dynamic> request,
+  ) {
     return _post('/approvals/', {'user_id': userId, ...request});
   }
 
@@ -162,17 +202,25 @@ class EmployeeService {
     Map<String, dynamic> fields,
     String attachmentPath,
   ) async {
-    final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/approvals/'));
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_baseUrl/approvals/'),
+    );
     request.fields['user_id'] = userId;
     for (final entry in fields.entries) {
       request.fields[entry.key] = entry.value is List
           ? jsonEncode(entry.value)
           : '${entry.value}';
     }
-    request.files.add(await http.MultipartFile.fromPath('attachment', attachmentPath));
+    request.files.add(
+      await http.MultipartFile.fromPath('attachment', attachmentPath),
+    );
     final response = await http.Response.fromStream(await request.send());
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return _decodeMap(response, 'Employee approvals API returned invalid data');
+      return _decodeMap(
+        response,
+        'Employee approvals API returned invalid data',
+      );
     }
     throw Exception(_responseError(response, 'Employee approvals API failed'));
   }
@@ -188,16 +236,21 @@ class EmployeeService {
     'comment': comment,
   });
 
-  Future<Map<String, dynamic>> fetchApproval(String userId, Object approvalId) async {
+  Future<Map<String, dynamic>> fetchApproval(
+    String userId,
+    Object approvalId,
+  ) async {
     final response = await http.get(
-      Uri.parse('$_baseUrl/approvals/$approvalId/action/').replace(
-        queryParameters: {'user_id': userId},
-      ),
+      Uri.parse(
+        '$_baseUrl/approvals/$approvalId/action/',
+      ).replace(queryParameters: {'user_id': userId}),
     );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return _decodeMap(response, 'Approval details API returned invalid data');
     }
-    throw Exception(_responseError(response, 'Unable to load approval details'));
+    throw Exception(
+      _responseError(response, 'Unable to load approval details'),
+    );
   }
 
   Future<Map<String, dynamic>> _post(

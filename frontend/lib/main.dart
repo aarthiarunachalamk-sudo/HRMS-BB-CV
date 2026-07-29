@@ -20,9 +20,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 Future<void> _initializeFirebase() async {
   try {
     await Firebase.initializeApp().timeout(const Duration(seconds: 6));
-    FirebaseMessaging.onBackgroundMessage(
-      _firebaseMessagingBackgroundHandler,
-    );
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   } catch (error) {
     debugPrint('Firebase initialization skipped: $error');
   }
@@ -146,20 +144,21 @@ class MyApp extends StatelessWidget {
       brightness: brightness,
       scaffoldBackgroundColor: scaffold,
       cardColor: card,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF0072FF),
-        brightness: brightness,
-      ).copyWith(
-        primary: primary,
-        onPrimary: onPrimary,
-        surface: surface,
-        onSurface: text,
-        secondary: _accent,
-        onSecondary: onPrimary,
-        outline: outline,
-        error: const Color(0xFFEF4444),
-        onError: Colors.white,
-      ),
+      colorScheme:
+          ColorScheme.fromSeed(
+            seedColor: const Color(0xFF0072FF),
+            brightness: brightness,
+          ).copyWith(
+            primary: primary,
+            onPrimary: onPrimary,
+            surface: surface,
+            onSurface: text,
+            secondary: _accent,
+            onSecondary: onPrimary,
+            outline: outline,
+            error: const Color(0xFFEF4444),
+            onError: Colors.white,
+          ),
       useMaterial3: true,
       visualDensity: VisualDensity.standard,
       splashFactory: InkSparkle.splashFactory,
@@ -205,7 +204,10 @@ class MyApp extends StatelessWidget {
         hintStyle: textTheme.bodyMedium,
         prefixIconColor: muted,
         suffixIconColor: muted,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         constraints: const BoxConstraints(minHeight: AppLayout.controlHeight),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -234,9 +236,7 @@ class MyApp extends StatelessWidget {
             borderSide: BorderSide(color: outline),
           ),
         ),
-        menuStyle: MenuStyle(
-          backgroundColor: WidgetStatePropertyAll(surface),
-        ),
+        menuStyle: MenuStyle(backgroundColor: WidgetStatePropertyAll(surface)),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: surface,
@@ -248,7 +248,9 @@ class MyApp extends StatelessWidget {
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: isDark ? const Color(0xFF0F1B2E) : const Color(0xFF1F3654),
+        backgroundColor: isDark
+            ? const Color(0xFF0F1B2E)
+            : const Color(0xFF1F3654),
         contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
         actionTextColor: const Color(0xFF00C6FF),
         behavior: SnackBarBehavior.floating,
@@ -258,7 +260,9 @@ class MyApp extends StatelessWidget {
       chipTheme: ChipThemeData(
         backgroundColor: fill,
         selectedColor: primary.withAlpha(isDark ? 55 : 35),
-        disabledColor: isDark ? const Color(0xFF1E2E44) : const Color(0xFFE2E8F0),
+        disabledColor: isDark
+            ? const Color(0xFF1E2E44)
+            : const Color(0xFFE2E8F0),
         labelStyle: textTheme.labelMedium!.copyWith(color: text),
         secondaryLabelStyle: textTheme.labelMedium!.copyWith(color: text),
         side: BorderSide(color: outline),
@@ -275,6 +279,33 @@ class MyApp extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const WidgetStatePropertyAll(Size(0, 44)),
+          padding: const WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) =>
+                states.contains(WidgetState.selected) ? Colors.white : muted,
+          ),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) =>
+                states.contains(WidgetState.selected) ? primary : surface,
+          ),
+          side: WidgetStateProperty.resolveWith(
+            (states) => BorderSide(
+              color: states.contains(WidgetState.selected) ? primary : outline,
+            ),
+          ),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+          ),
+        ),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: surface,
@@ -314,34 +345,42 @@ class MyApp extends StatelessWidget {
           disabledForegroundColor: muted,
           textStyle: textTheme.labelLarge,
           minimumSize: const Size(48, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: ThemeConfig.blueSecondary,
           foregroundColor: onPrimary,
-          disabledBackgroundColor:
-              isDark ? const Color(0xFF1E2E44) : const Color(0xFFE2E8F0),
+          disabledBackgroundColor: isDark
+              ? const Color(0xFF1E2E44)
+              : const Color(0xFFE2E8F0),
           disabledForegroundColor: muted,
           textStyle: textTheme.labelLarge,
           minimumSize: const Size(64, 52),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: ThemeConfig.blueSecondary,
           foregroundColor: onPrimary,
-          disabledBackgroundColor:
-              isDark ? const Color(0xFF1E2E44) : const Color(0xFFE2E8F0),
+          disabledBackgroundColor: isDark
+              ? const Color(0xFF1E2E44)
+              : const Color(0xFFE2E8F0),
           disabledForegroundColor: muted,
           textStyle: textTheme.labelLarge,
           minimumSize: const Size(64, 52),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -352,7 +391,9 @@ class MyApp extends StatelessWidget {
           textStyle: textTheme.labelLarge,
           minimumSize: const Size(64, 52),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
@@ -367,21 +408,6 @@ class MyApp extends StatelessWidget {
         backgroundColor: primary,
         foregroundColor: Colors.white,
         elevation: 2,
-      ),
-      segmentedButtonTheme: SegmentedButtonThemeData(
-        style: ButtonStyle(
-          foregroundColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? Colors.white
-                : primary,
-          ),
-          backgroundColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? primary
-                : Colors.transparent,
-          ),
-          side: WidgetStatePropertyAll(BorderSide(color: primary)),
-        ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: surface,
@@ -401,7 +427,9 @@ class MyApp extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
         side: BorderSide(color: muted, width: 1.5),
         fillColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected) ? primary : Colors.transparent,
+          (states) => states.contains(WidgetState.selected)
+              ? primary
+              : Colors.transparent,
         ),
       ),
       radioTheme: RadioThemeData(

@@ -498,7 +498,7 @@ class EmployeeLeaveRequest(models.Model):
     session = models.CharField(max_length=20, default='Full Day')
     from_date = models.DateField(db_index=True)
     to_date = models.DateField(db_index=True)
-    total_days = models.PositiveIntegerField(default=1)
+    total_days = models.DecimalField(max_digits=5, decimal_places=2, default=1)
     reason = models.TextField(blank=True)
     medical_certificate = models.FileField(upload_to='leave_certificates/', blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
