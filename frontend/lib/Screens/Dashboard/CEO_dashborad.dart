@@ -17551,6 +17551,9 @@ class _DonutPainter extends CustomPainter {
 }
 
 class _CeoText {
+  static Color primaryFor(BuildContext context) =>
+      ThemeConfig.getTextPrimary(context);
+
   static TextStyle title(double size) => TextStyle(
     color: Colors.white,
     fontSize: size,
