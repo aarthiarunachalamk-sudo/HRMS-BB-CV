@@ -29,6 +29,36 @@ class EmployeeAttendanceScreen extends StatefulWidget {
 }
 
 class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
+  static const Map<String, String> _workModes = {
+    'office': 'Office',
+    'work_from_home': 'Work From Home',
+    'hybrid': 'Hybrid',
+  };
+  String _selectedWorkMode = 'office';
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedWorkMode = _normalizedWorkMode(
+      widget.data.attendance['work_mode'] ?? widget.data.profile['work_mode'],
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant EmployeeAttendanceScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final persisted = '${widget.data.attendance['work_mode'] ?? ''}'.trim();
+    if (persisted.isNotEmpty) {
+      _selectedWorkMode = _normalizedWorkMode(persisted);
+    }
+  }
+
+  String _normalizedWorkMode(Object? value) {
+    final mode = '$value'.trim().toLowerCase();
+    if (mode == 'onsite' || mode == 'on_site') return 'office';
+    return _workModes.containsKey(mode) ? mode : 'office';
+  }
+
   Future<void> _openSelfieAttendance(EmployeeAttendanceAction action) async {
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
       MaterialPageRoute(
@@ -36,6 +66,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
           userId: widget.userId,
           service: widget.service,
           action: action,
+          workMode: _selectedWorkMode,
         ),
       ),
     );
@@ -167,6 +198,41 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 22),
+          Text(
+            hasCheckIn ? 'Work Mode' : 'Select Work Mode',
+            style: TextStyle(
+              color: textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: _selectedWorkMode,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.work_outline_rounded),
+              filled: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            items: _workModes.entries
+                .map(
+                  (entry) => DropdownMenuItem<String>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+                )
+                .toList(),
+            onChanged: hasCheckIn
+                ? null
+                : (value) {
+                    if (value != null) {
+                      setState(() => _selectedWorkMode = value);
+                    }
+                  },
           ),
           const SizedBox(height: 22),
           SizedBox(

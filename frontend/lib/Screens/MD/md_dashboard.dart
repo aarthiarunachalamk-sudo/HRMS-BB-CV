@@ -227,6 +227,24 @@ class _MdDashboardState extends State<MdDashboard> {
     );
   }
 
+  void _handleSystemBack() {
+    final previous = switch (_step) {
+      _MdStep.time => _MdStep.calendar,
+      _MdStep.details => _MdStep.meetings,
+      _MdStep.participants => _MdStep.details,
+      _MdStep.agenda => _MdStep.participants,
+      _MdStep.review => _MdStep.agenda,
+      _MdStep.success => _MdStep.review,
+      _MdStep.calendar => _MdStep.meetings,
+      _MdStep.list => _MdStep.meetings,
+      _ => _MdStep.dashboard,
+    };
+    setState(() {
+      _step = previous;
+      _bottomIndex = previous == _MdStep.meetings ? 3 : 0;
+    });
+  }
+
   Future<void> _requestLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -263,7 +281,12 @@ class _MdDashboardState extends State<MdDashboard> {
   @override
   Widget build(BuildContext context) {
     final colors = _MdColors.of(context);
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+    return PopScope<Object?>(
+      canPop: _step == _MdStep.dashboard,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleSystemBack();
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
       value: colors.isDark
           ? SystemUiOverlayStyle.light
           : SystemUiOverlayStyle.dark,
@@ -332,6 +355,7 @@ class _MdDashboardState extends State<MdDashboard> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

@@ -174,7 +174,6 @@ class _CeoDashboardState extends State<CeoDashboard> {
       setState(() => _selectedIndex = 0);
       return;
     }
-    SystemNavigator.pop();
   }
 
   void _switchRole(String role) {
@@ -730,7 +729,7 @@ class _CeoDashboardState extends State<CeoDashboard> {
     ];
 
     return PopScope<Object?>(
-      canPop: false,
+      canPop: _selectedIndex == 0 && _tabHistory.isEmpty,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         _handleSystemBack();

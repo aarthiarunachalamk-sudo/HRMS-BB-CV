@@ -44,12 +44,17 @@ class CeoShell extends StatelessWidget {
     final bgTop = ThemeConfig.getBgStart(context);
     final bgBottom = ThemeConfig.getBgEnd(context);
     final textPrimary = ThemeConfig.getTextPrimary(context);
-    return Scaffold(
-      backgroundColor: bgTop,
-      drawer: drawer,
-      bottomNavigationBar: bottomNavigationBar,
-      floatingActionButton: floatingActionButton,
-      body: Container(
+    return PopScope<Object?>(
+      canPop: onBack == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) onBack?.call();
+      },
+      child: Scaffold(
+        backgroundColor: bgTop,
+        drawer: drawer,
+        bottomNavigationBar: bottomNavigationBar,
+        floatingActionButton: floatingActionButton,
+        body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [bgTop, bgBottom],
@@ -146,6 +151,7 @@ class CeoShell extends StatelessWidget {
               Expanded(child: child),
             ],
           ),
+        ),
         ),
       ),
     );

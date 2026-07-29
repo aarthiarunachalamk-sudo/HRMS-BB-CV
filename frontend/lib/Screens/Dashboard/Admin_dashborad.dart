@@ -57,6 +57,7 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   _AdminTab _tab = _AdminTab.dashboard;
+  final List<_AdminTab> _tabHistory = [];
   _AdminRole _role = _AdminRole.admin;
   File? _profileImage;
 
@@ -82,8 +83,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   void _setTab(_AdminTab t) {
-    Navigator.of(context).maybePop();
-    setState(() => _tab = t);
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      Navigator.of(context).pop();
+    }
+    if (t == _tab) return;
+    setState(() {
+      _tabHistory.add(_tab);
+      _tab = t;
+    });
+  }
+
+  void _handleBack() {
+    if (_tabHistory.isNotEmpty) {
+      setState(() => _tab = _tabHistory.removeLast());
+    } else if (_tab != _AdminTab.dashboard) {
+      setState(() => _tab = _AdminTab.dashboard);
+    }
   }
 
   void _openAdminPage(Widget page) {
@@ -122,9 +137,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget build(BuildContext context) {
     final c = AdminPalette.of(context);
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: c.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: Scaffold(
+    return PopScope<Object?>(
+      canPop: _tab == _AdminTab.dashboard && _tabHistory.isEmpty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleBack();
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: c.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+        child: Scaffold(
         key: _scaffoldKey,
         backgroundColor: c.bg,
         drawer: _buildDrawer(c),
@@ -158,6 +178,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -168,10 +189,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
           firstName: widget.firstName,
           email: widget.email,
           userId: widget.userId,
-          onOpenEmployees: () => setState(() => _tab = _AdminTab.employees),
-          onOpenAttendance: () => setState(() => _tab = _AdminTab.attendance),
-          onOpenLeaves: () => setState(() => _tab = _AdminTab.leave),
-          onOpenMeetings: () => setState(() => _tab = _AdminTab.meetings),
+          onOpenEmployees: () => _setTab(_AdminTab.employees),
+          onOpenAttendance: () => _setTab(_AdminTab.attendance),
+          onOpenLeaves: () => _setTab(_AdminTab.leave),
+          onOpenMeetings: () => _setTab(_AdminTab.meetings),
         );
       case _AdminTab.employees:
         return AdminEmployeesScreen(userId: widget.userId);

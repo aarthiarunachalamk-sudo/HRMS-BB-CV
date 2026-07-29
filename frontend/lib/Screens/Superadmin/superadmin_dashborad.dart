@@ -27,6 +27,7 @@ class SuperAdminDashboard extends StatefulWidget {
 class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _selectedIndex = 0;
+  final List<int> _navigationHistory = [];
   String _dashboardRole = 'SuperAdmin';
   String _usersFocus = 'employees';
   String _workflowFocus = 'attendance';
@@ -56,7 +57,17 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
   Widget build(BuildContext context) {
     final colors = _SaColors.of(context);
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+    return PopScope<Object?>(
+      canPop: _selectedIndex == 0 && _navigationHistory.isEmpty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_navigationHistory.isNotEmpty) {
+          _setSection(_navigationHistory.removeLast(), remember: false);
+        } else if (_selectedIndex != 0) {
+          _setSection(0, remember: false);
+        }
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
       value: colors.isDark
           ? SystemUiOverlayStyle.light
           : SystemUiOverlayStyle.dark,
@@ -121,25 +132,26 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
           ),
         ),
       ),
+      ),
     );
   }
 
-  void _setSection(int index) {
-    setState(() => _selectedIndex = index);
+  void _setSection(int index, {bool remember = true}) {
+    if (index == _selectedIndex) return;
+    setState(() {
+      if (remember) _navigationHistory.add(_selectedIndex);
+      _selectedIndex = index;
+    });
   }
 
   void _openUsersFocus(String focus) {
-    setState(() {
-      _usersFocus = focus;
-      _selectedIndex = 1;
-    });
+    setState(() => _usersFocus = focus);
+    _setSection(1);
   }
 
   void _openWorkflowFocus(String focus) {
-    setState(() {
-      _workflowFocus = focus;
-      _selectedIndex = 2;
-    });
+    setState(() => _workflowFocus = focus);
+    _setSection(2);
   }
 
   Widget _buildTopBar(_SaColors colors) {

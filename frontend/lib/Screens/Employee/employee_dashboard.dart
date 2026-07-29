@@ -51,6 +51,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
   final ImagePicker _imagePicker = ImagePicker();
   late EmployeeDashboardData _data;
   int _selectedIndex = 0;
+  final List<int> _tabHistory = [];
   bool _loading = true;
   String? _profileImagePath;
   Timer? _refreshTimer;
@@ -217,6 +218,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
       if (result['latitude'] != null) 'latitude': result['latitude'],
       if (result['longitude'] != null) 'longitude': result['longitude'],
       if (result['accuracy'] != null) 'accuracy': result['accuracy'],
+      if (result['work_mode'] != null) 'work_mode': result['work_mode'],
+      if (result['work_mode_label'] != null)
+        'work_mode_label': result['work_mode_label'],
       if (result['selfie_file'] != null) 'selfie_file': result['selfie_file'],
     });
 
@@ -240,17 +244,20 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     (route) => false,
   );
 
-  void _handleMobileBack() {
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.pop();
-      return;
-    }
+  void _selectTab(int index, {bool remember = true}) {
+    if (index == _selectedIndex) return;
+    setState(() {
+      if (remember) _tabHistory.add(_selectedIndex);
+      _selectedIndex = index;
+    });
+  }
 
-    navigator.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+  void _handleMobileBack() {
+    if (_tabHistory.isNotEmpty) {
+      _selectTab(_tabHistory.removeLast(), remember: false);
+    } else if (_selectedIndex != 0) {
+      _selectTab(0, remember: false);
+    }
   }
 
   Future<void> _pickProfileImage() async {
@@ -290,11 +297,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         );
         return;
       }
-      setState(() => _selectedIndex = 4);
+      _selectTab(4);
       return;
     }
     if (text.contains('leave')) {
-      setState(() => _selectedIndex = 2);
+      _selectTab(2);
       return;
     }
     if (text.contains('task')) {
@@ -302,14 +309,14 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
       return;
     }
     if (text.contains('attendance') || text.contains('check in')) {
-      setState(() => _selectedIndex = 1);
+      _selectTab(1);
       return;
     }
     if (text.contains('approval')) {
-      setState(() => _selectedIndex = 3);
+      _selectTab(3);
       return;
     }
-    setState(() => _selectedIndex = 4);
+    _selectTab(4);
   }
 
   void _openEmployeeScreen(String title, Widget screen) {
@@ -407,7 +414,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     final pages = [
       EmployeeHomeScreen(
         data: _data,
-        onTabSelected: (index) => setState(() => _selectedIndex = index),
+        onTabSelected: _selectTab,
         onNotificationTap: _openNotification,
         onOpenNotifications: _openNotifications,
         onOpenMeetings: _openMeetings,
@@ -446,7 +453,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     final designation = '${profile['designation'] ?? 'Employee'}'.trim();
     final department = '${profile['department'] ?? ''}'.trim();
     return PopScope<Object?>(
-      canPop: false,
+      canPop: _selectedIndex == 0 && _tabHistory.isEmpty,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         _handleMobileBack();
@@ -462,7 +469,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
           onPickProfileImage: _pickProfileImage,
           onSelect: (index) {
             Navigator.of(context).pop();
-            setState(() => _selectedIndex = index);
+            _selectTab(index);
             if (index == 0) _load();
           },
           onLogout: _logout,
@@ -599,7 +606,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     return Expanded(
       child: InkWell(
         onTap: () {
-          setState(() => _selectedIndex = index);
+          _selectTab(index);
           if (index == 0) _load();
         },
         child: Column(

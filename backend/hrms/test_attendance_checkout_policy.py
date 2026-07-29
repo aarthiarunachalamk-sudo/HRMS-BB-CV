@@ -27,6 +27,30 @@ class AttendanceCheckoutPolicyTests(TestCase):
             status='Present',
         )
 
+    def test_check_in_persists_selected_work_mode(self):
+        local_now = datetime(2026, 7, 27, 9, 0, tzinfo=IST)
+        response = self.client.post(
+            '/api/employee/check-in/',
+            {
+                'user_id': self.employee_id,
+                'mobile_timestamp': local_now.isoformat(),
+                'timezone_offset_minutes': 330,
+                'work_mode': 'work_from_home',
+                'selfie': SimpleUploadedFile(
+                    'selfie.jpg', b'photo', content_type='image/jpeg'
+                ),
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['work_mode'], 'work_from_home')
+        self.assertEqual(response.data['work_mode_label'], 'Work From Home')
+        record = EmployeeAttendanceRecord.objects.get(
+            employee_id=self.employee_id,
+            attendance_date=local_now.date(),
+        )
+        self.assertEqual(record.work_mode, 'work_from_home')
+
     def test_checkout_before_530_creates_permission_without_closing_attendance(self):
         local_now = datetime(2026, 7, 27, 17, 0, tzinfo=IST)
         record = self._open_attendance(local_now.replace(hour=9))

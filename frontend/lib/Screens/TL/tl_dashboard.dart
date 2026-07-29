@@ -35,6 +35,7 @@ class _TLDashboardState extends State<TLDashboard> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   late Future<Map<String, dynamic>> _future;
   int _index = 0;
+  final List<int> _navigationHistory = [];
   String _role = 'Team Lead';
   Map<String, dynamic> _selected = {};
   File? _profileImage;
@@ -61,6 +62,7 @@ class _TLDashboardState extends State<TLDashboard> {
 
   void _openDetail(int index, Map<String, dynamic> item) {
     setState(() {
+      if (index != _index) _navigationHistory.add(_index);
       _selected = item;
       _index = index;
     });
@@ -75,6 +77,7 @@ class _TLDashboardState extends State<TLDashboard> {
   void _openBackendSection(int index) {
     setState(() {
       _future = TlService().fetchDashboard(widget.userId);
+      if (index != _index) _navigationHistory.add(_index);
       _index = index;
     });
   }
@@ -113,7 +116,17 @@ class _TLDashboardState extends State<TLDashboard> {
   @override
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
-    return AnnotatedRegion<SystemUiOverlayStyle>(
+    return PopScope<Object?>(
+      canPop: _index == 0 && _navigationHistory.isEmpty,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_navigationHistory.isNotEmpty) {
+          _setIndex(_navigationHistory.removeLast(), remember: false);
+        } else if (_index != 0) {
+          _setIndex(0, remember: false);
+        }
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
       value: c.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: FutureBuilder<Map<String, dynamic>>(
         future: _future,
@@ -263,15 +276,20 @@ class _TLDashboardState extends State<TLDashboard> {
           );
         },
       ),
+      ),
     );
   }
 
-  void _setIndex(int value) {
+  void _setIndex(int value, {bool remember = true}) {
     if (value < 0 || value >= _titles.length) return;
     if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
       Navigator.of(context).pop();
     }
-    setState(() => _index = value);
+    if (value == _index) return;
+    setState(() {
+      if (remember) _navigationHistory.add(_index);
+      _index = value;
+    });
   }
 }
 

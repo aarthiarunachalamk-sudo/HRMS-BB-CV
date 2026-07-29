@@ -901,6 +901,8 @@ def _attendance_payload(record, request=None):
             'grace_time': empty_calc['grace_time'],
             'location': '',
             'accuracy': '--',
+            'work_mode': '',
+            'work_mode_label': '',
         }
 
     accuracy = _accuracy_display(record.check_out_accuracy or record.check_in_accuracy)
@@ -932,6 +934,10 @@ def _attendance_payload(record, request=None):
         'latitude': latitude,
         'longitude': longitude,
         'accuracy': accuracy,
+        'work_mode': record.work_mode,
+        'work_mode_label': dict(EmployeeAttendanceRecord.WORK_MODE_CHOICES).get(
+            record.work_mode, 'Office'
+        ),
         'check_in_selfie': _file_url(request, record.check_in_selfie),
         'check_out_selfie': _file_url(request, record.check_out_selfie),
     }
@@ -1144,13 +1150,18 @@ def _employee_payload(user, account, request=None):
             'date_of_joining': str(account.date_of_joining) if account else '',
             'reporting_tl': account.reporting_tl if account else '',
             'work_location': account.work_location if account else '',
+            'work_mode': (
+                'office'
+                if (getattr(user, 'work_mode', '') or 'onsite') == 'onsite'
+                else user.work_mode
+            ),
             'doc_passport_photo': _document_url(
                 account.registration if account else None,
                 'doc_passport_photo',
                 request,
             ),
         },
-        'attendance': _attendance_payload(today_record),
+        'attendance': _attendance_payload(today_record, request),
         'leave_balances': _leave_balance_payload(employee_id, account),
         'leaves': [_leave_payload(record) for record in leave_records],
         'notifications': _notifications_for_employee(employee_id, employee_email),
@@ -1364,6 +1375,20 @@ def employee_check_in_view(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    work_mode = (request.data.get('work_mode') or '').strip().lower()
+    valid_work_modes = dict(EmployeeAttendanceRecord.WORK_MODE_CHOICES)
+    if not work_mode:
+        configured_mode = (getattr(user, 'work_mode', '') or 'onsite').lower()
+        work_mode = 'office' if configured_mode == 'onsite' else configured_mode
+    if work_mode not in valid_work_modes:
+        return Response(
+            {
+                'success': False,
+                'message': 'Select Office, Work From Home, or Hybrid.',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     now, offset_minutes = _mobile_time(request)
     record, _ = EmployeeAttendanceRecord.objects.get_or_create(
         employee_id=employee_id,
@@ -1371,6 +1396,7 @@ def employee_check_in_view(request):
         defaults={'status': 'Present'},
     )
     record.check_in = record.check_in or now
+    record.work_mode = work_mode
     record.check_in_timezone_offset_minutes = offset_minutes
     calc = _attendance_calculation(record.check_in, None, offset_minutes)
     record.status = calc['status']

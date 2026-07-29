@@ -20,12 +20,14 @@ class EmployeeSelfieAttendanceScreen extends StatefulWidget {
   final String userId;
   final EmployeeService service;
   final EmployeeAttendanceAction action;
+  final String workMode;
 
   const EmployeeSelfieAttendanceScreen({
     super.key,
     required this.userId,
     required this.service,
     required this.action,
+    required this.workMode,
   });
 
   @override
@@ -568,6 +570,7 @@ class _EmployeeSelfieAttendanceScreenState
       'accuracy': position.accuracy,
       'mobile_timestamp': mobileTime.toIso8601String(),
       'timezone_offset_minutes': mobileTime.timeZoneOffset.inMinutes,
+      if (_isCheckIn) 'work_mode': widget.workMode,
       if (policyStatus != null) 'client_attendance_status': policyStatus,
     };
 

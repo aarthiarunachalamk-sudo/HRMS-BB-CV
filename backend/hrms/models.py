@@ -448,8 +448,19 @@ class ReportSchedule(models.Model):
 
 
 class EmployeeAttendanceRecord(models.Model):
+    WORK_MODE_CHOICES = [
+        ('office', 'Office'),
+        ('work_from_home', 'Work From Home'),
+        ('hybrid', 'Hybrid'),
+    ]
+
     employee_id = models.CharField(max_length=20, db_index=True)
     attendance_date = models.DateField(db_index=True)
+    work_mode = models.CharField(
+        max_length=20,
+        choices=WORK_MODE_CHOICES,
+        default='office',
+    )
     status = models.CharField(max_length=20, default='Present')
     check_in = models.DateTimeField(null=True, blank=True)
     check_out = models.DateTimeField(null=True, blank=True)
