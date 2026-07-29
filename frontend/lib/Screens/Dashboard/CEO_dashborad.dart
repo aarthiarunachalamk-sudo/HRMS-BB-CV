@@ -5055,6 +5055,39 @@ class _ApprovalsView extends StatefulWidget {
 
 class _ApprovalsViewState extends State<_ApprovalsView> {
   String _statusFilter = 'pending';
+  DateTime? _historyDate;
+
+  DateTime? _itemHistoryDate(Map<String, dynamic> item) {
+    for (final key in const [
+      'reviewed_at',
+      'updated_at',
+      'date',
+      'from_date',
+      'created_at',
+    ]) {
+      final parsed = DateTime.tryParse('${item[key] ?? ''}'.trim());
+      if (parsed != null) return parsed.toLocal();
+    }
+    return null;
+  }
+
+  bool _sameDate(DateTime left, DateTime right) =>
+      left.year == right.year &&
+      left.month == right.month &&
+      left.day == right.day;
+
+  String _dateLabel(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+  Future<void> _selectHistoryDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _historyDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (selected != null && mounted) setState(() => _historyDate = selected);
+  }
 
   String _approvalStatus(Map<String, dynamic> item) {
     final raw = '${item['overall_status'] ?? item['status'] ?? ''}'
@@ -5189,7 +5222,15 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
         final rejected = employeeHistory
             .where((item) => _approvalStatus(item) == 'rejected')
             .toList();
-        final reviewed = _statusFilter == 'approved' ? approved : rejected;
+        final reviewedSource = _statusFilter == 'approved'
+            ? approved
+            : rejected;
+        final reviewed = _historyDate == null
+            ? reviewedSource
+            : reviewedSource.where((item) {
+                final date = _itemHistoryDate(item);
+                return date != null && _sameDate(date, _historyDate!);
+              }).toList();
 
         if (_statusFilter != 'pending') {
           final approvedTab = _statusFilter == 'approved';
@@ -5209,6 +5250,30 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
                 ),
               ),
               const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _selectHistoryDate,
+                      icon: const Icon(Icons.calendar_month_rounded),
+                      label: Text(
+                        _historyDate == null
+                            ? 'Approval history: All dates'
+                            : 'History: ${_dateLabel(_historyDate!)}',
+                      ),
+                    ),
+                  ),
+                  if (_historyDate != null) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Show all dates',
+                      onPressed: () => setState(() => _historyDate = null),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 18),
               Text('$label Approvals', style: _CeoText.titleFor(context, 16)),
               const SizedBox(height: 14),
               if (reviewed.isEmpty)
@@ -5217,7 +5282,9 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
                     padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Center(
                       child: Text(
-                        'No ${label.toLowerCase()} approvals',
+                        _historyDate == null
+                            ? 'No ${label.toLowerCase()} approvals'
+                            : 'No ${label.toLowerCase()} approvals on ${_dateLabel(_historyDate!)}',
                         style: _CeoText.mutedFor(context, 12),
                       ),
                     ),

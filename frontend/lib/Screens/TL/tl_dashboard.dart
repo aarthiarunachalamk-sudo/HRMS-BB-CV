@@ -128,155 +128,157 @@ class _TLDashboardState extends State<TLDashboard> {
         }
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-      value: c.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: FutureBuilder<Map<String, dynamic>>(
-        future: _future,
-        builder: (context, snapshot) {
-          final data = snapshot.data ?? {};
-          final failed = snapshot.hasError;
-          final pages = [
-            _Dashboard(
-              data: data,
-              name: widget.firstName,
-              email: widget.email,
-              userId: widget.userId,
-              profileImage: _profileImage,
-              onProfileTap: _pickProfileImage,
-              open: _openBackendSection,
-              loading: snapshot.connectionState == ConnectionState.waiting,
-              error: snapshot.error,
-              retry: _refreshDashboard,
-              onChanged: _refreshDashboard,
-            ),
-            _Team(data: data, open: (item) => _openDetail(18, item)),
-            _Tasks(
-              data: data,
-              open: (item) => _openDetail(14, item),
-              create: () => _setIndex(15),
-            ),
-            _Projects(data: data, open: (item) => _openDetail(16, item)),
-            _Attendance(
-              data: data,
-              openSelfie: () => _setIndex(5),
-              openReport: () => _setIndex(11),
-            ),
-            _Selfie(openNext: () => _setIndex(6)),
-            _GeoLocation(data: data, openNext: () => _setIndex(7)),
-            _ConfirmAttendance(data: data, openNext: () => _setIndex(8)),
-            _AttendanceMarked(data: data, openAttendance: () => _setIndex(4)),
-            _Leave(
-              data: data,
-              userId: widget.userId,
-              onChanged: _refreshDashboard,
-            ),
-            _Meetings(
-              data: data,
-              userId: widget.userId,
-              email: widget.email,
-              open: (item) => _openDetail(18, item),
-              scheduled: _refreshDashboard,
-            ),
-            _Reports(
-              data: data,
-              open: (item) => _openDetail(18, item),
-              menu: () => _scaffoldKey.currentState?.openDrawer(),
-              theme: _toggleTheme,
-            ),
-            _Approvals(
-              data: data,
-              userId: widget.userId,
-              onChanged: _refreshDashboard,
-            ),
-            _Notifications(
-              data: data,
-              userId: widget.userId,
-              onChanged: _refreshDashboard,
-              openApprovals: () => _setIndex(12),
-            ),
-            _TaskDetails(item: _selected, update: () => _setIndex(2)),
-            _CreateTask(
-              data: data,
-              userId: widget.userId,
-              onBack: () => _setIndex(2),
-              onTheme: _toggleTheme,
-              onCreated: () {
-                _refreshDashboard();
-                _setIndex(2);
-              },
-            ),
-            _ProjectDetails(item: _selected, openTasks: () => _setIndex(2)),
-            _TeamPerformance(data: data),
-            _SmartDetails(item: _selected),
-            _Profile(
-              email: widget.email,
-              name: widget.firstName,
-              profileImage: _profileImage,
-              onProfileTap: _pickProfileImage,
-              logout: _logout,
-            ),
-          ];
-          return Scaffold(
-            key: _scaffoldKey,
-            backgroundColor: c.bg,
-            drawer: _Drawer(
-              email: widget.email,
-              name: widget.firstName,
-              select: _setIndex,
-              logout: _logout,
-            ),
-            body: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [c.bg, c.bgAlt],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
+        value: c.isDark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
+        child: FutureBuilder<Map<String, dynamic>>(
+          future: _future,
+          builder: (context, snapshot) {
+            final data = snapshot.data ?? {};
+            final failed = snapshot.hasError;
+            final pages = [
+              _Dashboard(
+                data: data,
+                name: widget.firstName,
+                email: widget.email,
+                userId: widget.userId,
+                profileImage: _profileImage,
+                onProfileTap: _pickProfileImage,
+                open: _openBackendSection,
+                loading: snapshot.connectionState == ConnectionState.waiting,
+                error: snapshot.error,
+                retry: _refreshDashboard,
+                onChanged: _refreshDashboard,
               ),
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    if (_index != 15 && _index != 11)
-                      _TopBar(
-                        c: c,
-                        title: _titles[_index],
-                        menu: () => _scaffoldKey.currentState?.openDrawer(),
-                        theme: _toggleTheme,
-                      ),
-                    if (_index == 0)
-                      _TlRoleDropdown(
-                        c: c,
-                        value: _role,
-                        onChanged: _switchRole,
-                      ),
-                    if (snapshot.connectionState == ConnectionState.waiting)
-                      LinearProgressIndicator(
-                        minHeight: 2,
-                        color: c.primary,
-                        backgroundColor: Colors.transparent,
-                      ),
-                    if (failed)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
-                        child: TlCard(
-                          child: Text(
-                            'Unable to load data. Please try again.',
-                            style: TextStyle(
-                              color: c.danger,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
+              _Team(data: data, open: (item) => _openDetail(18, item)),
+              _Tasks(
+                data: data,
+                open: (item) => _openDetail(14, item),
+                create: () => _setIndex(15),
+              ),
+              _Projects(data: data, open: (item) => _openDetail(16, item)),
+              _Attendance(
+                data: data,
+                openSelfie: () => _setIndex(5),
+                openReport: () => _setIndex(11),
+              ),
+              _Selfie(openNext: () => _setIndex(6)),
+              _GeoLocation(data: data, openNext: () => _setIndex(7)),
+              _ConfirmAttendance(data: data, openNext: () => _setIndex(8)),
+              _AttendanceMarked(data: data, openAttendance: () => _setIndex(4)),
+              _Leave(
+                data: data,
+                userId: widget.userId,
+                onChanged: _refreshDashboard,
+              ),
+              _Meetings(
+                data: data,
+                userId: widget.userId,
+                email: widget.email,
+                open: (item) => _openDetail(18, item),
+                scheduled: _refreshDashboard,
+              ),
+              _Reports(
+                data: data,
+                open: (item) => _openDetail(18, item),
+                menu: () => _scaffoldKey.currentState?.openDrawer(),
+                theme: _toggleTheme,
+              ),
+              _Approvals(
+                data: data,
+                userId: widget.userId,
+                onChanged: _refreshDashboard,
+              ),
+              _Notifications(
+                data: data,
+                userId: widget.userId,
+                onChanged: _refreshDashboard,
+                openApprovals: () => _setIndex(12),
+              ),
+              _TaskDetails(item: _selected, update: () => _setIndex(2)),
+              _CreateTask(
+                data: data,
+                userId: widget.userId,
+                onBack: () => _setIndex(2),
+                onTheme: _toggleTheme,
+                onCreated: () {
+                  _refreshDashboard();
+                  _setIndex(2);
+                },
+              ),
+              _ProjectDetails(item: _selected, openTasks: () => _setIndex(2)),
+              _TeamPerformance(data: data),
+              _SmartDetails(item: _selected),
+              _Profile(
+                email: widget.email,
+                name: widget.firstName,
+                profileImage: _profileImage,
+                onProfileTap: _pickProfileImage,
+                logout: _logout,
+              ),
+            ];
+            return Scaffold(
+              key: _scaffoldKey,
+              backgroundColor: c.bg,
+              drawer: _Drawer(
+                email: widget.email,
+                name: widget.firstName,
+                select: _setIndex,
+                logout: _logout,
+              ),
+              body: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [c.bg, c.bgAlt],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      if (_index != 15 && _index != 11)
+                        _TopBar(
+                          c: c,
+                          title: _titles[_index],
+                          menu: () => _scaffoldKey.currentState?.openDrawer(),
+                          theme: _toggleTheme,
+                        ),
+                      if (_index == 0)
+                        _TlRoleDropdown(
+                          c: c,
+                          value: _role,
+                          onChanged: _switchRole,
+                        ),
+                      if (snapshot.connectionState == ConnectionState.waiting)
+                        LinearProgressIndicator(
+                          minHeight: 2,
+                          color: c.primary,
+                          backgroundColor: Colors.transparent,
+                        ),
+                      if (failed)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
+                          child: TlCard(
+                            child: Text(
+                              'Unable to load data. Please try again.',
+                              style: TextStyle(
+                                color: c.danger,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    Expanded(child: pages[_index]),
-                    _BottomNav(c: c, index: _index, select: _setIndex),
-                  ],
+                      Expanded(child: pages[_index]),
+                      _BottomNav(c: c, index: _index, select: _setIndex),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
-      ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -325,9 +327,10 @@ class _Dashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     final meetings = tlList(data, 'meetings');
-    final unreadNotifications = tlList(data, 'notifications')
-        .where((item) => item['is_read'] != true)
-        .toList();
+    final unreadNotifications = tlList(
+      data,
+      'notifications',
+    ).where((item) => item['is_read'] != true).toList();
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
       children: [
@@ -544,71 +547,120 @@ class _CompactApprovalInbox extends StatelessWidget {
     final c = TlPalette.of(context);
     final approvals = tlList(data, 'approvals');
     return TlCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: c.primary.withAlpha(28),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(Icons.inbox_rounded, color: c.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Approval Inbox', style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w900)),
-            Text('${approvals.length} awaiting action${unreadCount > 0 ? ' · $unreadCount unread' : ''}', style: TextStyle(color: c.muted, fontSize: 11, fontWeight: FontWeight.w700)),
-          ])),
-          TextButton(onPressed: openAll, child: const Text('View all')),
-        ]),
-        if (approvals.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 14),
-            child: Text('No employee requests need your action.', style: TextStyle(color: c.muted, fontSize: 12)),
-          )
-        else ...[
-          const SizedBox(height: 12),
-          ...approvals.take(3).map((item) {
-            final approvalType = '${item['approval_type'] ?? ''}';
-            final label = switch (approvalType) {
-              'daily_report' => 'Daily Report',
-              'social_media_post' => 'Social Media Post',
-              'leave_request' => 'Leave Request',
-              _ => '${item['leave_type'] ?? 'Employee Request'}',
-            };
-            return InkWell(
-              onTap: approvalType.isEmpty
-                  ? openAll
-                  : () => _openTlApprovalNotification(
-                        context,
-                        data,
-                        userId,
-                        {'reference_id': '${item['id'] ?? ''}', 'module': 'approval'},
-                        onChanged,
-                      ),
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 9),
-                child: Row(children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: c.warning.withAlpha(25),
-                    child: Icon(Icons.description_outlined, color: c.warning, size: 19),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('${item['title'] ?? item['name'] ?? 'Approval request'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontWeight: FontWeight.w900, fontSize: 13)),
-                    const SizedBox(height: 2),
-                    Text('$label · ${item['employee_id'] ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.muted, fontSize: 10)),
-                  ])),
-                  Icon(Icons.chevron_right_rounded, color: c.muted),
-                ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: c.primary.withAlpha(28),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(Icons.inbox_rounded, color: c.primary),
               ),
-            );
-          }),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Approval Inbox',
+                      style: TextStyle(
+                        color: c.text,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      '${approvals.length} awaiting action${unreadCount > 0 ? ' · $unreadCount unread' : ''}',
+                      style: TextStyle(
+                        color: c.muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(onPressed: openAll, child: const Text('View all')),
+            ],
+          ),
+          if (approvals.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Text(
+                'No employee requests need your action.',
+                style: TextStyle(color: c.muted, fontSize: 12),
+              ),
+            )
+          else ...[
+            const SizedBox(height: 12),
+            ...approvals.take(3).map((item) {
+              final approvalType = '${item['approval_type'] ?? ''}';
+              final label = switch (approvalType) {
+                'daily_report' => 'Daily Report',
+                'social_media_post' => 'Social Media Post',
+                'leave_request' => 'Leave Request',
+                _ => '${item['leave_type'] ?? 'Employee Request'}',
+              };
+              return InkWell(
+                onTap: approvalType.isEmpty
+                    ? openAll
+                    : () => _openTlApprovalNotification(context, data, userId, {
+                        'reference_id': '${item['id'] ?? ''}',
+                        'module': 'approval',
+                      }, onChanged),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: c.warning.withAlpha(25),
+                        child: Icon(
+                          Icons.description_outlined,
+                          color: c.warning,
+                          size: 19,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${item['title'] ?? item['name'] ?? 'Approval request'}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: c.text,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$label · ${item['employee_id'] ?? ''}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: c.muted, fontSize: 10),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: c.muted),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
         ],
-      ]),
+      ),
     );
   }
 }
@@ -3917,8 +3969,14 @@ class _ApprovalsState extends State<_Approvals> {
     _approved = tlList(widget.data, 'leaves_approved');
     _rejected = tlList(widget.data, 'leaves_rejected');
     _pending = [..._pending, ...tlList(widget.data, 'checkout_permissions')];
-    _approved = [..._approved, ...tlList(widget.data, 'checkout_permissions_approved')];
-    _rejected = [..._rejected, ...tlList(widget.data, 'checkout_permissions_rejected')];
+    _approved = [
+      ..._approved,
+      ...tlList(widget.data, 'checkout_permissions_approved'),
+    ];
+    _rejected = [
+      ..._rejected,
+      ...tlList(widget.data, 'checkout_permissions_rejected'),
+    ];
     _loadApprovals();
   }
 
@@ -4042,7 +4100,40 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
   int? _savingId;
   String _tab = 'pending';
   String _query = '';
+  DateTime? _historyDate;
   Map<String, dynamic>? _selected;
+
+  DateTime? _itemHistoryDate(Map<String, dynamic> item) {
+    for (final key in const [
+      'reviewed_at',
+      'updated_at',
+      'date',
+      'from_date',
+      'created_at',
+    ]) {
+      final parsed = DateTime.tryParse('${item[key] ?? ''}'.trim());
+      if (parsed != null) return parsed.toLocal();
+    }
+    return null;
+  }
+
+  bool _sameDate(DateTime left, DateTime right) =>
+      left.year == right.year &&
+      left.month == right.month &&
+      left.day == right.day;
+
+  String _dateLabel(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+  Future<void> _selectHistoryDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _historyDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (selected != null && mounted) setState(() => _historyDate = selected);
+  }
 
   Future<void> _decide(
     Map<String, dynamic> leave,
@@ -4089,7 +4180,11 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
   }
 
   Future<void> _openDetails(Map<String, dynamic> leave) async {
-    if (const {'daily_report', 'social_media_post', 'leave_request'}.contains(leave['approval_type'])) {
+    if (const {
+      'daily_report',
+      'social_media_post',
+      'leave_request',
+    }.contains(leave['approval_type'])) {
       final changed = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => EmployeeApprovalDetailScreen(
@@ -4166,6 +4261,10 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
       _ => widget.pending,
     };
     final filtered = leaves.where((leave) {
+      if ((_tab == 'approved' || _tab == 'rejected') && _historyDate != null) {
+        final date = _itemHistoryDate(leave);
+        if (date == null || !_sameDate(date, _historyDate!)) return false;
+      }
       final haystack =
           '${leave['name']} ${leave['employee_id']} ${leave['leave_type']} ${leave['reason']}'
               .toLowerCase();
@@ -4227,6 +4326,32 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
           ],
         ),
         const SizedBox(height: 12),
+        if (_tab == 'approved' || _tab == 'rejected') ...[
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _selectHistoryDate,
+                  icon: const Icon(Icons.calendar_month_rounded),
+                  label: Text(
+                    _historyDate == null
+                        ? 'Approval history: All dates'
+                        : 'History: ${_dateLabel(_historyDate!)}',
+                  ),
+                ),
+              ),
+              if (_historyDate != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Show all dates',
+                  onPressed: () => setState(() => _historyDate = null),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
         Row(
           children: [
             _LeaveTab(
@@ -4351,7 +4476,8 @@ class _ApprovalRequestCard extends StatelessWidget {
     }.contains(approvalType);
     final session = '${leave['session'] ?? ''}'.toLowerCase();
     final badgeLabel = switch (approvalType) {
-      'daily_report' => session.contains('after') ? 'Evening Report' : 'Morning Report',
+      'daily_report' =>
+        session.contains('after') ? 'Evening Report' : 'Morning Report',
       'social_media_post' => 'Social Media Poster',
       'leave_request' => '${leave['leave_type'] ?? 'Leave Request'}',
       _ => '${leave['leave_type'] ?? 'Leave Request'}',
@@ -4416,10 +4542,7 @@ class _ApprovalRequestCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  _ApprovalPill(
-                    label: badgeLabel,
-                    color: c.success,
-                  ),
+                  _ApprovalPill(label: badgeLabel, color: c.success),
                   const SizedBox(height: 8),
                   _TinyIconLine(
                     icon: Icons.calendar_today_rounded,
@@ -5442,7 +5565,8 @@ Future<void> _openTlApprovalNotification(
         if (values is! List) continue;
         for (final raw in values.whereType<Map>()) {
           final item = Map<String, dynamic>.from(raw);
-          if ('${item['id'] ?? ''}' == referenceId && item['approval_type'] != null) {
+          if ('${item['id'] ?? ''}' == referenceId &&
+              item['approval_type'] != null) {
             approval = item;
             break;
           }
@@ -5467,7 +5591,9 @@ Future<void> _openTlApprovalNotification(
   if (!context.mounted) return;
   if (approval == null) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('This approval is no longer awaiting your action.')),
+      const SnackBar(
+        content: Text('This approval is no longer awaiting your action.'),
+      ),
     );
     return;
   }
@@ -5477,7 +5603,8 @@ Future<void> _openTlApprovalNotification(
         item: approval!,
         userId: userId,
         service: EmployeeService(),
-        received: '${approval!['status'] ?? ''}'.toLowerCase() == 'requested' &&
+        received:
+            '${approval!['status'] ?? ''}'.toLowerCase() == 'requested' &&
             '${approval!['current_stage'] ?? ''}' == '0',
       ),
     ),

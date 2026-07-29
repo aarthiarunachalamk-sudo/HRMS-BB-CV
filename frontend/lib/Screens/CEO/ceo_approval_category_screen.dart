@@ -24,6 +24,7 @@ class CeoApprovalCategoryScreen extends StatefulWidget {
 
 class _CeoApprovalCategoryScreenState extends State<CeoApprovalCategoryScreen> {
   bool _history = false;
+  DateTime? _historyDate;
   late Future<Map<String, dynamic>> _future;
 
   @override
@@ -46,6 +47,44 @@ class _CeoApprovalCategoryScreenState extends State<CeoApprovalCategoryScreen> {
       _history = history;
       _load();
     });
+  }
+
+  DateTime? _itemHistoryDate(Map<String, dynamic> item) {
+    final details = item['details'] is Map
+        ? Map<String, dynamic>.from(item['details'] as Map)
+        : const <String, dynamic>{};
+    for (final value in [
+      item['reviewed_at'],
+      item['updated_at'],
+      item['from_date'],
+      item['submitted_at'],
+      item['date'],
+      details['Approved At'],
+      details['Updated At'],
+      details['Submitted At'],
+    ]) {
+      final parsed = DateTime.tryParse('${value ?? ''}'.trim());
+      if (parsed != null) return parsed.toLocal();
+    }
+    return null;
+  }
+
+  bool _sameDate(DateTime left, DateTime right) =>
+      left.year == right.year &&
+      left.month == right.month &&
+      left.day == right.day;
+
+  String _dateLabel(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+  Future<void> _selectDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _historyDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (selected != null && mounted) setState(() => _historyDate = selected);
   }
 
   Future<void> _openItem(Map<String, dynamic> item) async {
@@ -98,6 +137,33 @@ class _CeoApprovalCategoryScreenState extends State<CeoApprovalCategoryScreen> {
               ],
             ),
           ),
+          if (_history)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 2, 18, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _selectDate,
+                      icon: const Icon(Icons.calendar_month_rounded),
+                      label: Text(
+                        _historyDate == null
+                            ? 'History: All dates'
+                            : 'History: ${_dateLabel(_historyDate!)}',
+                      ),
+                    ),
+                  ),
+                  if (_historyDate != null) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Show all dates',
+                      onPressed: () => setState(() => _historyDate = null),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           Expanded(
             child: FutureBuilder<Map<String, dynamic>>(
               future: _future,
@@ -113,12 +179,18 @@ class _CeoApprovalCategoryScreenState extends State<CeoApprovalCategoryScreen> {
                   );
                 }
                 final rawItems = snapshot.data?['items'];
-                final items = rawItems is List
+                final allItems = rawItems is List
                     ? rawItems
                           .whereType<Map>()
                           .map((item) => Map<String, dynamic>.from(item))
                           .toList()
                     : <Map<String, dynamic>>[];
+                final items = !_history || _historyDate == null
+                    ? allItems
+                    : allItems.where((item) {
+                        final date = _itemHistoryDate(item);
+                        return date != null && _sameDate(date, _historyDate!);
+                      }).toList();
                 if (items.isEmpty) {
                   return pageList([
                     CeoCard(

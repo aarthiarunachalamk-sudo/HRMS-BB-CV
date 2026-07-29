@@ -37,6 +37,15 @@ def _approval_payload(item):
             attachment_url = item.attachment.url
         except (ValueError, AttributeError):
             attachment_url = ''
+    decisions = item.decisions or []
+    reviewed_at = next(
+        (
+            str(decision.get('decided_at') or decision.get('at') or decision.get('created_at') or '')
+            for decision in reversed(decisions)
+            if decision.get('decided_at') or decision.get('at') or decision.get('created_at')
+        ),
+        '',
+    )
     return {
         'id': item.id,
         'title': item.title,
@@ -57,11 +66,13 @@ def _approval_payload(item):
         'attachment_name': item.attachment.name.rsplit('/', 1)[-1] if item.attachment else '',
         'attachment_url': attachment_url,
         'approvers': item.approvers,
-        'decisions': item.decisions,
+        'decisions': decisions,
         'current_stage': item.current_stage,
         'approval_stages': stages,
         'status': item.status.title(),
         'created_at': timezone.localtime(item.created_at).isoformat(),
+        'updated_at': timezone.localtime(item.updated_at).isoformat(),
+        'reviewed_at': reviewed_at,
     }
 
 
