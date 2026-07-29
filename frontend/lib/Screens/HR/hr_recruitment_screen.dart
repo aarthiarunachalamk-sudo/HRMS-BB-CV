@@ -18,6 +18,7 @@ class HrRecruitmentScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
     final openings = hrList(data, 'open_positions');
+    final candidates = hrList(data, 'candidates');
     return ListView(
       padding: AppLayout.pagePadding,
       children: [
@@ -76,6 +77,19 @@ class HrRecruitmentScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
+        Text(
+          'Open Positions',
+          style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 10),
+        if (openings.isEmpty)
+          HrCard(
+            child: Text(
+              'No open positions. New job openings will appear here.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: c.muted, fontSize: 12),
+            ),
+          ),
         ...openings.map(
           (item) => Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -85,6 +99,34 @@ class HrRecruitmentScreen extends StatelessWidget {
               subtitle: '${item['subtitle']}',
               trailing: '${item['count']}',
               color: c.primary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Recent Candidates',
+          style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 10),
+        if (candidates.isEmpty)
+          HrCard(
+            child: Text(
+              'No candidate applications received yet.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: c.muted, fontSize: 12),
+            ),
+          ),
+        ...candidates.take(5).map(
+          (candidate) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: HrListTile(
+              icon: Icons.person_search_rounded,
+              title: '${candidate['name'] ?? 'Candidate'}',
+              subtitle:
+                  '${candidate['job_title'] ?? 'General Application'} • ${candidate['stage_label'] ?? candidate['stage'] ?? ''}',
+              trailing: '${candidate['experience'] ?? ''}',
+              color: c.success,
+              onTap: onPipeline,
             ),
           ),
         ),

@@ -159,7 +159,11 @@ class _HrDashboardState extends State<HrDashboard> {
               ),
               HrMeetingsScreen(data: data),
               HrRecruitmentPipelineScreen(data: data),
-              HrScheduleInterviewScreen(data: data),
+              HrScheduleInterviewScreen(
+                data: data,
+                userId: widget.userId,
+                onChanged: _refreshDashboard,
+              ),
               HrOnboardingScreen(data: data),
               HrDocumentsScreen(data: data),
               HrPerformanceScreen(data: data),

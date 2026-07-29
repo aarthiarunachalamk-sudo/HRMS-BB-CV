@@ -87,6 +87,28 @@ class HrService {
     }
   }
 
+  Future<Map<String, dynamic>> scheduleInterview(
+    int candidateId,
+    Map<String, dynamic> data,
+  ) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/recruitment/candidates/$candidateId/schedule-interview/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(data),
+        )
+        .timeout(_timeout);
+    final decoded = jsonDecode(response.body);
+    if (decoded is Map && response.statusCode >= 200 && response.statusCode < 300) {
+      return Map<String, dynamic>.from(decoded);
+    }
+    throw Exception(
+      decoded is Map && decoded['message'] != null
+          ? '${decoded['message']}'
+          : 'Unable to schedule interview (${response.statusCode})',
+    );
+  }
+
   Future<Map<String, dynamic>> generatePayroll(String userId, DateTime month) async {
     final response = await http
         .post(

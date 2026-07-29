@@ -3109,6 +3109,65 @@ def hr_dashboard_view(request):
         }
         for task in TeamTask.objects.order_by('-created_at')[:100]
     ]
+    recruitment_jobs = list(RecruitmentJobOpening.objects.order_by('-created_at'))
+    recruitment_candidates = list(
+        EmployeeRegistration.objects.select_related('applied_job').order_by('-submitted_at')
+    )
+    stage_labels = {
+        'applied': 'Applied',
+        'screening': 'Screening',
+        'interview': 'Interview',
+        'offer': 'Offer',
+        'hired': 'Hired',
+        'rejected': 'Rejected',
+    }
+    stage_counts = {
+        key: sum(1 for candidate in recruitment_candidates if candidate.recruitment_stage == key)
+        for key in stage_labels
+    }
+    recruitment_candidate_items = []
+    for candidate in recruitment_candidates:
+        serialized = EmployeeRegistrationSerializer(candidate).data
+        recruitment_candidate_items.append({
+            'id': candidate.id,
+            'name': f'{candidate.first_name} {candidate.last_name}'.strip(),
+            'email': candidate.personal_email,
+            'phone': mask_phone_number(candidate.mobile),
+            'qualification': candidate.qualification,
+            'experience': candidate.prev_experience if candidate.is_experienced else 'Fresher',
+            'stage': candidate.recruitment_stage,
+            'stage_label': stage_labels.get(candidate.recruitment_stage, candidate.recruitment_stage.title()),
+            'job_title': candidate.applied_job.title if candidate.applied_job else 'General Application',
+            'department': candidate.applied_job.department if candidate.applied_job else '',
+            'applied_at': candidate.submitted_at.isoformat() if candidate.submitted_at else '',
+            'photo': serialized.get('doc_passport_photo') or '',
+            'resume': serialized.get('doc_resume') or '',
+            'interview': candidate.interview_data or {},
+            'offer': candidate.offer_data or {},
+        })
+    open_job_items = [
+        {
+            'id': job.id,
+            'title': job.title,
+            'subtitle': ' • '.join(value for value in (job.department, job.location) if value),
+            'department': job.department,
+            'location': job.location,
+            'count': job.openings,
+            'openings': job.openings,
+            'status': job.status,
+        }
+        for job in recruitment_jobs
+        if job.status == 'open'
+    ]
+    pipeline_items = [
+        {
+            'key': key,
+            'title': label,
+            'subtitle': f'{stage_counts[key]} candidate(s)',
+            'count': stage_counts[key],
+        }
+        for key, label in stage_labels.items()
+    ]
 
     return Response({
         'success': True,
@@ -3151,13 +3210,14 @@ def hr_dashboard_view(request):
         'payroll_deductions': str(payroll_totals['deductions'] or 0),
         'payroll_net': str(payroll_totals['net'] or 0),
         'onboarding': [],
-        'pipeline': [],
-        'open_positions': [],
-        'open_positions_count': 0,
-        'candidates_count': 0,
-        'interviews_count': 0,
-        'offers': 0,
-        'offers_count': 0,
+        'pipeline': pipeline_items,
+        'candidates': recruitment_candidate_items,
+        'open_positions': open_job_items,
+        'open_positions_count': sum(item['openings'] for item in open_job_items),
+        'candidates_count': len(recruitment_candidates),
+        'interviews_count': stage_counts['interview'],
+        'offers': stage_counts['offer'],
+        'offers_count': stage_counts['offer'],
         'pending_reviews': 0,
         'completed_reviews': 0,
         'high_performers': 0,
@@ -6598,6 +6658,43 @@ def tl_checkout_permission_decision_view(request, pk):
 @api_view(['POST'])
 def hr_checkout_permission_decision_view(request, pk):
     return _checkout_permission_decision(request, pk, 'hr')
+
+
+@api_view(['POST'])
+def hr_schedule_interview_view(request, pk):
+    candidate = EmployeeRegistration.objects.filter(pk=pk).first()
+    if candidate is None:
+        return Response({'success': False, 'message': 'Candidate not found.'}, status=404)
+    scheduled_at = str(request.data.get('scheduled_at') or '').strip()
+    mode = str(request.data.get('mode') or '').strip()
+    if not scheduled_at:
+        return Response({'success': False, 'message': 'Interview date and time are required.'}, status=400)
+    if mode not in {'Online', 'In Person', 'Phone'}:
+        return Response({'success': False, 'message': 'Select a valid interview mode.'}, status=400)
+    candidate.interview_data = {
+        **(candidate.interview_data or {}),
+        'scheduled_at': scheduled_at,
+        'mode': mode,
+        'location_or_link': str(request.data.get('location_or_link') or '').strip(),
+        'interviewers': str(request.data.get('interviewers') or '').strip(),
+        'status': 'scheduled',
+        'scheduled_by': str(request.data.get('user_id') or 'HR').strip(),
+    }
+    candidate.recruitment_stage = 'interview'
+    candidate.save(update_fields=['interview_data', 'recruitment_stage'])
+    candidate_name = f'{candidate.first_name} {candidate.last_name}'.strip()
+    _notify_hr_recruitment(
+        title='Candidate Interview Scheduled',
+        message=f'{candidate_name or candidate.personal_email} • {scheduled_at} • {mode}',
+        candidate_id=candidate.id,
+        notification_type='warning',
+    )
+    return Response({
+        'success': True,
+        'message': 'Interview scheduled successfully.',
+        'candidate_id': candidate.id,
+        'interview': candidate.interview_data,
+    })
 
 @api_view(['POST'])
 def create_user_view(request):

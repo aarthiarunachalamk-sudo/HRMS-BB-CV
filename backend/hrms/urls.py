@@ -74,6 +74,7 @@ urlpatterns = [
     path('hr/payslip-pdf/upload/', views.hr_upload_payslip_pdf_view, name='hr_upload_payslip_pdf'),
     path('hr/leave-requests/<int:pk>/', views.hr_leave_decision_view, name='hr_leave_decision'),
     path('hr/checkout-permissions/<int:pk>/', views.hr_checkout_permission_decision_view, name='hr_checkout_permission_decision'),
+    path('hr/recruitment/candidates/<int:pk>/schedule-interview/', views.hr_schedule_interview_view, name='hr_schedule_interview'),
     path('tl/dashboard/', views.tl_dashboard_view, name='tl_dashboard'),
     path('tl/approvals/', views.tl_approvals_view, name='tl_approvals'),
     path('tl/meetings/', views.tl_meetings_view, name='tl_meetings'),
