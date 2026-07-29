@@ -14,7 +14,7 @@ from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
 from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
 from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, CompanyLeave, AttendanceRegularizationRequest, EmployeeApprovalRequest
-from .employee_views import _attendance_calculation, _leave_balance_payload, _notify_employee_presence, _approval_payload
+from .employee_views import _attendance_calculation, _format_time, _leave_balance_payload, _notify_employee_presence, _approval_payload
 from .payroll import (
     _attendance_credit as _payroll_attendance_credit,
     _working_dates,
@@ -1661,8 +1661,8 @@ def _employee_directory_items(include_attendance=False, limit=None):
 
 
 def _ceo_attendance_item(record):
-    check_in = timezone.localtime(record.check_in).strftime('%I:%M %p') if record.check_in else '--'
-    check_out = timezone.localtime(record.check_out).strftime('%I:%M %p') if record.check_out else '--'
+    check_in = _format_time(record.check_in, record.check_in_timezone_offset_minutes)
+    check_out = _format_time(record.check_out, record.check_out_timezone_offset_minutes)
     return {
         'date': record.attendance_date.isoformat(),
         'status': record.status or 'Present',
@@ -1782,14 +1782,14 @@ def ceo_attendance_intelligence_view(request):
                 'date': attendance_date.isoformat(),
                 'status': record.status if record else 'Absent',
                 'group': group,
-                'check_in': (
-                    timezone.localtime(record.check_in).strftime('%I:%M %p')
-                    if record and record.check_in else '--'
-                ),
-                'check_out': (
-                    timezone.localtime(record.check_out).strftime('%I:%M %p')
-                    if record and record.check_out else '--'
-                ),
+                'check_in': _format_time(
+                    record.check_in,
+                    record.check_in_timezone_offset_minutes,
+                ) if record else '--',
+                'check_out': _format_time(
+                    record.check_out,
+                    record.check_out_timezone_offset_minutes,
+                ) if record else '--',
                 'working_hours': record.working_hours if record else '--',
             })
 
@@ -1821,14 +1821,14 @@ def ceo_attendance_intelligence_view(request):
             'employment_type': account.get_employment_type_display(),
             'selected_status': selected_record.status if selected_record else 'Absent',
             'selected_group': selected_group,
-            'selected_check_in': (
-                timezone.localtime(selected_record.check_in).strftime('%I:%M %p')
-                if selected_record and selected_record.check_in else '--'
-            ),
-            'selected_check_out': (
-                timezone.localtime(selected_record.check_out).strftime('%I:%M %p')
-                if selected_record and selected_record.check_out else '--'
-            ),
+            'selected_check_in': _format_time(
+                selected_record.check_in,
+                selected_record.check_in_timezone_offset_minutes,
+            ) if selected_record else '--',
+            'selected_check_out': _format_time(
+                selected_record.check_out,
+                selected_record.check_out_timezone_offset_minutes,
+            ) if selected_record else '--',
             'summary': {**range_counts, 'percentage': attendance_percentage},
             'history': list(reversed(history)),
         })
@@ -3040,11 +3040,11 @@ def hr_dashboard_view(request):
             'employee_id': record.employee_id,
             'name': details.get('name') or record.employee_id,
             'subtitle': f"{record.attendance_date} · {record.status}",
-            'time': timezone.localtime(record.check_in).strftime('%I:%M %p') if record.check_in else '--',
+            'time': _format_time(record.check_in, record.check_in_timezone_offset_minutes),
             'attendance_date': str(record.attendance_date),
             'attendance_status': record.status,
-            'check_in': timezone.localtime(record.check_in).strftime('%I:%M %p') if record.check_in else '',
-            'check_out': timezone.localtime(record.check_out).strftime('%I:%M %p') if record.check_out else '',
+            'check_in': _format_time(record.check_in, record.check_in_timezone_offset_minutes),
+            'check_out': _format_time(record.check_out, record.check_out_timezone_offset_minutes),
             'working_hours': record.working_hours or '',
         })
 
@@ -6007,8 +6007,8 @@ def _admin_attendance_record_payload(record):
         'employee_id': record.employee_id,
         'name': _employee_name(record.employee_id),
         'status': status,
-        'checkin': record.check_in.strftime('%I:%M %p') if record.check_in else '--',
-        'checkout': record.check_out.strftime('%I:%M %p') if record.check_out else '--',
+        'checkin': _format_time(record.check_in, record.check_in_timezone_offset_minutes),
+        'checkout': _format_time(record.check_out, record.check_out_timezone_offset_minutes),
         'working_hours': record.working_hours,
         'date': record.attendance_date.isoformat(),
     }

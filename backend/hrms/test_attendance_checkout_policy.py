@@ -11,7 +11,7 @@ from .models import (
     EmployeeAttendanceRecord,
     EmployeeLeaveRequest,
 )
-from .employee_views import _leave_balance_payload
+from .employee_views import _format_time, _leave_balance_payload
 
 
 class AttendanceCheckoutPolicyTests(TestCase):
@@ -28,6 +28,17 @@ class AttendanceCheckoutPolicyTests(TestCase):
             check_in_timezone_offset_minutes=330,
             status='Present',
         )
+
+    def test_saved_mobile_timezone_formats_the_original_check_in_time(self):
+        utc_check_in = datetime(
+            2026,
+            7,
+            29,
+            4,
+            43,
+            tzinfo=datetime_timezone.utc,
+        )
+        self.assertEqual(_format_time(utc_check_in, 330), '10:13 AM')
 
     def test_check_in_persists_selected_work_mode(self):
         local_now = datetime(2026, 7, 27, 9, 0, tzinfo=IST)
