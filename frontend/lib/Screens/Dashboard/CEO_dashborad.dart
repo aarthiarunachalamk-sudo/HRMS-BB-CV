@@ -5072,20 +5072,23 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
       ('rejected', 'Rejected', rejected, const Color(0xFFFF5C77)),
     ];
     return Row(
-      children: tabs.map((tab) {
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: tabs.indexed.map((entry) {
+        final index = entry.$1;
+        final tab = entry.$2;
         final selected = _statusFilter == tab.$1;
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(right: tab.$1 == 'rejected' ? 0 : 8),
+            padding: EdgeInsets.only(right: index == tabs.length - 1 ? 0 : 10),
             child: InkWell(
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(12),
               onTap: () => setState(() => _statusFilter = tab.$1),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
                   color: selected ? tab.$4.withAlpha(35) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: selected ? tab.$4 : Colors.white.withAlpha(25),
                   ),
@@ -5100,11 +5103,8 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      tab.$2,
-                      style: _CeoText.mutedFor(context, 10),
-                    ),
+                    const SizedBox(height: 4),
+                    Text(tab.$2, style: _CeoText.mutedFor(context, 10)),
                   ],
                 ),
               ),
@@ -5116,7 +5116,8 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
   }
 
   Future<void> _openReviewedApproval(Map<String, dynamic> approval) async {
-    final type = '${approval['approval_type'] ?? approval['request_type'] ?? ''}';
+    final type =
+        '${approval['approval_type'] ?? approval['request_type'] ?? ''}';
     if (const {
       'daily_report',
       'social_media_post',
@@ -5159,18 +5160,33 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
         final pendingApprovals = _mapList(snapshot.data!['approvals']);
         final employeeApprovals = pendingApprovals
             .where(
-              (item) => const {
-                'daily_report',
-                'social_media_post',
-                'leave_request',
-              }.contains('${item['approval_type'] ?? item['request_type'] ?? ''}'),
+              (item) =>
+                  const {
+                    'daily_report',
+                    'social_media_post',
+                    'leave_request',
+                  }.contains(
+                    '${item['approval_type'] ?? item['request_type'] ?? ''}',
+                  ),
             )
             .toList();
         final history = _mapList(snapshot.data!['history']);
-        final approved = history
+        final employeeHistory = history
+            .where(
+              (item) =>
+                  const {
+                    'daily_report',
+                    'social_media_post',
+                    'leave_request',
+                  }.contains(
+                    '${item['approval_type'] ?? item['request_type'] ?? ''}',
+                  ),
+            )
+            .toList();
+        final approved = employeeHistory
             .where((item) => _approvalStatus(item) == 'approved')
             .toList();
-        final rejected = history
+        final rejected = employeeHistory
             .where((item) => _approvalStatus(item) == 'rejected')
             .toList();
         final reviewed = _statusFilter == 'approved' ? approved : rejected;
@@ -5182,12 +5198,19 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
               : const Color(0xFFFF5C77);
           final label = approvedTab ? 'Approved' : 'Rejected';
           return ListView(
-            padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
             children: [
-              _statusTabs(pendingApprovals.length, approved.length, rejected.length),
-              const SizedBox(height: 18),
+              SizedBox(
+                height: 82,
+                child: _statusTabs(
+                  employeeApprovals.length,
+                  approved.length,
+                  rejected.length,
+                ),
+              ),
+              const SizedBox(height: 24),
               Text('$label Approvals', style: _CeoText.titleFor(context, 16)),
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
               if (reviewed.isEmpty)
                 _GlassCard(
                   child: Padding(
@@ -5200,27 +5223,33 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
                     ),
                   ),
                 ),
-              ...reviewed.map((approval) => _ApprovalTile(
-                    approvedTab
-                        ? Icons.check_circle_rounded
-                        : Icons.cancel_rounded,
-                    _displayText(approval['title'], fallback: 'Approval'),
-                    _displayText(
-                      approval['subtitle'],
-                      fallback: '$label by CEO',
-                    ),
-                    color,
-                    () => _openReviewedApproval(approval),
-                  )),
+              ...reviewed.map(
+                (approval) => _ApprovalTile(
+                  approvedTab
+                      ? Icons.check_circle_rounded
+                      : Icons.cancel_rounded,
+                  _displayText(approval['title'], fallback: 'Approval'),
+                  _displayText(approval['subtitle'], fallback: '$label by CEO'),
+                  color,
+                  () => _openReviewedApproval(approval),
+                ),
+              ),
             ],
           );
         }
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
           children: [
-            _statusTabs(pendingApprovals.length, approved.length, rejected.length),
-            const SizedBox(height: 18),
+            SizedBox(
+              height: 82,
+              child: _statusTabs(
+                employeeApprovals.length,
+                approved.length,
+                rejected.length,
+              ),
+            ),
+            const SizedBox(height: 26),
             Row(
               children: [
                 Expanded(
@@ -5249,7 +5278,7 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
             if (employeeApprovals.isEmpty)
               _GlassCard(
                 child: Padding(
@@ -5263,7 +5292,8 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
                 ),
               ),
             ...employeeApprovals.map((approval) {
-              final type = '${approval['approval_type'] ?? approval['request_type'] ?? ''}';
+              final type =
+                  '${approval['approval_type'] ?? approval['request_type'] ?? ''}';
               final typeLabel = switch (type) {
                 'daily_report' => 'Daily Report',
                 'social_media_post' => 'Social Media Post',
@@ -5294,14 +5324,15 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
                 },
               );
             }),
-            const SizedBox(height: 18),
+            const SizedBox(height: 22),
             _GlassCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Text(
                 'Other approval categories and history',
                 style: _CeoText.mutedFor(context, 12),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             if (categories.isEmpty)
               _GlassCard(
                 child: Padding(
@@ -8373,10 +8404,7 @@ class _DepartmentFilterTabs extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: active
                       ? const LinearGradient(
-                          colors: [
-                            Color(0xFF00C6FF),
-                            Color(0xFF0072FF),
-                          ],
+                          colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
                         )
                       : null,
                   color: active ? null : ThemeConfig.getCardBg(context),
@@ -12326,7 +12354,9 @@ class _NotificationsDynamicPage extends StatefulWidget {
 class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
   bool _unreadOnly = false;
 
-  Future<void> _openApprovalNotification(Map<String, dynamic> notification) async {
+  Future<void> _openApprovalNotification(
+    Map<String, dynamic> notification,
+  ) async {
     final referenceId = '${notification['reference_id'] ?? ''}';
     try {
       final data = await CeoService().fetchApprovals(widget.userId);
@@ -12337,8 +12367,11 @@ class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
         for (final raw in values.whereType<Map>()) {
           final item = Map<String, dynamic>.from(raw);
           if ('${item['id'] ?? ''}' == referenceId &&
-              const {'daily_report', 'social_media_post', 'leave_request'}
-                  .contains(item['approval_type'])) {
+              const {
+                'daily_report',
+                'social_media_post',
+                'leave_request',
+              }.contains(item['approval_type'])) {
             approval = item;
             break;
           }
@@ -12356,7 +12389,9 @@ class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
       if (!mounted) return;
       if (approval == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This approval is not awaiting CEO action.')),
+          const SnackBar(
+            content: Text('This approval is not awaiting CEO action.'),
+          ),
         );
         return;
       }
@@ -12366,7 +12401,8 @@ class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
             item: approval!,
             userId: widget.userId,
             service: EmployeeService(),
-            received: '${approval!['status'] ?? ''}'.toLowerCase() == 'requested' &&
+            received:
+                '${approval!['status'] ?? ''}'.toLowerCase() == 'requested' &&
                 '${approval!['current_stage'] ?? ''}' == '1',
           ),
         ),
@@ -15735,8 +15771,57 @@ class _ApprovalTile extends StatelessWidget {
   );
 
   @override
-  Widget build(BuildContext context) =>
-      _ReportTile(icon, title, subtitle, color, onTap);
+  Widget build(BuildContext context) {
+    return _GlassCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 58),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 52,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _IconSquare(icon: icon, color: color),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CeoText.titleFor(context, 14),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _CeoText.mutedFor(context, 11),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 24,
+              child: Icon(
+                Icons.chevron_right_rounded,
+                color: ThemeConfig.getTextPrimary(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _MenuTile extends StatelessWidget {
