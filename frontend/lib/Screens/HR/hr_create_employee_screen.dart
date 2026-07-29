@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
@@ -36,7 +37,23 @@ class _HrCreateEmployeeScreenState extends State<HrCreateEmployeeScreen> {
 
   @override
   void dispose() {
-    for (final controller in [_firstName, _lastName, _email, _phone, _dob, _password, _confirmPassword, _doorNo, _street, _pincode, _city, _state, _occupation, _pan, _aadhar]) {
+    for (final controller in [
+      _firstName,
+      _lastName,
+      _email,
+      _phone,
+      _dob,
+      _password,
+      _confirmPassword,
+      _doorNo,
+      _street,
+      _pincode,
+      _city,
+      _state,
+      _occupation,
+      _pan,
+      _aadhar,
+    ]) {
       controller.dispose();
     }
     super.dispose();
@@ -74,14 +91,22 @@ class _HrCreateEmployeeScreenState extends State<HrCreateEmployeeScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(data['success'] == true ? '${data['message']} ID: ${data['user_id']}' : '${data['message'] ?? data['errors'] ?? 'Employee creation failed'}'),
-          backgroundColor: data['success'] == true ? Colors.green : Colors.redAccent,
+          content: Text(
+            data['success'] == true
+                ? '${data['message']} ID: ${data['user_id']}'
+                : '${data['message'] ?? data['errors'] ?? 'Employee creation failed'}',
+          ),
+          backgroundColor: data['success'] == true
+              ? Colors.green
+              : Colors.redAccent,
         ),
       );
       if (data['success'] == true) _formKey.currentState!.reset();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -93,73 +118,130 @@ class _HrCreateEmployeeScreenState extends State<HrCreateEmployeeScreen> {
     return Form(
       key: _formKey,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+        padding: AppLayout.pagePadding,
         children: [
           HrCard(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _Field(label: 'First Name', controller: _firstName),
-              _Field(label: 'Last Name', controller: _lastName),
-              _Field(label: 'Email', controller: _email, keyboardType: TextInputType.emailAddress),
-              _Field(label: 'Phone', controller: _phone, keyboardType: TextInputType.phone),
-              _Field(label: 'DOB', controller: _dob, hint: 'YYYY-MM-DD'),
-              AppDropdownButtonFormField<String>(
-                value: _gender,
-                decoration: _decoration(context, 'Gender'),
-                dropdownColor: c.surface,
-                items: const [
-                  DropdownMenuItem(value: 'male', child: Text('Male')),
-                  DropdownMenuItem(value: 'female', child: Text('Female')),
-                  DropdownMenuItem(value: 'other', child: Text('Other')),
-                ],
-                onChanged: (value) => setState(() => _gender = value ?? 'male'),
-              ),
-              const SizedBox(height: 10),
-              _Field(label: 'Password', controller: _password, obscure: true),
-              _Field(label: 'Confirm Password', controller: _confirmPassword, obscure: true),
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Field(label: 'First Name', controller: _firstName),
+                _Field(label: 'Last Name', controller: _lastName),
+                _Field(
+                  label: 'Email',
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                _Field(
+                  label: 'Phone',
+                  controller: _phone,
+                  keyboardType: TextInputType.phone,
+                ),
+                _Field(label: 'DOB', controller: _dob, hint: 'YYYY-MM-DD'),
+                AppDropdownButtonFormField<String>(
+                  value: _gender,
+                  decoration: _decoration(context, 'Gender'),
+                  dropdownColor: c.surface,
+                  items: const [
+                    DropdownMenuItem(value: 'male', child: Text('Male')),
+                    DropdownMenuItem(value: 'female', child: Text('Female')),
+                    DropdownMenuItem(value: 'other', child: Text('Other')),
+                  ],
+                  onChanged: (value) =>
+                      setState(() => _gender = value ?? 'male'),
+                ),
+                const SizedBox(height: 10),
+                _Field(label: 'Password', controller: _password, obscure: true),
+                _Field(
+                  label: 'Confirm Password',
+                  controller: _confirmPassword,
+                  obscure: true,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 12),
           HrCard(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _Field(label: 'Door No', controller: _doorNo),
-              _Field(label: 'Street', controller: _street),
-              _Field(label: 'Pincode', controller: _pincode, keyboardType: TextInputType.number),
-              AppDropdownButtonFormField<String>(
-                value: indiaStates.contains(_state.text) ? _state.text : null,
-                isExpanded: true,
-                menuMaxHeight: 300,
-                decoration: _decoration(context, 'State'),
-                dropdownColor: c.surface,
-                items: indiaStates.map((state) => DropdownMenuItem(value: state, child: Text(state))).toList(),
-                validator: (value) => value == null || value.isEmpty ? 'Required' : null,
-                onChanged: (value) => setState(() {
-                  _state.text = value ?? '';
-                  _city.clear();
-                }),
-              ),
-              const SizedBox(height: 10),
-              AppDropdownButtonFormField<String>(
-                value: indiaCitiesForState(_state.text).contains(_city.text) ? _city.text : null,
-                isExpanded: true,
-                menuMaxHeight: 300,
-                decoration: _decoration(context, 'City'),
-                dropdownColor: c.surface,
-                hint: Text(_state.text.isEmpty ? 'Select state first' : 'Select city'),
-                items: indiaCitiesForState(_state.text).map((city) => DropdownMenuItem(value: city, child: Text(city))).toList(),
-                validator: (value) => value == null || value.isEmpty ? 'Required' : null,
-                onChanged: (value) => setState(() => _city.text = value ?? ''),
-              ),
-              const SizedBox(height: 10),
-              _Field(label: 'Occupation', controller: _occupation),
-              _Field(label: 'PAN', controller: _pan),
-              _Field(label: 'Aadhar', controller: _aadhar, keyboardType: TextInputType.number),
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Field(label: 'Door No', controller: _doorNo),
+                _Field(label: 'Street', controller: _street),
+                _Field(
+                  label: 'Pincode',
+                  controller: _pincode,
+                  keyboardType: TextInputType.number,
+                ),
+                AppDropdownButtonFormField<String>(
+                  value: indiaStates.contains(_state.text) ? _state.text : null,
+                  isExpanded: true,
+                  menuMaxHeight: 300,
+                  decoration: _decoration(context, 'State'),
+                  dropdownColor: c.surface,
+                  items: indiaStates
+                      .map(
+                        (state) =>
+                            DropdownMenuItem(value: state, child: Text(state)),
+                      )
+                      .toList(),
+                  validator: (value) =>
+                      value == null || value.isEmpty ? 'Required' : null,
+                  onChanged: (value) => setState(() {
+                    _state.text = value ?? '';
+                    _city.clear();
+                  }),
+                ),
+                const SizedBox(height: 10),
+                AppDropdownButtonFormField<String>(
+                  value: indiaCitiesForState(_state.text).contains(_city.text)
+                      ? _city.text
+                      : null,
+                  isExpanded: true,
+                  menuMaxHeight: 300,
+                  decoration: _decoration(context, 'City'),
+                  dropdownColor: c.surface,
+                  hint: Text(
+                    _state.text.isEmpty ? 'Select state first' : 'Select city',
+                  ),
+                  items: indiaCitiesForState(_state.text)
+                      .map(
+                        (city) =>
+                            DropdownMenuItem(value: city, child: Text(city)),
+                      )
+                      .toList(),
+                  validator: (value) =>
+                      value == null || value.isEmpty ? 'Required' : null,
+                  onChanged: (value) =>
+                      setState(() => _city.text = value ?? ''),
+                ),
+                const SizedBox(height: 10),
+                _Field(label: 'Occupation', controller: _occupation),
+                _Field(label: 'PAN', controller: _pan),
+                _Field(
+                  label: 'Aadhar',
+                  controller: _aadhar,
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 14),
           ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(48)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: c.primary,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(48),
+            ),
             onPressed: _loading ? null : _create,
-            icon: _loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.person_add_alt_1_rounded),
+            icon: _loading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.person_add_alt_1_rounded),
             label: const Text('Create Employee'),
           ),
         ],
@@ -175,7 +257,13 @@ class _Field extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool obscure;
 
-  const _Field({required this.label, required this.controller, this.hint, this.keyboardType, this.obscure = false});
+  const _Field({
+    required this.label,
+    required this.controller,
+    this.hint,
+    this.keyboardType,
+    this.obscure = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -185,14 +273,19 @@ class _Field extends StatelessWidget {
         controller: controller,
         keyboardType: keyboardType,
         obscureText: obscure,
-        validator: (value) => value == null || value.trim().isEmpty ? 'Required' : null,
+        validator: (value) =>
+            value == null || value.trim().isEmpty ? 'Required' : null,
         decoration: _decoration(context, label, hint),
       ),
     );
   }
 }
 
-InputDecoration _decoration(BuildContext context, String label, [String? hint]) {
+InputDecoration _decoration(
+  BuildContext context,
+  String label, [
+  String? hint,
+]) {
   final c = HrPalette.of(context);
   return InputDecoration(
     labelText: label,
@@ -201,8 +294,17 @@ InputDecoration _decoration(BuildContext context, String label, [String? hint]) 
     fillColor: c.row,
     labelStyle: TextStyle(color: c.muted),
     hintStyle: TextStyle(color: c.muted),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.border)),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: c.primary)),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: c.border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: c.border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: c.primary),
+    ),
   );
 }

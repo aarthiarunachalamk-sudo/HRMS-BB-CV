@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
@@ -287,75 +288,76 @@ class _MdDashboardState extends State<MdDashboard> {
         if (!didPop) _handleSystemBack();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-      value: colors.isDark
-          ? SystemUiOverlayStyle.light
-          : SystemUiOverlayStyle.dark,
-      child: Scaffold(
-        key: _scaffoldKey,
-        backgroundColor: colors.bg,
-        drawer: _MdDrawer(
-          colors: colors,
-          name: widget.firstName,
-          email: widget.email,
-          roleLabel: _roleLabel,
-          select: _setDrawerStep,
-          logout: _requestLogout,
-        ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              if (_step != _MdStep.more)
-                _TopBar(
-                  colors: colors,
-                  dashboardTitle: '$_roleShortLabel Dashboard',
-                  onMenu: () => _scaffoldKey.currentState?.openDrawer(),
-                  onTheme: _toggleTheme,
-                  onProfile: _pickProfileImage,
-                ),
-              if (_step == _MdStep.dashboard)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
-                  child: _RoleSelector(
+        value: colors.isDark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          key: _scaffoldKey,
+          backgroundColor: colors.bg,
+          drawer: _MdDrawer(
+            colors: colors,
+            name: widget.firstName,
+            email: widget.email,
+            roleLabel: _roleLabel,
+            select: _setDrawerStep,
+            logout: _requestLogout,
+          ),
+          body: SafeArea(
+            child: Column(
+              children: [
+                if (_step != _MdStep.more)
+                  _TopBar(
                     colors: colors,
-                    managementRoleLabel: _roleShortLabel,
-                    selectedRole: _dashboardRole,
-                    onChanged: (role) => setState(() => _dashboardRole = role),
+                    dashboardTitle: '$_roleShortLabel Dashboard',
+                    onMenu: () => _scaffoldKey.currentState?.openDrawer(),
+                    onTheme: _toggleTheme,
+                    onProfile: _pickProfileImage,
+                  ),
+                if (_step == _MdStep.dashboard)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
+                    child: _RoleSelector(
+                      colors: colors,
+                      managementRoleLabel: _roleShortLabel,
+                      selectedRole: _dashboardRole,
+                      onChanged: (role) =>
+                          setState(() => _dashboardRole = role),
+                    ),
+                  ),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: _loading
+                        ? Center(
+                            child: CircularProgressIndicator(
+                              color: colors.primary,
+                            ),
+                          )
+                        : _buildStep(colors),
                   ),
                 ),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 220),
-                  child: _loading
-                      ? Center(
-                          child: CircularProgressIndicator(
-                            color: colors.primary,
-                          ),
-                        )
-                      : _buildStep(colors),
+                _BottomNav(
+                  colors: colors,
+                  selectedIndex: _bottomIndex,
+                  onTap: (index) {
+                    setState(() {
+                      _bottomIndex = index;
+                      _step = const [
+                        _MdStep.dashboard,
+                        _MdStep.analytics,
+                        _MdStep.employees,
+                        _MdStep.meetings,
+                        _MdStep.reports,
+                        _MdStep.approvals,
+                        _MdStep.more,
+                      ][index];
+                    });
+                  },
                 ),
-              ),
-              _BottomNav(
-                colors: colors,
-                selectedIndex: _bottomIndex,
-                onTap: (index) {
-                  setState(() {
-                    _bottomIndex = index;
-                    _step = const [
-                      _MdStep.dashboard,
-                      _MdStep.analytics,
-                      _MdStep.employees,
-                      _MdStep.meetings,
-                      _MdStep.reports,
-                      _MdStep.approvals,
-                      _MdStep.more,
-                    ][index];
-                  });
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -1221,7 +1223,6 @@ class _MeetingsPageState extends State<_MeetingsPage> {
           children: [
             _PageTitle(colors: widget.colors, title: 'Meetings'),
             _Tabs(
-              colors: widget.colors,
               selected: _selectedTab,
               onChanged: (tab) => setState(() => _selectedTab = tab),
             ),
@@ -3175,57 +3176,21 @@ class _PageTitle extends StatelessWidget {
 }
 
 class _Tabs extends StatelessWidget {
-  final _MdColors colors;
   final String selected;
   final ValueChanged<String> onChanged;
 
-  const _Tabs({
-    required this.colors,
-    required this.selected,
-    required this.onChanged,
-  });
+  const _Tabs({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        children: ['Upcoming', 'Past', 'Cancelled'].map((tab) {
-          final active = tab == selected;
-          return Expanded(
-            child: InkWell(
-              onTap: () => onChanged(tab),
-              borderRadius: BorderRadius.circular(7),
-              child: Container(
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: active
-                      ? const LinearGradient(
-                          colors: [Color(0xFF00C6FF), Color(0xFF0072FF)],
-                        )
-                      : null,
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                child: Text(
-                  tab,
-                  style: TextStyle(
-                    color: active ? Colors.white : colors.text,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+    return AppModuleTabs<String>(
+      tabs: const [
+        AppModuleTab('Upcoming', 'Upcoming'),
+        AppModuleTab('Past', 'Past'),
+        AppModuleTab('Cancelled', 'Cancelled'),
+      ],
+      selected: selected,
+      onSelected: onChanged,
     );
   }
 }

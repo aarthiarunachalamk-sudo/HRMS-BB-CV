@@ -451,7 +451,7 @@ Widget chartCard(
 }
 
 Widget pageList(List<Widget> children) {
-  return ListView(padding: AppLayout.pagePadding, children: children);
+  return AppAlignedListView(children: children);
 }
 
 Widget title(String text, double size) {

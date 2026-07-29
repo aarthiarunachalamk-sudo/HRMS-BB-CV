@@ -445,12 +445,15 @@ class AdminInfoRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(flex: 2, child: adminMuted(label, 12, c)),
+          const SizedBox(width: AppLayout.itemGap),
           Expanded(
             flex: 3,
             child: Text(
               value,
+              textAlign: TextAlign.right,
               style: TextStyle(
                 color: valueColor ?? c.text,
                 fontSize: 13,
@@ -577,7 +580,7 @@ class AdminBadge extends StatelessWidget {
 //  Page list helper
 // ─────────────────────────────────────────────────────────────
 Widget adminPageList(List<Widget> children) =>
-    ListView(padding: AppLayout.pagePadding, children: children);
+    AppAlignedListView(children: children);
 
 // ─────────────────────────────────────────────────────────────
 //  Text helpers

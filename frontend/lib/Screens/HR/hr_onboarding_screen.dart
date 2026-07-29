@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 import 'hr_shared.dart';
 
 class HrOnboardingScreen extends StatelessWidget {
@@ -10,11 +11,16 @@ class HrOnboardingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: hrList(data, 'onboarding').map((item) {
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
-          child: HrListTile(icon: Icons.assignment_ind_rounded, title: '${item['title']}', subtitle: '${item['subtitle']}', color: c.primary),
+          child: HrListTile(
+            icon: Icons.assignment_ind_rounded,
+            title: '${item['title']}',
+            subtitle: '${item['subtitle']}',
+            color: c.primary,
+          ),
         );
       }).toList(),
     );

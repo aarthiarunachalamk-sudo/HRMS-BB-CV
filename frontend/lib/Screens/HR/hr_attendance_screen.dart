@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 import 'hr_employee_detail_screen.dart';
 import 'hr_shared.dart';
 
@@ -12,7 +13,7 @@ class HrAttendanceScreen extends StatelessWidget {
     final c = HrPalette.of(context);
     final records = hrList(data, 'attendance_records');
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         Text(
           'Team Attendance Overview',
@@ -28,35 +29,76 @@ class HrAttendanceScreen extends StatelessWidget {
           style: TextStyle(color: c.muted, fontSize: 11, height: 1.4),
         ),
         const SizedBox(height: 14),
-        Row(children: [
-          Expanded(child: HrMetricCard(title: 'Present', value: hrText(data, 'present_today'), icon: Icons.verified_rounded, color: c.success)),
-          const SizedBox(width: 10),
-          Expanded(child: HrMetricCard(title: 'Absent', value: hrText(data, 'absent_today'), icon: Icons.person_off_rounded, color: c.danger)),
-        ]),
+        Row(
+          children: [
+            Expanded(
+              child: HrMetricCard(
+                title: 'Present',
+                value: hrText(data, 'present_today'),
+                icon: Icons.verified_rounded,
+                color: c.success,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: HrMetricCard(
+                title: 'Absent',
+                value: hrText(data, 'absent_today'),
+                icon: Icons.person_off_rounded,
+                color: c.danger,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: HrMetricCard(title: 'Late Entry', value: hrText(data, 'late_entry'), icon: Icons.schedule_rounded, color: c.warning)),
-          const SizedBox(width: 10),
-          Expanded(child: HrMetricCard(title: 'WFH', value: hrText(data, 'wfh'), icon: Icons.home_work_rounded, color: c.purple)),
-        ]),
+        Row(
+          children: [
+            Expanded(
+              child: HrMetricCard(
+                title: 'Late Entry',
+                value: hrText(data, 'late_entry'),
+                icon: Icons.schedule_rounded,
+                color: c.warning,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: HrMetricCard(
+                title: 'WFH',
+                value: hrText(data, 'wfh'),
+                icon: Icons.home_work_rounded,
+                color: c.purple,
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
-        Text('Recent Records', style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w900)),
+        Text(
+          'Recent Records',
+          style: TextStyle(
+            color: c.text,
+            fontSize: 15,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
         const SizedBox(height: 10),
-        ...records.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: HrListTile(
-                icon: Icons.access_time_rounded,
-                title: '${item['name']}',
-                subtitle: '${item['subtitle']}',
-                trailing: '${item['time']}',
-                color: c.teal,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => _HrAttendanceDetailScreen(record: item),
-                  ),
+        ...records.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: HrListTile(
+              icon: Icons.access_time_rounded,
+              title: '${item['name']}',
+              subtitle: '${item['subtitle']}',
+              trailing: '${item['time']}',
+              color: c.teal,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => _HrAttendanceDetailScreen(record: item),
                 ),
               ),
-            )),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -85,22 +127,41 @@ class _HrAttendanceDetailScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${record['name'] ?? 'Employee'}', style: TextStyle(color: c.text, fontSize: 18, fontWeight: FontWeight.w900)),
+                Text(
+                  '${record['name'] ?? 'Employee'}',
+                  style: TextStyle(
+                    color: c.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text('${record['employee_id'] ?? record['id'] ?? ''}', style: TextStyle(color: c.primary, fontWeight: FontWeight.w700)),
+                Text(
+                  '${record['employee_id'] ?? record['id'] ?? ''}',
+                  style: TextStyle(
+                    color: c.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 _detailRow('Date', '${record['attendance_date'] ?? '-'}', c),
                 _detailRow('Status', status, c),
                 _detailRow('Check in', '${record['check_in'] ?? '-'}', c),
                 _detailRow('Check out', '${record['check_out'] ?? '-'}', c),
-                _detailRow('Working hours', '${record['working_hours'] ?? '-'}', c),
+                _detailRow(
+                  'Working hours',
+                  '${record['working_hours'] ?? '-'}',
+                  c,
+                ),
               ],
             ),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => HrEmployeeDetailScreen(employee: record)),
+              MaterialPageRoute(
+                builder: (_) => HrEmployeeDetailScreen(employee: record),
+              ),
             ),
             icon: const Icon(Icons.person_rounded),
             label: const Text('View Employee Profile'),
@@ -111,12 +172,20 @@ class _HrAttendanceDetailScreen extends StatelessWidget {
   }
 
   Widget _detailRow(String label, String value, HrPalette c) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: Row(
-          children: [
-            SizedBox(width: 110, child: Text(label, style: TextStyle(color: c.muted, fontSize: 12))),
-            Expanded(child: Text(value.isEmpty ? '-' : value, style: TextStyle(color: c.text, fontWeight: FontWeight.w700))),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 7),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(label, style: TextStyle(color: c.muted, fontSize: 12)),
         ),
-      );
+        Expanded(
+          child: Text(
+            value.isEmpty ? '-' : value,
+            style: TextStyle(color: c.text, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
+    ),
+  );
 }

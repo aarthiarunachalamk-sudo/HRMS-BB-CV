@@ -7,6 +7,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_shared.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Superadmin/sa_shared.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/TL/tl_shared.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 
 void main() {
   const longTitle =
@@ -118,5 +119,43 @@ void main() {
       ),
     );
     expect(find.text('Approved (300)'), findsOneWidget);
+  });
+
+  testWidgets('Shared action row stacks neatly on a narrow phone', (
+    tester,
+  ) async {
+    await pumpNarrow(
+      tester,
+      AppActionRow(
+        children: [
+          OutlinedButton(onPressed: () {}, child: const Text('Reject Request')),
+          FilledButton(onPressed: () {}, child: const Text('Approve Request')),
+        ],
+      ),
+    );
+    final reject = tester.getRect(find.text('Reject Request'));
+    final approve = tester.getRect(find.text('Approve Request'));
+    expect(approve.top, greaterThan(reject.bottom));
+  });
+
+  testWidgets('Aligned module content stays centred on a tablet', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AppAlignedListView(
+            children: [SizedBox(key: Key('aligned-content'), height: 40)],
+          ),
+        ),
+      ),
+    );
+    final rect = tester.getRect(find.byKey(const Key('aligned-content')));
+    expect(rect.width, lessThanOrEqualTo(AppLayout.maxContentWidth));
+    expect(rect.center.dx, closeTo(500, 1));
   });
 }

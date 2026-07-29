@@ -39,30 +39,26 @@ class EmployeePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textPrimary = ThemeConfig.getTextPrimary(context);
-    return SingleChildScrollView(
-      padding: AppLayout.pagePadding,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    color: textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+    return AppAlignedListView(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              ?action,
-            ],
-          ),
-          const SizedBox(height: AppLayout.sectionGap),
-          ...children,
-        ],
-      ),
+            ),
+            ?action,
+          ],
+        ),
+        const SizedBox(height: AppLayout.sectionGap),
+        ...children,
+      ],
     );
   }
 }

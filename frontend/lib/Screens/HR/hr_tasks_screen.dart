@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'hr_shared.dart';
 
@@ -11,7 +12,7 @@ class HrTasksScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         AppModuleTabs<String>(
           tabs: const [

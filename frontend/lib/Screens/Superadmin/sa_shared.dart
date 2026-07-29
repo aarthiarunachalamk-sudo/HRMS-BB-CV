@@ -444,8 +444,7 @@ class SaMetric {
   const SaMetric(this.title, this.value, this.icon, this.color);
 }
 
-Widget saList(List<Widget> children) =>
-    ListView(padding: AppLayout.pagePadding, children: children);
+Widget saList(List<Widget> children) => AppAlignedListView(children: children);
 
 Widget saTitle(BuildContext context, String text, double size) {
   final c = SaPalette.of(context);

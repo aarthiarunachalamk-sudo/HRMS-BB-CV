@@ -333,7 +333,7 @@ class _Dashboard extends StatelessWidget {
       'notifications',
     ).where((item) => item['is_read'] != true).toList();
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         if (loading)
           TlCard(
@@ -1086,7 +1086,7 @@ class _TeamState extends State<_Team> {
         )
         .toList();
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         Row(
           children: [
@@ -1739,7 +1739,7 @@ class _AttendanceState extends State<_Attendance> {
           sum + (int.tryParse('${_summary(item)['absent'] ?? 0}') ?? 0),
     );
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         Row(
           children: [
@@ -1989,7 +1989,7 @@ class _Selfie extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         TlCard(
           child: Column(
@@ -2030,7 +2030,7 @@ class _GeoLocation extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         TlCard(
           child: Column(
@@ -2083,7 +2083,7 @@ class _ConfirmAttendance extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         TlCard(
           child: Column(
@@ -2118,7 +2118,7 @@ class _AttendanceMarked extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         TlCard(
           child: Column(
@@ -2320,7 +2320,7 @@ class _MeetingsState extends State<_Meetings> {
         ? _employeeId
         : null;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         _MeetingInputCard(
           title: 'Meeting Title',
@@ -3147,7 +3147,7 @@ class _TlReportsDashboardState extends State<_TlReportsDashboard> {
         }).toList();
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         _ReportsHeader(c: c, menu: widget.menu, theme: widget.theme),
         const SizedBox(height: 14),
@@ -4278,7 +4278,7 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
       _ => 'No leave requests pending TL review',
     };
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         Row(
           children: [
@@ -4545,7 +4545,7 @@ class _ApprovalDetails extends StatelessWidget {
       children: [
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+            padding: AppLayout.pagePadding,
             children: [
               // ── Header ────────────────────────────────────────────
               Row(
@@ -5558,7 +5558,7 @@ class _TaskDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         TlCard(
           child: Column(
@@ -5734,7 +5734,7 @@ class _CreateTaskState extends State<_CreateTask> {
     }
     if (_reviewing) return _buildReview(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         Row(
           children: [
@@ -6672,7 +6672,7 @@ class _ProjectDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         TlCard(
           child: Column(
@@ -6719,7 +6719,7 @@ class _TeamPerformance extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         TlCard(
           child: Column(
@@ -6815,7 +6815,7 @@ class _EmployeeDetails extends StatelessWidget {
         0;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         TlCard(
           child: Row(
@@ -7042,7 +7042,7 @@ class _GenericDetails extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         TlCard(
           child: Column(
@@ -7085,7 +7085,7 @@ class _Profile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         TlCard(
           child: Column(
@@ -7220,7 +7220,7 @@ class _ListPageState extends State<_ListPage> {
           .where((value) => value.isNotEmpty),
     }.toList();
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         Row(
           children: [

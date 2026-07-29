@@ -125,113 +125,115 @@ class _HrDashboardState extends State<HrDashboard> {
         }
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-      value: c.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: FutureBuilder<Map<String, dynamic>>(
-        future: _future,
-        builder: (context, snapshot) {
-          final data = snapshot.data ?? {};
-          final pages = [
-            _HrHome(
-              data: data,
-              name: widget.firstName,
-              email: widget.email,
-              profileImage: _profileImage,
-              onProfileTap: _pickProfileImage,
-              onOpen: _setIndex,
-              onNotificationTap: _openNotification,
-            ),
-            const RegisterEmployeesPage(),
-            HrEmployeesScreen(data: data),
-            HrAttendanceScreen(data: data),
-            HrLeaveRequestsScreen(
-              data: data,
-              userId: widget.userId,
-              onChanged: _refreshDashboard,
-            ),
-            HrRecruitmentScreen(
-              data: data,
-              onPipeline: () => _setIndex(7),
-              onSchedule: () => _setIndex(8),
-            ),
-            HrMeetingsScreen(data: data),
-            HrRecruitmentPipelineScreen(data: data),
-            HrScheduleInterviewScreen(data: data),
-            HrOnboardingScreen(data: data),
-            HrDocumentsScreen(data: data),
-            HrPerformanceScreen(data: data),
-            HrPayrollScreen(
-              data: data,
-              userId: widget.userId,
-              onChanged: _refreshDashboard,
-            ),
-            HrTrainingScreen(data: data),
-            HrTasksScreen(data: data),
-            HrProfileScreen(
-              email: widget.email,
-              name: widget.firstName,
-              onLogout: _logout,
-            ),
-          ];
-
-          return Scaffold(
-            key: _scaffoldKey,
-            backgroundColor: c.bg,
-            drawer: _HrDrawer(
-              data: data,
-              email: widget.email,
-              onTap: _setIndex,
-              onLogout: _logout,
-            ),
-            body: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [c.bg, c.bgAlt],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
+        value: c.isDark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
+        child: FutureBuilder<Map<String, dynamic>>(
+          future: _future,
+          builder: (context, snapshot) {
+            final data = snapshot.data ?? {};
+            final pages = [
+              _HrHome(
+                data: data,
+                name: widget.firstName,
+                email: widget.email,
+                profileImage: _profileImage,
+                onProfileTap: _pickProfileImage,
+                onOpen: _setIndex,
+                onNotificationTap: _openNotification,
               ),
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    _TopBar(
-                      colors: c,
-                      title: _titles[_index],
-                      onMenu: () => _scaffoldKey.currentState?.openDrawer(),
-                      onTheme: _toggleTheme,
-                    ),
-                    if (_index == 0)
-                      _HrRoleDropdown(
+              const RegisterEmployeesPage(),
+              HrEmployeesScreen(data: data),
+              HrAttendanceScreen(data: data),
+              HrLeaveRequestsScreen(
+                data: data,
+                userId: widget.userId,
+                onChanged: _refreshDashboard,
+              ),
+              HrRecruitmentScreen(
+                data: data,
+                onPipeline: () => _setIndex(7),
+                onSchedule: () => _setIndex(8),
+              ),
+              HrMeetingsScreen(data: data),
+              HrRecruitmentPipelineScreen(data: data),
+              HrScheduleInterviewScreen(data: data),
+              HrOnboardingScreen(data: data),
+              HrDocumentsScreen(data: data),
+              HrPerformanceScreen(data: data),
+              HrPayrollScreen(
+                data: data,
+                userId: widget.userId,
+                onChanged: _refreshDashboard,
+              ),
+              HrTrainingScreen(data: data),
+              HrTasksScreen(data: data),
+              HrProfileScreen(
+                email: widget.email,
+                name: widget.firstName,
+                onLogout: _logout,
+              ),
+            ];
+
+            return Scaffold(
+              key: _scaffoldKey,
+              backgroundColor: c.bg,
+              drawer: _HrDrawer(
+                data: data,
+                email: widget.email,
+                onTap: _setIndex,
+                onLogout: _logout,
+              ),
+              body: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [c.bg, c.bgAlt],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      _TopBar(
                         colors: c,
-                        value: _role,
-                        onChanged: _switchRole,
+                        title: _titles[_index],
+                        onMenu: () => _scaffoldKey.currentState?.openDrawer(),
+                        onTheme: _toggleTheme,
                       ),
-                    if (snapshot.connectionState == ConnectionState.waiting)
-                      LinearProgressIndicator(
-                        minHeight: 2,
-                        color: c.primary,
-                        backgroundColor: Colors.transparent,
-                      ),
-                    if (snapshot.hasError)
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(
-                          'Unable to load data. Please try again.',
-                          style: TextStyle(
-                            color: c.danger,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
+                      if (_index == 0)
+                        _HrRoleDropdown(
+                          colors: c,
+                          value: _role,
+                          onChanged: _switchRole,
+                        ),
+                      if (snapshot.connectionState == ConnectionState.waiting)
+                        LinearProgressIndicator(
+                          minHeight: 2,
+                          color: c.primary,
+                          backgroundColor: Colors.transparent,
+                        ),
+                      if (snapshot.hasError)
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Text(
+                            'Unable to load data. Please try again.',
+                            style: TextStyle(
+                              color: c.danger,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                      ),
-                    Expanded(child: pages[_index]),
-                    _BottomNav(colors: c, index: _index, onTap: _setIndex),
-                  ],
+                      Expanded(child: pages[_index]),
+                      _BottomNav(colors: c, index: _index, onTap: _setIndex),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
-      ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -463,7 +465,7 @@ class _HrHome extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+      padding: AppLayout.pagePadding,
       children: [
         Row(
           children: [
