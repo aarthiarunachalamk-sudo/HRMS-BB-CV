@@ -245,7 +245,6 @@ class MyApp extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         elevation: 0,
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       ),
       snackBarTheme: SnackBarThemeData(
