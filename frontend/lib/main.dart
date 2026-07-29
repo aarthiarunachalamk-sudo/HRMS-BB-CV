@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/splash_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -204,6 +205,8 @@ class MyApp extends StatelessWidget {
         hintStyle: textTheme.bodyMedium,
         prefixIconColor: muted,
         suffixIconColor: muted,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        constraints: const BoxConstraints(minHeight: AppLayout.controlHeight),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: outline),
@@ -241,6 +244,10 @@ class MyApp extends StatelessWidget {
         contentTextStyle: textTheme.bodyMedium,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+        contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: isDark ? const Color(0xFF0F1B2E) : const Color(0xFF1F3654),
@@ -354,6 +361,8 @@ class MyApp extends StatelessWidget {
         style: IconButton.styleFrom(
           foregroundColor: primary,
           disabledForegroundColor: muted,
+          minimumSize: const Size.square(AppLayout.iconTouchTarget),
+          tapTargetSize: MaterialTapTargetSize.padded,
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(

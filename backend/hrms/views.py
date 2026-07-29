@@ -13,7 +13,7 @@ from django.utils.html import escape
 from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
 from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
-from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, AttendanceRegularizationRequest, EmployeeApprovalRequest
+from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, CompanyLeave, AttendanceRegularizationRequest, EmployeeApprovalRequest
 from .employee_views import _attendance_calculation, _leave_balance_payload, _notify_employee_presence, _approval_payload
 from .payroll import generate_payroll_for_month, payslip_payload
 import os
@@ -4149,7 +4149,95 @@ def ceo_leave_intelligence_view(request):
         'balances': list(balance_totals.values()),
         'types': [{'type': key, **value} for key, value in type_totals.items()],
         'trend': trend,
+        'company_leaves': [
+            {
+                'id': item.id,
+                'title': item.title,
+                'message': item.message,
+                'from_date': item.from_date.isoformat(),
+                'to_date': item.to_date.isoformat(),
+                'leave_type': 'Company Leave',
+                'status': 'Company Leave',
+            }
+            for item in CompanyLeave.objects.filter(
+                from_date__lte=month_end,
+                to_date__gte=month_start,
+            )
+        ],
     })
+
+
+@api_view(['POST'])
+def ceo_company_leave_view(request):
+    user_id = str(request.data.get('user_id') or '').strip()
+    if not User.objects.filter(user_id=user_id, role='ceo', is_active=True).exists():
+        return Response({'success': False, 'message': 'Only an active CEO can announce company leave.'}, status=403)
+    title = str(request.data.get('title') or '').strip()
+    message = str(request.data.get('message') or '').strip()
+    try:
+        from_date = date.fromisoformat(str(request.data.get('from_date') or ''))
+        to_date = date.fromisoformat(str(request.data.get('to_date') or ''))
+    except ValueError:
+        return Response({'success': False, 'message': 'Select valid leave dates.'}, status=400)
+    if not title:
+        return Response({'success': False, 'message': 'Company leave title is required.'}, status=400)
+    if to_date < from_date:
+        return Response({'success': False, 'message': 'End date cannot be before start date.'}, status=400)
+
+    with transaction.atomic():
+        announcement = Announcement.objects.create(
+            title=title,
+            message=message or 'The company has announced a company-wide leave.',
+            target_roles=['admin', 'tl', 'hr', 'md', 'director', 'employee'],
+            status='published',
+            publish_at=timezone.now(),
+            created_by=user_id,
+        )
+        company_leave = CompanyLeave.objects.create(
+            title=title,
+            message=message,
+            from_date=from_date,
+            to_date=to_date,
+            announced_by=user_id,
+            announcement=announcement,
+        )
+
+    date_label = from_date.strftime('%d %b %Y') if from_date == to_date else f'{from_date:%d %b %Y} to {to_date:%d %b %Y}'
+    notification_message = f'{title} has been announced as Company Leave for {date_label}.'
+    if message:
+        notification_message = f'{notification_message} {message}'
+    for role in ('admin', 'tl', 'hr', 'md', 'director'):
+        _create_notification(
+            role=role,
+            title='Company Leave Announced',
+            message=notification_message,
+            notification_type='info',
+            module='company_leave',
+            reference_id=company_leave.id,
+        )
+    employee_ids = set(EmployeeAccount.objects.filter(is_active=True).values_list('employee_id', flat=True))
+    employee_ids.update(User.objects.filter(role='employee', is_active=True).values_list('user_id', flat=True))
+    for employee_id in employee_ids:
+        _create_notification(
+            user_id=employee_id,
+            title='Company Leave Announced',
+            message=notification_message,
+            notification_type='info',
+            module='company_leave',
+            reference_id=company_leave.id,
+        )
+    return Response({
+        'success': True,
+        'message': 'Company leave announced to all dashboards.',
+        'company_leave': {
+            'id': company_leave.id,
+            'title': company_leave.title,
+            'message': company_leave.message,
+            'from_date': company_leave.from_date.isoformat(),
+            'to_date': company_leave.to_date.isoformat(),
+            'leave_type': 'Company Leave',
+        },
+    }, status=201)
 
 
 @api_view(['GET', 'POST'])

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 
 class HrPalette {
   final bool isDark;
@@ -77,7 +78,7 @@ class HrCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
 
-  const HrCard({super.key, required this.child, this.padding = const EdgeInsets.all(12)});
+  const HrCard({super.key, required this.child, this.padding = const EdgeInsets.all(AppLayout.cardPadding)});
 
   @override
   Widget build(BuildContext context) {
@@ -148,11 +149,11 @@ class HrListTile extends StatelessWidget {
     final c = HrPalette.of(context);
     final accent = color ?? c.primary;
     final tile = HrCard(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(AppLayout.cardPadding),
       child: Row(
         children: [
           Container(width: 34, height: 34, decoration: BoxDecoration(color: accent.withAlpha(24), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: accent, size: 18)),
-          const SizedBox(width: 10),
+          const SizedBox(width: AppLayout.itemGap),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontSize: 13, fontWeight: FontWeight.w900)),
             const SizedBox(height: 3),

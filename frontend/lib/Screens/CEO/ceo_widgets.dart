@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 
 class CeoColors {
   static const bgTop = Color(0xFF020916);
@@ -66,7 +67,7 @@ class CeoShell extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+                padding: AppLayout.headerPadding,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final rightWidth = trailing == null
@@ -225,7 +226,7 @@ class CeoCard extends StatelessWidget {
   const CeoCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(12),
+    this.padding = const EdgeInsets.all(AppLayout.cardPadding),
     this.onTap,
   });
 
@@ -253,9 +254,9 @@ class CeoCard extends StatelessWidget {
       child: child,
     );
     if (onTap == null)
-      return Padding(padding: const EdgeInsets.only(bottom: 10), child: card);
+      return Padding(padding: const EdgeInsets.only(bottom: AppLayout.itemGap), child: card);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: AppLayout.itemGap),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -281,8 +282,8 @@ class CeoMetricGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
+        mainAxisSpacing: AppLayout.itemGap,
+        crossAxisSpacing: AppLayout.itemGap,
         childAspectRatio: 1.55,
       ),
       itemBuilder: (context, index) {
@@ -348,7 +349,7 @@ class CeoListTile extends StatelessWidget {
             ),
             child: Icon(icon, color: color, size: 22),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppLayout.itemGap),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -440,7 +441,7 @@ Widget chartCard(
 
 Widget pageList(List<Widget> children) {
   return ListView(
-    padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+    padding: AppLayout.pagePadding,
     children: children,
   );
 }

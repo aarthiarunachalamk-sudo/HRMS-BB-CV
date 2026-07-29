@@ -1490,6 +1490,28 @@ class Announcement(models.Model):
         return self.title
 
 
+class CompanyLeave(models.Model):
+    title = models.CharField(max_length=180)
+    message = models.TextField(blank=True)
+    from_date = models.DateField(db_index=True)
+    to_date = models.DateField(db_index=True)
+    announced_by = models.CharField(max_length=40, blank=True)
+    announcement = models.OneToOneField(
+        Announcement,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='company_leave',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-from_date', '-created_at']
+
+    def __str__(self):
+        return f'{self.title}: {self.from_date} - {self.to_date}'
+
+
 class AuditLog(models.Model):
     actor_user_id = models.CharField(max_length=40, blank=True, db_index=True)
     actor_role = models.CharField(max_length=30, blank=True)

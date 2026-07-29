@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 
 class SaPalette {
   final bool isDark;
@@ -105,12 +106,12 @@ class SaScreen extends StatelessWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+                padding: AppLayout.headerPadding,
                 child: Row(
                   children: [
-                    SizedBox(width: 42, height: 42, child: IconButton(icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.text, size: 18), onPressed: () => Navigator.maybePop(context))),
+                    SizedBox(width: AppLayout.iconTouchTarget, height: AppLayout.iconTouchTarget, child: IconButton(icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.text, size: 18), onPressed: () => Navigator.maybePop(context))),
                     Expanded(child: Text(title, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w900))),
-                    SizedBox(width: 42, height: 42, child: Center(child: trailing ?? const SizedBox.shrink())),
+                    SizedBox(width: AppLayout.iconTouchTarget, height: AppLayout.iconTouchTarget, child: Center(child: trailing ?? const SizedBox.shrink())),
                   ],
                 ),
               ),
@@ -137,7 +138,7 @@ class SaCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final Color? color;
 
-  const SaCard({super.key, required this.child, this.padding = const EdgeInsets.all(12), this.color});
+  const SaCard({super.key, required this.child, this.padding = const EdgeInsets.all(AppLayout.cardPadding), this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +166,7 @@ class SaInfoTile extends StatelessWidget {
     final c = SaPalette.of(context);
     final accent = color ?? c.primary;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: AppLayout.itemGap),
       child: SaCard(
         color: c.row,
         child: Row(
@@ -301,7 +302,7 @@ class SaMetric {
   const SaMetric(this.title, this.value, this.icon, this.color);
 }
 
-Widget saList(List<Widget> children) => ListView(padding: const EdgeInsets.fromLTRB(12, 8, 12, 18), children: children);
+Widget saList(List<Widget> children) => ListView(padding: AppLayout.pagePadding, children: children);
 
 Widget saTitle(BuildContext context, String text, double size) {
   final c = SaPalette.of(context);

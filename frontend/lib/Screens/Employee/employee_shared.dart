@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 
 /// Supports both a backend URL and a photo selected from the device.
 ImageProvider<Object>? employeeProfileImageProvider(String? source) {
@@ -39,7 +40,7 @@ class EmployeePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final textPrimary = ThemeConfig.getTextPrimary(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 24),
+      padding: AppLayout.pagePadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -58,7 +59,7 @@ class EmployeePage extends StatelessWidget {
               ?action,
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: AppLayout.sectionGap),
           ...children,
         ],
       ),
@@ -74,7 +75,7 @@ class EmployeeCard extends StatelessWidget {
   const EmployeeCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = const EdgeInsets.all(AppLayout.cardPadding),
     this.margin,
   });
 
@@ -157,8 +158,8 @@ class EmployeeListTile extends StatelessWidget {
         ? const Color(0xFF9AA8BA)
         : const Color(0xFF607086);
     return EmployeeCard(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: AppLayout.itemGap),
+      padding: const EdgeInsets.all(AppLayout.cardPadding),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
@@ -173,7 +174,7 @@ class EmployeeListTile extends StatelessWidget {
               ),
               child: Icon(icon, color: color, size: 19),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppLayout.itemGap),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

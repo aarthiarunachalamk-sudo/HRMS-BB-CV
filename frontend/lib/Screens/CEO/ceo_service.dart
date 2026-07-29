@@ -236,6 +236,25 @@ class CeoService {
     }).query}',
   );
 
+  Future<Map<String, dynamic>> announceCompanyLeave(
+    String userId, {
+    required String title,
+    required DateTime fromDate,
+    required DateTime toDate,
+    String message = '',
+  }) => _post('/company-leaves/', {
+    'user_id': userId,
+    'title': title,
+    'message': message,
+    'from_date': _companyLeaveDate(fromDate),
+    'to_date': _companyLeaveDate(toDate),
+  });
+
+  String _companyLeaveDate(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
+
   Future<Map<String, dynamic>> fetchPayrollOverview(
     String userId, {
     required int year,

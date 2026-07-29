@@ -28,6 +28,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 
 class HrDashboard extends StatefulWidget {
   final String email;
@@ -752,7 +753,7 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      padding: AppLayout.headerPadding,
       child: Row(
         children: [
           IconButton(
@@ -803,9 +804,14 @@ class _HrRoleDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+      padding: const EdgeInsets.fromLTRB(
+        AppLayout.screenGutter,
+        0,
+        AppLayout.screenGutter,
+        AppLayout.compactGap,
+      ),
       child: Container(
-        height: 42,
+        height: AppLayout.controlHeight,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: colors.surface,

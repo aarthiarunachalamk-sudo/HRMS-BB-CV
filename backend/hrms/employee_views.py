@@ -21,6 +21,7 @@ from .models import (
     TeamTask,
     User,
     EmployeeApprovalRequest,
+    CompanyLeave,
 )
 from .payroll import latest_payslip_for_employee
 
@@ -943,6 +944,40 @@ def _attendance_payload(record, request=None):
     }
 
 
+def _company_leave_attendance_payload(company_leave, attendance_date):
+    return {
+        **_attendance_payload(None),
+        'date': attendance_date.isoformat(),
+        'status': 'Company Leave',
+        'leave_type': 'Company Leave',
+        'company_leave': True,
+        'company_leave_id': company_leave.id,
+        'company_leave_title': company_leave.title,
+        'message': company_leave.message,
+    }
+
+
+def _company_leave_payload(company_leave):
+    total_days = (company_leave.to_date - company_leave.from_date).days + 1
+    return {
+        'id': f'company-{company_leave.id}',
+        'company_leave_id': company_leave.id,
+        'company_leave': True,
+        'leave_type': 'Company Leave',
+        'type': 'Company Leave',
+        'title': company_leave.title,
+        'message': company_leave.message,
+        'reason': company_leave.message,
+        'from_date': company_leave.from_date.isoformat(),
+        'to_date': company_leave.to_date.isoformat(),
+        'date': f'{company_leave.from_date.isoformat()} - {company_leave.to_date.isoformat()}',
+        'days': total_days,
+        'status': 'Company Leave',
+        'overall_status': 'Company Leave',
+        'personal_leave': False,
+    }
+
+
 def _accuracy_display(value):
     text = str(value or '').strip()
     if not text:
@@ -1131,6 +1166,10 @@ def _employee_payload(user, account, request=None):
         today_records.filter(employee_id=employee_id).first()
         or today_records.first()
     )
+    today_company_leave = CompanyLeave.objects.filter(
+        from_date__lte=today,
+        to_date__gte=today,
+    ).first()
     leave_records = EmployeeLeaveRequest.objects.filter(employee_id=employee_id)[:10] if employee_id else []
     employee_email = user.email if user else account.employee_email if account else ''
     task_owner = Q(pk__isnull=True)
@@ -1161,9 +1200,27 @@ def _employee_payload(user, account, request=None):
                 request,
             ),
         },
-        'attendance': _attendance_payload(today_record, request),
+        'attendance': (
+            _attendance_payload(today_record, request)
+            if today_record is not None or today_company_leave is None
+            else _company_leave_attendance_payload(today_company_leave, today)
+        ),
+        'company_leaves': [
+            {
+                'id': item.id,
+                'title': item.title,
+                'message': item.message,
+                'from_date': item.from_date.isoformat(),
+                'to_date': item.to_date.isoformat(),
+                'leave_type': 'Company Leave',
+            }
+            for item in CompanyLeave.objects.filter(to_date__gte=today)[:20]
+        ],
         'leave_balances': _leave_balance_payload(employee_id, account),
-        'leaves': [_leave_payload(record) for record in leave_records],
+        'leaves': (
+            [_company_leave_payload(item) for item in CompanyLeave.objects.filter(to_date__gte=today)[:20]]
+            + [_leave_payload(record) for record in leave_records]
+        ),
         'notifications': _notifications_for_employee(employee_id, employee_email),
         'meetings': _employee_meetings(employee_id, employee_email),
         'tasks': [
@@ -1602,9 +1659,22 @@ def employee_attendance_history_view(request):
         attendance_date__gte=from_date,
         attendance_date__lte=to_date,
     )
+    payloads = [_attendance_payload(record, request) for record in records]
+    recorded_dates = {record.attendance_date for record in records}
+    for company_leave in CompanyLeave.objects.filter(
+        from_date__lte=to_date,
+        to_date__gte=from_date,
+    ):
+        current = max(company_leave.from_date, from_date)
+        end = min(company_leave.to_date, to_date)
+        while current <= end:
+            if current not in recorded_dates:
+                payloads.append(_company_leave_attendance_payload(company_leave, current))
+            current += timedelta(days=1)
+    payloads.sort(key=lambda item: item.get('date', ''), reverse=True)
     return Response({
         'success': True,
-        'records': [_attendance_payload(record, request) for record in records],
+        'records': payloads,
     })
 
 
@@ -1620,9 +1690,16 @@ def employee_leave_history_view(request):
         from_date__lte=to_date,
         to_date__gte=from_date,
     )
+    company_leaves = CompanyLeave.objects.filter(
+        from_date__lte=to_date,
+        to_date__gte=from_date,
+    )
     return Response({
         'success': True,
-        'records': [_leave_payload(record, request) for record in records],
+        'records': (
+            [_company_leave_payload(item) for item in company_leaves]
+            + [_leave_payload(record, request) for record in records]
+        ),
         'leave_balances': _leave_balance_payload(employee_id, account),
     })
 

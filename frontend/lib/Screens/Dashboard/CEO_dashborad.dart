@@ -8,6 +8,7 @@ import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_approval_category_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_leave_intelligence_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_leave_request_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_payroll_overview_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_document_center_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_hiring_pipeline_screen.dart';
@@ -5053,6 +5054,96 @@ class _ApprovalsView extends StatefulWidget {
 }
 
 class _ApprovalsViewState extends State<_ApprovalsView> {
+  String _statusFilter = 'pending';
+
+  String _approvalStatus(Map<String, dynamic> item) {
+    final raw = '${item['overall_status'] ?? item['status'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    if (raw.contains('approved')) return 'approved';
+    if (raw.contains('rejected')) return 'rejected';
+    return 'pending';
+  }
+
+  Widget _statusTabs(int pending, int approved, int rejected) {
+    final tabs = <(String, String, int, Color)>[
+      ('pending', 'Pending', pending, const Color(0xFFFFB74D)),
+      ('approved', 'Approved', approved, const Color(0xFF13D989)),
+      ('rejected', 'Rejected', rejected, const Color(0xFFFF5C77)),
+    ];
+    return Row(
+      children: tabs.map((tab) {
+        final selected = _statusFilter == tab.$1;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: tab.$1 == 'rejected' ? 0 : 8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(9),
+              onTap: () => setState(() => _statusFilter = tab.$1),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected ? tab.$4.withAlpha(35) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(
+                    color: selected ? tab.$4 : Colors.white.withAlpha(25),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      '${tab.$3}',
+                      style: TextStyle(
+                        color: selected ? tab.$4 : _CeoText.primaryFor(context),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      tab.$2,
+                      style: _CeoText.mutedFor(context, 10),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Future<void> _openReviewedApproval(Map<String, dynamic> approval) async {
+    final type = '${approval['approval_type'] ?? approval['request_type'] ?? ''}';
+    if (const {
+      'daily_report',
+      'social_media_post',
+      'leave_request',
+    }.contains(type)) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => EmployeeApprovalDetailScreen(
+            item: approval,
+            userId: widget.userId,
+            service: EmployeeService(),
+            received: false,
+          ),
+        ),
+      );
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CeoLeaveRequestScreen(
+          approvalId: '${approval['id'] ?? ''}',
+          userId: widget.userId,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>>(
@@ -5065,7 +5156,8 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
         }
 
         final categories = _mapList(snapshot.data!['summary']);
-        final employeeApprovals = _mapList(snapshot.data!['approvals'])
+        final pendingApprovals = _mapList(snapshot.data!['approvals']);
+        final employeeApprovals = pendingApprovals
             .where(
               (item) => const {
                 'daily_report',
@@ -5074,10 +5166,61 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
               }.contains('${item['approval_type'] ?? item['request_type'] ?? ''}'),
             )
             .toList();
+        final history = _mapList(snapshot.data!['history']);
+        final approved = history
+            .where((item) => _approvalStatus(item) == 'approved')
+            .toList();
+        final rejected = history
+            .where((item) => _approvalStatus(item) == 'rejected')
+            .toList();
+        final reviewed = _statusFilter == 'approved' ? approved : rejected;
+
+        if (_statusFilter != 'pending') {
+          final approvedTab = _statusFilter == 'approved';
+          final color = approvedTab
+              ? const Color(0xFF13D989)
+              : const Color(0xFFFF5C77);
+          final label = approvedTab ? 'Approved' : 'Rejected';
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+            children: [
+              _statusTabs(pendingApprovals.length, approved.length, rejected.length),
+              const SizedBox(height: 18),
+              Text('$label Approvals', style: _CeoText.titleFor(context, 16)),
+              const SizedBox(height: 10),
+              if (reviewed.isEmpty)
+                _GlassCard(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        'No ${label.toLowerCase()} approvals',
+                        style: _CeoText.mutedFor(context, 12),
+                      ),
+                    ),
+                  ),
+                ),
+              ...reviewed.map((approval) => _ApprovalTile(
+                    approvedTab
+                        ? Icons.check_circle_rounded
+                        : Icons.cancel_rounded,
+                    _displayText(approval['title'], fallback: 'Approval'),
+                    _displayText(
+                      approval['subtitle'],
+                      fallback: '$label by CEO',
+                    ),
+                    color,
+                    () => _openReviewedApproval(approval),
+                  )),
+            ],
+          );
+        }
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
           children: [
+            _statusTabs(pendingApprovals.length, approved.length, rejected.length),
+            const SizedBox(height: 18),
             Row(
               children: [
                 Expanded(

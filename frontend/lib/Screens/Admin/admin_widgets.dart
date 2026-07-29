@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'admin_palette.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  Shell  (top bar + gradient background, matches CEO pattern)
@@ -64,7 +65,7 @@ class _AdminTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+      padding: AppLayout.headerPadding,
       child: Row(
         children: [
           SizedBox(
@@ -99,8 +100,8 @@ class _AdminTopBar extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 42,
-            height: 42,
+            width: AppLayout.iconTouchTarget,
+            height: AppLayout.iconTouchTarget,
             child: Center(
               child: trailing ??
                   IconButton(
@@ -129,7 +130,7 @@ class AdminCard extends StatelessWidget {
   const AdminCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(14),
+    this.padding = const EdgeInsets.all(AppLayout.cardPadding),
     this.onTap,
   });
 
@@ -148,10 +149,10 @@ class AdminCard extends StatelessWidget {
       child: child,
     );
     if (onTap == null) {
-      return Padding(padding: const EdgeInsets.only(bottom: 10), child: card);
+      return Padding(padding: const EdgeInsets.only(bottom: AppLayout.itemGap), child: card);
     }
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: AppLayout.itemGap),
       child: Material(
         color: Colors.transparent,
         child: InkWell(borderRadius: BorderRadius.circular(12), onTap: onTap, child: card),
@@ -190,8 +191,8 @@ class AdminListTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: AppLayout.iconTouchTarget,
+            height: AppLayout.iconTouchTarget,
             decoration: BoxDecoration(
               color: col.withOpacity(0.12),
               borderRadius: BorderRadius.circular(10),

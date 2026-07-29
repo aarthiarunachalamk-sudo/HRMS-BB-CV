@@ -32,6 +32,7 @@ urlpatterns = [
     path('ceo/employee-attendance/', views.ceo_employee_attendance_view, name='ceo_employee_attendance'),
     path('ceo/attendance-intelligence/', views.ceo_attendance_intelligence_view, name='ceo_attendance_intelligence'),
     path('ceo/leave-intelligence/', views.ceo_leave_intelligence_view, name='ceo_leave_intelligence'),
+    path('ceo/company-leaves/', views.ceo_company_leave_view, name='ceo_company_leave'),
     path('ceo/payroll-overview/', views.ceo_payroll_overview_view, name='ceo_payroll_overview'),
     path('ceo/documents/', views.ceo_documents_view, name='ceo_documents'),
     path('ceo/hiring-pipeline/', views.ceo_hiring_pipeline_view, name='ceo_hiring_pipeline'),
