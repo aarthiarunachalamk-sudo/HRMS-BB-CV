@@ -4,6 +4,42 @@ import os
 from django.db.models import Q
 
 
+def _recipient_user_ids(user_id):
+    """Return every login/employee alias that can own the same mobile device."""
+    normalized = str(user_id or '').strip()
+    if not normalized:
+        return set()
+
+    from .models import EmployeeAccount, User
+
+    aliases = {normalized}
+    users = User.objects.filter(Q(user_id=normalized) | Q(email__iexact=normalized))
+    aliases.update(users.values_list('user_id', flat=True))
+    emails = set(users.exclude(email='').values_list('email', flat=True))
+    aliases.update(emails)
+
+    accounts = EmployeeAccount.objects.select_related('user').filter(
+        Q(employee_id=normalized)
+        | Q(employee_email__iexact=normalized)
+        | Q(user__user_id=normalized)
+        | Q(user__email__iexact=normalized)
+    )
+    if emails:
+        accounts = accounts | EmployeeAccount.objects.select_related('user').filter(
+            employee_email__in=emails
+        )
+    for account in accounts:
+        aliases.add(account.employee_id)
+        if account.employee_email:
+            aliases.add(account.employee_email)
+        if account.user_id:
+            aliases.add(account.user.user_id)
+            if account.user.email:
+                aliases.add(account.user.email)
+    aliases.discard('')
+    return aliases
+
+
 def _firebase_app():
     try:
         import firebase_admin
@@ -35,7 +71,7 @@ def send_mobile_push(notification):
 
     targets = Q(is_active=True)
     if notification.recipient_user_id:
-        targets &= Q(user_id=notification.recipient_user_id)
+        targets &= Q(user_id__in=_recipient_user_ids(notification.recipient_user_id))
     elif notification.recipient_role:
         targets &= Q(role=notification.recipient_role)
     else:
@@ -54,12 +90,15 @@ def send_mobile_push(notification):
             'module': notification.module or '',
             'reference_id': notification.reference_id or '',
             'notification_id': str(notification.id),
+            'notification_type': notification.notification_type or 'info',
+            'click_action': 'FLUTTER_NOTIFICATION_CLICK',
         },
         android=messaging.AndroidConfig(
             priority='high',
             notification=messaging.AndroidNotification(
-                channel_id='attendance_reminders',
+                channel_id='hrms_updates',
                 sound='default',
+                tag=f'hrms-{notification.module or "general"}-{notification.id}',
             ),
         ),
         apns=messaging.APNSConfig(

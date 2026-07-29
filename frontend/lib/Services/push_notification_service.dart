@@ -13,11 +13,15 @@ class PushNotificationService {
 
   static final PushNotificationService instance = PushNotificationService._();
   static const _channel = AndroidNotificationChannel(
-    'attendance_reminders',
-    'Attendance reminders',
-    description: 'Check-in and attendance reminders from HRMS.',
+    'hrms_updates',
+    'HRMS updates',
+    description: 'Attendance, leave, approvals, payroll, tasks and HRMS updates.',
     importance: Importance.high,
   );
+  final StreamController<Map<String, dynamic>> _notificationTapController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get notificationTaps =>
+      _notificationTapController.stream;
   final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
@@ -32,6 +36,18 @@ class PushNotificationService {
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         iOS: DarwinInitializationSettings(),
       ),
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload == null || payload.isEmpty) return;
+        try {
+          final decoded = jsonDecode(payload);
+          if (decoded is Map) {
+            _notificationTapController.add(Map<String, dynamic>.from(decoded));
+          }
+        } catch (_) {
+          _notificationTapController.add({'module': payload});
+        }
+      },
     );
     await _local
         .resolvePlatformSpecificImplementation<
@@ -49,6 +65,16 @@ class PushNotificationService {
       sound: true,
     );
     FirebaseMessaging.onMessage.listen(_showForegroundNotification);
+    FirebaseMessaging.onMessageOpenedApp.listen(
+      (message) => _notificationTapController.add(message.data),
+    );
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      Future<void>.delayed(
+        Duration.zero,
+        () => _notificationTapController.add(initialMessage.data),
+      );
+    }
     _initialized = true;
   }
 
@@ -113,17 +139,20 @@ class PushNotificationService {
       message.messageId.hashCode,
       notification.title,
       notification.body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'attendance_reminders',
-          'Attendance reminders',
-          channelDescription: 'Check-in and attendance reminders from HRMS.',
+      NotificationDetails(
+        android: const AndroidNotificationDetails(
+          'hrms_updates',
+          'HRMS updates',
+          channelDescription:
+              'Attendance, leave, approvals, payroll, tasks and HRMS updates.',
           importance: Importance.high,
           priority: Priority.high,
+          category: AndroidNotificationCategory.message,
+          groupKey: 'com.bitbyte.hrms.UPDATES',
         ),
-        iOS: DarwinNotificationDetails(),
+        iOS: const DarwinNotificationDetails(),
       ),
-      payload: message.data['module']?.toString(),
+      payload: jsonEncode(message.data),
     );
   }
 }

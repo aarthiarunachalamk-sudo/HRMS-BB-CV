@@ -3264,6 +3264,41 @@ def _account_display_name(account, fallback='Employee'):
     return fallback or 'Employee'
 
 
+def _notify_payroll_published(year, month, payslips, actor):
+    month_label = datetime(year, month, 1).strftime('%B %Y')
+    reference_id = f'{year}-{month:02d}'
+    for payslip in payslips:
+        if not AppNotification.objects.filter(
+            recipient_user_id=payslip.employee_id,
+            module='payroll',
+            reference_id=reference_id,
+            title='Payslip Available',
+        ).exists():
+            _create_notification(
+                user_id=payslip.employee_id,
+                title='Payslip Available',
+                message=f'Your {month_label} payslip has been published and is ready to view.',
+                notification_type='success',
+                module='payroll',
+                reference_id=reference_id,
+            )
+    for role in ('hr', 'finance', 'md', 'admin', 'superadmin'):
+        if not AppNotification.objects.filter(
+            recipient_role=role,
+            module='payroll',
+            reference_id=reference_id,
+            title='Payroll Published',
+        ).exists():
+            _create_notification(
+                role=role,
+                title='Payroll Published',
+                message=f'{month_label} payroll was published by {actor}.',
+                notification_type='success',
+                module='payroll',
+                reference_id=reference_id,
+            )
+
+
 @api_view(['POST'])
 def hr_generate_payroll_view(request):
     today = timezone.localdate()
@@ -3283,6 +3318,7 @@ def hr_generate_payroll_view(request):
 
     # Email payroll summary to HR / MD / Admin / SuperAdmin
     _send_payroll_summary_to_management(year, month, payslips, generated_by, request)
+    _notify_payroll_published(year, month, payslips, generated_by)
 
     return Response({
         'success': True,
@@ -3378,6 +3414,7 @@ def hr_payroll_process_view(request):
 
             # Email payroll summary to HR / MD / Admin / SuperAdmin
             _send_payroll_summary_to_management(year, month, payslips, actor, request)
+            _notify_payroll_published(year, month, payslips, actor)
 
             return Response({
                 'success': True,
@@ -4473,6 +4510,7 @@ def ceo_payroll_overview_view(request):
             process.approved_at = now
             process.published_at = now
             process.publishing_options = {'declaration': True, 'published_by': user_id}
+            _notify_payroll_published(year, month, payslips_to_publish, user_id)
         else:
             return Response({'success': False, 'message': 'Unsupported payroll action.'}, status=400)
         process.save()
