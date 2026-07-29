@@ -2927,6 +2927,14 @@ class _AttendanceIntelligenceFlowPageState
                         : '0',
                     Icons.badge_outlined,
                     _CeoDashboardState._green,
+                    () => _open(
+                      _DailyAttendanceFlowPage(
+                        userId: widget.userId,
+                        onNavigate: widget.onNavigate,
+                        initialDate: _range.end,
+                        initialFilter: 'present',
+                      ),
+                    ),
                   ),
                   _AttendanceMetricData(
                     'Late',
@@ -3059,11 +3067,13 @@ class _DailyAttendanceFlowPage extends StatefulWidget {
   final String userId;
   final ValueChanged<int> onNavigate;
   final DateTime? initialDate;
+  final String initialFilter;
 
   const _DailyAttendanceFlowPage({
     required this.userId,
     required this.onNavigate,
     this.initialDate,
+    this.initialFilter = 'all',
   });
 
   @override
@@ -3075,12 +3085,13 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
   late DateTime _date;
   late Future<Map<String, dynamic>> _future;
   String _query = '';
-  String _filter = 'all';
+  late String _filter;
 
   @override
   void initState() {
     super.initState();
     _date = widget.initialDate ?? DateTime.now();
+    _filter = widget.initialFilter;
     _load();
   }
 
@@ -3147,7 +3158,10 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
         final hasSelectedData = _hasAttendanceData(data);
         final employees = all.where((employee) {
           final group = _displayText(employee['selected_group']);
-          final matchesFilter = _filter == 'all' || group == _filter;
+          final isLate = employee['selected_is_late'] == true ||
+              '${employee['selected_is_late']}'.toLowerCase() == 'true';
+          final matchesFilter = _filter == 'all' ||
+              (_filter == 'late' ? isLate : group == _filter);
           final haystack =
               '${employee['name']} ${employee['id']} ${employee['department_label']}'
                   .toLowerCase();
@@ -4366,16 +4380,21 @@ class _AttendanceMetricCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   const _AttendanceMetricCard({
     required this.label,
     required this.value,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) => Container(
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(10),
+    child: Container(
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: _CeoDashboardState._card,
@@ -4398,6 +4417,7 @@ class _AttendanceMetricCard extends StatelessWidget {
         Icon(icon, color: color, size: 27),
       ],
     ),
+    ),
   );
 }
 
@@ -4406,8 +4426,15 @@ class _AttendanceMetricData {
   final String value;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
-  const _AttendanceMetricData(this.label, this.value, this.icon, this.color);
+  const _AttendanceMetricData(
+    this.label,
+    this.value,
+    this.icon,
+    this.color, [
+    this.onTap,
+  ]);
 }
 
 class _AttendanceMetricsGrid extends StatelessWidget {
@@ -4435,6 +4462,7 @@ class _AttendanceMetricsGrid extends StatelessWidget {
                   value: item.value,
                   icon: item.icon,
                   color: item.color,
+                  onTap: item.onTap,
                 ),
               ),
             )
@@ -4515,7 +4543,7 @@ class _AttendanceOverview extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _AttendanceLegend(
-          label: 'Present',
+          label: 'Present (includes late)',
           value: _displayText(summary['present'], fallback: '0'),
           color: _CeoDashboardState._green,
         ),
@@ -4798,10 +4826,12 @@ class _AttendanceEmployeeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final group = _displayText(employee['selected_group']);
-    final color = group == 'present'
-        ? _CeoDashboardState._green
-        : group == 'late'
+    final isLate = employee['selected_is_late'] == true ||
+        '${employee['selected_is_late']}'.toLowerCase() == 'true';
+    final color = isLate
         ? _CeoDashboardState._gold
+        : group == 'present'
+        ? _CeoDashboardState._green
         : Colors.redAccent;
     return _GlassCard(
       onTap: onTap,

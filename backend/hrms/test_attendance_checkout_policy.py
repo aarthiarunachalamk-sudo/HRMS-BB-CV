@@ -8,8 +8,11 @@ from rest_framework.test import APIClient
 from .management.commands.auto_checkout_attendance import IST, run_auto_checkout
 from .models import (
     AttendanceRegularizationRequest,
+    EmployeeAccount,
     EmployeeAttendanceRecord,
     EmployeeLeaveRequest,
+    EmployeeRegistration,
+    User,
 )
 from .employee_views import _format_time, _leave_balance_payload
 
@@ -39,6 +42,57 @@ class AttendanceCheckoutPolicyTests(TestCase):
             tzinfo=datetime_timezone.utc,
         )
         self.assertEqual(_format_time(utc_check_in, 330), '10:13 AM')
+
+    def test_ceo_present_count_includes_every_actual_check_in_and_late_is_subset(self):
+        ceo = User.objects.create_user('ceo.attendance@test.local', 'Password1!', role='ceo')
+        attendance_date = datetime(2026, 7, 29).date()
+        for index, status in enumerate(('Present', 'Late Entry', 'Present'), start=1):
+            registration = EmployeeRegistration.objects.create(
+                first_name=f'Employee{index}', last_name='Test', gender='other',
+                dob='1995-01-01', mobile=f'900000000{index}',
+                personal_email=f'attendance{index}@test.local', marital_status='single',
+                blood_group='O+', nationality='Indian', current_city='Chennai',
+                current_state='Tamil Nadu', permanent_city='Chennai',
+                permanent_state='Tamil Nadu', emergency_name='Contact',
+                emergency_relationship='Friend', emergency_contact=f'800000000{index}',
+                aadhar=f'1234567890{index:02d}', pan=f'ABCDE12{index:02d}F',
+                qualification='B.E.', college='Test College', year_of_passing='2020',
+                percentage='80', account_holder=f'Employee {index}', bank_name='Bank',
+                account_number=f'123456789{index}', ifsc_code='TEST0001234',
+                branch_name='Chennai', status='approved',
+            )
+            account = EmployeeAccount.objects.create(
+                registration=registration, employee_id=f'BBATT{index:05d}',
+                employee_email=registration.personal_email,
+                department='mobile_application_development', designation='associate',
+                date_of_joining=attendance_date, employment_type='full_time',
+            )
+            EmployeeAttendanceRecord.objects.create(
+                employee_id=account.employee_id,
+                attendance_date=attendance_date,
+                status=status,
+                check_in=(
+                    datetime(2026, 7, 29, 4 + index, 0, tzinfo=datetime_timezone.utc)
+                    if index < 3 else None
+                ),
+                check_in_timezone_offset_minutes=330,
+            )
+
+        response = self.client.get('/api/ceo/attendance-intelligence/', {
+            'user_id': ceo.user_id,
+            'date': attendance_date.isoformat(),
+            'date_from': attendance_date.isoformat(),
+            'date_to': attendance_date.isoformat(),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['summary']['present'], 2)
+        self.assertEqual(response.data['summary']['late'], 1)
+        self.assertEqual(
+            response.data['summary']['absent'],
+            response.data['summary']['total'] - 2,
+        )
+        present = [item for item in response.data['employees'] if item['selected_group'] == 'present']
+        self.assertEqual(len(present), 2)
 
     def test_check_in_persists_selected_work_mode(self):
         local_now = datetime(2026, 7, 27, 9, 0, tzinfo=IST)

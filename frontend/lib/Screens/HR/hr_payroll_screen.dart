@@ -133,29 +133,66 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
     final c = HrPalette.of(context);
     final readiness =
         int.tryParse('${widget.data['payroll_readiness'] ?? 0}') ?? 0;
+    final isReady = readiness >= 100 && _issues.isEmpty;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 6, 14, 20),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        _pageTitle(context, 'Payroll Command Center', badge: 'HR'),
+        _pageTitle(context, 'Payroll Processing', badge: 'HR'),
+        const SizedBox(height: 4),
+        Text(
+          'Validate, calculate, approve and publish employee payroll.',
+          style: TextStyle(color: c.muted, fontSize: 11),
+        ),
         const SizedBox(height: 12),
         HrCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '${widget.data['payroll_month'] ?? ''} Payroll',
-                style: TextStyle(
-                  color: c.text,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: c.primary.withAlpha(28),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(Icons.calendar_month_rounded, color: c.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${widget.data['payroll_month'] ?? ''} Payroll',
+                          style: TextStyle(
+                            color: c.text,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _monthPeriod(),
+                          style: TextStyle(color: c.muted, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _statusPill(
+                    context,
+                    isReady ? 'Ready' : 'In preparation',
+                    isReady ? c.success : c.warning,
+                  ),
+                ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 18),
               Row(
                 children: [
                   SizedBox(
-                    width: 112,
-                    height: 112,
+                    width: 106,
+                    height: 106,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
@@ -195,20 +232,6 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Payroll Period',
-                          style: TextStyle(color: c.muted, fontSize: 10),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _monthPeriod(),
-                          style: TextStyle(
-                            color: c.text,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Divider(height: 20, color: c.border),
-                        Text(
                           'Employees',
                           style: TextStyle(color: c.muted, fontSize: 10),
                         ),
@@ -231,7 +254,7 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('Continue Payroll'),
+                              Text('Start Processing'),
                               SizedBox(width: 5),
                               Icon(Icons.chevron_right_rounded, size: 17),
                             ],
@@ -247,7 +270,9 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
         ),
         const SizedBox(height: 12),
         _stepRail(context, 0),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
+        _sectionTitle(context, 'Payroll Summary', 'Live calculation'),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -259,28 +284,44 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
                 Icons.account_balance_wallet_outlined,
               ),
             ),
-            const SizedBox(width: 7),
+            const SizedBox(width: 10),
             Expanded(
               child: _metric(
                 context,
-                'Processed',
-                '$_processed',
+                'Deductions',
+                _money(widget.data['payroll_deductions']),
                 c.danger,
-                Icons.receipt_long_outlined,
-              ),
-            ),
-            const SizedBox(width: 7),
-            Expanded(
-              child: _metric(
-                context,
-                'Pending',
-                '$_pending',
-                c.success,
-                Icons.payments_outlined,
+                Icons.remove_circle_outline_rounded,
               ),
             ),
           ],
         ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _metric(
+                context,
+                'Net Pay',
+                _money(widget.data['payroll_net']),
+                c.success,
+                Icons.payments_outlined,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _metric(
+                context,
+                'Employees',
+                '$_processed processed / $_pending pending',
+                c.primary,
+                Icons.groups_2_outlined,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _approvalOwnershipCard(context),
         const SizedBox(height: 16),
         _sectionTitle(context, 'Needs Attention', '${_issues.length} issues'),
         const SizedBox(height: 8),
@@ -304,8 +345,8 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
           _attentionCard(
             context,
             Icons.cancel_outlined,
-            '${_issues.where((e) => e.colorKey == 'critical').length} missing bank details',
-            'Required before bank transfer',
+            '${_issues.where((e) => e.colorKey == 'critical').length} critical payroll issues',
+            'Resolve salary and bank details before processing',
             c.danger,
           ),
         ],
@@ -721,15 +762,22 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
               ),
               _timeline(
                 context,
-                'HR Manager Review',
-                'Calculation confirmed',
+                'Finance Review',
+                'Gross pay, deductions and bank advice verified',
                 true,
               ),
-              _timeline(context, 'Payroll Approval', 'Ready to publish', true),
               _timeline(
                 context,
-                'Payslip Generation',
-                _published ? 'Completed' : 'Ready to generate',
+                'CEO Approval',
+                'Final payroll authorization completed',
+                true,
+              ),
+              _timeline(
+                context,
+                'HR Publish & Payslips',
+                _published
+                    ? 'Payslips released to employees'
+                    : 'Ready for HR to publish',
                 _published,
               ),
             ],
@@ -1079,6 +1127,112 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
     );
   }
 
+  Widget _statusPill(BuildContext context, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withAlpha(24),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withAlpha(80)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+
+  Widget _approvalOwnershipCard(BuildContext context) {
+    final c = HrPalette.of(context);
+    final steps = <(String, String, IconData)>[
+      ('HR', 'Prepare & validate', Icons.badge_outlined),
+      ('Finance', 'Verify calculation', Icons.account_balance_outlined),
+      ('CEO', 'Final approval', Icons.verified_user_outlined),
+      ('HR', 'Publish payslips', Icons.send_outlined),
+    ];
+    return HrCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Approval Ownership',
+            style: TextStyle(
+              color: c.text,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Each role completes its review before employee payslips are released.',
+            style: TextStyle(color: c.muted, fontSize: 9),
+          ),
+          const SizedBox(height: 12),
+          ...List.generate(steps.length, (index) {
+            final step = steps[index];
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 30,
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: c.primary.withAlpha(28),
+                        child: Icon(step.$3, color: c.primary, size: 15),
+                      ),
+                      if (index < steps.length - 1)
+                        Container(width: 1, height: 19, color: c.border),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          step.$1,
+                          style: TextStyle(
+                            color: c.text,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          step.$2,
+                          style: TextStyle(color: c.muted, fontSize: 9),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    '${index + 1}'.padLeft(2, '0'),
+                    style: TextStyle(
+                      color: c.muted,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _metric(
     BuildContext context,
     String label,
@@ -1096,11 +1250,11 @@ class _HrPayrollScreenState extends State<HrPayrollScreen> {
           const SizedBox(height: 6),
           Text(
             value,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
-              fontSize: 16,
+              fontSize: value.length > 15 ? 11 : 16,
               fontWeight: FontWeight.w900,
             ),
           ),

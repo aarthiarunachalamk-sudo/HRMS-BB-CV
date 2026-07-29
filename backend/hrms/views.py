@@ -1816,18 +1816,25 @@ def ceo_attendance_intelligence_view(request):
             })
 
         selected_record = record_lookup.get((account.employee_id, selected_date))
-        selected_group = _attendance_status_group(
+        status_group = _attendance_status_group(
             selected_record.status if selected_record else 'Absent'
         )
+        checked_in = bool(selected_record and selected_record.check_in)
+        selected_group = 'present' if checked_in else 'absent'
+        selected_is_late = checked_in and status_group == 'late'
         selected_counts[selected_group] += 1
+        if selected_is_late:
+            selected_counts['late'] += 1
         department = account.department or 'unassigned'
         department_bucket = department_selected.setdefault(
             department,
             {'department': department, 'total': 0, 'late': 0, 'absent': 0},
         )
         department_bucket['total'] += 1
-        if selected_group in {'late', 'absent'}:
-            department_bucket[selected_group] += 1
+        if selected_is_late:
+            department_bucket['late'] += 1
+        if selected_group == 'absent':
+            department_bucket['absent'] += 1
         attended = range_counts['present'] + range_counts['late']
         attendance_percentage = round((attended / len(dates)) * 100, 1) if dates else 0
         employee_payloads.append({
@@ -1843,6 +1850,7 @@ def ceo_attendance_intelligence_view(request):
             'employment_type': account.get_employment_type_display(),
             'selected_status': selected_record.status if selected_record else 'Absent',
             'selected_group': selected_group,
+            'selected_is_late': selected_is_late,
             'selected_check_in': _format_time(
                 selected_record.check_in,
                 selected_record.check_in_timezone_offset_minutes,
@@ -1863,8 +1871,14 @@ def ceo_attendance_intelligence_view(request):
             record = record_lookup.get((account.employee_id, attendance_date))
             if record is not None:
                 actual_records += 1
-            counts[_attendance_status_group(record.status if record else 'Absent')] += 1
-        attended = counts['present'] + counts['late']
+            checked_in = bool(record and record.check_in)
+            if checked_in:
+                counts['present'] += 1
+                if _attendance_status_group(record.status) == 'late':
+                    counts['late'] += 1
+            else:
+                counts['absent'] += 1
+        attended = counts['present']
         daily.append({
             'date': attendance_date.isoformat(),
             **counts,
@@ -1883,7 +1897,7 @@ def ceo_attendance_intelligence_view(request):
         })
     departments.sort(key=lambda item: item['department'])
     total_employees = len(accounts)
-    attended_today = selected_counts['present'] + selected_counts['late']
+    attended_today = selected_counts['present']
     return Response({
         'success': True,
         'generated_at': timezone.now().isoformat(),
