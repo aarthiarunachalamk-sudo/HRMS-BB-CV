@@ -303,6 +303,13 @@ class _HrDashboardState extends State<HrDashboard> {
       _setIndex(1);
       return;
     }
+    if (module == 'recruitment' ||
+        title.contains('resume') ||
+        title.contains('interview') ||
+        subtitle.contains('candidate')) {
+      _setIndex(5);
+      return;
+    }
     _setIndex(14);
   }
 }
@@ -341,12 +348,32 @@ class _HrHome extends StatelessWidget {
 
   IconData _notificationIcon(Map<String, dynamic> item) {
     final module = '${item['module'] ?? ''}'.toLowerCase();
-    if (module.startsWith('attendance')) return Icons.access_time_filled_rounded;
+    final message = '${item['subtitle'] ?? item['message'] ?? ''}'.toLowerCase();
+    if (module.startsWith('attendance') && message.contains('checked out')) {
+      return Icons.logout_rounded;
+    }
+    if (module.startsWith('attendance')) return Icons.login_rounded;
     if (module == 'meeting') return Icons.event_rounded;
     if (module == 'leave') return Icons.beach_access_rounded;
     if (module == 'documents') return Icons.description_rounded;
     if (module == 'tasks') return Icons.task_alt_rounded;
+    if (module == 'recruitment') return Icons.work_rounded;
     return Icons.notifications_active_rounded;
+  }
+
+  Color _notificationColor(Map<String, dynamic> item, HrPalette c) {
+    final module = '${item['module'] ?? ''}'.toLowerCase();
+    final message = '${item['subtitle'] ?? item['message'] ?? ''}'.toLowerCase();
+    if (module.startsWith('attendance') && message.contains('checked out')) {
+      return c.primary;
+    }
+    if (module.startsWith('attendance')) return c.teal;
+    if (module == 'leave') return c.purple;
+    if (module == 'meeting') return c.warning;
+    if (module == 'documents') return c.primary;
+    if (module == 'tasks') return c.success;
+    if (module == 'recruitment') return c.purple;
+    return c.warning;
   }
 
   void _showStatDetail(
@@ -701,7 +728,7 @@ class _HrHome extends StatelessWidget {
                 title: '${item['title']}',
                 subtitle: '${item['subtitle'] ?? item['message'] ?? ''}',
                 trailing: '${item['time'] ?? item['trailing'] ?? ''}',
-                color: c.danger,
+                color: _notificationColor(item, c),
                 onTap: () => onNotificationTap(item),
               ),
             ),

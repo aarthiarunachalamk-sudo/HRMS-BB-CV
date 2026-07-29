@@ -55,6 +55,15 @@ class HrAttendanceScreen extends StatelessWidget {
           children: [
             Expanded(
               child: HrMetricCard(
+                title: 'On Leave',
+                value: hrText(data, 'on_leave'),
+                icon: Icons.beach_access_rounded,
+                color: c.purple,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: HrMetricCard(
                 title: 'Late Entry',
                 value: hrText(data, 'late_entry'),
                 icon: Icons.schedule_rounded,
@@ -157,6 +166,22 @@ class HrAttendanceDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
+          _AttendanceSelfieCard(
+            title: 'Check-in Image',
+            time: '${record['check_in'] ?? '-'}',
+            imageUrl: '${record['check_in_selfie'] ?? ''}',
+            icon: Icons.login_rounded,
+            color: c.teal,
+          ),
+          const SizedBox(height: 12),
+          _AttendanceSelfieCard(
+            title: 'Check-out Image',
+            time: '${record['check_out'] ?? '-'}',
+            imageUrl: '${record['check_out_selfie'] ?? ''}',
+            icon: Icons.logout_rounded,
+            color: c.primary,
+          ),
+          const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(
@@ -185,6 +210,79 @@ class HrAttendanceDetailScreen extends StatelessWidget {
             style: TextStyle(color: c.text, fontWeight: FontWeight.w700),
           ),
         ),
+      ],
+    ),
+  );
+}
+
+class _AttendanceSelfieCard extends StatelessWidget {
+  final String title;
+  final String time;
+  final String imageUrl;
+  final IconData icon;
+  final Color color;
+
+  const _AttendanceSelfieCard({
+    required this.title,
+    required this.time,
+    required this.imageUrl,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = HrPalette.of(context);
+    return HrCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    color: c.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(time, style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: imageUrl.isEmpty
+                ? _missingImage(c)
+                : Image.network(
+                    imageUrl,
+                    width: double.infinity,
+                    height: 220,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _missingImage(c),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _missingImage(HrPalette c) => Container(
+    width: double.infinity,
+    height: 140,
+    color: c.row,
+    alignment: Alignment.center,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.image_not_supported_outlined, color: c.muted, size: 32),
+        const SizedBox(height: 6),
+        Text('Image not available', style: TextStyle(color: c.muted, fontSize: 12)),
       ],
     ),
   );

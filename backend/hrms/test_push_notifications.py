@@ -3,6 +3,7 @@ from rest_framework.test import APIClient
 
 from .models import AppNotification, TeamTask, User
 from .push_notifications import _recipient_user_ids
+from .views import _notify_hr_recruitment
 
 
 class PushNotificationRecipientTests(TestCase):
@@ -53,3 +54,18 @@ class PushNotificationRecipientTests(TestCase):
         self.assertEqual(len(tasks), 1)
         self.assertEqual(tasks[0]['id'], task.id)
         self.assertEqual(tasks[0]['assignee_id'], self.employee.user_id)
+
+    def test_hr_recruitment_notification_is_created_once(self):
+        for _ in range(2):
+            _notify_hr_recruitment(
+                title='New Resume Received',
+                message='Candidate submitted a resume.',
+                candidate_id=91,
+            )
+        notifications = AppNotification.objects.filter(
+            recipient_role='hr',
+            module='recruitment',
+            reference_id='91',
+            title='New Resume Received',
+        )
+        self.assertEqual(notifications.count(), 1)

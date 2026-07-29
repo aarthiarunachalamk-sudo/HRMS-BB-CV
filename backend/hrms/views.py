@@ -14,7 +14,7 @@ from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
 from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
 from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, CompanyLeave, AttendanceRegularizationRequest, EmployeeApprovalRequest
-from .employee_views import _attendance_calculation, _format_time, _leave_balance_payload, _notify_employee_presence, _approval_payload
+from .employee_views import _attendance_calculation, _file_url, _format_time, _leave_balance_payload, _notify_employee_presence, _approval_payload
 from .payroll import (
     _attendance_credit as _payroll_attendance_credit,
     _working_dates,
@@ -224,6 +224,26 @@ def _create_notification(*, user_id='', role='', title, message, notification_ty
     if notification.push_sent:
         notification.save(update_fields=['push_sent'])
     return notification
+
+
+def _notify_hr_recruitment(*, title, message, candidate_id, notification_type='info'):
+    reference_id = str(candidate_id or '')
+    existing = AppNotification.objects.filter(
+        recipient_role='hr',
+        module='recruitment',
+        reference_id=reference_id,
+        title=title,
+    ).first()
+    if existing is not None:
+        return existing
+    return _create_notification(
+        role='hr',
+        title=title,
+        message=message,
+        notification_type=notification_type,
+        module='recruitment',
+        reference_id=reference_id,
+    )
 
 
 DOCUMENT_FIELD_LABELS = {
@@ -2952,9 +2972,11 @@ def hr_dashboard_view(request):
     notifications = _notifications_for_role('hr')
 
     # Live attendance counts
+    # Presence is based on a real check-in, not a pre-created/status-only row.
     present_ids = set(
         EmployeeAttendanceRecord.objects.filter(
-            attendance_date=today, status__in=['Present', 'Half Day']
+            attendance_date=today,
+            check_in__isnull=False,
         ).values_list('employee_id', flat=True)
     )
     on_leave_ids = set(
@@ -2964,6 +2986,8 @@ def hr_dashboard_view(request):
             to_date__gte=today,
         ).values_list('employee_id', flat=True)
     )
+    # A real check-in takes precedence over leave for today's live headcount.
+    on_leave_ids.difference_update(present_ids)
     all_active_accounts = list(
         EmployeeAccount.objects.select_related('registration').filter(is_active=True)
     )
@@ -3046,6 +3070,12 @@ def hr_dashboard_view(request):
             'check_in': _format_time(record.check_in, record.check_in_timezone_offset_minutes),
             'check_out': _format_time(record.check_out, record.check_out_timezone_offset_minutes),
             'working_hours': record.working_hours or '',
+            'check_in_selfie': _file_url(request, record.check_in_selfie),
+            'check_out_selfie': _file_url(request, record.check_out_selfie),
+            'check_in_latitude': record.check_in_latitude or '',
+            'check_in_longitude': record.check_in_longitude or '',
+            'check_out_latitude': record.check_out_latitude or '',
+            'check_out_longitude': record.check_out_longitude or '',
         })
 
     # Per-stat employee lists
@@ -4742,6 +4772,19 @@ def ceo_hiring_pipeline_view(request):
                 'status': 'scheduled',
             }
             candidate.recruitment_stage = 'interview'
+            candidate_name = f'{candidate.first_name} {candidate.last_name}'.strip()
+            scheduled_at = str(request.data.get('scheduled_at') or '').strip()
+            mode = str(request.data.get('mode') or '').strip()
+            details = ' • '.join(value for value in (scheduled_at, mode) if value)
+            _notify_hr_recruitment(
+                title='Candidate Interview Scheduled',
+                message=(
+                    f'{candidate_name or candidate.personal_email} is scheduled for interview.'
+                    + (f' {details}' if details else '')
+                ),
+                candidate_id=candidate.id,
+                notification_type='warning',
+            )
         elif action == 'feedback':
             try:
                 rating = int(request.data.get('rating') or 0)
@@ -6649,6 +6692,18 @@ def register_employee_view(request):
                 updated = True
         if updated:
             emp.save()
+        if request.FILES.get('doc_resume') or getattr(emp, 'doc_resume', None):
+            candidate_name = f'{emp.first_name} {emp.last_name}'.strip()
+            job_title = emp.applied_job.title if emp.applied_job_id else 'General Application'
+            _notify_hr_recruitment(
+                title='New Resume Received',
+                message=(
+                    f'{candidate_name or emp.personal_email} submitted a resume for '
+                    f'{job_title}. Review the candidate profile.'
+                ),
+                candidate_id=emp.id,
+                notification_type='info',
+            )
         return Response({'success': True, 'message': 'Registration submitted!', 'id': emp.id})
     print('Employee registration validation errors:', serializer.errors)
     first_error = next(iter(serializer.errors.items()), None)
