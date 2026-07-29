@@ -93,7 +93,7 @@ class HrAttendanceScreen extends StatelessWidget {
               color: c.teal,
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => _HrAttendanceDetailScreen(record: item),
+                  builder: (_) => HrAttendanceDetailScreen(record: item),
                 ),
               ),
             ),
@@ -104,10 +104,10 @@ class HrAttendanceScreen extends StatelessWidget {
   }
 }
 
-class _HrAttendanceDetailScreen extends StatelessWidget {
+class HrAttendanceDetailScreen extends StatelessWidget {
   final Map<String, dynamic> record;
 
-  const _HrAttendanceDetailScreen({required this.record});
+  const HrAttendanceDetailScreen({super.key, required this.record});
 
   @override
   Widget build(BuildContext context) {

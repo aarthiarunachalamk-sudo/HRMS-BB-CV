@@ -3063,6 +3063,22 @@ def hr_dashboard_view(request):
         'deductions': sum(item.total_deductions for item in month_payslips),
         'net': sum(item.net_salary for item in month_payslips),
     }
+    hr_tasks = [
+        {
+            'id': task.id,
+            'title': task.title,
+            'subtitle': task.project or task.description or 'No description',
+            'project': task.project,
+            'assignee': task.assignee_name or task.assignee_id or 'Unassigned',
+            'assignee_id': task.assignee_id,
+            'priority': task.priority,
+            'status': task.status,
+            'status_label': task.get_status_display(),
+            'due_date': task.due_date,
+            'created_by': task.created_by,
+        }
+        for task in TeamTask.objects.order_by('-created_at')[:100]
+    ]
 
     return Response({
         'success': True,
@@ -3090,7 +3106,7 @@ def hr_dashboard_view(request):
         'checkout_permissions_rejected': _checkout_permissions('rejected'),
         'notifications': notifications,
         'upcoming': [],
-        'tasks': [],
+        'tasks': hr_tasks,
         'documents': [],
         'payroll_month': payroll_month.strftime('%B %Y'),
         'payroll_processed': len(month_payslips),

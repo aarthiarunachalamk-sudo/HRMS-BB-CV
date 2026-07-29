@@ -53,6 +53,7 @@ class _HrDashboardState extends State<HrDashboard> {
   final List<int> _navigationHistory = [];
   String _role = 'HR';
   File? _profileImage;
+  Map<String, dynamic> _latestData = const {};
 
   @override
   void initState() {
@@ -132,6 +133,7 @@ class _HrDashboardState extends State<HrDashboard> {
           future: _future,
           builder: (context, snapshot) {
             final data = snapshot.data ?? {};
+            if (snapshot.hasData) _latestData = snapshot.data!;
             final pages = [
               _HrHome(
                 data: data,
@@ -255,6 +257,34 @@ class _HrDashboardState extends State<HrDashboard> {
     final title = '${item['title'] ?? ''}'.toLowerCase();
     final subtitle = '${item['subtitle'] ?? item['message'] ?? ''}'
         .toLowerCase();
+    if (module.startsWith('attendance')) {
+      final referenceId = '${item['reference_id'] ?? ''}';
+      var employeeId = referenceId.split(':').first.trim();
+      if (employeeId.isEmpty) {
+        final match = RegExp(r'\(([^()]+)\)').firstMatch(subtitle);
+        employeeId = match?.group(1)?.trim() ?? '';
+      }
+      final records = hrList(_latestData, 'attendance_records');
+      Map<String, dynamic>? record;
+      for (final candidate in records) {
+        final candidateId =
+            '${candidate['employee_id'] ?? candidate['id'] ?? ''}'.trim();
+        if (candidateId == employeeId) {
+          record = candidate;
+          break;
+        }
+      }
+      if (record != null) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => HrAttendanceDetailScreen(record: record!),
+          ),
+        );
+      } else {
+        _setIndex(3);
+      }
+      return;
+    }
     if (module == 'leave' ||
         title.contains('leave') ||
         subtitle.contains('leave')) {
@@ -295,6 +325,29 @@ class _HrHome extends StatelessWidget {
     required this.onOpen,
     required this.onNotificationTap,
   });
+
+  String _notificationHeading(List<Map<String, dynamic>> notifications) {
+    final modules = notifications
+        .map((item) => '${item['module'] ?? ''}'.toLowerCase())
+        .toSet();
+    if (modules.isNotEmpty && modules.every((m) => m.startsWith('attendance'))) {
+      return 'Attendance Notifications';
+    }
+    if (modules.length == 1 && modules.first == 'meeting') {
+      return 'Meeting Notifications';
+    }
+    return 'Recent Notifications';
+  }
+
+  IconData _notificationIcon(Map<String, dynamic> item) {
+    final module = '${item['module'] ?? ''}'.toLowerCase();
+    if (module.startsWith('attendance')) return Icons.access_time_filled_rounded;
+    if (module == 'meeting') return Icons.event_rounded;
+    if (module == 'leave') return Icons.beach_access_rounded;
+    if (module == 'documents') return Icons.description_rounded;
+    if (module == 'tasks') return Icons.task_alt_rounded;
+    return Icons.notifications_active_rounded;
+  }
 
   void _showStatDetail(
     BuildContext context,
@@ -632,7 +685,7 @@ class _HrHome extends StatelessWidget {
         if (hrList(data, 'notifications').isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
-            'Meeting Notifications',
+            _notificationHeading(hrList(data, 'notifications')),
             style: TextStyle(
               color: c.text,
               fontSize: 15,
@@ -644,7 +697,7 @@ class _HrHome extends StatelessWidget {
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: HrListTile(
-                icon: Icons.notifications_active_rounded,
+                icon: _notificationIcon(item),
                 title: '${item['title']}',
                 subtitle: '${item['subtitle'] ?? item['message'] ?? ''}',
                 trailing: '${item['time'] ?? item['trailing'] ?? ''}',

@@ -46,3 +46,10 @@ class PushNotificationRecipientTests(TestCase):
                 reference_id=str(task.id),
             ).exists()
         )
+
+        dashboard = APIClient().get('/api/hr/dashboard/')
+        self.assertEqual(dashboard.status_code, 200)
+        tasks = dashboard.json()['tasks']
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(tasks[0]['id'], task.id)
+        self.assertEqual(tasks[0]['assignee_id'], self.employee.user_id)
