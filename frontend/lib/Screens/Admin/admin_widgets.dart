@@ -39,7 +39,12 @@ class AdminShell extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
-              _AdminTopBar(c: c, title: title, showBack: showBack, trailing: trailing),
+              _AdminTopBar(
+                c: c,
+                title: title,
+                showBack: showBack,
+                trailing: trailing,
+              ),
               Expanded(child: child),
             ],
           ),
@@ -73,12 +78,19 @@ class _AdminTopBar extends StatelessWidget {
             height: 42,
             child: showBack
                 ? IconButton(
-                    icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.text, size: 18),
+                    icon: Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: c.text,
+                      size: 18,
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                   )
                 : Builder(
                     builder: (ctx) => IconButton(
-                      constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 42,
+                        height: 42,
+                      ),
                       padding: EdgeInsets.zero,
                       tooltip: 'Menu',
                       icon: Icon(Icons.menu_rounded, color: c.text, size: 26),
@@ -96,19 +108,33 @@ class _AdminTopBar extends StatelessWidget {
               title,
               textAlign: showBack ? TextAlign.center : TextAlign.start,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                color: c.text,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           SizedBox(
             width: AppLayout.iconTouchTarget,
             height: AppLayout.iconTouchTarget,
             child: Center(
-              child: trailing ??
+              child:
+                  trailing ??
                   IconButton(
-                    constraints: const BoxConstraints.tightFor(width: 42, height: 42),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 42,
+                      height: 42,
+                    ),
                     padding: EdgeInsets.zero,
                     tooltip: c.isDark ? 'Light theme' : 'Dark theme',
-                    icon: Icon(c.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: c.primary, size: 20),
+                    icon: Icon(
+                      c.isDark
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                      color: c.primary,
+                      size: 20,
+                    ),
                     onPressed: AdminPalette.toggleTheme,
                   ),
             ),
@@ -149,13 +175,20 @@ class AdminCard extends StatelessWidget {
       child: child,
     );
     if (onTap == null) {
-      return Padding(padding: const EdgeInsets.only(bottom: AppLayout.itemGap), child: card);
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppLayout.itemGap),
+        child: card,
+      );
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: AppLayout.itemGap),
       child: Material(
         color: Colors.transparent,
-        child: InkWell(borderRadius: BorderRadius.circular(12), onTap: onTap, child: card),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: card,
+        ),
       ),
     );
   }
@@ -188,30 +221,42 @@ class AdminListTile extends StatelessWidget {
     final col = color ?? c.primary;
     return AdminCard(
       onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: AppLayout.iconTouchTarget,
-            height: AppLayout.iconTouchTarget,
-            decoration: BoxDecoration(
-              color: col.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Row(
+          children: [
+            Container(
+              width: AppLayout.iconTouchTarget,
+              height: AppLayout.iconTouchTarget,
+              decoration: BoxDecoration(
+                color: col.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: col, size: 22),
             ),
-            child: Icon(icon, color: col, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                adminTitle(titleText, 14, c),
-                const SizedBox(height: 3),
-                adminMuted(subtitle, 11, c),
-              ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  adminTitle(titleText, 14, c),
+                  const SizedBox(height: 3),
+                  adminMuted(subtitle, 11, c),
+                ],
+              ),
             ),
-          ),
-          trailing ?? Icon(Icons.chevron_right_rounded, color: c.muted),
-        ],
+            const SizedBox(width: AppLayout.compactGap),
+            SizedBox(
+              width: AppLayout.iconTouchTarget,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child:
+                    trailing ??
+                    Icon(Icons.chevron_right_rounded, color: c.muted),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -249,8 +294,14 @@ class AdminMetricGrid extends StatelessWidget {
                   Icon(card.icon, color: card.color, size: 20),
                   const Spacer(),
                   if (card.trend.isNotEmpty)
-                    Text(card.trend,
-                        style: TextStyle(color: c.green, fontSize: 11, fontWeight: FontWeight.w700)),
+                    Text(
+                      card.trend,
+                      style: TextStyle(
+                        color: c.green,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                 ],
               ),
               Column(
@@ -311,8 +362,14 @@ class AdminChartCard extends StatelessWidget {
             children: [
               Expanded(child: adminTitle(title, 16, c)),
               if (trend != null)
-                Text(trend!,
-                    style: TextStyle(color: c.green, fontSize: 11, fontWeight: FontWeight.w700)),
+                Text(
+                  trend!,
+                  style: TextStyle(
+                    color: c.green,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 14),
@@ -360,8 +417,14 @@ class AdminSectionTitle extends StatelessWidget {
     final c = AdminPalette.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Text(text,
-          style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w800)),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: c.text,
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -464,9 +527,14 @@ class AdminPrimaryButton extends StatelessWidget {
                     Icon(icon, color: Colors.white, size: 18),
                     const SizedBox(width: 8),
                   ],
-                  Text(label,
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -490,9 +558,17 @@ class AdminBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-          color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-      child: Text(text,
-          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -501,28 +577,28 @@ class AdminBadge extends StatelessWidget {
 //  Page list helper
 // ─────────────────────────────────────────────────────────────
 Widget adminPageList(List<Widget> children) =>
-    ListView(padding: const EdgeInsets.fromLTRB(18, 8, 18, 24), children: children);
+    ListView(padding: AppLayout.pagePadding, children: children);
 
 // ─────────────────────────────────────────────────────────────
 //  Text helpers
 // ─────────────────────────────────────────────────────────────
 Widget adminTitle(String t, double size, AdminPalette c) => Text(
-      t,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(color: c.text, fontSize: size, fontWeight: FontWeight.w800),
-    );
+  t,
+  overflow: TextOverflow.ellipsis,
+  style: TextStyle(color: c.text, fontSize: size, fontWeight: FontWeight.w800),
+);
 
 Widget adminMuted(String t, double size, AdminPalette c) => Text(
-      t,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(color: c.muted, fontSize: size, fontWeight: FontWeight.w500),
-    );
+  t,
+  overflow: TextOverflow.ellipsis,
+  style: TextStyle(color: c.muted, fontSize: size, fontWeight: FontWeight.w500),
+);
 
 Widget adminSmall(String t, Color color) => Text(
-      t,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700),
-    );
+  t,
+  overflow: TextOverflow.ellipsis,
+  style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700),
+);
 
 // ─────────────────────────────────────────────────────────────
 //  Divider with label
@@ -536,14 +612,16 @@ class AdminDividerLabel extends StatelessWidget {
     final c = AdminPalette.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(children: [
-        Expanded(child: Divider(color: c.border)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: adminMuted(text, 11, c),
-        ),
-        Expanded(child: Divider(color: c.border)),
-      ]),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: c.border)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: adminMuted(text, 11, c),
+          ),
+          Expanded(child: Divider(color: c.border)),
+        ],
+      ),
     );
   }
 }

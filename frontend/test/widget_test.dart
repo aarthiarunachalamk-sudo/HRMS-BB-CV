@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/splash_screen.dart';
@@ -8,6 +9,6 @@ void main() {
     await tester.pumpWidget(const MyApp());
 
     expect(find.byType(SplashScreen), findsOneWidget);
-    expect(find.text('HRMS'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 }

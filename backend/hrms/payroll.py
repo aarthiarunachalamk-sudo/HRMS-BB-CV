@@ -9,6 +9,8 @@ from .models import (
     EmployeeAccount,
     EmployeeAttendanceRecord,
     EmployeeLeaveRequest,
+    EmployeePerformance,
+    CompanyLeave,
     Payslip,
     SalaryStructure,
 )
@@ -32,6 +34,8 @@ def payslip_payload(payslip, request=None):
         'overtime_minutes': payslip.overtime_minutes,
         'overtime_hours': _money(Decimal(payslip.overtime_minutes) / Decimal(60)),
         'gross_salary': _money(payslip.gross_salary),
+        'performance_score': _money(payslip.performance_score),
+        'performance_incentive': _money(payslip.performance_incentive),
         'total_earnings': _money(payslip.total_earnings),
         'total_deductions': _money(payslip.total_deductions),
         'net_salary': _money(payslip.net_salary),
@@ -51,34 +55,36 @@ def latest_payslip_for_employee(employee_id, request=None):
     return payslip_payload(payslip, request)
 
 
-def generate_payroll_for_month(year, month, generated_by=''):
+def generate_payroll_for_month(year, month, generated_by='', status='draft'):
     accounts = EmployeeAccount.objects.filter(is_active=True).select_related('registration')
     payslips = [
-        calculate_employee_payslip(account, year, month, generated_by)
+        calculate_employee_payslip(account, year, month, generated_by, status=status)
         for account in accounts
     ]
     return payslips
 
 
-def calculate_employee_payslip(account, year, month, generated_by=''):
+def calculate_employee_payslip(account, year, month, generated_by='', status='draft'):
     structure, _ = SalaryStructure.objects.get_or_create(employee_id=account.employee_id)
     start_date = date(year, month, 1)
     end_date = date(year, month, monthrange(year, month)[1])
-    working_days = _working_days(start_date, end_date)
+    working_dates = _working_dates(start_date, end_date)
+    working_days = len(working_dates)
+    day_credits = {working_date: Decimal('0') for working_date in working_dates}
 
     attendance = EmployeeAttendanceRecord.objects.filter(
         employee_id=account.employee_id,
         attendance_date__gte=start_date,
         attendance_date__lte=end_date,
     )
-    present_days = 0
     overtime_minutes = 0
     for record in attendance:
-        status = (record.status or '').lower()
-        if 'half' in status:
-            present_days += Decimal('0.5')
-        elif any(value in status for value in ['present', 'late']):
-            present_days += Decimal('1')
+        if record.attendance_date in day_credits:
+            attendance_credit = _attendance_credit(record.status)
+            day_credits[record.attendance_date] = max(
+                day_credits[record.attendance_date],
+                attendance_credit,
+            )
         overtime_minutes += _attendance_overtime_minutes(record)
 
     approved_leaves = EmployeeLeaveRequest.objects.filter(
@@ -87,19 +93,24 @@ def calculate_employee_payslip(account, year, month, generated_by=''):
         from_date__lte=end_date,
         to_date__gte=start_date,
     )
-    paid_leave_days = Decimal('0')
-    explicit_lop_days = Decimal('0')
     for leave in approved_leaves:
         overlap_start = max(leave.from_date, start_date)
         overlap_end = min(leave.to_date, end_date)
-        days = Decimal((overlap_end - overlap_start).days + 1)
         if leave.leave_type.upper() == 'LOP':
-            explicit_lop_days += days
-        else:
-            paid_leave_days += days
+            continue
+        leave_credit = (
+            Decimal('0.5')
+            if 'half' in str(leave.session or '').lower()
+            else Decimal('1')
+        )
+        current = overlap_start
+        while current <= overlap_end:
+            if current in day_credits:
+                day_credits[current] = max(day_credits[current], leave_credit)
+            current += timedelta(days=1)
 
-    paid_days = min(Decimal(working_days), present_days + paid_leave_days)
-    lop_days = max(Decimal('0'), Decimal(working_days) - paid_days) + explicit_lop_days
+    paid_days = sum(day_credits.values(), Decimal('0'))
+    lop_days = max(Decimal('0'), Decimal(working_days) - paid_days)
 
     earnings = {
         'Basic Salary': structure.basic_salary,
@@ -114,7 +125,18 @@ def calculate_employee_payslip(account, year, month, generated_by=''):
     overtime_amount = (Decimal(overtime_minutes) / Decimal(60)) * structure.overtime_rate_per_hour
     lop_deduction = per_day_salary * lop_days
 
+    performance = _performance_for_month(account.employee_id, year, month)
+    performance_score = performance.performance_score if performance else Decimal('0')
+    attendance_ratio = paid_days / Decimal(working_days or 1)
+    performance_incentive = (
+        structure.basic_salary
+        * (structure.performance_incentive_percent / Decimal('100'))
+        * (performance_score / Decimal('5'))
+        * attendance_ratio
+    )
+
     earnings['Overtime'] = overtime_amount
+    earnings['Performance Incentive'] = performance_incentive
     deductions = {
         'PF': structure.pf_employee,
         'ESI': structure.esi_employee,
@@ -134,18 +156,20 @@ def calculate_employee_payslip(account, year, month, generated_by=''):
         month=month,
         defaults={
             'working_days': working_days,
-            'paid_days': int(paid_days),
-            'lop_days': int(lop_days),
+            'paid_days': _round(paid_days),
+            'lop_days': _round(lop_days),
             'overtime_minutes': overtime_minutes,
+            'performance_score': _round(performance_score),
+            'performance_incentive': _round(performance_incentive),
             'gross_salary': _round(gross_salary),
             'total_earnings': _round(total_earnings),
             'total_deductions': _round(total_deductions),
             'net_salary': _round(net_salary),
             'earnings': {key: _money(value) for key, value in earnings.items()},
             'deductions': {key: _money(value) for key, value in deductions.items()},
-            'status': 'approved',
+            'status': status,
             'generated_by': generated_by,
-            'paid_date': timezone.localdate(),
+            'paid_date': None,
         },
     )
     payslip.pdf_file.save(
@@ -166,6 +190,7 @@ def _payslip_lines(account, payslip):
         f'Working Days: {payslip.working_days}',
         f'Paid Days: {payslip.paid_days}',
         f'LOP Days: {payslip.lop_days}',
+        f'Performance Score: {_money(payslip.performance_score)} / 5.00',
         '',
         'Earnings',
         *[f'{key}: Rs {value}' for key, value in payslip.earnings.items()],
@@ -209,14 +234,45 @@ def _simple_pdf(lines):
     return pdf
 
 
-def _working_days(start_date, end_date):
-    days = 0
+def _working_dates(start_date, end_date):
+    company_leave_dates = set()
+    for leave in CompanyLeave.objects.filter(
+        from_date__lte=end_date,
+        to_date__gte=start_date,
+    ):
+        current = max(start_date, leave.from_date)
+        leave_end = min(end_date, leave.to_date)
+        while current <= leave_end:
+            company_leave_dates.add(current)
+            current += timedelta(days=1)
+
+    days = []
     current = start_date
     while current <= end_date:
-        if current.weekday() < 5:
-            days += 1
+        if current.weekday() < 5 and current not in company_leave_dates:
+            days.append(current)
         current = current + timedelta(days=1)
     return days
+
+
+def _attendance_credit(status):
+    value = str(status or '').strip().lower()
+    if 'half' in value:
+        return Decimal('0.5')
+    if any(label in value for label in ['present', 'late', 'wfh', 'hybrid']):
+        return Decimal('1')
+    return Decimal('0')
+
+
+def _performance_for_month(employee_id, year, month):
+    monthly_period = f'{year}-{month:02d}'
+    quarter_period = f'Q{((month - 1) // 3) + 1} {year}'
+    submitted = EmployeePerformance.objects.filter(
+        employee_id=employee_id,
+        status__in=['submitted', 'reviewed'],
+    )
+    exact = submitted.filter(period__in=[monthly_period, quarter_period]).first()
+    return exact or submitted.filter(reviewed_at__year=year, reviewed_at__month__lte=month).first()
 
 
 def _attendance_overtime_minutes(record):

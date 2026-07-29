@@ -78,7 +78,11 @@ class HrCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
 
-  const HrCard({super.key, required this.child, this.padding = const EdgeInsets.all(AppLayout.cardPadding)});
+  const HrCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(AppLayout.cardPadding),
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +94,13 @@ class HrCard extends StatelessWidget {
         color: c.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: c.border),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(c.isDark ? 45 : 10), blurRadius: 14, offset: const Offset(0, 8))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(c.isDark ? 45 : 10),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: child,
     );
@@ -104,7 +114,14 @@ class HrMetricCard extends StatelessWidget {
   final Color color;
   final VoidCallback? onTap;
 
-  const HrMetricCard({super.key, required this.title, required this.value, required this.icon, required this.color, this.onTap});
+  const HrMetricCard({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -117,16 +134,44 @@ class HrMetricCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Icon(icon, color: color, size: 22),
-              if (onTap != null)
-                Icon(Icons.arrow_forward_ios_rounded, color: color.withAlpha(120), size: 11),
-            ]),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontSize: 20, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 3),
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.muted, fontSize: 11, fontWeight: FontWeight.w700)),
-            ]),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, color: color, size: 22),
+                if (onTap != null)
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: color.withAlpha(120),
+                    size: 11,
+                  ),
+              ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: c.text,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: c.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -142,7 +187,15 @@ class HrListTile extends StatelessWidget {
   final Color? color;
   final VoidCallback? onTap;
 
-  const HrListTile({super.key, required this.icon, required this.title, required this.subtitle, this.trailing, this.color, this.onTap});
+  const HrListTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+    this.color,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -150,22 +203,77 @@ class HrListTile extends StatelessWidget {
     final accent = color ?? c.primary;
     final tile = HrCard(
       padding: const EdgeInsets.all(AppLayout.cardPadding),
-      child: Row(
-        children: [
-          Container(width: 34, height: 34, decoration: BoxDecoration(color: accent.withAlpha(24), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: accent, size: 18)),
-          const SizedBox(width: AppLayout.itemGap),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontSize: 13, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 3),
-            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.muted, fontSize: 11, fontWeight: FontWeight.w600)),
-          ])),
-          if (trailing != null) Text(trailing!, style: TextStyle(color: accent, fontSize: 10, fontWeight: FontWeight.w900)),
-          Icon(Icons.chevron_right_rounded, color: c.muted, size: 18),
-        ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: accent.withAlpha(24),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: accent, size: 18),
+            ),
+            const SizedBox(width: AppLayout.itemGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: c.text,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: c.muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: AppLayout.compactGap),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 72),
+                child: Text(
+                  trailing!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(width: AppLayout.compactGap),
+            Icon(Icons.chevron_right_rounded, color: c.muted, size: 18),
+          ],
+        ),
       ),
     );
     if (onTap == null) return tile;
-    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(8), child: tile);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: tile,
+    );
   }
 }
 
@@ -174,5 +282,8 @@ String hrText(Map<String, dynamic> data, String key) => '${data[key] ?? ''}';
 List<Map<String, dynamic>> hrList(Map<String, dynamic> data, String key) {
   final value = data[key];
   if (value is! List) return [];
-  return value.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+  return value
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
 }

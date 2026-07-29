@@ -75,7 +75,12 @@ class TlCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
 
-  const TlCard({super.key, required this.child, this.padding = const EdgeInsets.all(AppLayout.cardPadding), this.onTap});
+  const TlCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(AppLayout.cardPadding),
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -87,12 +92,22 @@ class TlCard extends StatelessWidget {
         color: c.surface,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: c.border),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(c.isDark ? 28 : 8), blurRadius: 10, offset: const Offset(0, 5))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(c.isDark ? 28 : 8),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: child,
     );
     if (onTap == null) return card;
-    return InkWell(onTap: onTap, borderRadius: BorderRadius.circular(10), child: card);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: card,
+    );
   }
 }
 
@@ -104,7 +119,15 @@ class TlListTile extends StatelessWidget {
   final Color? color;
   final VoidCallback? onTap;
 
-  const TlListTile({super.key, required this.icon, required this.title, required this.subtitle, this.trailing, this.color, this.onTap});
+  const TlListTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+    this.color,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -115,17 +138,70 @@ class TlListTile extends StatelessWidget {
       child: TlCard(
         onTap: onTap,
         padding: const EdgeInsets.all(AppLayout.cardPadding),
-        child: Row(children: [
-          Container(width: 34, height: 34, decoration: BoxDecoration(color: accent.withAlpha(24), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: accent, size: 18)),
-          const SizedBox(width: AppLayout.itemGap),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontSize: 13, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 3),
-            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.muted, fontSize: 11, fontWeight: FontWeight.w600)),
-          ])),
-          if (trailing != null) Text(trailing!, style: TextStyle(color: accent, fontSize: 10, fontWeight: FontWeight.w900)),
-          Icon(Icons.chevron_right_rounded, color: c.muted, size: 18),
-        ]),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: accent.withAlpha(24),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: accent, size: 18),
+              ),
+              const SizedBox(width: AppLayout.itemGap),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: c.muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: AppLayout.compactGap),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 72),
+                  child: Text(
+                    trailing!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(width: AppLayout.compactGap),
+              Icon(Icons.chevron_right_rounded, color: c.muted, size: 18),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -144,5 +220,8 @@ double tlPercent(Map<String, dynamic> data, String key) {
 List<Map<String, dynamic>> tlList(Map<String, dynamic> data, String key) {
   final value = data[key];
   if (value is! List) return [];
-  return value.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+  return value
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
 }

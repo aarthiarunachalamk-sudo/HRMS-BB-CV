@@ -60,7 +60,13 @@ class SaPalette {
         teal: Color(0xFF14B8A6),
         blue: Color(0xFF3B82F6),
         purple: Color(0xFF8B5CF6),
-        shadow: [BoxShadow(color: Color(0x33000000), blurRadius: 18, offset: Offset(0, 10))],
+        shadow: [
+          BoxShadow(
+            color: Color(0x33000000),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
       );
     }
     return SaPalette(
@@ -80,7 +86,13 @@ class SaPalette {
       teal: const Color(0xFF14B8A6),
       blue: const Color(0xFF3B82F6),
       purple: const Color(0xFF8B5CF6),
-      shadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 16, offset: const Offset(0, 8))],
+      shadow: [
+        BoxShadow(
+          color: Colors.black.withAlpha(10),
+          blurRadius: 16,
+          offset: const Offset(0, 8),
+        ),
+      ],
     );
   }
 }
@@ -92,7 +104,14 @@ class SaScreen extends StatelessWidget {
   final Widget? floatingActionButton;
   final int? activeIndex;
 
-  const SaScreen({super.key, required this.title, required this.child, this.trailing, this.floatingActionButton, this.activeIndex});
+  const SaScreen({
+    super.key,
+    required this.title,
+    required this.child,
+    this.trailing,
+    this.floatingActionButton,
+    this.activeIndex,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +120,13 @@ class SaScreen extends StatelessWidget {
       backgroundColor: c.background,
       floatingActionButton: floatingActionButton,
       body: Container(
-        decoration: BoxDecoration(gradient: LinearGradient(colors: [c.background, c.backgroundAlt], begin: Alignment.topCenter, end: Alignment.bottomCenter)),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [c.background, c.backgroundAlt],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
         child: SafeArea(
           child: Column(
             children: [
@@ -109,14 +134,43 @@ class SaScreen extends StatelessWidget {
                 padding: AppLayout.headerPadding,
                 child: Row(
                   children: [
-                    SizedBox(width: AppLayout.iconTouchTarget, height: AppLayout.iconTouchTarget, child: IconButton(icon: Icon(Icons.arrow_back_ios_new_rounded, color: c.text, size: 18), onPressed: () => Navigator.maybePop(context))),
-                    Expanded(child: Text(title, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w900))),
-                    SizedBox(width: AppLayout.iconTouchTarget, height: AppLayout.iconTouchTarget, child: Center(child: trailing ?? const SizedBox.shrink())),
+                    SizedBox(
+                      width: AppLayout.iconTouchTarget,
+                      height: AppLayout.iconTouchTarget,
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: c.text,
+                          size: 18,
+                        ),
+                        onPressed: () => Navigator.maybePop(context),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: c.text,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: AppLayout.iconTouchTarget,
+                      height: AppLayout.iconTouchTarget,
+                      child: Center(child: trailing ?? const SizedBox.shrink()),
+                    ),
                   ],
                 ),
               ),
               Expanded(child: child),
-              SaBottomNav(colors: c, selectedIndex: activeIndex ?? _activeIndexForTitle(title)),
+              SaBottomNav(
+                colors: c,
+                selectedIndex: activeIndex ?? _activeIndexForTitle(title),
+              ),
             ],
           ),
         ),
@@ -125,10 +179,21 @@ class SaScreen extends StatelessWidget {
   }
 
   int _activeIndexForTitle(String title) {
-    if (title.contains('User') || title.contains('Role') || title.contains('Department')) return 1;
-    if (title.contains('Attendance') || title.contains('Leave') || title.contains('Task') || title.contains('Meeting')) return 2;
+    if (title.contains('User') ||
+        title.contains('Role') ||
+        title.contains('Department'))
+      return 1;
+    if (title.contains('Attendance') ||
+        title.contains('Leave') ||
+        title.contains('Task') ||
+        title.contains('Meeting'))
+      return 2;
     if (title.contains('Payroll') || title.contains('Reports')) return 3;
-    if (title.contains('Notification') || title.contains('Settings') || title.contains('Profile') || title.contains('Logout')) return 4;
+    if (title.contains('Notification') ||
+        title.contains('Settings') ||
+        title.contains('Profile') ||
+        title.contains('Logout'))
+      return 4;
     return 0;
   }
 }
@@ -138,7 +203,12 @@ class SaCard extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final Color? color;
 
-  const SaCard({super.key, required this.child, this.padding = const EdgeInsets.all(AppLayout.cardPadding), this.color});
+  const SaCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(AppLayout.cardPadding),
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +216,12 @@ class SaCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: padding,
-      decoration: BoxDecoration(color: color ?? c.surface, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.border), boxShadow: c.shadow),
+      decoration: BoxDecoration(
+        color: color ?? c.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: c.border),
+        boxShadow: c.shadow,
+      ),
       child: child,
     );
   }
@@ -159,7 +234,14 @@ class SaInfoTile extends StatelessWidget {
   final String? trailing;
   final Color? color;
 
-  const SaInfoTile({super.key, required this.icon, required this.title, required this.subtitle, this.trailing, this.color});
+  const SaInfoTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -169,15 +251,43 @@ class SaInfoTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppLayout.itemGap),
       child: SaCard(
         color: c.row,
-        child: Row(
-          children: [
-            SaIconBox(icon: icon, color: accent),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [saTitle(context, title, 13), const SizedBox(height: 3), saMuted(context, subtitle, 11)])),
-            if (trailing != null) Text(trailing!, style: TextStyle(color: accent, fontSize: 10, fontWeight: FontWeight.w900)),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right_rounded, color: c.muted, size: 18),
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Row(
+            children: [
+              SaIconBox(icon: icon, color: accent),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    saTitle(context, title, 13),
+                    const SizedBox(height: 3),
+                    saMuted(context, subtitle, 11),
+                  ],
+                ),
+              ),
+              if (trailing != null) ...[
+                const SizedBox(width: AppLayout.compactGap),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 72),
+                  child: Text(
+                    trailing!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(width: AppLayout.compactGap),
+              Icon(Icons.chevron_right_rounded, color: c.muted, size: 18),
+            ],
+          ),
         ),
       ),
     );
@@ -216,8 +326,21 @@ class SaMetricCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(children: [SaIconBox(icon: metric.icon, color: metric.color), const Spacer(), Icon(Icons.trending_up_rounded, color: c.success, size: 14)]),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [saTitle(context, metric.value, 20), const SizedBox(height: 2), saMuted(context, metric.title, 11)]),
+          Row(
+            children: [
+              SaIconBox(icon: metric.icon, color: metric.color),
+              const Spacer(),
+              Icon(Icons.trending_up_rounded, color: c.success, size: 14),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              saTitle(context, metric.value, 20),
+              const SizedBox(height: 2),
+              saMuted(context, metric.title, 11),
+            ],
+          ),
         ],
       ),
     );
@@ -236,7 +359,10 @@ class SaIconBox extends StatelessWidget {
     return Container(
       width: 36,
       height: 36,
-      decoration: BoxDecoration(color: color.withAlpha(c.isDark ? 40 : 22), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: color.withAlpha(c.isDark ? 40 : 22),
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Icon(icon, color: color, size: 19),
     );
   }
@@ -246,7 +372,11 @@ class SaBottomNav extends StatelessWidget {
   final SaPalette colors;
   final int selectedIndex;
 
-  const SaBottomNav({super.key, required this.colors, required this.selectedIndex});
+  const SaBottomNav({
+    super.key,
+    required this.colors,
+    required this.selectedIndex,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -259,7 +389,10 @@ class SaBottomNav extends StatelessWidget {
     ];
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
-      decoration: BoxDecoration(color: colors.surface, border: Border(top: BorderSide(color: colors.border))),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.border)),
+      ),
       child: Row(
         children: List.generate(items.length, (index) {
           final item = items[index];
@@ -276,7 +409,16 @@ class SaBottomNav extends StatelessWidget {
                   size: 19,
                 ),
                 const SizedBox(height: 3),
-                FittedBox(child: Text(item.label, style: TextStyle(color: active ? colors.primary : colors.muted, fontSize: 10, fontWeight: FontWeight.w800))),
+                FittedBox(
+                  child: Text(
+                    item.label,
+                    style: TextStyle(
+                      color: active ? colors.primary : colors.muted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
               ],
             ),
           );
@@ -302,16 +444,33 @@ class SaMetric {
   const SaMetric(this.title, this.value, this.icon, this.color);
 }
 
-Widget saList(List<Widget> children) => ListView(padding: AppLayout.pagePadding, children: children);
+Widget saList(List<Widget> children) =>
+    ListView(padding: AppLayout.pagePadding, children: children);
 
 Widget saTitle(BuildContext context, String text, double size) {
   final c = SaPalette.of(context);
-  return Text(text, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.text, fontSize: size, fontWeight: FontWeight.w900));
+  return Text(
+    text,
+    overflow: TextOverflow.ellipsis,
+    style: TextStyle(
+      color: c.text,
+      fontSize: size,
+      fontWeight: FontWeight.w900,
+    ),
+  );
 }
 
 Widget saMuted(BuildContext context, String text, double size) {
   final c = SaPalette.of(context);
-  return Text(text, overflow: TextOverflow.ellipsis, style: TextStyle(color: c.muted, fontSize: size, fontWeight: FontWeight.w600));
+  return Text(
+    text,
+    overflow: TextOverflow.ellipsis,
+    style: TextStyle(
+      color: c.muted,
+      fontSize: size,
+      fontWeight: FontWeight.w600,
+    ),
+  );
 }
 
 Widget saSearch(BuildContext context, String hint) {
@@ -319,6 +478,12 @@ Widget saSearch(BuildContext context, String hint) {
   return SaCard(
     color: c.input,
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-    child: Row(children: [Icon(Icons.search_rounded, color: c.muted, size: 18), const SizedBox(width: 8), saMuted(context, hint, 12)]),
+    child: Row(
+      children: [
+        Icon(Icons.search_rounded, color: c.muted, size: 18),
+        const SizedBox(width: 8),
+        saMuted(context, hint, 12),
+      ],
+    ),
   );
 }

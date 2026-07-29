@@ -533,6 +533,11 @@ class SalaryStructure(models.Model):
     tds = models.DecimalField(max_digits=10, decimal_places=2, default=2000)
     other_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     overtime_rate_per_hour = models.DecimalField(max_digits=10, decimal_places=2, default=150)
+    performance_incentive_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=10,
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -550,9 +555,11 @@ class Payslip(models.Model):
     year = models.PositiveIntegerField()
     month = models.PositiveIntegerField()
     working_days = models.PositiveIntegerField(default=0)
-    paid_days = models.PositiveIntegerField(default=0)
-    lop_days = models.PositiveIntegerField(default=0)
+    paid_days = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    lop_days = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     overtime_minutes = models.PositiveIntegerField(default=0)
+    performance_score = models.DecimalField(max_digits=3, decimal_places=2, default=0)
+    performance_incentive = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     gross_salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_deductions = models.DecimalField(max_digits=10, decimal_places=2, default=0)

@@ -56,103 +56,104 @@ class CeoShell extends StatelessWidget {
         bottomNavigationBar: bottomNavigationBar,
         floatingActionButton: floatingActionButton,
         body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [bgTop, bgBottom],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [bgTop, bgBottom],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: AppLayout.headerPadding,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final rightWidth = trailing == null
-                        ? 48.0
-                        : (constraints.maxWidth < 360 ? 88.0 : 96.0);
-                    return Row(
-                      children: [
-                        SizedBox(
-                          width: 42,
-                          height: 42,
-                          child: showBack
-                              ? IconButton(
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 42,
-                                    height: 42,
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                  icon: Icon(
-                                    Icons.arrow_back_ios_new_rounded,
-                                    color: textPrimary,
-                                    size: 18,
-                                  ),
-                                  onPressed:
-                                      onBack ??
-                                      () => Navigator.of(context).pop(),
-                                )
-                              : Builder(
-                                  builder: (ctx) => IconButton(
+          child: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: AppLayout.headerPadding,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final rightWidth = trailing == null
+                          ? 48.0
+                          : (constraints.maxWidth < 360 ? 88.0 : 96.0);
+                      return Row(
+                        children: [
+                          SizedBox(
+                            width: 42,
+                            height: 42,
+                            child: showBack
+                                ? IconButton(
                                     constraints: const BoxConstraints.tightFor(
                                       width: 42,
                                       height: 42,
                                     ),
                                     padding: EdgeInsets.zero,
-                                    tooltip: 'Menu',
                                     icon: Icon(
-                                      Icons.menu_rounded,
+                                      Icons.arrow_back_ios_new_rounded,
                                       color: textPrimary,
-                                      size: 26,
+                                      size: 18,
                                     ),
-                                    onPressed: () =>
-                                        Scaffold.of(ctx).openDrawer(),
+                                    onPressed:
+                                        onBack ??
+                                        () => Navigator.of(context).pop(),
+                                  )
+                                : Builder(
+                                    builder: (ctx) => IconButton(
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: 42,
+                                            height: 42,
+                                          ),
+                                      padding: EdgeInsets.zero,
+                                      tooltip: 'Menu',
+                                      icon: Icon(
+                                        Icons.menu_rounded,
+                                        color: textPrimary,
+                                        size: 26,
+                                      ),
+                                      onPressed: () =>
+                                          Scaffold.of(ctx).openDrawer(),
+                                    ),
                                   ),
+                          ),
+                          Expanded(
+                            child: Semantics(
+                              label: title,
+                              header: true,
+                              child: const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Padding(
+                                  padding: EdgeInsets.only(left: 2),
+                                  child: BitByteLogo(compact: true),
                                 ),
-                        ),
-                        Expanded(
-                          child: Semantics(
-                            label: title,
-                            header: true,
-                            child: const Align(
-                              alignment: Alignment.centerLeft,
-                              child: Padding(
-                                padding: EdgeInsets.only(left: 2),
-                                child: BitByteLogo(compact: true),
                               ),
                             ),
                           ),
-                        ),
-                        SizedBox(
-                          width: rightWidth,
-                          height: 42,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              const _CeoThemeToggleButton(),
-                              if (trailing != null)
-                                SizedBox(
-                                  width: 42,
-                                  height: 42,
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: trailing,
+                          SizedBox(
+                            width: rightWidth,
+                            height: 42,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                const _CeoThemeToggleButton(),
+                                if (trailing != null)
+                                  SizedBox(
+                                    width: 42,
+                                    height: 42,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: trailing,
+                                    ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    );
-                  },
+                        ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-              Expanded(child: child),
-            ],
+                Expanded(child: child),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -254,7 +255,10 @@ class CeoCard extends StatelessWidget {
       child: child,
     );
     if (onTap == null)
-      return Padding(padding: const EdgeInsets.only(bottom: AppLayout.itemGap), child: card);
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppLayout.itemGap),
+        child: card,
+      );
     return Padding(
       padding: const EdgeInsets.only(bottom: AppLayout.itemGap),
       child: Material(
@@ -338,30 +342,37 @@ class CeoListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return CeoCard(
       onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(8),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 22),
             ),
-            child: Icon(icon, color: color, size: 22),
-          ),
-          const SizedBox(width: AppLayout.itemGap),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                title(titleText, 14),
-                const SizedBox(height: 3),
-                muted(subtitle, 11),
-              ],
+            const SizedBox(width: AppLayout.itemGap),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title(titleText, 14),
+                  const SizedBox(height: 3),
+                  muted(subtitle, 11),
+                ],
+              ),
             ),
-          ),
-          const Icon(Icons.chevron_right_rounded, color: CeoColors.muted),
-        ],
+            const SizedBox(width: AppLayout.compactGap),
+            const SizedBox(
+              width: 24,
+              child: Icon(Icons.chevron_right_rounded, color: CeoColors.muted),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -440,10 +451,7 @@ Widget chartCard(
 }
 
 Widget pageList(List<Widget> children) {
-  return ListView(
-    padding: AppLayout.pagePadding,
-    children: children,
-  );
+  return ListView(padding: AppLayout.pagePadding, children: children);
 }
 
 Widget title(String text, double size) {

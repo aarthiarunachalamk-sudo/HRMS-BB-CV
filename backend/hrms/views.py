@@ -15,7 +15,12 @@ from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistra
 from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
 from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, CompanyLeave, AttendanceRegularizationRequest, EmployeeApprovalRequest
 from .employee_views import _attendance_calculation, _leave_balance_payload, _notify_employee_presence, _approval_payload
-from .payroll import generate_payroll_for_month, payslip_payload
+from .payroll import (
+    _attendance_credit as _payroll_attendance_credit,
+    _working_dates,
+    generate_payroll_for_month,
+    payslip_payload,
+)
 import os
 from .mailer import email_is_configured, send_email as send_transactional_email
 from sendgrid import SendGridAPIClient
@@ -3083,6 +3088,8 @@ def _hr_payroll_item(payslip, account_by_employee_id=None):
         'paid_days': payslip.paid_days,
         'lop_days': payslip.lop_days,
         'overtime_minutes': payslip.overtime_minutes,
+        'performance_score': str(payslip.performance_score),
+        'performance_incentive': str(payslip.performance_incentive),
         'gross_salary': str(payslip.gross_salary),
         'total_earnings': str(payslip.total_earnings),
         'total_deductions': str(payslip.total_deductions),
@@ -3095,37 +3102,81 @@ def _hr_payroll_item(payslip, account_by_employee_id=None):
 
 def _hr_payroll_validation(accounts, payroll_date):
     month_start = payroll_date.replace(day=1)
-    elapsed_working_days = sum(
-        1
-        for day in range(1, payroll_date.day + 1)
-        if payroll_date.replace(day=day).weekday() < 5
-    )
+    working_dates = _working_dates(month_start, payroll_date)
+    elapsed_working_days = len(working_dates)
+    working_date_set = set(working_dates)
     employee_ids = [account.employee_id for account in accounts]
-    attendance_counts = {
-        row['employee_id']: row['count']
-        for row in EmployeeAttendanceRecord.objects.filter(
-            employee_id__in=employee_ids,
-            attendance_date__gte=month_start,
-            attendance_date__lte=payroll_date,
-        ).values('employee_id').annotate(count=Count('id'))
-    }
+    attendance_credits = {employee_id: {} for employee_id in employee_ids}
+    for record in EmployeeAttendanceRecord.objects.filter(
+        employee_id__in=employee_ids,
+        attendance_date__gte=month_start,
+        attendance_date__lte=payroll_date,
+    ):
+        if record.attendance_date not in working_date_set:
+            continue
+        credits = attendance_credits[record.employee_id]
+        credits[record.attendance_date] = max(
+            credits.get(record.attendance_date, Decimal('0')),
+            _payroll_attendance_credit(record.status),
+        )
+    for leave in EmployeeLeaveRequest.objects.filter(
+        employee_id__in=employee_ids,
+        status='approved',
+        from_date__lte=payroll_date,
+        to_date__gte=month_start,
+    ).exclude(leave_type__iexact='LOP'):
+        leave_credit = (
+            Decimal('0.5')
+            if 'half' in str(leave.session or '').lower()
+            else Decimal('1')
+        )
+        credits = attendance_credits[leave.employee_id]
+        current = max(month_start, leave.from_date)
+        leave_end = min(payroll_date, leave.to_date)
+        while current <= leave_end:
+            if current in working_date_set:
+                credits[current] = max(
+                    credits.get(current, Decimal('0')),
+                    leave_credit,
+                )
+            current += timedelta(days=1)
     salary_employee_ids = set(
         SalaryStructure.objects.filter(
             employee_id__in=employee_ids,
         ).values_list('employee_id', flat=True)
     )
+    performance_periods = {
+        f'{payroll_date.year}-{payroll_date.month:02d}',
+        f'Q{((payroll_date.month - 1) // 3) + 1} {payroll_date.year}',
+    }
+    performance_reviews = {
+        review.employee_id: review
+        for review in EmployeePerformance.objects.filter(
+            employee_id__in=employee_ids,
+            period__in=performance_periods,
+            status__in=['submitted', 'reviewed'],
+        )
+    }
     items = []
     for account in accounts:
         registration = account.registration
         name = _account_display_name(account, account.employee_id)
-        attendance_days = attendance_counts.get(account.employee_id, 0)
-        missing_attendance_days = max(elapsed_working_days - attendance_days, 0)
+        attendance_days = sum(
+            attendance_credits.get(account.employee_id, {}).values(),
+            Decimal('0'),
+        )
+        missing_attendance_days = max(
+            Decimal(elapsed_working_days) - attendance_days,
+            Decimal('0'),
+        )
         bank_missing = not (
             registration
             and str(registration.account_number or '').strip()
             and str(registration.ifsc_code or '').strip()
         )
         salary_configured = account.employee_id in salary_employee_ids
+        performance = performance_reviews.get(account.employee_id)
+        performance_submitted = performance is not None
         items.append({
             'employee_id': account.employee_id,
             'employee_name': name,
@@ -3140,7 +3191,15 @@ def _hr_payroll_validation(accounts, payroll_date):
             'missing_attendance_days': missing_attendance_days,
             'attendance_conflict': missing_attendance_days > 0,
             'salary_configured': salary_configured,
-            'ready': not bank_missing and missing_attendance_days == 0 and salary_configured,
+            'performance_submitted': performance_submitted,
+            'performance_score': str(performance.performance_score) if performance else '',
+            'performance_period': performance.period if performance else '',
+            'ready': (
+                not bank_missing
+                and missing_attendance_days == 0
+                and salary_configured
+                and performance_submitted
+            ),
         })
     return items
 
@@ -3159,7 +3218,12 @@ def hr_generate_payroll_view(request):
     year = int(request.data.get('year') or today.year)
     month = int(request.data.get('month') or today.month)
     generated_by = request.data.get('user_id') or request.data.get('generated_by') or 'HR'
-    payslips = generate_payroll_for_month(year, month, generated_by)
+    payslips = generate_payroll_for_month(
+        year,
+        month,
+        generated_by,
+        status='approved',
+    )
 
     # Email each employee their payslip PDF
     for payslip in payslips:
@@ -3211,15 +3275,44 @@ def hr_payroll_process_view(request):
             process.resolved_issues = resolved
             process.status = 'validation'
         elif action == 'validate':
+            unresolved = _payroll_unresolved_count(validation, process.resolved_issues)
+            if unresolved:
+                return Response({
+                    'success': False,
+                    'message': f'{unresolved} payroll validation issue(s) remain.',
+                }, status=409)
             process.status = 'calculation'
             process.validated_at = now
-        elif action == 'approve':
+        elif action == 'calculate':
+            if process.status != 'calculation':
+                return Response({
+                    'success': False,
+                    'message': 'Payroll must be validated before calculation.',
+                }, status=409)
+            payslips = generate_payroll_for_month(
+                year,
+                month,
+                actor,
+                status='draft',
+            )
             process.status = 'approval'
-            process.calculated_at = process.calculated_at or now
-            process.approved_at = now
+            process.calculated_at = now
         elif action == 'publish':
             options = request.data.get('options') if isinstance(request.data.get('options'), dict) else {}
-            payslips = generate_payroll_for_month(year, month, actor)
+            if process.status != 'approval':
+                return Response({
+                    'success': False,
+                    'message': 'Payroll must be calculated before publishing.',
+                }, status=409)
+            payslips = list(Payslip.objects.filter(year=year, month=month))
+            if not payslips:
+                return Response({
+                    'success': False,
+                    'message': 'No calculated payslips are available.',
+                }, status=409)
+            Payslip.objects.filter(year=year, month=month).update(status='approved')
+            for payslip in payslips:
+                payslip.status = 'approved'
             process.status = 'published'
             process.publishing_options = options
             process.approved_at = process.approved_at or now
@@ -3227,8 +3320,9 @@ def hr_payroll_process_view(request):
             process.save()
 
             # Email each employee their payslip PDF
-            for payslip in payslips:
-                _send_payslip_to_employee(payslip, request)
+            if options.get('email_employees', True):
+                for payslip in payslips:
+                    _send_payslip_to_employee(payslip, request)
 
             # Email payroll summary to HR / MD / Admin / SuperAdmin
             _send_payroll_summary_to_management(year, month, payslips, actor, request)
@@ -3244,6 +3338,17 @@ def hr_payroll_process_view(request):
         else:
             return Response({'success': False, 'message': 'Unsupported payroll process action.'}, status=400)
         process.save()
+
+        if action == 'calculate':
+            return Response({
+                'success': True,
+                'message': f'Payroll calculated for {month:02d}/{year}.',
+                'process': _payroll_process_payload(process),
+                'validation': validation,
+                'payslips': [payslip_payload(item, request) for item in payslips],
+                'total_employees': len(accounts),
+                'unresolved_issues': 0,
+            })
 
     return Response({
         'success': True,
@@ -3281,6 +3386,8 @@ def _payroll_unresolved_count(validation, resolved_issues):
             issue_ids.append(f'{employee_id}-attendance')
         if not item['salary_configured']:
             issue_ids.append(f'{employee_id}-salary')
+        if not item['performance_submitted']:
+            issue_ids.append(f'{employee_id}-performance')
     resolved = set(resolved_issues or [])
     return sum(1 for issue_id in issue_ids if issue_id not in resolved)
 
@@ -4289,8 +4396,7 @@ def ceo_payroll_overview_view(request):
         elif action == 'calculate':
             if process.status != 'calculation':
                 return Response({'success': False, 'message': 'Payroll must be validated before calculation.'}, status=409)
-            generate_payroll_for_month(year, month, user_id)
-            Payslip.objects.filter(year=year, month=month).update(status='draft')
+            generate_payroll_for_month(year, month, user_id, status='draft')
             process.status = 'approval'
             process.calculated_at = now
         elif action == 'publish':
