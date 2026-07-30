@@ -94,14 +94,14 @@ class EmployeeMoreScreen extends StatelessWidget {
           Icons.person_rounded,
           'Profile',
           EmployeeColors.pink,
-          EmployeeProfileScreen(data: data),
+          EmployeeProfileScreen(data: data, userId: userId),
         ),
         _tile(
           context,
           Icons.settings_rounded,
           'Settings',
           EmployeeColors.purple,
-          EmployeeSettingsScreen(onLogout: onLogout),
+          EmployeeSettingsScreen(onLogout: onLogout, userId: userId),
         ),
       ],
     );

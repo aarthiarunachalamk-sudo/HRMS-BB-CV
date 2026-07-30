@@ -2,6 +2,13 @@
 
 All notable changes to BBT HRMS are recorded here. Versions follow Semantic Versioning (`MAJOR.MINOR.PATCH`) and Flutter build numbers increase with every distributable build.
 
+## [1.5.0+13] - 2026-07-30
+
+### Changed
+
+- Connected Employee and TL profile actions to live personal information, password, and notification-preference APIs.
+- Replaced the Admin placeholder password form with the working password-change flow.
+
 ## [1.4.2+12] - 2026-07-30
 
 ### Fixed

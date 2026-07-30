@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 
 import 'employee_models.dart';
 import 'employee_shared.dart';
 
 class EmployeeProfileScreen extends StatelessWidget {
   final EmployeeDashboardData data;
+  final String userId;
 
-  const EmployeeProfileScreen({super.key, required this.data});
+  const EmployeeProfileScreen({super.key, required this.data, required this.userId});
 
   @override
   Widget build(BuildContext context) {
@@ -63,13 +65,15 @@ class EmployeeProfileScreen extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Profile editing is not available yet.')),
-              );
-            },
-            icon: const Icon(Icons.edit_rounded),
-            label: const Text('Edit Profile'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => UserPersonalInformationScreen(
+                  userId: userId,
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.person_outline_rounded),
+            label: const Text('View Personal Information'),
           ),
         ),
       ],

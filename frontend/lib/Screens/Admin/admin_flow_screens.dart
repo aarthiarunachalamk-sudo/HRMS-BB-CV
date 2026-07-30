@@ -3,6 +3,7 @@ import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/Change_Password.dart';
 
 import 'admin_palette.dart';
 import 'admin_service.dart';
@@ -834,7 +835,7 @@ class AdminProfileScreen extends StatelessWidget {
               color: c.purple,
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const AdminChangePasswordScreen(),
+                  builder: (_) => ChangePasswordScreen(employeeId: userId, otc: ''),
                 ),
               ),
             ),

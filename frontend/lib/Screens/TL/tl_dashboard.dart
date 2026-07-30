@@ -6,6 +6,8 @@ import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/Change_Password.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
@@ -215,6 +217,7 @@ class _TLDashboardState extends State<TLDashboard> {
               _TeamPerformance(data: data),
               _SmartDetails(item: _selected),
               _Profile(
+                userId: widget.userId,
                 email: widget.email,
                 name: widget.firstName,
                 profileImage: _profileImage,
@@ -7073,12 +7076,14 @@ class _GenericDetails extends StatelessWidget {
 }
 
 class _Profile extends StatelessWidget {
+  final String userId;
   final String email;
   final String name;
   final File? profileImage;
   final VoidCallback onProfileTap;
   final VoidCallback logout;
   const _Profile({
+    required this.userId,
     required this.email,
     required this.name,
     required this.profileImage,
@@ -7118,18 +7123,21 @@ class _Profile extends StatelessWidget {
           title: 'Personal Information',
           subtitle: 'Profile and contact details',
           color: c.primary,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => UserPersonalInformationScreen(userId: userId))),
         ),
         TlListTile(
           icon: Icons.lock_outline_rounded,
           title: 'Change Password',
           subtitle: 'Security settings',
           color: c.purple,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChangePasswordScreen(employeeId: userId, otc: ''))),
         ),
         TlListTile(
           icon: Icons.notifications_none_rounded,
           title: 'Notification Settings',
           subtitle: 'Alerts and reminders',
           color: c.warning,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => UserNotificationSettingsScreen(userId: userId))),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(

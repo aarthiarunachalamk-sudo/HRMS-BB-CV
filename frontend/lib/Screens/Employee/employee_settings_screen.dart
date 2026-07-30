@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/Change_Password.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 
 import 'employee_shared.dart';
 
 class EmployeeSettingsScreen extends StatelessWidget {
   final VoidCallback onLogout;
+  final String userId;
 
-  const EmployeeSettingsScreen({super.key, required this.onLogout});
+  const EmployeeSettingsScreen({super.key, required this.onLogout, required this.userId});
 
   @override
   Widget build(BuildContext context) {
     return EmployeePage(
       title: 'Settings',
       children: [
-        EmployeeListTile(icon: Icons.lock_outline_rounded, title: 'Change Password', subtitle: 'Update account credentials', trailing: '', color: EmployeeColors.blue, onTap: () => _showUnavailable(context, 'Change password')),
-        EmployeeListTile(icon: Icons.notifications_none_rounded, title: 'Notification Settings', subtitle: 'Manage alerts', trailing: '', color: EmployeeColors.gold, onTap: () => _showUnavailable(context, 'Notification settings')),
+        EmployeeListTile(icon: Icons.lock_outline_rounded, title: 'Change Password', subtitle: 'Update account credentials', trailing: '', color: EmployeeColors.blue, onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChangePasswordScreen(employeeId: userId, otc: '')))),
+        EmployeeListTile(icon: Icons.notifications_none_rounded, title: 'Notification Settings', subtitle: 'Manage alerts', trailing: '', color: EmployeeColors.gold, onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => UserNotificationSettingsScreen(userId: userId)))),
         ValueListenableBuilder<ThemeMode>(
           valueListenable: MyApp.themeNotifier,
           builder: (context, mode, _) {
