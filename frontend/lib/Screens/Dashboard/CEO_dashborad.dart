@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
@@ -2828,7 +2829,7 @@ class _AttendanceIntelligenceFlowPageState
   }
 
   Future<void> _pickRange() async {
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _range.end,
       firstDate: DateTime(2020),
@@ -3117,7 +3118,7 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
   }
 
   Future<void> _pickDate() async {
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _date,
       firstDate: DateTime(2020),
@@ -3158,9 +3159,11 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
         final hasSelectedData = _hasAttendanceData(data);
         final employees = all.where((employee) {
           final group = _displayText(employee['selected_group']);
-          final isLate = employee['selected_is_late'] == true ||
+          final isLate =
+              employee['selected_is_late'] == true ||
               '${employee['selected_is_late']}'.toLowerCase() == 'true';
-          final matchesFilter = _filter == 'all' ||
+          final matchesFilter =
+              _filter == 'all' ||
               (_filter == 'late' ? isLate : group == _filter);
           final haystack =
               '${employee['name']} ${employee['id']} ${employee['department_label']}'
@@ -3185,7 +3188,7 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
                             onSurface: ThemeConfig.getTextPrimary(context),
                           ),
                         ),
-                        child: CalendarDatePicker(
+                        child: SeparatedCalendarDatePicker(
                           initialDate: _date,
                           firstDate: DateTime(2020),
                           lastDate: DateTime.now(),
@@ -3234,7 +3237,7 @@ class _DailyAttendanceFlowPageState extends State<_DailyAttendanceFlowPage> {
                           onSurface: ThemeConfig.getTextPrimary(context),
                         ),
                       ),
-                      child: CalendarDatePicker(
+                      child: SeparatedCalendarDatePicker(
                         initialDate: _date,
                         firstDate: DateTime(2020),
                         lastDate: DateTime.now(),
@@ -4395,28 +4398,28 @@ class _AttendanceMetricCard extends StatelessWidget {
     onTap: onTap,
     borderRadius: BorderRadius.circular(10),
     child: Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: _CeoDashboardState._card,
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: _CeoDashboardState._border),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(label, style: _CeoText.mutedFor(context, 9)),
-              const SizedBox(height: 4),
-              Text(value, style: _CeoText.titleFor(context, 18)),
-            ],
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _CeoDashboardState._card,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _CeoDashboardState._border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(label, style: _CeoText.mutedFor(context, 9)),
+                const SizedBox(height: 4),
+                Text(value, style: _CeoText.titleFor(context, 18)),
+              ],
+            ),
           ),
-        ),
-        Icon(icon, color: color, size: 27),
-      ],
-    ),
+          Icon(icon, color: color, size: 27),
+        ],
+      ),
     ),
   );
 }
@@ -4826,7 +4829,8 @@ class _AttendanceEmployeeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final group = _displayText(employee['selected_group']);
-    final isLate = employee['selected_is_late'] == true ||
+    final isLate =
+        employee['selected_is_late'] == true ||
         '${employee['selected_is_late']}'.toLowerCase() == 'true';
     final color = isLate
         ? _CeoDashboardState._gold
@@ -5110,7 +5114,7 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
   Future<void> _selectHistoryDate() async {
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _historyDate ?? DateTime.now(),
       firstDate: DateTime(2020),
@@ -12671,7 +12675,7 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
             Future<void> pickDate() async {
-              final picked = await showDatePicker(
+              final picked = await showSeparatedDatePicker(
                 context: sheetContext,
                 initialDate: selectedDate,
                 firstDate: DateTime.now().subtract(const Duration(days: 1)),

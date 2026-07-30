@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from .management.commands.auto_checkout_attendance import IST, run_auto_checkout
 from .models import (
+    AuditLog,
     AttendanceRegularizationRequest,
     EmployeeAccount,
     EmployeeAttendanceRecord,
@@ -186,6 +187,13 @@ class AttendanceCheckoutPolicyTests(TestCase):
         self.assertFalse(checkout.data.get('permission_required', False))
         record.refresh_from_db()
         self.assertIsNotNone(record.check_out)
+        self.assertEqual(record.check_out.astimezone(IST), local_now)
+        self.assertEqual(record.checkout_source, 'manual')
+        self.assertFalse(record.is_auto_checkout)
+        self.assertTrue(AuditLog.objects.filter(
+            module='attendance', action='manual_checkout',
+            reference_id=str(record.pk),
+        ).exists())
 
     def test_morning_permission_approval_creates_only_one_first_half_leave(self):
         permission = AttendanceRegularizationRequest.objects.create(
@@ -229,6 +237,9 @@ class AttendanceCheckoutPolicyTests(TestCase):
         self.assertEqual(run_auto_checkout(local_now), 1)
         record.refresh_from_db()
         self.assertEqual(record.check_out.astimezone(IST).strftime('%H:%M'), '18:30')
+        self.assertEqual(record.checkout_source, 'system_auto')
+        self.assertTrue(record.is_auto_checkout)
+        self.assertEqual(run_auto_checkout(local_now), 0)
 
     def test_only_hr_approved_second_half_leave_auto_checks_out_at_1_pm(self):
         local_now = datetime(2026, 7, 27, 13, 0, tzinfo=IST)

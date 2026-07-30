@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:http/http.dart' as http;
@@ -91,7 +92,7 @@ class _CreateAdminsPageState extends State<CreateAdminsPage> {
       initialDate = currentValue;
     }
 
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: initialDate,
       initialEntryMode: DatePickerEntryMode.calendarOnly,

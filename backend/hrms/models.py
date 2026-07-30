@@ -354,11 +354,16 @@ class TeamTask(models.Model):
         ('pending', 'Pending'),
         ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
+        ('rejected', 'Rejected'),
+        ('reopened', 'Reopened'),
+        ('cancelled', 'Cancelled by Management'),
+        ('blocked', 'Blocked'),
     ]
     PRIORITY_CHOICES = [
         ('Low', 'Low'),
         ('Medium', 'Medium'),
         ('High', 'High'),
+        ('Critical', 'Critical'),
         ('Urgent', 'Urgent'),
     ]
 
@@ -372,6 +377,10 @@ class TeamTask(models.Model):
     description = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_by = models.CharField(max_length=80, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    review_status = models.CharField(max_length=20, default='pending')
+    quality_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    blocked_approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -420,6 +429,9 @@ class EmployeePerformance(models.Model):
     kpis = models.JSONField(default=dict, blank=True)
     potential_score = models.DecimalField(max_digits=3, decimal_places=2, default=0)
     performance_score = models.DecimalField(max_digits=3, decimal_places=2, default=0)
+    calculated_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    score_breakdown = models.JSONField(default=dict, blank=True)
+    is_provisional = models.BooleanField(default=False)
     competency_scores = models.JSONField(default=dict, blank=True)
     reviewer_comments = models.TextField(blank=True)
     status = models.CharField(max_length=20, default='draft')
@@ -464,6 +476,8 @@ class EmployeeAttendanceRecord(models.Model):
     status = models.CharField(max_length=20, default='Present')
     check_in = models.DateTimeField(null=True, blank=True)
     check_out = models.DateTimeField(null=True, blank=True)
+    checkout_source = models.CharField(max_length=20, blank=True)
+    is_auto_checkout = models.BooleanField(default=False)
     check_in_timezone_offset_minutes = models.IntegerField(null=True, blank=True)
     check_out_timezone_offset_minutes = models.IntegerField(null=True, blank=True)
     working_hours = models.CharField(max_length=20, blank=True)

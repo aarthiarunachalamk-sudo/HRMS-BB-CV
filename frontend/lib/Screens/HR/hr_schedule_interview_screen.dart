@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 import 'hr_service.dart';
 import 'hr_shared.dart';
@@ -20,8 +21,7 @@ class HrScheduleInterviewScreen extends StatefulWidget {
       _HrScheduleInterviewScreenState();
 }
 
-class _HrScheduleInterviewScreenState
-    extends State<HrScheduleInterviewScreen> {
+class _HrScheduleInterviewScreenState extends State<HrScheduleInterviewScreen> {
   int? _candidateId;
   DateTime? _date;
   TimeOfDay? _time;
@@ -41,7 +41,10 @@ class _HrScheduleInterviewScreenState
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
     final candidates = hrList(widget.data, 'candidates')
-        .where((candidate) => !{'hired', 'rejected'}.contains('${candidate['stage']}'))
+        .where(
+          (candidate) =>
+              !{'hired', 'rejected'}.contains('${candidate['stage']}'),
+        )
         .toList();
     if (_candidateId == null && candidates.isNotEmpty) {
       _candidateId = int.tryParse('${candidates.first['id']}');
@@ -51,7 +54,11 @@ class _HrScheduleInterviewScreenState
       children: [
         Text(
           'Schedule Candidate Interview',
-          style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            color: c.text,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
@@ -123,12 +130,18 @@ class _HrScheduleInterviewScreenState
                   dropdownColor: c.surface,
                   decoration: _decoration(Icons.video_call_rounded, c),
                   items: const ['Online', 'In Person', 'Phone']
-                      .map((mode) => DropdownMenuItem(value: mode, child: Text(mode)))
+                      .map(
+                        (mode) =>
+                            DropdownMenuItem(value: mode, child: Text(mode)),
+                      )
                       .toList(),
                   onChanged: (value) => setState(() => _mode = value ?? _mode),
                 ),
                 const SizedBox(height: 14),
-                _label(_mode == 'Online' ? 'Meeting Link' : 'Location / Details', c),
+                _label(
+                  _mode == 'Online' ? 'Meeting Link' : 'Location / Details',
+                  c,
+                ),
                 TextField(
                   controller: _location,
                   style: TextStyle(color: c.text),
@@ -156,7 +169,10 @@ class _HrScheduleInterviewScreenState
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Icon(Icons.event_available_rounded),
             label: Text(_saving ? 'Scheduling...' : 'Schedule Interview'),
@@ -168,7 +184,7 @@ class _HrScheduleInterviewScreenState
 
   Future<void> _pickDate() async {
     final today = DateTime.now();
-    final value = await showDatePicker(
+    final value = await showSeparatedDatePicker(
       context: context,
       initialDate: _date ?? today,
       firstDate: today,
@@ -216,7 +232,9 @@ class _HrScheduleInterviewScreenState
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -225,7 +243,14 @@ class _HrScheduleInterviewScreenState
 
   Widget _label(String text, HrPalette c) => Padding(
     padding: const EdgeInsets.only(bottom: 6),
-    child: Text(text, style: TextStyle(color: c.muted, fontSize: 11, fontWeight: FontWeight.w700)),
+    child: Text(
+      text,
+      style: TextStyle(
+        color: c.muted,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
   );
 
   InputDecoration _decoration(IconData icon, HrPalette c) => InputDecoration(
@@ -278,7 +303,11 @@ class _PickerTile extends StatelessWidget {
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: c.text, fontSize: 12, fontWeight: FontWeight.w800),
+              style: TextStyle(
+                color: c.text,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ],
         ),

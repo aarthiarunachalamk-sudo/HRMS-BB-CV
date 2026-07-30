@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 
 import '../Payslip/payslip_detail_screen.dart';
@@ -45,15 +46,15 @@ class _AdminPayslipGenerationScreenState
       );
       setState(() => _summary = generatedPayslip);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payslip generated')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Payslip generated')));
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -74,9 +75,9 @@ class _AdminPayslipGenerationScreenState
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
       }
     } finally {
       if (mounted) setState(() => _releasing = false);
@@ -99,9 +100,9 @@ class _AdminPayslipGenerationScreenState
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -229,7 +230,7 @@ class _AdminPayslipGenerationScreenState
   }
 
   Future<void> _pickMonth() async {
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _month,
       firstDate: DateTime(2020),

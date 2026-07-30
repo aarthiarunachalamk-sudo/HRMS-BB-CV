@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 
@@ -79,7 +80,7 @@ class _CeoApprovalCategoryScreenState extends State<CeoApprovalCategoryScreen> {
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
   Future<void> _selectDate() async {
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _historyDate ?? DateTime.now(),
       firstDate: DateTime(2020),

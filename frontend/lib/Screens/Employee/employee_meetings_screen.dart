@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import 'package:flutter/services.dart';
 
@@ -181,7 +182,7 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen> {
 
   Future<void> _pickDate() async {
     final today = DateTime.now();
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _selectedDate ?? today,
       firstDate: DateTime(today.year - 1),

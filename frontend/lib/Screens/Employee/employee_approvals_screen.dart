@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 
@@ -98,7 +99,7 @@ class _EmployeeApprovalsScreenState extends State<EmployeeApprovalsScreen> {
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
   Future<void> _selectHistoryDate() async {
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _historyDate ?? DateTime.now(),
       firstDate: DateTime(2020),
@@ -773,7 +774,7 @@ class _DailyApprovalFormState extends State<_DailyApprovalForm> {
             ),
             trailing: const Icon(Icons.calendar_month_rounded),
             onTap: () async {
-              final value = await showDatePicker(
+              final value = await showSeparatedDatePicker(
                 context: context,
                 initialDate: DateTime.now(),
                 firstDate: DateTime.now().subtract(const Duration(days: 30)),
@@ -1043,7 +1044,7 @@ class _SocialMediaApprovalFormState extends State<_SocialMediaApprovalForm> {
             trailing: const Icon(Icons.calendar_month),
             onTap: () async {
               final now = DateTime.now();
-              final value = await showDatePicker(
+              final value = await showSeparatedDatePicker(
                 context: context,
                 initialDate: now,
                 firstDate: DateTime(now.year, now.month, now.day),
@@ -1152,7 +1153,7 @@ class _LeaveApprovalFormState extends State<_LeaveApprovalForm> {
 
   Future<DateTime?> _pickDate(DateTime? initial, {DateTime? firstDate}) {
     final now = DateTime.now();
-    return showDatePicker(
+    return showSeparatedDatePicker(
       context: context,
       initialDate: initial ?? firstDate ?? now,
       firstDate: firstDate ?? DateTime(now.year, now.month, now.day),

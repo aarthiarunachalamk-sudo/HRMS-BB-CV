@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
@@ -2224,7 +2225,7 @@ class _MeetingsState extends State<_Meetings> {
   }
 
   Future<void> _pickDate() async {
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _date,
       firstDate: DateTime.now(),
@@ -4127,7 +4128,7 @@ class _LeaveApprovalListState extends State<_LeaveApprovalList> {
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
   Future<void> _selectHistoryDate() async {
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _historyDate ?? DateTime.now(),
       firstDate: DateTime(2020),
@@ -5637,7 +5638,7 @@ class _CreateTaskState extends State<_CreateTask> {
 
   Future<void> _pickDueDate() async {
     final now = DateTime.now();
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _dueDate ?? now,
       firstDate: now,
@@ -5686,7 +5687,7 @@ class _CreateTaskState extends State<_CreateTask> {
   }
 
   Future<void> _pickStartDate() async {
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _startDate,
       firstDate: DateTime.now().subtract(const Duration(days: 30)),

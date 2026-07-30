@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -150,7 +151,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final picked = await showSeparatedDatePicker(
       context: context,
       initialDate: now,
       firstDate: DateTime(2000),

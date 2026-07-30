@@ -23,6 +23,7 @@ from .models import (
     User,
     EmployeeApprovalRequest,
     CompanyLeave,
+    AuditLog,
 )
 from .payroll import latest_payslip_for_employee
 
@@ -962,6 +963,8 @@ def _attendance_payload(record, request=None):
         'status': calc['status'] if record.check_in else record.status,
         'check_in': _format_time(record.check_in, record.check_in_timezone_offset_minutes),
         'check_out': _format_time(record.check_out, record.check_out_timezone_offset_minutes),
+        'checkout_source': record.checkout_source,
+        'is_auto_checkout': record.is_auto_checkout,
         'working_hours': calc['working_hours'] if record.check_out else record.working_hours or '--',
         'late_entry': calc['late_entry'],
         'late_minutes': calc['late_minutes'],
@@ -1608,6 +1611,8 @@ def employee_check_out_view(request):
     calc = _attendance_calculation(record.check_in, now, offset_minutes)
     record.status = calc['status']
     record.check_out = now
+    record.checkout_source = 'manual'
+    record.is_auto_checkout = False
     record.check_out_timezone_offset_minutes = offset_minutes
     record.working_hours = calc['working_hours']
     record.check_out_latitude = request.data.get('latitude') or ''
@@ -1615,6 +1620,14 @@ def employee_check_out_view(request):
     record.check_out_accuracy = request.data.get('accuracy') or ''
     record.check_out_selfie = selfie
     record.save()
+    AuditLog.objects.create(
+        actor_user_id=employee_id,
+        actor_role='employee',
+        action='manual_checkout',
+        module='attendance',
+        reference_id=str(record.pk),
+        after={'check_out': now.isoformat(), 'checkout_source': 'manual'},
+    )
     _notify_employee_presence(record, 'check_out')
 
     return Response({
@@ -1767,7 +1780,9 @@ def employee_task_complete_view(request):
         return Response({'success': False, 'message': 'Assigned task was not found.'}, status=status.HTTP_404_NOT_FOUND)
 
     task.status = 'completed'
-    task.save(update_fields=['status'])
+    task.completed_at = timezone.now()
+    task.review_status = 'pending'
+    task.save(update_fields=['status', 'completed_at', 'review_status'])
     return Response({
         'success': True,
         'message': 'Task marked as completed!',

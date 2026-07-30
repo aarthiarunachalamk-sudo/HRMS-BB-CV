@@ -13,7 +13,8 @@ from django.utils.html import escape
 from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
 from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
-from .models import BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, CompanyLeave, AttendanceRegularizationRequest, EmployeeApprovalRequest
+from .models import AuditLog, BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, CompanyLeave, AttendanceRegularizationRequest, EmployeeApprovalRequest
+from .performance_service import calculate_employee_performance
 from .employee_views import _attendance_calculation, _file_url, _format_time, _leave_balance_payload, _notify_employee_presence, _approval_payload
 from .payroll import (
     _attendance_credit as _payroll_attendance_credit,
@@ -4970,7 +4971,10 @@ def _ceo_project_task_payload(task):
         'assignee_id': task.assignee_id, 'assignee_name': task.assignee_name,
         'assignee_email': task.assignee_email, 'priority': task.priority,
         'due_date': task.due_date, 'description': task.description,
-        'status': task.status, 'created_at': task.created_at.isoformat(),
+        'status': task.status, 'review_status': task.review_status,
+        'quality_score': float(task.quality_score) if task.quality_score is not None else None,
+        'completed_at': task.completed_at.isoformat() if task.completed_at else '',
+        'created_at': task.created_at.isoformat(),
     }
 
 
@@ -5052,6 +5056,17 @@ def ceo_projects_flow_view(request):
             if status_value not in {'pending', 'in_progress', 'completed'}:
                 return Response({'success': False, 'message': 'Invalid task status.'}, status=400)
             task.status = status_value
+            if status_value == 'completed':
+                task.completed_at = task.completed_at or timezone.now()
+                task.review_status = 'approved'
+                try:
+                    task.quality_score = max(0, min(float(request.data.get('quality_score', 100)), 100))
+                except (TypeError, ValueError):
+                    return Response({'success': False, 'message': 'Quality score must be between 0 and 100.'}, status=400)
+            else:
+                task.review_status = 'pending'
+                if status_value in {'pending', 'in_progress'}:
+                    task.completed_at = None
             task.save()
         else:
             return Response({'success': False, 'message': 'Unsupported project action.'}, status=400)
@@ -5099,8 +5114,12 @@ def ceo_performance_matrix_view(request):
         period = f'Q{((today.month - 1) // 3) + 1} {today.year}'
     if request.method == 'POST':
         employee_id = str(request.data.get('employee_id') or '').strip()
-        if not EmployeeAccount.objects.filter(employee_id=employee_id, is_active=True).exists():
+        employee = EmployeeAccount.objects.filter(employee_id=employee_id, is_active=True).first()
+        if employee is None:
             return Response({'success': False, 'message': 'Active employee not found.'}, status=404)
+        actor = User.objects.filter(user_id=user_id).first()
+        if actor and employee.employee_email.lower() == actor.email.lower():
+            return Response({'success': False, 'message': 'You cannot review your own performance.'}, status=403)
         review, _ = EmployeePerformance.objects.get_or_create(employee_id=employee_id, period=period)
         action = str(request.data.get('action') or '').strip().lower()
         if action == 'save_goals':
@@ -5109,7 +5128,7 @@ def ceo_performance_matrix_view(request):
         elif action in {'save_review', 'submit_review'}:
             try:
                 potential = float(request.data.get('potential_score') or 0)
-                performance = float(request.data.get('performance_score') or 0)
+                performance = float(request.data.get('review_score', request.data.get('performance_score')) or 0)
             except (TypeError, ValueError):
                 return Response({'success': False, 'message': 'Scores must be numeric.'}, status=400)
             if not 0 <= potential <= 5 or not 0 <= performance <= 5:
@@ -5125,6 +5144,12 @@ def ceo_performance_matrix_view(request):
         else:
             return Response({'success': False, 'message': 'Unsupported performance action.'}, status=400)
         review.save()
+        AuditLog.objects.create(
+            actor_user_id=user_id, actor_role='ceo',
+            action=f'performance_{action}', module='performance',
+            reference_id=str(review.pk),
+            after={'employee_id': employee_id, 'period': period, 'status': review.status},
+        )
         return Response({'success': True, 'message': 'Performance record saved.'})
 
     accounts = list(EmployeeAccount.objects.filter(is_active=True).select_related('registration'))
@@ -5132,19 +5157,31 @@ def ceo_performance_matrix_view(request):
     employees = []
     for account in accounts:
         review = reviews.get(account.employee_id)
+        calculated = calculate_employee_performance(account.employee_id, period)
+        if review:
+            review.calculated_score = calculated['score']
+            review.score_breakdown = calculated['breakdown']
+            review.is_provisional = calculated['provisional']
+            review.save(update_fields=['calculated_score', 'score_breakdown', 'is_provisional', 'updated_at'])
         employees.append({
             'employee_id': account.employee_id, 'name': _employee_name(account.employee_id),
             'designation': account.get_designation_display(), 'department': account.get_department_display(),
             'email': account.employee_email, 'period': period,
             'goals': review.goals if review else [], 'kpis': review.kpis if review else {},
             'potential_score': float(review.potential_score) if review else 0,
-            'performance_score': float(review.performance_score) if review else 0,
+            'performance_score': calculated['score'],
+            'review_score': float(review.performance_score) if review else 0,
+            'performance_rating': calculated['rating'],
+            'score_breakdown': calculated['breakdown'],
+            'is_provisional': calculated['provisional'],
+            'task_summary': calculated['task_summary'],
+            'score_explanation': calculated['explanation'],
             'competency_scores': review.competency_scores if review else {},
             'reviewer_comments': review.reviewer_comments if review else '',
             'status': review.status if review else 'not_started',
             'reviewed_at': review.reviewed_at.isoformat() if review and review.reviewed_at else '',
         })
-    scored = [item for item in employees if item['performance_score'] > 0]
+    scored = [item for item in employees if item['performance_score'] is not None]
     departments = {}
     for item in scored:
         bucket = departments.setdefault(item['department'], [])
@@ -5153,8 +5190,8 @@ def ceo_performance_matrix_view(request):
         'success': True, 'period': period,
         'summary': {
             'total_employees': len(employees), 'completed_reviews': sum(1 for item in employees if item['status'] == 'submitted'),
-            'high_performers': sum(1 for item in scored if item['performance_score'] >= 4),
-            'at_risk': sum(1 for item in scored if item['performance_score'] < 2.5),
+            'high_performers': sum(1 for item in scored if item['performance_score'] >= 80),
+            'at_risk': sum(1 for item in scored if item['performance_score'] < 50),
             'overall_score': round(sum(item['performance_score'] for item in scored) / len(scored), 2) if scored else 0,
         },
         'departments': [{'name': key, 'score': round(sum(values) / len(values), 2)} for key, values in departments.items()],

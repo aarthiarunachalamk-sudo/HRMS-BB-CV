@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 
@@ -59,7 +60,10 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
             return _AdminTaskMessage(
               icon: Icons.cloud_off_rounded,
               title: 'Unable to load tasks',
-              message: _text(snapshot.data?['message'], 'Check your connection and try again.'),
+              message: _text(
+                snapshot.data?['message'],
+                'Check your connection and try again.',
+              ),
               actionLabel: 'Retry',
               onAction: _refresh,
             );
@@ -67,58 +71,68 @@ class _AdminTasksScreenState extends State<AdminTasksScreen> {
           return RefreshIndicator(
             onRefresh: _refresh,
             child: adminPageList([
-            _Segment(
-              const ['All', 'In Progress', 'Completed'],
-              _selectedFilter,
-              c,
-              onSelected: (index) => setState(() => _selectedFilter = index),
-            ),
-            if (filtered.isEmpty)
-              _AdminTaskMessage(
-                icon: tasks.isEmpty ? Icons.task_alt_rounded : Icons.filter_alt_off_rounded,
-                title: tasks.isEmpty ? 'No tasks assigned yet' : 'No matching tasks',
-                message: tasks.isEmpty
-                    ? 'Tap the + button to create and assign the first task.'
-                    : 'Choose another status to view available tasks.',
+              _Segment(
+                const ['All', 'In Progress', 'Completed'],
+                _selectedFilter,
+                c,
+                onSelected: (index) => setState(() => _selectedFilter = index),
               ),
-            ...filtered.map((task) {
-              final title = _text(task['title'], 'Task');
-              final assignee = _text(task['assignee'], 'Unassigned');
-              final priority = _text(task['priority'], 'Medium');
-              final progress = _taskProgress(task['status']);
-              return AdminCard(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => AdminTaskDetailsScreen(
-                      title: title,
-                      assignee: assignee,
-                      priority: priority,
-                      progress: progress,
-                      dueDate: _text(task['due_date'], 'N/A'),
-                      description: _text(task['description'], 'No description'),
-                    ),
-                  ),
+              if (filtered.isEmpty)
+                _AdminTaskMessage(
+                  icon: tasks.isEmpty
+                      ? Icons.task_alt_rounded
+                      : Icons.filter_alt_off_rounded,
+                  title: tasks.isEmpty
+                      ? 'No tasks assigned yet'
+                      : 'No matching tasks',
+                  message: tasks.isEmpty
+                      ? 'Tap the + button to create and assign the first task.'
+                      : 'Choose another status to view available tasks.',
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          adminTitle(title, 14, c),
-                          const SizedBox(height: 4),
-                          adminMuted(assignee, 11, c),
-                          const SizedBox(height: 5),
-                          AdminBadge(priority, color: _priorityColor(priority, c)),
-                        ],
+              ...filtered.map((task) {
+                final title = _text(task['title'], 'Task');
+                final assignee = _text(task['assignee'], 'Unassigned');
+                final priority = _text(task['priority'], 'Medium');
+                final progress = _taskProgress(task['status']);
+                return AdminCard(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AdminTaskDetailsScreen(
+                        title: title,
+                        assignee: assignee,
+                        priority: priority,
+                        progress: progress,
+                        dueDate: _text(task['due_date'], 'N/A'),
+                        description: _text(
+                          task['description'],
+                          'No description',
+                        ),
                       ),
                     ),
-                    _RingLabel(progress, c.primary),
-                  ],
-                ),
-              );
-            }),
-          ]),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            adminTitle(title, 14, c),
+                            const SizedBox(height: 4),
+                            adminMuted(assignee, 11, c),
+                            const SizedBox(height: 5),
+                            AdminBadge(
+                              priority,
+                              color: _priorityColor(priority, c),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _RingLabel(progress, c.primary),
+                    ],
+                  ),
+                );
+              }),
+            ]),
           );
         },
       ),
@@ -153,7 +167,11 @@ class _AdminTaskMessage extends StatelessWidget {
             const SizedBox(height: 10),
             adminTitle(title, 14, c),
             const SizedBox(height: 6),
-            Text(message, textAlign: TextAlign.center, style: TextStyle(color: c.muted, fontSize: 12)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: c.muted, fontSize: 12),
+            ),
             if (actionLabel != null && onAction != null) ...[
               const SizedBox(height: 12),
               TextButton(onPressed: onAction, child: Text(actionLabel!)),
@@ -199,11 +217,15 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
         final employeeByLabel = <String, Map<String, dynamic>>{
           for (final employee in employees)
             if (_text(employee['name']).isNotEmpty)
-              '${_text(employee['name'])} (${_text(employee['employee_id'], _text(employee['user_id']))})': employee,
+              '${_text(employee['name'])} (${_text(employee['employee_id'], _text(employee['user_id']))})':
+                  employee,
         };
-        final assignees = employeeByLabel.isEmpty ? ['Unassigned'] : employeeByLabel.keys.toList();
-        final selectedAssignee =
-            assignees.contains(_assignee) ? _assignee : assignees.first;
+        final assignees = employeeByLabel.isEmpty
+            ? ['Unassigned']
+            : employeeByLabel.keys.toList();
+        final selectedAssignee = assignees.contains(_assignee)
+            ? _assignee
+            : assignees.first;
         if (_assignee != selectedAssignee) {
           _assignee = selectedAssignee;
           final employee = employeeByLabel[selectedAssignee];
@@ -219,48 +241,56 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
         return AdminShell(
           title: 'Create Task',
           child: adminPageList([
-        _TextFieldBlock('Task Title', _title, Icons.task_alt_rounded, c),
-        _TextFieldBlock(
-          'Description',
-          _description,
-          Icons.notes_rounded,
-          c,
-          maxLines: 3,
-        ),
-        _DropdownBlock(
-          label: 'Assign To',
-          value: selectedAssignee,
-          items: assignees,
-          icon: Icons.person_outline_rounded,
-          c: c,
-          onChanged: (v) {
-            final employee = employeeByLabel[v];
-            setState(() {
-              _assignee = v;
-              _assigneeId = _text(employee?['employee_id'], _text(employee?['user_id']));
-              _assigneeEmail = _text(employee?['email'], _text(employee?['employee_email']));
-            });
-          },
-        ),
-        _DropdownBlock(
-          label: 'Priority',
-          value: _priority,
-          items: const ['High', 'Medium', 'Low'],
-          icon: Icons.flag_outlined,
-          c: c,
-          onChanged: (v) => setState(() => _priority = v),
-        ),
-        _DateCard(
-          'Due Date',
-          _dueDate == null ? 'Select due date' : _dueDate!.toIso8601String().split('T').first,
-          c,
-          onTap: _selectDueDate,
-        ),
-        AdminPrimaryButton(
-          label: _saving ? 'Assigning...' : 'Assign Task',
-          icon: Icons.send_rounded,
-          onTap: _assignTask,
-        ),
+            _TextFieldBlock('Task Title', _title, Icons.task_alt_rounded, c),
+            _TextFieldBlock(
+              'Description',
+              _description,
+              Icons.notes_rounded,
+              c,
+              maxLines: 3,
+            ),
+            _DropdownBlock(
+              label: 'Assign To',
+              value: selectedAssignee,
+              items: assignees,
+              icon: Icons.person_outline_rounded,
+              c: c,
+              onChanged: (v) {
+                final employee = employeeByLabel[v];
+                setState(() {
+                  _assignee = v;
+                  _assigneeId = _text(
+                    employee?['employee_id'],
+                    _text(employee?['user_id']),
+                  );
+                  _assigneeEmail = _text(
+                    employee?['email'],
+                    _text(employee?['employee_email']),
+                  );
+                });
+              },
+            ),
+            _DropdownBlock(
+              label: 'Priority',
+              value: _priority,
+              items: const ['High', 'Medium', 'Low'],
+              icon: Icons.flag_outlined,
+              c: c,
+              onChanged: (v) => setState(() => _priority = v),
+            ),
+            _DateCard(
+              'Due Date',
+              _dueDate == null
+                  ? 'Select due date'
+                  : _dueDate!.toIso8601String().split('T').first,
+              c,
+              onTap: _selectDueDate,
+            ),
+            AdminPrimaryButton(
+              label: _saving ? 'Assigning...' : 'Assign Task',
+              icon: Icons.send_rounded,
+              onTap: _assignTask,
+            ),
           ]),
         );
       },
@@ -284,7 +314,9 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
     setState(() => _saving = false);
     if (response['success'] != true) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${response['message'] ?? 'Task creation failed.'}')),
+        SnackBar(
+          content: Text('${response['message'] ?? 'Task creation failed.'}'),
+        ),
       );
       return;
     }
@@ -305,7 +337,7 @@ class _AdminCreateTaskScreenState extends State<AdminCreateTaskScreen> {
 
   Future<void> _selectDueDate() async {
     final today = DateTime.now();
-    final selected = await showDatePicker(
+    final selected = await showSeparatedDatePicker(
       context: context,
       initialDate: _dueDate ?? today,
       firstDate: today,
@@ -401,21 +433,36 @@ class AdminAssetsScreen extends StatelessWidget {
         future: AdminService().fetchAssets(userId),
         builder: (context, snapshot) {
           final assets = _mapList(snapshot.data?['assets']);
-          final assigned = assets.where((a) => _text(a['status']).toLowerCase() == 'assigned').length;
+          final assigned = assets
+              .where((a) => _text(a['status']).toLowerCase() == 'assigned')
+              .length;
           final available = assets.length - assigned;
           return adminPageList([
             Row(
               children: [
-                Expanded(child: _CountCard('Total Assets', '${assets.length}', c.primary, c)),
+                Expanded(
+                  child: _CountCard(
+                    'Total Assets',
+                    '${assets.length}',
+                    c.primary,
+                    c,
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _CountCard('Assigned', '$assigned', c.green, c)),
+                Expanded(
+                  child: _CountCard('Assigned', '$assigned', c.green, c),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _CountCard('Available', '$available', c.orange, c)),
+                Expanded(
+                  child: _CountCard('Available', '$available', c.orange, c),
+                ),
               ],
             ),
             const AdminSearchBox(hint: 'Search assets...'),
             if (assets.isEmpty)
-              AdminCard(child: Center(child: adminMuted('No assets found', 12, c))),
+              AdminCard(
+                child: Center(child: adminMuted('No assets found', 12, c)),
+              ),
             ...assets.map((asset) {
               final status = _text(asset['status'], 'Available');
               return AdminListTile(
@@ -508,22 +555,26 @@ class AdminReportsScreen extends StatelessWidget {
           final reports = _mapList(snapshot.data?['reports']);
           return adminPageList([
             if (reports.isEmpty)
-              AdminCard(child: Center(child: adminMuted('No reports found', 12, c))),
-            ...reports.map((item) => AdminListTile(
-                  icon: _reportIcon(_text(item['title'])),
-                  titleText: _text(item['title'], 'Report'),
-                  subtitle: _text(item['subtitle'], 'Backend report'),
-                  color: c.primary,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => AdminReportDetailsScreen(
-                        title: _text(item['title'], 'Report'),
-                        value: _text(item['value'], '0'),
-                        subtitle: _text(item['subtitle']),
-                      ),
+              AdminCard(
+                child: Center(child: adminMuted('No reports found', 12, c)),
+              ),
+            ...reports.map(
+              (item) => AdminListTile(
+                icon: _reportIcon(_text(item['title'])),
+                titleText: _text(item['title'], 'Report'),
+                subtitle: _text(item['subtitle'], 'Backend report'),
+                color: c.primary,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminReportDetailsScreen(
+                      title: _text(item['title'], 'Report'),
+                      value: _text(item['value'], '0'),
+                      subtitle: _text(item['subtitle']),
                     ),
                   ),
-                )),
+                ),
+              ),
+            ),
           ]);
         },
       ),
@@ -568,7 +619,9 @@ class AdminReportDetailsScreen extends StatelessWidget {
         ),
         AdminCard(
           child: adminMuted(
-            subtitle.isEmpty ? 'This report is loaded from the backend.' : subtitle,
+            subtitle.isEmpty
+                ? 'This report is loaded from the backend.'
+                : subtitle,
             12,
             c,
           ),
@@ -604,17 +657,25 @@ class AdminNotificationsScreen extends StatelessWidget {
           final notifications = _mapList(snapshot.data?['notifications']);
           return adminPageList([
             if (notifications.isEmpty)
-              AdminCard(child: Center(child: adminMuted('No notifications found', 12, c))),
-            ...notifications.map((item) => AdminListTile(
-                  icon: _notificationIcon(_text(item['module'])),
-                  titleText: _text(item['title'], 'Notification'),
-                  subtitle: _text(item['subtitle'], _text(item['message'])),
-                  color: _notificationColor(_text(item['type']), c),
-                )),
+              AdminCard(
+                child: Center(
+                  child: adminMuted('No notifications found', 12, c),
+                ),
+              ),
+            ...notifications.map(
+              (item) => AdminListTile(
+                icon: _notificationIcon(_text(item['module'])),
+                titleText: _text(item['title'], 'Notification'),
+                subtitle: _text(item['subtitle'], _text(item['message'])),
+                color: _notificationColor(_text(item['type']), c),
+              ),
+            ),
             TextButton(
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Notifications refreshed from backend.')),
+                  const SnackBar(
+                    content: Text('Notifications refreshed from backend.'),
+                  ),
                 );
               },
               child: Text(
@@ -644,9 +705,11 @@ class AdminSettingsScreen extends StatelessWidget {
           titleText: 'Profile Settings',
           subtitle: 'Manage your profile',
           color: c.primary,
-          onTap: () => Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => AdminProfileScreen(userId: userId))),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AdminProfileScreen(userId: userId),
+            ),
+          ),
         ),
         AdminListTile(
           icon: Icons.security_rounded,
@@ -665,7 +728,9 @@ class AdminSettingsScreen extends StatelessWidget {
           subtitle: 'Manage notifications',
           color: c.orange,
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => AdminNotificationsScreen(userId: userId)),
+            MaterialPageRoute(
+              builder: (_) => AdminNotificationsScreen(userId: userId),
+            ),
           ),
         ),
         AdminListTile(
@@ -746,7 +811,10 @@ class AdminProfileScreen extends StatelessWidget {
                 children: [
                   AdminInfoRow('Mobile', _text(profile['phone'], 'N/A')),
                   Divider(color: c.border),
-                  AdminInfoRow('Department', _text(profile['department'], 'N/A')),
+                  AdminInfoRow(
+                    'Department',
+                    _text(profile['department'], 'N/A'),
+                  ),
                   Divider(color: c.border),
                   AdminInfoRow('Role', _text(profile['role'], 'Admin')),
                   Divider(color: c.border),
@@ -1154,7 +1222,10 @@ Map<String, dynamic> _map(dynamic value) =>
     value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
 
 List<Map<String, dynamic>> _mapList(dynamic value) => value is List
-    ? value.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+    ? value
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList()
     : <Map<String, dynamic>>[];
 
 String _text(dynamic value, [String fallback = '']) {

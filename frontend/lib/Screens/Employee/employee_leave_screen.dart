@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:image_picker/image_picker.dart';
@@ -35,11 +36,7 @@ class EmployeeLeaveScreen extends StatefulWidget {
 
 class _EmployeeLeaveScreenState extends State<EmployeeLeaveScreen> {
   static const List<_LeaveTypeOption> _leaveTypes = [
-    _LeaveTypeOption(
-      'Sick Leave',
-      '8 days per annum',
-      Icons.healing_rounded,
-    ),
+    _LeaveTypeOption('Sick Leave', '8 days per annum', Icons.healing_rounded),
     _LeaveTypeOption(
       'Casual Leave',
       '4 days per annum',
@@ -555,7 +552,7 @@ class _LeaveDetailsPageState extends State<_LeaveDetailsPage> {
 
   Future<void> _pickDate({required bool from}) async {
     final initial = from ? _fromDate : _toDate;
-    final picked = await showDatePicker(
+    final picked = await showSeparatedDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime.now().subtract(const Duration(days: 30)),
@@ -864,7 +861,10 @@ class _ReviewLeavePageState extends State<_ReviewLeavePage> {
                 EmployeeInfoRow('From Date', _displayDate(widget.fromDate)),
                 EmployeeInfoRow('To Date', _displayDate(widget.toDate)),
                 EmployeeInfoRow('Number of Days', _dayCountText(days)),
-                EmployeeInfoRow('Paid Leave', _dayCountText(calculation.paidDays)),
+                EmployeeInfoRow(
+                  'Paid Leave',
+                  _dayCountText(calculation.paidDays),
+                ),
                 if (calculation.lopDays > 0)
                   EmployeeInfoRow('LOP', _dayCountText(calculation.lopDays)),
                 EmployeeInfoRow('Session', widget.session),
@@ -1007,7 +1007,11 @@ class _MyLeavesPage extends StatefulWidget {
 class _MyLeavesPageState extends State<_MyLeavesPage> {
   String _filter = 'All';
   DateTime _focusedMonth = DateTime(DateTime.now().year, DateTime.now().month);
-  DateTime? _selectedDay = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+  DateTime? _selectedDay = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
 
   // Build a map: "yyyy-MM-dd" -> list of leave records that cover that day
   Map<String, List<Map<String, dynamic>>> get _leavesByDay {
@@ -1032,12 +1036,12 @@ class _MyLeavesPageState extends State<_MyLeavesPage> {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   void _prevMonth() => setState(() {
-        _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
-      });
+    _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
+  });
 
   void _nextMonth() => setState(() {
-        _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
-      });
+    _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1052,7 +1056,9 @@ class _MyLeavesPageState extends State<_MyLeavesPage> {
             return overall == f || display.contains(f);
           }).toList();
 
-    final selectedLeaves = _selectedDay != null ? _leavesForDay(_selectedDay!) : <Map<String, dynamic>>[];
+    final selectedLeaves = _selectedDay != null
+        ? _leavesForDay(_selectedDay!)
+        : <Map<String, dynamic>>[];
 
     return _LeavePageShell(
       title: 'My Leaves',
@@ -1066,13 +1072,15 @@ class _MyLeavesPageState extends State<_MyLeavesPage> {
           // ── Filter chips ──────────────────────────────────
           Row(
             children: ['All', 'Pending', 'Approved', 'Rejected']
-                .map((item) => Expanded(
-                      child: _FilterChip(
-                        label: item,
-                        selected: _filter == item,
-                        onTap: () => setState(() => _filter = item),
-                      ),
-                    ))
+                .map(
+                  (item) => Expanded(
+                    child: _FilterChip(
+                      label: item,
+                      selected: _filter == item,
+                      onTap: () => setState(() => _filter = item),
+                    ),
+                  ),
+                )
                 .toList(),
           ),
           const SizedBox(height: 16),
@@ -1088,10 +1096,7 @@ class _MyLeavesPageState extends State<_MyLeavesPage> {
             ),
             const SizedBox(height: 16),
             if (_selectedDay != null) ...[
-              _DayDetailSection(
-                day: _selectedDay!,
-                leaves: selectedLeaves,
-              ),
+              _DayDetailSection(day: _selectedDay!, leaves: selectedLeaves),
               const SizedBox(height: 16),
             ],
           ],
@@ -1130,8 +1135,18 @@ class _LeaveCalendar extends StatelessWidget {
 
   static const _weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   static const _months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   String _isoDay(DateTime d) =>
@@ -1156,7 +1171,10 @@ class _LeaveCalendar extends StatelessWidget {
 
     // Days in month + leading offset
     final firstDay = DateTime(focusedMonth.year, focusedMonth.month, 1);
-    final daysInMonth = DateUtils.getDaysInMonth(focusedMonth.year, focusedMonth.month);
+    final daysInMonth = DateUtils.getDaysInMonth(
+      focusedMonth.year,
+      focusedMonth.month,
+    );
     final leadingBlanks = firstDay.weekday % 7; // Sun=0
 
     return Container(
@@ -1200,17 +1218,19 @@ class _LeaveCalendar extends StatelessWidget {
           // Week day headers
           Row(
             children: _weekLabels
-                .map((d) => Expanded(
-                      child: Text(
-                        d,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: textSecondary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
+                .map(
+                  (d) => Expanded(
+                    child: Text(
+                      d,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                       ),
-                    ))
+                    ),
+                  ),
+                )
                 .toList(),
           ),
           const SizedBox(height: 6),
@@ -1227,14 +1247,20 @@ class _LeaveCalendar extends StatelessWidget {
             itemCount: leadingBlanks + daysInMonth,
             itemBuilder: (context, index) {
               if (index < leadingBlanks) return const SizedBox.shrink();
-              final day = DateTime(focusedMonth.year, focusedMonth.month, index - leadingBlanks + 1);
+              final day = DateTime(
+                focusedMonth.year,
+                focusedMonth.month,
+                index - leadingBlanks + 1,
+              );
               final key = _isoDay(day);
               final dayLeaves = leavesByDay[key] ?? [];
-              final isSelected = selectedDay != null &&
+              final isSelected =
+                  selectedDay != null &&
                   selectedDay!.year == day.year &&
                   selectedDay!.month == day.month &&
                   selectedDay!.day == day.day;
-              final isToday = today.year == day.year &&
+              final isToday =
+                  today.year == day.year &&
                   today.month == day.month &&
                   today.day == day.day;
               final hasLeave = dayLeaves.isNotEmpty;
@@ -1252,7 +1278,11 @@ class _LeaveCalendar extends StatelessWidget {
                             end: Alignment.bottomRight,
                           )
                         : null,
-                    color: isSelected ? null : (isToday ? const Color(0xFF4FACFE).withAlpha(30) : null),
+                    color: isSelected
+                        ? null
+                        : (isToday
+                              ? const Color(0xFF4FACFE).withAlpha(30)
+                              : null),
                     border: isToday && !isSelected
                         ? Border.all(color: const Color(0xFF4FACFE), width: 1)
                         : null,
@@ -1266,10 +1296,12 @@ class _LeaveCalendar extends StatelessWidget {
                           color: isSelected
                               ? Colors.white
                               : isToday
-                                  ? const Color(0xFF4FACFE)
-                                  : textPrimary,
+                              ? const Color(0xFF4FACFE)
+                              : textPrimary,
                           fontSize: 13,
-                          fontWeight: isSelected || isToday ? FontWeight.w900 : FontWeight.w600,
+                          fontWeight: isSelected || isToday
+                              ? FontWeight.w900
+                              : FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -1347,8 +1379,18 @@ class _DayDetailSection extends StatelessWidget {
   const _DayDetailSection({required this.day, required this.leaves});
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
@@ -1374,7 +1416,11 @@ class _DayDetailSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.today_rounded, size: 16, color: Color(0xFF4FACFE)),
+              const Icon(
+                Icons.today_rounded,
+                size: 16,
+                color: Color(0xFF4FACFE),
+              ),
               const SizedBox(width: 6),
               Text(
                 label,
@@ -1390,7 +1436,11 @@ class _DayDetailSection extends StatelessWidget {
           if (leaves.isEmpty)
             Row(
               children: [
-                const Icon(Icons.check_circle_outline_rounded, size: 16, color: Color(0xFF00D46A)),
+                const Icon(
+                  Icons.check_circle_outline_rounded,
+                  size: 16,
+                  color: Color(0xFF00D46A),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'No leave on this day',
@@ -1412,7 +1462,10 @@ class _DayDetailSection extends StatelessWidget {
               final days = '${r['days'] ?? 1}';
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: statusColor.withAlpha(20),
                   borderRadius: BorderRadius.circular(10),
@@ -1427,7 +1480,11 @@ class _DayDetailSection extends StatelessWidget {
                         color: statusColor.withAlpha(40),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(Icons.beach_access_rounded, color: statusColor, size: 18),
+                      child: Icon(
+                        Icons.beach_access_rounded,
+                        color: statusColor,
+                        size: 18,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -1455,7 +1512,10 @@ class _DayDetailSection extends StatelessWidget {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: statusColor.withAlpha(35),
                         borderRadius: BorderRadius.circular(8),
@@ -1819,13 +1879,17 @@ class _LeaveHeroCard extends StatelessWidget {
                     ? LinearProgressIndicator(
                         minHeight: 8,
                         backgroundColor: Colors.white.withAlpha(30),
-                        valueColor: const AlwaysStoppedAnimation(Color(0xFF4FACFE)),
+                        valueColor: const AlwaysStoppedAnimation(
+                          Color(0xFF4FACFE),
+                        ),
                       )
                     : LinearProgressIndicator(
                         minHeight: 8,
                         value: progress,
                         backgroundColor: Colors.white.withAlpha(30),
-                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF4FACFE)),
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          Color(0xFF4FACFE),
+                        ),
                       ),
               ),
               const SizedBox(height: 10),
@@ -2050,9 +2114,7 @@ class _LeaveTypeSummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          ...overview.types.map(
-            (item) => _LeaveTypeSummaryRow(item: item),
-          ),
+          ...overview.types.map((item) => _LeaveTypeSummaryRow(item: item)),
         ],
       ),
     );
@@ -2075,7 +2137,11 @@ class _ColHeader extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.center,
-        style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w800),
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -2309,9 +2375,21 @@ class _LeaveTypeSummaryRow extends StatelessWidget {
               ],
             ),
           ),
-          _SummaryValue(_formatOneDecimal(item.entitlement), textPrimary, width: 58),
-          _SummaryValue(_formatOneDecimal(item.used), EmployeeColors.gold, width: 46),
-          _SummaryValue(_formatOneDecimal(item.available), EmployeeColors.green, width: 58),
+          _SummaryValue(
+            _formatOneDecimal(item.entitlement),
+            textPrimary,
+            width: 58,
+          ),
+          _SummaryValue(
+            _formatOneDecimal(item.used),
+            EmployeeColors.gold,
+            width: 46,
+          ),
+          _SummaryValue(
+            _formatOneDecimal(item.available),
+            EmployeeColors.green,
+            width: 58,
+          ),
         ],
       ),
     );
@@ -2672,7 +2750,10 @@ class _LeaveBalanceOverview {
     if (source.isNotEmpty && rawTypes is List) {
       final types = rawTypes
           .whereType<Map>()
-          .map((item) => _LeaveTypeBalance.fromMap(Map<String, dynamic>.from(item)))
+          .map(
+            (item) =>
+                _LeaveTypeBalance.fromMap(Map<String, dynamic>.from(item)),
+          )
           .toList();
       return _LeaveBalanceOverview(
         fiscalYear: '${source['fiscal_year'] ?? _currentFiscalYear()}',
@@ -2686,8 +2767,7 @@ class _LeaveBalanceOverview {
         nextAccrualDate:
             _parseIsoDate('${source['next_accrual_date'] ?? ''}') ??
             _nextAccrualDate(DateTime.now()),
-        accrualFrequency:
-            '${source['accrual_frequency'] ?? ''}',
+        accrualFrequency: '${source['accrual_frequency'] ?? ''}',
         types: types,
       );
     }
@@ -2870,8 +2950,10 @@ IconData _leaveTypeIcon(String title, String backendIcon) {
   if (key.contains('health') || key == 'sickleave') {
     return Icons.health_and_safety_rounded;
   }
-  if (key.contains('umbrella') || key == 'casualleave') return Icons.beach_access_rounded;
-  if (key.contains('event') || key == 'compoff') return Icons.event_available_rounded;
+  if (key.contains('umbrella') || key == 'casualleave')
+    return Icons.beach_access_rounded;
+  if (key.contains('event') || key == 'compoff')
+    return Icons.event_available_rounded;
   return Icons.beach_access_rounded;
 }
 
@@ -2968,15 +3050,16 @@ bool _countsTowardBalance(
 ) {
   final type = '${record['leave_type'] ?? record['type'] ?? ''}';
   if (_normalizeLeaveType(type) != _normalizeLeaveType(leaveType)) return false;
-  final status = '${record['overall_status'] ?? record['status'] ?? ''}'.toLowerCase();
+  final status = '${record['overall_status'] ?? record['status'] ?? ''}'
+      .toLowerCase();
   if (status.contains('reject')) return false;
   final fromDate = _parseIsoDate('${record['from_date'] ?? ''}');
   return fromDate != null && fromDate.year == year;
 }
 
 bool _isPendingLeave(Map<String, dynamic> record) {
-  final status =
-      '${record['overall_status'] ?? record['status'] ?? ''}'.toLowerCase();
+  final status = '${record['overall_status'] ?? record['status'] ?? ''}'
+      .toLowerCase();
   final tlStatus = '${record['tl_status'] ?? ''}'.toLowerCase();
   final hrStatus = '${record['hr_status'] ?? ''}'.toLowerCase();
   return status.contains('pending') ||
@@ -2986,7 +3069,9 @@ bool _isPendingLeave(Map<String, dynamic> record) {
 
 String _normalizeLeaveType(String value) {
   final normalized = value.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
-  if (normalized == 'al' || normalized.contains('annual') || normalized.contains('earned')) {
+  if (normalized == 'al' ||
+      normalized.contains('annual') ||
+      normalized.contains('earned')) {
     return 'annualleave';
   }
   if (normalized == 'cl' || normalized.contains('casual')) return 'casualleave';
@@ -3040,7 +3125,10 @@ int? _monthNumber(String value) {
     'nov': 11,
     'dec': 12,
   };
-  return months[value.toLowerCase().substring(0, value.length < 3 ? value.length : 3)];
+  return months[value.toLowerCase().substring(
+    0,
+    value.length < 3 ? value.length : 3,
+  )];
 }
 
 String _formatLeaveDays(double days) {

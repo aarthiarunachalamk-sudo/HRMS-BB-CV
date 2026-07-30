@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -356,10 +357,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         : _validateRegistrationPage(_logicalPageForIndex(_currentPage));
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error),
-          backgroundColor: Colors.redAccent,
-        ),
+        SnackBar(content: Text(error), backgroundColor: Colors.redAccent),
       );
       return;
     }
@@ -446,8 +444,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!RegExp(r'^\d{12}$').hasMatch(value(_aadharCtrl))) {
         return 'Aadhaar number must contain exactly 12 digits.';
       }
-      if (!RegExp(r'^[A-Z]{5}[0-9]{4}[A-Z]$')
-          .hasMatch(value(_panCtrl).toUpperCase())) {
+      if (!RegExp(
+        r'^[A-Z]{5}[0-9]{4}[A-Z]$',
+      ).hasMatch(value(_panCtrl).toUpperCase())) {
         return 'Enter a valid PAN number, for example ABCDE1234F.';
       }
       final passport = value(_passportCtrl).toUpperCase();
@@ -569,7 +568,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _pickDate(TextEditingController ctrl) async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final picked = await showSeparatedDatePicker(
       context: context,
       initialDate: DateTime(now.year - 22),
       firstDate: DateTime(1950),

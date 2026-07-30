@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -1840,7 +1841,7 @@ class _StepPersonalState extends State<_StepPersonal> {
         initial = DateTime.parse(widget.dob.text.trim());
       } catch (_) {}
     }
-    final picked = await showDatePicker(
+    final picked = await showSeparatedDatePicker(
       context: context,
       initialDate: initial,
       initialEntryMode: DatePickerEntryMode.calendarOnly,
