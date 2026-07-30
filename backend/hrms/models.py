@@ -535,6 +535,7 @@ class EmployeeLeaveRequest(models.Model):
     approved_by = models.CharField(max_length=100, blank=True)
     tl_approved_by = models.CharField(max_length=100, blank=True)
     hr_approved_by = models.CharField(max_length=100, blank=True)
+    approver_comments = models.TextField(blank=True)
     tl_reviewed_at = models.DateTimeField(null=True, blank=True)
     hr_reviewed_at = models.DateTimeField(null=True, blank=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)

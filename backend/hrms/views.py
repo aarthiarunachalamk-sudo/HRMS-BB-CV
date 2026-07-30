@@ -2677,6 +2677,7 @@ def _leave_dashboard_item(leave):
         'tl_reviewed_at': leave.tl_reviewed_at.isoformat() if leave.tl_reviewed_at else '',
         'hr_approved_by': leave.hr_approved_by,
         'hr_reviewed_at': leave.hr_reviewed_at.isoformat() if leave.hr_reviewed_at else '',
+        'approver_comments': leave.approver_comments,
         'leave_balance': round(balance_before, 2),
         'after_request_balance': round(balance_after, 2),
     }
@@ -5395,6 +5396,12 @@ def ceo_approval_decision_view(request, pk):
         return Response({'success': False, 'message': 'Leave request not found.'}, status=404)
 
     reviewer = str(request.data.get('reviewed_by') or request.data.get('user_id') or '').strip()
+    approver_comments = str(request.data.get('approver_comments') or '').strip()
+    if not approver_comments:
+        return Response(
+            {'success': False, 'message': 'Approver comments are required.'},
+            status=400,
+        )
     if not User.objects.filter(user_id=reviewer, role='ceo', is_active=True).exists():
         return Response(
             {'success': False, 'message': 'Only an active CEO can decide this leave request.'},
@@ -5406,6 +5413,7 @@ def ceo_approval_decision_view(request, pk):
     leave.hr_approved_by = reviewer
     leave.hr_reviewed_at = now
     leave.approved_by = reviewer
+    leave.approver_comments = approver_comments
     leave.reviewed_at = now
     _notify_leave_employee(
         leave,

@@ -22,6 +22,7 @@ class _CeoLeaveRequestScreenState extends State<CeoLeaveRequestScreen> {
   late Future<Map<String, dynamic>> _future;
   bool _saving = false;
   Map<String, dynamic> _leave = {};
+  final TextEditingController _commentsController = TextEditingController();
 
   @override
   void initState() {
@@ -37,11 +38,25 @@ class _CeoLeaveRequestScreenState extends State<CeoLeaveRequestScreen> {
         ? Map<String, dynamic>.from(data['leave'] as Map)
         : <String, dynamic>{};
     _leave = leave;
+    _commentsController.text = '${leave['approver_comments'] ?? ''}';
     return leave;
+  }
+
+  @override
+  void dispose() {
+    _commentsController.dispose();
+    super.dispose();
   }
 
   Future<void> _update(String status) async {
     if (_saving) return;
+    final comments = _commentsController.text.trim();
+    if (comments.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter approver comments.')),
+      );
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -72,6 +87,7 @@ class _CeoLeaveRequestScreenState extends State<CeoLeaveRequestScreen> {
         widget.approvalId,
         status,
         widget.userId.isEmpty ? 'CEO' : widget.userId,
+        comments,
       );
       if (!mounted) return;
       if (result.isEmpty || result['success'] == false) {
@@ -208,6 +224,31 @@ class _CeoLeaveRequestScreenState extends State<CeoLeaveRequestScreen> {
                 ],
               ),
             ),
+            if (pending)
+              CeoCard(
+                child: TextField(
+                  controller: _commentsController,
+                  enabled: !_saving,
+                  minLines: 3,
+                  maxLines: 5,
+                  maxLength: 500,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: TextStyle(color: ThemeConfig.getTextPrimary(context)),
+                  decoration: const InputDecoration(
+                    labelText: 'Approver Comments *',
+                    hintText: 'Enter comments for this leave request',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              )
+            else if (_text(leave, 'approver_comments').isNotEmpty)
+              CeoCard(
+                child: _InfoRow(
+                  'Approver Comments',
+                  _text(leave, 'approver_comments'),
+                ),
+              ),
             if (_saving)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),

@@ -195,10 +195,12 @@ class CeoService {
     String leaveId,
     String status,
     String reviewedBy,
+    String approverComments,
   ) => _post('/approvals/$leaveId/', {
     'status': status,
     'user_id': reviewedBy,
     'reviewed_by': reviewedBy,
+    'approver_comments': approverComments,
   });
 
   // ── Employees ─────────────────────────────────────────────

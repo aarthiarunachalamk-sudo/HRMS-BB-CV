@@ -468,19 +468,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         const BitByteLogo(size: 86, showSubtitle: false),
                         const SizedBox(height: 24),
                         Text(
-                          'Welcome To Bit Byte Technologies',
+                          'Welcome to\nBit Byte Technologies',
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
                             color: textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Sign in to continue to BitByte HRMS',
-                          style: TextStyle(color: textSecondary, fontSize: 13),
-                        ),
-                        const SizedBox(height: 30),
+                        const SizedBox(height: 24),
                         BoomInWidget(
                           duration: const Duration(milliseconds: 850),
                           child: Container(
