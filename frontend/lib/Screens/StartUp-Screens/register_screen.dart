@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/india_locations.dart';
+import 'package:hrms_mobileapp_bitbyte/utils/nationalities.dart';
 import 'theme_config.dart';
 import 'constellation_background.dart';
 import 'login_screen.dart';
@@ -113,13 +114,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   final List<String> _bloodGroups = [
     'A+',
-    'A-',
+    'A−',
+    'A1+',
+    'A1−',
+    'A2+',
+    'A2−',
     'B+',
-    'B-',
-    'O+',
-    'O-',
+    'B−',
     'AB+',
-    'AB-',
+    'AB−',
+    'A1B+',
+    'A1B−',
+    'A2B+',
+    'A2B−',
+    'O+',
+    'O−',
+    'Bombay phenotype (Oh/hh)',
+    'Para-Bombay phenotype',
+    'Unknown',
   ];
 
   final List<String> _bankNames = [
@@ -1384,14 +1396,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               showScrollbar: true,
             ),
             const SizedBox(height: 14),
-            _field(
-              'Nationality *',
-              _nationalityCtrl,
-              isDark,
-              tp,
-              ts,
-              cardBorder,
-            ),
+            _nationalityField(isDark, tp, ts, cardBorder),
           ]),
           const SizedBox(height: 20),
         ],
@@ -2110,6 +2115,86 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ? (v) => v == null || v.trim().isEmpty ? 'Required' : null
               : null,
           decoration: _inputDec(label, isDark, cb),
+        ),
+      ],
+    );
+  }
+
+  Widget _nationalityField(bool isDark, Color tp, Color ts, Color cb) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Nationality *',
+          style: TextStyle(
+            color: ts,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Autocomplete<String>(
+          initialValue: TextEditingValue(text: _nationalityCtrl.text),
+          displayStringForOption: (option) => option,
+          optionsBuilder: (value) {
+            final query = value.text.trim().toLowerCase();
+            if (query.isEmpty) return nationalityOptions.take(12);
+            return nationalityOptions
+                .where((option) => option.toLowerCase().contains(query))
+                .take(12);
+          },
+          onSelected: (option) => _nationalityCtrl.text = option,
+          fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+            return TextFormField(
+              controller: controller,
+              focusNode: focusNode,
+              style: TextStyle(color: tp, fontSize: 13),
+              onChanged: (value) => _nationalityCtrl.text = value,
+              validator: (value) {
+                final nationality = (value ?? '').trim();
+                if (nationality.isEmpty) return 'Required';
+                if (!nationalityOptions.contains(nationality)) {
+                  return 'Select a nationality from the list';
+                }
+                return null;
+              },
+              decoration: _inputDec(
+                'Search nationality',
+                isDark,
+                cb,
+              ).copyWith(suffixIcon: Icon(Icons.arrow_drop_down, color: ts)),
+            );
+          },
+          optionsViewBuilder: (context, onSelected, options) {
+            final values = options.toList();
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 8,
+                color: isDark ? const Color(0xFF0A1728) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: 260,
+                    maxWidth: 580,
+                  ),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    shrinkWrap: true,
+                    itemCount: values.length,
+                    itemBuilder: (context, index) => ListTile(
+                      dense: true,
+                      title: Text(
+                        values[index],
+                        style: TextStyle(color: tp, fontSize: 13),
+                      ),
+                      onTap: () => onSelected(values[index]),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ],
     );

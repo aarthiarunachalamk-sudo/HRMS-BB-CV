@@ -152,8 +152,14 @@ class EmployeeRegistration(models.Model):
     GENDER_CHOICES = [('male', 'Male'), ('female', 'Female'), ('other', 'Other')]
     MARITAL_CHOICES = [('single', 'Single'), ('married', 'Married'), ('other', 'Other')]
     BLOOD_CHOICES = [
-        ('A+', 'A+'), ('A-', 'A-'), ('B+', 'B+'), ('B-', 'B-'),
-        ('O+', 'O+'), ('O-', 'O-'), ('AB+', 'AB+'), ('AB-', 'AB-'),
+        ('A+', 'A+'), ('A−', 'A−'), ('A1+', 'A1+'), ('A1−', 'A1−'),
+        ('A2+', 'A2+'), ('A2−', 'A2−'), ('B+', 'B+'), ('B−', 'B−'),
+        ('AB+', 'AB+'), ('AB−', 'AB−'), ('A1B+', 'A1B+'),
+        ('A1B−', 'A1B−'), ('A2B+', 'A2B+'), ('A2B−', 'A2B−'),
+        ('O+', 'O+'), ('O−', 'O−'),
+        ('Bombay phenotype (Oh/hh)', 'Bombay phenotype (Oh/hh)'),
+        ('Para-Bombay phenotype', 'Para-Bombay phenotype'),
+        ('Unknown', 'Unknown'),
     ]
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -171,7 +177,7 @@ class EmployeeRegistration(models.Model):
     personal_email = models.EmailField()
     marital_status = models.CharField(max_length=20, choices=MARITAL_CHOICES)
     marital_other = models.CharField(max_length=50, blank=True)
-    blood_group = models.CharField(max_length=5, choices=BLOOD_CHOICES)
+    blood_group = models.CharField(max_length=30, choices=BLOOD_CHOICES)
     nationality = models.CharField(max_length=50)
 
     # Address
