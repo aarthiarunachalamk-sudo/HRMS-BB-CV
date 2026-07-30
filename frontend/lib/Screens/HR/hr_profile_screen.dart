@@ -4,7 +4,7 @@ import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 import 'hr_service.dart';
 import 'hr_shared.dart';
 
-class HrProfileScreen extends StatelessWidget {
+class HrProfileScreen extends StatefulWidget {
   final String userId;
   final String email;
   final String name;
@@ -19,6 +19,44 @@ class HrProfileScreen extends StatelessWidget {
   });
 
   @override
+  State<HrProfileScreen> createState() => _HrProfileScreenState();
+}
+
+class _HrProfileScreenState extends State<HrProfileScreen> {
+  late Future<Map<String, dynamic>> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = HrService().fetchUserProfile(widget.userId);
+  }
+
+  Widget _profileAvatar(HrPalette colors) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _profileFuture,
+      builder: (context, snapshot) {
+        final rawProfile = snapshot.data?['profile'];
+        final profile = rawProfile is Map
+            ? Map<String, dynamic>.from(rawProfile)
+            : <String, dynamic>{};
+        final photoUrl = '${profile['profile_photo_url'] ?? ''}'.trim();
+
+        return CircleAvatar(
+          radius: 34,
+          backgroundColor: colors.primary.withAlpha(30),
+          foregroundImage: photoUrl.isEmpty ? null : NetworkImage(photoUrl),
+          onForegroundImageError: photoUrl.isEmpty ? null : (_, __) {},
+          child: Icon(
+            Icons.person_rounded,
+            color: colors.primary,
+            size: 34,
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
     return ListView(
@@ -27,14 +65,10 @@ class HrProfileScreen extends StatelessWidget {
         HrCard(
           child: Column(
             children: [
-              CircleAvatar(
-                radius: 34,
-                backgroundColor: c.primary.withAlpha(30),
-                child: Icon(Icons.person_rounded, color: c.primary, size: 34),
-              ),
+              _profileAvatar(c),
               const SizedBox(height: 10),
               Text(
-                name.trim().isEmpty ? 'HR Manager' : name,
+                widget.name.trim().isEmpty ? 'HR Manager' : widget.name,
                 style: TextStyle(
                   color: c.text,
                   fontSize: 16,
@@ -42,7 +76,7 @@ class HrProfileScreen extends StatelessWidget {
                 ),
               ),
               Text(
-                email,
+                widget.email,
                 style: TextStyle(
                   color: c.muted,
                   fontSize: 11,
@@ -58,7 +92,7 @@ class HrProfileScreen extends StatelessWidget {
           title: 'Personal Information',
           subtitle: 'Profile and contact details',
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => _HrPersonalInformationScreen(userId: userId)),
+            MaterialPageRoute(builder: (_) => _HrPersonalInformationScreen(userId: widget.userId)),
           ),
         ),
         const SizedBox(height: 10),
@@ -68,7 +102,7 @@ class HrProfileScreen extends StatelessWidget {
           subtitle: 'Security settings',
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => ChangePasswordScreen(employeeId: userId, otc: ''),
+              builder: (_) => ChangePasswordScreen(employeeId: widget.userId, otc: ''),
             ),
           ),
         ),
@@ -78,7 +112,7 @@ class HrProfileScreen extends StatelessWidget {
           title: 'Notification Settings',
           subtitle: 'Alerts and reminders',
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => _HrNotificationSettingsScreen(userId: userId)),
+            MaterialPageRoute(builder: (_) => _HrNotificationSettingsScreen(userId: widget.userId)),
           ),
         ),
         const SizedBox(height: 10),
@@ -87,7 +121,7 @@ class HrProfileScreen extends StatelessWidget {
           title: 'Logout',
           subtitle: 'End current session',
           color: c.danger,
-          onTap: onLogout,
+          onTap: widget.onLogout,
         ),
         const SizedBox(height: 8),
         ElevatedButton(
@@ -95,7 +129,7 @@ class HrProfileScreen extends StatelessWidget {
             backgroundColor: c.danger,
             foregroundColor: Colors.white,
           ),
-          onPressed: onLogout,
+          onPressed: widget.onLogout,
           child: const Text('Logout'),
         ),
       ],

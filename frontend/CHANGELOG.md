@@ -2,6 +2,13 @@
 
 All notable changes to BBT HRMS are recorded here. Versions follow Semantic Versioning (`MAJOR.MINOR.PATCH`) and Flutter build numbers increase with every distributable build.
 
+## [1.2.1+6] - 2026-07-30
+
+### Fixed
+
+- Display the mandatory uploaded profile photo in the HR Profile screen instead of always showing the placeholder icon.
+- Keep a safe placeholder when the stored profile image is unavailable or cannot be loaded.
+
 ## [1.2.0+5] - 2026-07-30
 
 ### Changed
