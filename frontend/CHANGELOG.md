@@ -2,6 +2,13 @@
 
 All notable changes to BBT HRMS are recorded here. Versions follow Semantic Versioning (`MAJOR.MINOR.PATCH`) and Flutter build numbers increase with every distributable build.
 
+## [1.1.1+3] - 2026-07-30
+
+### Fixed
+
+- Fixed valid display-picture uploads being rejected when Android supplied an incorrect or missing MIME type.
+- Added content-based JPG, PNG, and WebP validation and explicit Flutter multipart image types.
+
 ## [1.1.0+2] - 2026-07-30
 
 ### Changed

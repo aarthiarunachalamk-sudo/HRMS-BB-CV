@@ -43,6 +43,7 @@ import json
 import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from PIL import Image, UnidentifiedImageError
 
 @api_view(['POST'])
 def login_view(request):
@@ -114,10 +115,19 @@ def profile_photo_upload_view(request):
         return Response({'success': False, 'message': 'User ID is required.'}, status=400)
     if upload is None:
         return Response({'success': False, 'message': 'Display picture is required.'}, status=400)
-    if not str(getattr(upload, 'content_type', '')).lower().startswith('image/'):
-        return Response({'success': False, 'message': 'Display picture must be an image.'}, status=400)
     if upload.size > 5 * 1024 * 1024:
         return Response({'success': False, 'message': 'Display picture must be 5 MB or smaller.'}, status=400)
+    try:
+        image = Image.open(upload)
+        image.verify()
+        if image.format not in {'JPEG', 'PNG', 'WEBP'}:
+            raise UnidentifiedImageError
+        upload.seek(0)
+    except (UnidentifiedImageError, OSError, ValueError):
+        return Response(
+            {'success': False, 'message': 'Select a valid JPG, PNG, or WebP image.'},
+            status=400,
+        )
     user = User.objects.filter(user_id=user_id, is_active=True).first()
     if user is None:
         return Response({'success': False, 'message': 'Active user was not found.'}, status=404)

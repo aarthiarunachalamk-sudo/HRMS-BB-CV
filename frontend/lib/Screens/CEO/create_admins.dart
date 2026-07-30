@@ -5,6 +5,7 @@ import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/india_locations.dart';
@@ -440,6 +441,14 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
         await http.MultipartFile.fromPath(
           'profile_photo',
           _profilePhoto!.path,
+          contentType: MediaType(
+            'image',
+            _profilePhoto!.path.toLowerCase().endsWith('.png')
+                ? 'png'
+                : _profilePhoto!.path.toLowerCase().endsWith('.webp')
+                ? 'webp'
+                : 'jpeg',
+          ),
         ),
       );
       final streamed = await request.send();

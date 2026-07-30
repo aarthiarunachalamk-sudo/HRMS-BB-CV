@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 
 class MandatoryProfilePhotoGate extends StatefulWidget {
@@ -47,10 +48,20 @@ class _MandatoryProfilePhotoGateState extends State<MandatoryProfilePhotoGate> {
       _error = null;
     });
     try {
+      final extension = _photo!.path.split('.').last.toLowerCase();
+      final subtype = extension == 'png'
+          ? 'png'
+          : extension == 'webp'
+          ? 'webp'
+          : 'jpeg';
       final request = http.MultipartRequest('POST', ApiConfig.uri('/profile/photo/'))
         ..fields['user_id'] = widget.userId
         ..files.add(
-          await http.MultipartFile.fromPath('profile_photo', _photo!.path),
+          await http.MultipartFile.fromPath(
+            'profile_photo',
+            _photo!.path,
+            contentType: MediaType('image', subtype),
+          ),
         );
       final response = await http.Response.fromStream(await request.send());
       final decoded = jsonDecode(response.body);
