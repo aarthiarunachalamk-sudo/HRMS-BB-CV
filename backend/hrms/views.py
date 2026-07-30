@@ -1011,12 +1011,23 @@ def _passport_photo_for_email(email):
             return str(user.profile_photo)
     registration = EmployeeRegistration.objects.filter(personal_email__iexact=email).order_by('-submitted_at').first()
     if not registration:
+        account = (
+            EmployeeAccount.objects.filter(employee_email__iexact=email)
+            .select_related('registration')
+            .first()
+        )
+        registration = account.registration if account else None
+    if not registration:
         return ''
     return EmployeeRegistrationSerializer(registration).data.get('doc_passport_photo') or ''
 
 
 def _profile_photo_for_employee_id(employee_id):
-    account = EmployeeAccount.objects.filter(employee_id=employee_id).first()
+    account = (
+        EmployeeAccount.objects.filter(employee_id=employee_id)
+        .select_related('registration')
+        .first()
+    )
     return _passport_photo_for_email(account.employee_email) if account else ''
 
 

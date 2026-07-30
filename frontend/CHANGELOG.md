@@ -2,6 +2,20 @@
 
 All notable changes to BBT HRMS are recorded here. Versions follow Semantic Versioning (`MAJOR.MINOR.PATCH`) and Flutter build numbers increase with every distributable build.
 
+## [1.4.2+12] - 2026-07-30
+
+### Fixed
+
+- Added a deployment migration that backfills existing mandatory registration photos into linked employee user profiles.
+- Employees without any stored registration or profile image continue to receive the mandatory upload gate.
+
+## [1.4.1+11] - 2026-07-30
+
+### Fixed
+
+- Resolve every employee's mandatory registration photo through the linked employee account when company and personal email addresses differ.
+- Ensure employee and attendance lists receive the stored image instead of falling back to initials for valid uploaded photos.
+
 ## [1.4.0+10] - 2026-07-30
 
 ### Changed
