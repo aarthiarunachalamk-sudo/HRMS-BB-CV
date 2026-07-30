@@ -472,7 +472,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         userId: widget.userId,
         data: _data,
         service: _service,
-        onLogout: _logout,
+        onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
         onNotificationTap: _openNotification,
         onDocumentsChanged: _load,
       ),
@@ -503,7 +503,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
             _selectTab(index);
             if (index == 0) _load();
           },
-          onLogout: _logout,
+          onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
         ),
         body: ConstellationBackground(
           accentColor: EmployeeColors.blue,

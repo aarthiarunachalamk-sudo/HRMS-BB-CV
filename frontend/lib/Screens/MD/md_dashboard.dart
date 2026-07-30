@@ -252,25 +252,7 @@ class _MdDashboardState extends State<MdDashboard> {
   }
 
   Future<void> _requestLogout() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Logout'),
-        content: Text('Logout from the $_roleLabel dashboard?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            icon: const Icon(Icons.logout_rounded),
-            label: const Text('Logout'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && mounted) _logout();
+    await showLogoutConfirmation(context: context, onLogout: _logout);
   }
 
   Future<void> _pickProfileImage() async {

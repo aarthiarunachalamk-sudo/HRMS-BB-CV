@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'admin_approve_leave_screen.dart';
 import 'admin_palette.dart';
@@ -103,16 +104,12 @@ class _LeaveTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
+              EmployeeAvatar(
+                name: '${leave['name'] ?? ''}',
+                photoUrl: '${leave['doc_passport_photo'] ?? ''}',
                 radius: 20,
                 backgroundColor: c.primary.withOpacity(0.14),
-                child: Text(
-                  (leave['name'] ?? 'E').substring(0, 1).toUpperCase(),
-                  style: TextStyle(
-                    color: c.primary,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                foregroundColor: c.primary,
               ),
               const SizedBox(width: 10),
               Expanded(

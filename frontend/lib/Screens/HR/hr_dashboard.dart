@@ -181,7 +181,7 @@ class _HrDashboardState extends State<HrDashboard> {
                 userId: widget.userId,
                 email: widget.email,
                 name: widget.firstName,
-                onLogout: _logout,
+                onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
               ),
             ];
 
@@ -192,7 +192,7 @@ class _HrDashboardState extends State<HrDashboard> {
                 data: data,
                 email: widget.email,
                 onTap: _setIndex,
-                onLogout: _logout,
+                onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
               ),
               body: Container(
                 decoration: BoxDecoration(

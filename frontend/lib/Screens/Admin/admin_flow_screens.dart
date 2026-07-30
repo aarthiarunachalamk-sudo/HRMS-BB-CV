@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 
 import 'admin_palette.dart';
@@ -763,8 +764,12 @@ class AdminSettingsScreen extends StatelessWidget {
           titleText: 'Logout',
           subtitle: 'Sign out from admin',
           color: c.red,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const AdminLogoutConfirmScreen()),
+          onTap: () => showLogoutConfirmation(
+            context: context,
+            onLogout: () => Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              (route) => false,
+            ),
           ),
         ),
       ]),

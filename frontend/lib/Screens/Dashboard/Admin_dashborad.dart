@@ -370,7 +370,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   style: TextStyle(
                       color: Colors.redAccent,
                       fontWeight: FontWeight.w700)),
-              onTap: () => _openAdminPage(const AdminLogoutConfirmScreen()),
+              onTap: () => showLogoutConfirmation(context: context, onLogout: _logout),
             ),
             const SizedBox(height: 8),
           ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'hr_employee_detail_screen.dart';
 import 'hr_shared.dart';
 
@@ -42,6 +43,14 @@ class HrEmployeesScreen extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 10),
             child: HrListTile(
               icon: Icons.person_rounded,
+              leading: EmployeeAvatar(
+                name: '${employee['name'] ?? ''}',
+                photoUrl: '${employee['doc_passport_photo'] ?? ''}',
+                radius: 22,
+                backgroundColor: c.primary.withAlpha(24),
+                foregroundColor: c.primary,
+                borderRadius: BorderRadius.circular(10),
+              ),
               title: '${employee['name']}',
               subtitle: '${employee['subtitle']}',
               trailing: '${employee['trailing']}',

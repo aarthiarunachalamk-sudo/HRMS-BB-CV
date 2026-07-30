@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'hr_service.dart';
@@ -116,6 +117,14 @@ class _HrLeaveRequestsScreenState extends State<HrLeaveRequestsScreen> {
                 children: [
                   HrListTile(
                     icon: Icons.person_rounded,
+                    leading: EmployeeAvatar(
+                      name: '${leave['name'] ?? ''}',
+                      photoUrl: '${leave['doc_passport_photo'] ?? ''}',
+                      radius: 20,
+                      backgroundColor: c.primary.withAlpha(24),
+                      foregroundColor: c.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     title: '${leave['name']}',
                     subtitle: '${leave['subtitle']}',
                     trailing: '${leave['status'] ?? leave['days']}',

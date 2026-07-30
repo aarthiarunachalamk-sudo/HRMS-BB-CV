@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'hr_employee_detail_screen.dart';
 import 'hr_service.dart';
 import 'hr_shared.dart';
@@ -97,6 +98,14 @@ class HrAttendanceScreen extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 10),
             child: HrListTile(
               icon: Icons.access_time_rounded,
+              leading: EmployeeAvatar(
+                name: '${item['name'] ?? ''}',
+                photoUrl: '${item['doc_passport_photo'] ?? ''}',
+                radius: 22,
+                backgroundColor: c.teal.withAlpha(24),
+                foregroundColor: c.teal,
+                borderRadius: BorderRadius.circular(10),
+              ),
               title: '${item['name']}',
               subtitle: '${item['subtitle']}',
               trailing: '${item['time']}',
@@ -159,9 +168,11 @@ class _HrAttendanceDetailScreenState extends State<HrAttendanceDetailScreen> {
         foregroundColor: c.text,
         title: const Text('Attendance Details'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
           if (_loading) const LinearProgressIndicator(),
           HrCard(
             child: Column(
@@ -222,16 +233,17 @@ class _HrAttendanceDetailScreenState extends State<HrAttendanceDetailScreen> {
             color: c.primary,
           ),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => HrEmployeeDetailScreen(employee: record),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => HrEmployeeDetailScreen(employee: record),
+                ),
               ),
+              icon: const Icon(Icons.person_rounded),
+              label: const Text('View Employee Profile'),
             ),
-            icon: const Icon(Icons.person_rounded),
-            label: const Text('View Employee Profile'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

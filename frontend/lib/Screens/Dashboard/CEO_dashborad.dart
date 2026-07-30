@@ -163,6 +163,8 @@ class _CeoDashboardState extends State<CeoDashboard>
     );
   }
 
+  void _requestLogout() => showLogoutConfirmation(context: context, onLogout: _logout);
+
   Future<void> _openPage(Widget page) async {
     final result = await Navigator.of(
       context,
@@ -320,9 +322,7 @@ class _CeoDashboardState extends State<CeoDashboard>
                             userId: widget.userId,
                             fallbackName: widget.firstName,
                             fallbackEmail: widget.email,
-                            onLogout: () => _openPage(
-                              _LogoutConfirmPage(onLogout: _logout),
-                            ),
+                            onLogout: _requestLogout,
                           ),
                         );
                       },
@@ -479,7 +479,7 @@ class _CeoDashboardState extends State<CeoDashboard>
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  _openPage(_LogoutConfirmPage(onLogout: _logout));
+                  _requestLogout();
                 },
               ),
             ],
@@ -674,7 +674,7 @@ class _CeoDashboardState extends State<CeoDashboard>
             userId: widget.userId,
             fallbackName: widget.firstName,
             fallbackEmail: widget.email,
-            onLogout: () => _openPage(_LogoutConfirmPage(onLogout: _logout)),
+            onLogout: _requestLogout,
           ),
         ),
         onOpenDepartment: () => _openPage(
@@ -708,13 +708,12 @@ class _CeoDashboardState extends State<CeoDashboard>
                 userId: widget.userId,
                 fallbackName: widget.firstName,
                 fallbackEmail: widget.email,
-                onLogout: () =>
-                    _openPage(_LogoutConfirmPage(onLogout: _logout)),
+                onLogout: _requestLogout,
               ),
             ),
             onOpenAudit: () =>
                 _openPage(CeoAuditFlowScreen(userId: widget.userId)),
-            onLogout: () => _openPage(_LogoutConfirmPage(onLogout: _logout)),
+            onLogout: _requestLogout,
           ),
         ),
         onBudget: () =>
@@ -745,7 +744,7 @@ class _CeoDashboardState extends State<CeoDashboard>
             onNavigate: _selectTab,
           ),
         ),
-        onLogout: () => _openPage(_LogoutConfirmPage(onLogout: _logout)),
+        onLogout: _requestLogout,
       ),
     ];
 

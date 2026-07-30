@@ -219,7 +219,7 @@ class _TLDashboardState extends State<TLDashboard> {
                 name: widget.firstName,
                 profileImage: _profileImage,
                 onProfileTap: _pickProfileImage,
-                logout: _logout,
+                logout: () => showLogoutConfirmation(context: context, onLogout: _logout),
               ),
             ];
             return Scaffold(
@@ -229,7 +229,7 @@ class _TLDashboardState extends State<TLDashboard> {
                 email: widget.email,
                 name: widget.firstName,
                 select: _setIndex,
-                logout: _logout,
+                logout: () => showLogoutConfirmation(context: context, onLogout: _logout),
               ),
               body: Container(
                 decoration: BoxDecoration(

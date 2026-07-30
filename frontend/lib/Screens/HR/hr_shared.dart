@@ -181,6 +181,7 @@ class HrMetricCard extends StatelessWidget {
 
 class HrListTile extends StatelessWidget {
   final IconData icon;
+  final Widget? leading;
   final String title;
   final String subtitle;
   final String? trailing;
@@ -190,6 +191,7 @@ class HrListTile extends StatelessWidget {
   const HrListTile({
     super.key,
     required this.icon,
+    this.leading,
     required this.title,
     required this.subtitle,
     this.trailing,
@@ -207,7 +209,7 @@ class HrListTile extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           children: [
-            Container(
+            leading ?? Container(
               width: 34,
               height: 34,
               decoration: BoxDecoration(

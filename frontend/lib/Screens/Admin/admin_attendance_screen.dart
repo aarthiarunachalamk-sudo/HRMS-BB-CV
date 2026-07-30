@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'admin_palette.dart';
 import 'admin_service.dart';
 import 'admin_widgets.dart';
@@ -125,13 +126,12 @@ class _AttendanceTile extends StatelessWidget {
     }
     return AdminCard(
       child: Row(children: [
-        CircleAvatar(
+        EmployeeAvatar(
+          name: '${att['name'] ?? ''}',
+          photoUrl: '${att['doc_passport_photo'] ?? ''}',
           radius: 20,
           backgroundColor: statusColor.withOpacity(0.14),
-          child: Text(
-            (att['name'] ?? 'E').substring(0, 1).toUpperCase(),
-            style: TextStyle(color: statusColor, fontWeight: FontWeight.w800),
-          ),
+          foregroundColor: statusColor,
         ),
         const SizedBox(width: 12),
         Expanded(

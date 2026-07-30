@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
@@ -405,7 +406,7 @@ class _ITTeamDashboardState extends State<ITTeamDashboard> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              onTap: _logout,
+              onTap: () => showLogoutConfirmation(context: context, onLogout: _logout),
             ),
           ],
         ),

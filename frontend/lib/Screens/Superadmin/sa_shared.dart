@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 
 class SaPalette {
   final bool isDark;
@@ -233,6 +234,7 @@ class SaInfoTile extends StatelessWidget {
   final String subtitle;
   final String? trailing;
   final Color? color;
+  final String? photoUrl;
 
   const SaInfoTile({
     super.key,
@@ -241,6 +243,7 @@ class SaInfoTile extends StatelessWidget {
     required this.subtitle,
     this.trailing,
     this.color,
+    this.photoUrl,
   });
 
   @override
@@ -255,7 +258,16 @@ class SaInfoTile extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 48),
           child: Row(
             children: [
-              SaIconBox(icon: icon, color: accent),
+              photoUrl == null
+                  ? SaIconBox(icon: icon, color: accent)
+                  : EmployeeAvatar(
+                      name: title,
+                      photoUrl: photoUrl,
+                      radius: 20,
+                      backgroundColor: accent.withAlpha(24),
+                      foregroundColor: accent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

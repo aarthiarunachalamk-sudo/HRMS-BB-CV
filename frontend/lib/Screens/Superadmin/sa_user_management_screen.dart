@@ -149,6 +149,7 @@ class _SaUserManagementScreenState extends State<SaUserManagementScreen> {
               ...users.map(
                 (u) => SaInfoTile(
                   icon: Icons.person_rounded,
+                  photoUrl: u.photoUrl,
                   title: u.name.isEmpty ? 'User' : u.name,
                   subtitle: '${u.subtitle}  ${u.detail}'.trim(),
                   trailing: u.status,
@@ -193,6 +194,7 @@ class _SaUserManagementScreenState extends State<SaUserManagementScreen> {
         subtitle: '${u['subtitle'] ?? ''}  ${u['trailing'] ?? ''}',
         detail: '${u['detail'] ?? ''}',
         status: '${u['status'] ?? 'Active'}',
+        photoUrl: '${u['doc_passport_photo'] ?? ''}',
       );
     }).toList();
   }
@@ -286,12 +288,14 @@ class _UserRow {
   final String subtitle;
   final String detail;
   final String status;
+  final String photoUrl;
 
   const _UserRow({
     required this.name,
     required this.subtitle,
     required this.detail,
     required this.status,
+    required this.photoUrl,
   });
 
   String get role => subtitle.split(RegExp(r'\s+')).first.trim();

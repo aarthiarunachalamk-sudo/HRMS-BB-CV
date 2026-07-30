@@ -1015,6 +1015,11 @@ def _passport_photo_for_email(email):
     return EmployeeRegistrationSerializer(registration).data.get('doc_passport_photo') or ''
 
 
+def _profile_photo_for_employee_id(employee_id):
+    account = EmployeeAccount.objects.filter(employee_id=employee_id).first()
+    return _passport_photo_for_email(account.employee_email) if account else ''
+
+
 _CEO_VISIBLE_MEMBER_ROLES = ['admin', 'tl', 'hr', 'director', 'manager', 'md']
 _CEO_CREATABLE_MEMBER_ROLES = [
     'ceo',
@@ -1058,7 +1063,7 @@ def _ceo_employee_account_payload(account):
         'reporting_tl': account.reporting_tl or '',
         'status': 'Active' if account.is_active else 'Inactive',
         'source': 'Employee Under TL',
-        'doc_passport_photo': registration_data.get('doc_passport_photo') or '',
+        'doc_passport_photo': _passport_photo_for_email(account.employee_email),
         'attendance_summary': attendance['summary'],
         'recent_attendance': attendance['records'][:5],
         'children': [],
@@ -1761,7 +1766,7 @@ def _employee_directory_items(include_attendance=False, limit=None):
             'qualification': registration.qualification or '',
             'college': registration.college or '',
             'year_of_passing': registration.year_of_passing or '',
-            'doc_passport_photo': registration_data.get('doc_passport_photo') or '',
+            'doc_passport_photo': _passport_photo_for_email(account.employee_email),
             'attendance_summary': attendance['summary'],
             'recent_attendance': attendance['records'][:5],
             'source': 'Active Employee',
@@ -2276,7 +2281,7 @@ def _tl_team_items(user_id=''):
             'trailing': account.employee_id,
             'score': f'{performance_score}%',
             'status': 'Active' if account.is_active else 'Inactive',
-            'doc_passport_photo': registration_data.get('doc_passport_photo') or '',
+            'doc_passport_photo': _passport_photo_for_email(account.employee_email),
             'attendance_summary': {
                 'present': present_count,
                 'late': late_count,
@@ -2453,6 +2458,7 @@ def _superadmin_users():
             'detail': user.email,
             'trailing': user.user_id,
             'status': 'Active' if user.is_active else 'Inactive',
+            'doc_passport_photo': _passport_photo_for_email(user.email),
         })
     return users
 
@@ -2881,6 +2887,7 @@ def _checkout_permission_item(item):
         'approval_type': 'early_checkout',
         'employee_id': item.employee_id,
         'name': employee_name,
+        'doc_passport_photo': _profile_photo_for_employee_id(leave.employee_id),
         'initials': _initials(employee_name),
         'title': f'{employee_name} - {permission_label}',
         'subtitle': f'{permission_label} - {item.attendance_date:%d %b %Y}',
@@ -3153,7 +3160,7 @@ def hr_dashboard_view(request):
                 'qualification': reg.qualification or '',
                 'college': reg.college or '',
                 'year_of_passing': reg.year_of_passing or '',
-                'doc_passport_photo': EmployeeRegistrationSerializer(reg).data.get('doc_passport_photo') or '',
+                'doc_passport_photo': _passport_photo_for_email(acc.employee_email),
             })
         return result
 
@@ -6206,7 +6213,7 @@ def _admin_employee_payload_from_account(account):
         'phone': mask_phone_number(getattr(registration, 'mobile', '') or ''),
         'date_of_joining': account.date_of_joining.isoformat() if account.date_of_joining else '',
         'reporting_manager': account.reporting_tl,
-        'doc_passport_photo': EmployeeRegistrationSerializer(registration).data.get('doc_passport_photo') or '',
+        'doc_passport_photo': _passport_photo_for_email(account.employee_email),
     }
 
 
@@ -6257,6 +6264,7 @@ def _admin_attendance_record_payload(record):
         'id': record.id,
         'employee_id': record.employee_id,
         'name': _employee_name(record.employee_id),
+        'doc_passport_photo': _profile_photo_for_employee_id(record.employee_id),
         'status': status,
         'checkin': _format_time(record.check_in, record.check_in_timezone_offset_minutes),
         'checkout': _format_time(record.check_out, record.check_out_timezone_offset_minutes),
@@ -6271,6 +6279,7 @@ def _admin_leave_payload(leave):
         'id': str(leave.id),
         'name': item['name'],
         'employee_id': item['employee_id'],
+        'doc_passport_photo': _profile_photo_for_employee_id(item['employee_id']),
         'role': item.get('designation') or item.get('department') or 'Employee',
         'department': item.get('department', ''),
         'type': item['leave_type'],

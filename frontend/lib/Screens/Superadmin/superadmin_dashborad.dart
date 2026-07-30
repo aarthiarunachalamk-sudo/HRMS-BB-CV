@@ -120,7 +120,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                       _SettingsView(
                         colors: colors,
                         email: widget.email,
-                        onLogout: _logout,
+                        onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
                       ),
                     ],
                   ),
@@ -435,7 +435,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 icon: Icons.logout_rounded,
                 title: 'Logout',
                 danger: true,
-                onTap: _logout,
+                onTap: () => showLogoutConfirmation(context: context, onLogout: _logout),
               ),
               const SizedBox(height: 4),
             ],

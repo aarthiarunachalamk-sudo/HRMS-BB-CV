@@ -2,6 +2,33 @@
 
 All notable changes to BBT HRMS are recorded here. Versions follow Semantic Versioning (`MAJOR.MINOR.PATCH`) and Flutter build numbers increase with every distributable build.
 
+## [1.4.0+10] - 2026-07-30
+
+### Changed
+
+- Standardized employee avatars on the mandatory account profile photo across role directories, attendance records, leave requests, and detail views.
+- Updated backend employee payloads to prefer the account profile photo consistently, with initials used only for legacy missing or broken images.
+
+## [1.3.1+9] - 2026-07-30
+
+### Changed
+
+- Added one consistent session logout confirmation popup across every module and role.
+- Kept Android back-button log-out-and-exit behavior separate from normal in-app logout.
+
+## [1.3.0+8] - 2026-07-30
+
+### Changed
+
+- Redesigned HR Personal Information with a compact identity header and grouped contact, employment, and address sections.
+- Added the uploaded profile photo, readable department names, responsive text wrapping, and bottom safe-area spacing.
+
+## [1.2.2+7] - 2026-07-30
+
+### Fixed
+
+- Keep the HR Attendance Details "View Employee Profile" button above the Android system navigation bar.
+
 ## [1.2.1+6] - 2026-07-30
 
 ### Fixed
