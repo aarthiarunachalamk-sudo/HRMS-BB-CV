@@ -5,6 +5,7 @@ import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
@@ -120,13 +121,15 @@ class _TLDashboardState extends State<TLDashboard> {
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
     return PopScope<Object?>(
-      canPop: _index == 0 && _navigationHistory.isEmpty,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_navigationHistory.isNotEmpty) {
           _setIndex(_navigationHistory.removeLast(), remember: false);
         } else if (_index != 0) {
           _setIndex(0, remember: false);
+        } else {
+          showLogoutExitConfirmation(context: context, onLogout: _logout);
         }
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/constellation_background.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
@@ -261,6 +262,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
       _selectTab(_tabHistory.removeLast(), remember: false);
     } else if (_selectedIndex != 0) {
       _selectTab(0, remember: false);
+    } else {
+      showLogoutExitConfirmation(context: context, onLogout: _logout);
     }
   }
 
@@ -481,7 +484,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     final designation = '${profile['designation'] ?? 'Employee'}'.trim();
     final department = '${profile['department'] ?? ''}'.trim();
     return PopScope<Object?>(
-      canPop: _selectedIndex == 0 && _tabHistory.isEmpty,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         _handleMobileBack();

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -25,10 +26,16 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   static const int _maxUploadBytes = 25 * 1024 * 1024;
+  final String _submissionKey =
+      'mobile-${DateTime.now().microsecondsSinceEpoch}';
 
   final PageController _pageController = PageController();
   int _currentPage = 0;
   bool _isLoading = false;
+  bool _submissionPopupVisible = false;
+  final ValueNotifier<String> _submissionStatus = ValueNotifier(
+    'Preparing your registration...',
+  );
   final ImagePicker _picker = ImagePicker();
 
   // Page 1 - Personal
@@ -308,7 +315,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     'Other',
   ];
 
-  String? _generatedIfsc;
+  String? _verifiedIfsc;
+  String? _verifiedBranch;
+  bool _isIfscVerifying = false;
 
   List<String> get _yearOptions {
     final currentYear = DateTime.now().year;
@@ -360,6 +369,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _prevDesignationCtrl.dispose();
     _prevExperienceCtrl.dispose();
     _prevLastDayCtrl.dispose();
+    _submissionStatus.dispose();
     super.dispose();
   }
 
@@ -499,11 +509,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
       final ifsc = value(_ifscCtrl).toUpperCase();
       if (!_isValidIfsc(ifsc)) return 'Enter a valid 11-character IFSC code.';
-      final selectedBankCode = _bankIfscCodes[value(_bankNameCtrl)];
-      if (selectedBankCode != null && !ifsc.startsWith(selectedBankCode)) {
-        return 'IFSC code does not match the selected bank.';
+      if (_verifiedIfsc != ifsc) {
+        return 'Verify IFSC using the live bank registry.';
       }
       if (value(_branchCtrl).length < 2) return 'Enter the bank branch name.';
+      if (_verifiedBranch != value(_branchCtrl)) {
+        return 'Branch details changed. Verify IFSC again.';
+      }
     }
 
     if (page == 3) {
@@ -625,25 +637,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => docMap[key] = File(cropped?.path ?? picked.path));
   }
 
-  void _generateIfsc({bool force = false}) {
-    final bankCode = _bankIfscCodes[_bankNameCtrl.text.trim()];
-    if (bankCode == null) return;
-
-    final current = _ifscCtrl.text.trim().toUpperCase();
-    if (!force && current.isNotEmpty && current != _generatedIfsc) return;
-
-    final cleanBranch = _branchCtrl.text.toUpperCase().replaceAll(
-      RegExp(r'[^A-Z0-9]'),
-      '',
-    );
-    final branchCode = cleanBranch.isEmpty
-        ? '000001'
-        : cleanBranch.padRight(6, '0').substring(0, 6);
-    final generated = '${bankCode}0$branchCode';
-    _generatedIfsc = generated;
-    _ifscCtrl.text = generated;
-  }
-
   bool _isValidIfsc(String value) {
     return RegExp(
       r'^[A-Z]{4}0[A-Z0-9]{6}$',
@@ -655,6 +648,75 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (ifsc.isEmpty) return 'Required';
     if (!_isValidIfsc(ifsc)) return 'Use format ABCD0XXXXXX';
     return null;
+  }
+
+  Future<void> _verifyIfscLive() async {
+    final ifsc = _ifscCtrl.text.trim().toUpperCase();
+    if (!_isValidIfsc(ifsc)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid 11-character IFSC code.')),
+      );
+      return;
+    }
+    setState(() => _isIfscVerifying = true);
+    try {
+      final response = await http
+          .get(
+            ApiConfig.uri(
+              '/verify-ifsc/?ifsc=${Uri.encodeQueryComponent(ifsc)}',
+            ),
+          )
+          .timeout(const Duration(seconds: 12));
+      final body = jsonDecode(response.body);
+      final data = body is Map
+          ? Map<String, dynamic>.from(body)
+          : <String, dynamic>{};
+      if (response.statusCode != 200 || data['verified'] != true) {
+        throw Exception(data['message'] ?? 'IFSC could not be verified.');
+      }
+      final selectedCode = _bankIfscCodes[_bankNameCtrl.text.trim()];
+      if (selectedCode != null && !ifsc.startsWith(selectedCode)) {
+        throw Exception(
+          'This IFSC belongs to ${data['bank']}, not the selected bank.',
+        );
+      }
+      final branch = '${data['branch'] ?? ''}'.trim();
+      if (branch.isEmpty) {
+        throw Exception('The live registry did not return a branch name.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _ifscCtrl.text = ifsc;
+        _branchCtrl.text = branch;
+        _verifiedIfsc = ifsc;
+        _verifiedBranch = branch;
+      });
+      final location = [
+        '${data['city'] ?? ''}'.trim(),
+        '${data['state'] ?? ''}'.trim(),
+      ].where((value) => value.isNotEmpty).join(', ');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.green.shade700,
+          content: Text(
+            'Verified: ${data['bank']} • $branch'
+            '${location.isEmpty ? '' : ' • $location'}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _verifiedIfsc = null;
+        _verifiedBranch = null;
+      });
+      final message = '$error'.replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: Colors.redAccent, content: Text(message)),
+      );
+    } finally {
+      if (mounted) setState(() => _isIfscVerifying = false);
+    }
   }
 
   List<String> get _collegeOptionsForUniversity {
@@ -763,18 +825,66 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  Future<void> _ensureBackendReady() async {
+    Object? lastError;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final response = await http
+            .get(ApiConfig.uri('/health/'))
+            .timeout(const Duration(seconds: 60));
+        if (response.statusCode >= 200 && response.statusCode < 300) return;
+        lastError = 'HTTP ${response.statusCode}';
+      } catch (error) {
+        lastError = error;
+      }
+      if (attempt < 2) {
+        await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+      }
+    }
+    throw http.ClientException(
+      'Backend did not become ready after 3 attempts: $lastError',
+      ApiConfig.uri('/health/'),
+    );
+  }
+
+  void _showSubmissionPopup() {
+    if (_submissionPopupVisible) return;
+    _submissionPopupVisible = true;
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AppSubmissionProgressDialog(status: _submissionStatus),
+      ).whenComplete(() => _submissionPopupVisible = false),
+    );
+  }
+
+  void _closeSubmissionPopup() {
+    if (!_submissionPopupVisible || !mounted) return;
+    Navigator.of(context, rootNavigator: true).pop();
+    _submissionPopupVisible = false;
+  }
+
   Future<void> _submitForm() async {
     final nationality = _nationalityCtrl.text.trim();
     if (nationality.isEmpty) {
       _nationalityCtrl.text = 'Indian';
     }
     setState(() => _isLoading = true);
+    _submissionStatus.value = 'Connecting securely to the HRMS server...';
+    _showSubmissionPopup();
+    await Future<void>.delayed(Duration.zero);
     try {
+      // Wake a sleeping Render instance before opening a large multipart
+      // upload. This prevents the first submission from failing during cold
+      // start while keeping every selected local document available to retry.
+      await _ensureBackendReady();
+      _submissionStatus.value = 'Preparing your selected documents...';
       final uri = ApiConfig.uri('/register-employee/');
-      final request = http.MultipartRequest('POST', uri);
 
       // Text fields
-      request.fields.addAll({
+      final registrationFields = <String, String>{
+        'submission_key': _submissionKey,
         'first_name': _firstNameCtrl.text.trim(),
         'last_name': _lastNameCtrl.text.trim(),
         'gender': _gender,
@@ -816,7 +926,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'prev_designation': _prevDesignationCtrl.text.trim(),
         'prev_experience': _prevExperienceCtrl.text.trim(),
         'prev_last_working_day': _prevLastDayCtrl.text.trim(),
-      });
+      };
 
       // Document files
       final allDocs = {
@@ -850,22 +960,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
           '(maximum 25 MB in total).',
         );
       }
+      final documentCount = allDocs.values.whereType<File>().length;
 
-      for (final entry in allDocs.entries) {
-        if (entry.value != null) {
-          request.files.add(
-            await http.MultipartFile.fromPath(entry.key, entry.value!.path),
-          );
+      Future<http.Response> sendUpload() async {
+        final request = http.MultipartRequest('POST', uri)
+          ..fields.addAll(registrationFields);
+        for (final entry in allDocs.entries) {
+          if (entry.value != null) {
+            request.files.add(
+              await http.MultipartFile.fromPath(entry.key, entry.value!.path),
+            );
+          }
         }
+        final streamed = await request.send().timeout(
+          const Duration(minutes: 5),
+        );
+        return http.Response.fromStream(streamed);
       }
 
-      // A registration can contain many full-resolution documents. Render can
-      // also need time to wake a sleeping service, so 90 seconds is too short
-      // on slower mobile connections.
-      final streamedResponse = await request.send().timeout(
-        const Duration(minutes: 5),
-      );
-      final response = await http.Response.fromStream(streamedResponse);
+      http.Response? response;
+      Object? lastUploadError;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        _submissionStatus.value = attempt == 0
+            ? 'Uploading $documentCount documents securely...'
+            : 'Connection interrupted. Retrying automatically (${attempt + 1}/3)...';
+        try {
+          final candidate = await sendUpload();
+          if ({502, 503, 504}.contains(candidate.statusCode) && attempt < 2) {
+            lastUploadError = 'HTTP ${candidate.statusCode}';
+          } else {
+            response = candidate;
+            break;
+          }
+        } catch (error) {
+          lastUploadError = error;
+          if (attempt == 2) rethrow;
+        }
+        await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+      }
+      if (response == null) {
+        throw http.ClientException(
+          'Upload failed after automatic retries: $lastUploadError',
+          uri,
+        );
+      }
+      _submissionStatus.value = 'Finalizing your registration...';
       Map<String, dynamic> data;
       try {
         final decoded = jsonDecode(response.body);
@@ -884,6 +1023,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (response.statusCode >= 200 &&
           response.statusCode < 300 &&
           data['success'] == true) {
+        _closeSubmissionPopup();
         showDialog(
           context: context,
           builder: (_) => AlertDialog(
@@ -943,6 +1083,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
     } on TimeoutException {
       if (!mounted) return;
+      _closeSubmissionPopup();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -953,6 +1094,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     } on SocketException catch (e) {
       if (!mounted) return;
+      _closeSubmissionPopup();
       final wasAborted = e.message.toLowerCase().contains('connection abort');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -967,16 +1109,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     } on FileSystemException catch (e) {
       if (!mounted) return;
+      _closeSubmissionPopup();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message), backgroundColor: Colors.redAccent),
       );
     } on http.ClientException catch (e) {
       if (!mounted) return;
+      _closeSubmissionPopup();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message), backgroundColor: Colors.redAccent),
       );
     } catch (e) {
       if (!mounted) return;
+      _closeSubmissionPopup();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Registration failed: $e'),
@@ -984,6 +1129,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
     } finally {
+      _closeSubmissionPopup();
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -1674,8 +1820,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 UpperCaseTextFormatter(),
               ],
               onChanged: (value) {
-                final upper = value.toUpperCase();
-                if (upper != _generatedIfsc) _generatedIfsc = null;
+                final upper = value.trim().toUpperCase();
+                if (upper != _verifiedIfsc) {
+                  setState(() {
+                    _verifiedIfsc = null;
+                    _verifiedBranch = null;
+                    _branchCtrl.clear();
+                  });
+                }
               },
               suffix: _ifscVerifyButton(cardBorder),
             ),
@@ -1689,9 +1841,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ts,
               cardBorder,
               Icons.location_on_outlined,
-              onChanged: (_) {
-                setState(() => _generateIfsc());
-              },
+              onChanged: (_) => setState(() => _verifiedBranch = null),
             ),
           ]),
           const SizedBox(height: 20),
@@ -2167,6 +2317,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           },
           optionsViewBuilder: (context, onSelected, options) {
             final values = options.toList();
+            final scrollController = ScrollController();
             return Align(
               alignment: Alignment.topLeft,
               child: Material(
@@ -2178,17 +2329,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     maxHeight: 260,
                     maxWidth: 580,
                   ),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    shrinkWrap: true,
-                    itemCount: values.length,
-                    itemBuilder: (context, index) => ListTile(
-                      dense: true,
-                      title: Text(
-                        values[index],
-                        style: TextStyle(color: tp, fontSize: 13),
+                  child: Scrollbar(
+                    controller: scrollController,
+                    thumbVisibility: values.length > 4,
+                    trackVisibility: values.length > 4,
+                    child: ListView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      shrinkWrap: true,
+                      itemCount: values.length,
+                      itemBuilder: (context, index) => ListTile(
+                        dense: true,
+                        title: Text(
+                          values[index],
+                          style: TextStyle(color: tp, fontSize: 13),
+                        ),
+                        onTap: () => onSelected(values[index]),
                       ),
-                      onTap: () => onSelected(values[index]),
                     ),
                   ),
                 ),
@@ -2282,6 +2439,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           value: value,
           isExpanded: true,
           menuMaxHeight: 240,
+          showScrollbar: items.length > 4,
           dropdownColor: cardBg,
           icon: const Icon(
             Icons.keyboard_arrow_down_rounded,
@@ -2462,6 +2620,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         AppDropdownButtonFormField<String>(
           value: _bankNameCtrl.text.isEmpty ? null : _bankNameCtrl.text,
           isExpanded: true,
+          menuMaxHeight: 240,
+          showScrollbar: true,
           dropdownColor: cardBg,
           icon: const Icon(
             Icons.keyboard_arrow_down_rounded,
@@ -2491,7 +2651,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
             if (value == null) return;
             setState(() {
               _bankNameCtrl.text = value;
-              _generateIfsc(force: _ifscCtrl.text.trim().isEmpty);
+              _verifiedIfsc = null;
+              _verifiedBranch = null;
+              _branchCtrl.clear();
             });
           },
         ),
@@ -2531,33 +2693,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
         border: Border(left: BorderSide(color: cb)),
       ),
       child: TextButton(
-        onPressed: () {
-          final ifsc = _ifscCtrl.text.trim().toUpperCase();
-          if (_isValidIfsc(ifsc)) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('IFSC code looks valid.')),
-            );
-          } else {
-            if (!_bankIfscCodes.containsKey(_bankNameCtrl.text.trim())) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Select bank name first.')),
-              );
-              return;
-            }
-            setState(() => _generateIfsc(force: true));
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Generated IFSC: ${_ifscCtrl.text}')),
-            );
-          }
-        },
-        child: const Text(
-          'Verify',
-          style: TextStyle(
-            color: ThemeConfig.blueAccent,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+        onPressed: _isIfscVerifying ? null : _verifyIfscLive,
+        child: _isIfscVerifying
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(
+                _verifiedIfsc == _ifscCtrl.text.trim().toUpperCase()
+                    ? 'Verified'
+                    : 'Verify',
+                style: TextStyle(
+                  color: _verifiedIfsc == _ifscCtrl.text.trim().toUpperCase()
+                      ? Colors.greenAccent
+                      : ThemeConfig.blueAccent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
       ),
     );
   }
@@ -2600,7 +2754,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       value: value,
       isExpanded: true,
       menuMaxHeight: 240,
-      showScrollbar: showScrollbar,
+      showScrollbar: showScrollbar || items.length > 4,
       dropdownColor: cardBg,
       icon: const Icon(
         Icons.keyboard_arrow_down_rounded,

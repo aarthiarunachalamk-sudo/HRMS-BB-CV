@@ -173,6 +173,12 @@ class EmployeeRegistrationSerializer(serializers.ModelSerializer):
         allow_blank=True,
         default='Indian',
     )
+    submission_key = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        write_only=True,
+    )
     doc_passport_photo = serializers.SerializerMethodField()
     doc_aadhar = serializers.SerializerMethodField()
     doc_pan = serializers.SerializerMethodField()

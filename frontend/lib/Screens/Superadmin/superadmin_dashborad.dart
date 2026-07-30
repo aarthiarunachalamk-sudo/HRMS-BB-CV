@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
@@ -58,13 +59,15 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
     final colors = _SaColors.of(context);
 
     return PopScope<Object?>(
-      canPop: _selectedIndex == 0 && _navigationHistory.isEmpty,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_navigationHistory.isNotEmpty) {
           _setSection(_navigationHistory.removeLast(), remember: false);
         } else if (_selectedIndex != 0) {
           _setSection(0, remember: false);
+        } else {
+          showLogoutExitConfirmation(context: context, onLogout: _logout);
         }
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 
@@ -389,6 +390,123 @@ class AppCelebrationDialog extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppSubmissionProgressDialog extends StatelessWidget {
+  final ValueListenable<String> status;
+
+  const AppSubmissionProgressDialog({super.key, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF00D5FF);
+    final cardBg = ThemeConfig.getCardBg(context);
+    final border = ThemeConfig.getCardBorder(context);
+    final text = ThemeConfig.getTextPrimary(context);
+    final muted = ThemeConfig.getTextSecondary(context);
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 360),
+            decoration: BoxDecoration(
+              color: cardBg,
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 132,
+                  width: double.infinity,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(painter: AppConfettiPainter()),
+                      ),
+                      Container(
+                        width: 78,
+                        height: 78,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: accent.withAlpha(25),
+                          border: Border.all(color: accent, width: 2.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: .40),
+                              blurRadius: 24,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.all(22),
+                          child: CircularProgressIndicator(
+                            color: accent,
+                            strokeWidth: 3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 26),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Submitting Registration',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: text,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ValueListenableBuilder<String>(
+                        valueListenable: status,
+                        builder: (context, value, _) => AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          child: Text(
+                            value,
+                            key: ValueKey(value),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: muted,
+                              fontSize: 13,
+                              height: 1.45,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const LinearProgressIndicator(
+                        color: accent,
+                        backgroundColor: Color(0x2200D5FF),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Please keep the app open. Automatic retry is enabled.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: muted, fontSize: 10.5),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

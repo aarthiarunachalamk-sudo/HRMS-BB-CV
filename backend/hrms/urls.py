@@ -3,10 +3,12 @@ from . import views
 from . import employee_views
 
 urlpatterns = [
+    path('health/', views.health_view, name='health'),
     path('login/', views.login_view, name='login'),
     path('forgot-password/', views.forgot_password_view, name='forgot_password'),
     path('create-user/', views.create_user_view, name='create_user'),
     path('register-employee/', views.register_employee_view, name='register_employee'),
+    path('verify-ifsc/', views.verify_ifsc_view, name='verify_ifsc'),
     path('registered-employees/', views.get_registered_employees_view, name='registered_employees'),
     path('registered-employees/<int:pk>/', views.update_employee_status_view, name='update_employee_status'),
     path('registered-employees/<int:pk>/documents/action/', views.employee_document_action_view, name='employee_document_action'),

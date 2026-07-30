@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_attendance_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_create_employee_screen.dart';
@@ -116,13 +117,15 @@ class _HrDashboardState extends State<HrDashboard> {
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
     return PopScope<Object?>(
-      canPop: _index == 0 && _navigationHistory.isEmpty,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_navigationHistory.isNotEmpty) {
           _setIndex(_navigationHistory.removeLast(), remember: false);
         } else if (_index != 0) {
           _setIndex(0, remember: false);
+        } else {
+          showLogoutExitConfirmation(context: context, onLogout: _logout);
         }
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(

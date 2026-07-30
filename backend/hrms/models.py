@@ -168,6 +168,14 @@ class EmployeeRegistration(models.Model):
         ('flagged', 'Flagged'),
     ]
 
+    submission_key = models.CharField(
+        max_length=80,
+        null=True,
+        blank=True,
+        unique=True,
+        editable=False,
+    )
+
     # Personal
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=50)

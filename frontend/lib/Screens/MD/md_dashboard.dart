@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
@@ -229,6 +230,10 @@ class _MdDashboardState extends State<MdDashboard> {
   }
 
   void _handleSystemBack() {
+    if (_step == _MdStep.dashboard) {
+      showLogoutExitConfirmation(context: context, onLogout: _logout);
+      return;
+    }
     final previous = switch (_step) {
       _MdStep.time => _MdStep.calendar,
       _MdStep.details => _MdStep.meetings,
@@ -283,7 +288,7 @@ class _MdDashboardState extends State<MdDashboard> {
   Widget build(BuildContext context) {
     final colors = _MdColors.of(context);
     return PopScope<Object?>(
-      canPop: _step == _MdStep.dashboard,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) _handleSystemBack();
       },

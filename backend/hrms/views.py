@@ -41,6 +41,8 @@ import csv
 import io
 import json
 import unicodedata
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 @api_view(['POST'])
 def login_view(request):
@@ -6832,6 +6834,79 @@ def create_user_view(request):
         message = f'{field}: {errors[0] if errors else "Invalid value"}'
     return Response({'success': False, 'message': message, 'errors': serializer.errors}, status=400)
 
+@api_view(['GET'])
+def verify_ifsc_view(request):
+    """Resolve an IFSC against Razorpay's live RBI-backed IFSC registry."""
+    ifsc = str(request.query_params.get('ifsc') or '').strip().upper()
+    if not re.fullmatch(r'[A-Z]{4}0[A-Z0-9]{6}', ifsc):
+        return Response({
+            'success': False,
+            'verified': False,
+            'message': 'Enter a valid 11-character IFSC code.',
+        }, status=400)
+
+    cache_key = f'ifsc-lookup:{ifsc}'
+    cached = cache.get(cache_key)
+    if isinstance(cached, dict):
+        return Response(cached)
+
+    try:
+        request_object = Request(
+            f'https://ifsc.razorpay.com/{ifsc}',
+            headers={'Accept': 'application/json', 'User-Agent': 'BitByte-HRMS/1.0'},
+        )
+        with urlopen(request_object, timeout=8) as response:
+            registry = json.loads(response.read().decode('utf-8'))
+    except HTTPError as error:
+        if error.code == 404:
+            return Response({
+                'success': False,
+                'verified': False,
+                'message': 'IFSC was not found in the live bank registry.',
+            }, status=404)
+        return Response({
+            'success': False,
+            'verified': False,
+            'message': 'The bank registry is temporarily unavailable. Try again.',
+        }, status=503)
+    except (URLError, TimeoutError, json.JSONDecodeError):
+        return Response({
+            'success': False,
+            'verified': False,
+            'message': 'Unable to reach the live bank registry. Check your connection and retry.',
+        }, status=503)
+
+    returned_ifsc = str(registry.get('IFSC') or '').upper()
+    if returned_ifsc != ifsc:
+        return Response({
+            'success': False,
+            'verified': False,
+            'message': 'The bank registry returned inconsistent branch data.',
+        }, status=502)
+    payload = {
+        'success': True,
+        'verified': True,
+        'source': 'Razorpay IFSC Registry',
+        'verified_at': timezone.now().isoformat(),
+        'ifsc': returned_ifsc,
+        'bank': str(registry.get('BANK') or '').strip(),
+        'branch': str(registry.get('BRANCH') or '').strip(),
+        'address': str(registry.get('ADDRESS') or '').strip(),
+        'city': str(registry.get('CITY') or '').strip(),
+        'district': str(registry.get('DISTRICT') or '').strip(),
+        'state': str(registry.get('STATE') or '').strip(),
+        'contact': str(registry.get('CONTACT') or '').strip(),
+        'micr': str(registry.get('MICR') or '').strip(),
+    }
+    cache.set(cache_key, payload, 60 * 60)
+    return Response(payload)
+
+
+@api_view(['GET'])
+def health_view(request):
+    return Response({'success': True, 'status': 'ready'})
+
+
 @api_view(['POST'])
 def register_employee_view(request):
     doc_fields = [
@@ -6840,6 +6915,18 @@ def register_employee_view(request):
         'doc_resume', 'doc_experience_cert', 'doc_relieving', 'doc_salary_slips',
         'doc_passport_copy', 'doc_driving', 'doc_vaccination',
     ]
+    submission_key = str(request.data.get('submission_key') or '').strip()
+    if submission_key:
+        existing = EmployeeRegistration.objects.filter(
+            submission_key=submission_key,
+        ).first()
+        if existing:
+            return Response({
+                'success': True,
+                'message': 'Registration was already submitted successfully.',
+                'id': existing.id,
+                'duplicate': True,
+            })
     registration_data = {
     key: value
     for key, value in request.data.items()
@@ -6848,14 +6935,21 @@ def register_employee_view(request):
 
     serializer = EmployeeRegistrationSerializer(data=registration_data)
     if serializer.is_valid():
-        emp = serializer.save()
-        updated = False
-        for field in doc_fields:
-            if field in request.FILES:
-                setattr(emp, field, request.FILES[field])
-                updated = True
-        if updated:
-            emp.save()
+        try:
+            with transaction.atomic():
+                emp = serializer.save()
+                updated = False
+                for field in doc_fields:
+                    if field in request.FILES:
+                        setattr(emp, field, request.FILES[field])
+                        updated = True
+                if updated:
+                    emp.save()
+        except Exception:
+            return Response({
+                'success': False,
+                'message': 'Document storage is temporarily unavailable. Your registration was not partially saved; please retry.',
+            }, status=503)
         if request.FILES.get('doc_resume') or getattr(emp, 'doc_resume', None):
             candidate_name = f'{emp.first_name} {emp.last_name}'.strip()
             job_title = emp.applied_job.title if emp.applied_job_id else 'General Application'

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_attendance_screen.dart';
@@ -98,6 +99,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
       setState(() => _tab = _tabHistory.removeLast());
     } else if (_tab != _AdminTab.dashboard) {
       setState(() => _tab = _AdminTab.dashboard);
+    } else {
+      showLogoutExitConfirmation(context: context, onLogout: _logout);
     }
   }
 
@@ -138,7 +141,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final c = AdminPalette.of(context);
 
     return PopScope<Object?>(
-      canPop: _tab == _AdminTab.dashboard && _tabHistory.isEmpty,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) _handleBack();
       },

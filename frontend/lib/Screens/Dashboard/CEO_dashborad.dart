@@ -7,6 +7,7 @@ import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_approval_category_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_leave_intelligence_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_leave_request_screen.dart';
@@ -176,6 +177,7 @@ class _CeoDashboardState extends State<CeoDashboard> {
       setState(() => _selectedIndex = 0);
       return;
     }
+    showLogoutExitConfirmation(context: context, onLogout: _logout);
   }
 
   void _switchRole(String role) {
@@ -731,7 +733,7 @@ class _CeoDashboardState extends State<CeoDashboard> {
     ];
 
     return PopScope<Object?>(
-      canPop: _selectedIndex == 0 && _tabHistory.isEmpty,
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         _handleSystemBack();
@@ -12710,7 +12712,9 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                       18,
                       18,
                       18,
-                      18 + MediaQuery.of(context).viewInsets.bottom,
+                      32 +
+                          MediaQuery.of(context).viewInsets.bottom +
+                          MediaQuery.of(context).viewPadding.bottom,
                     ),
                     children: [
                       Text(
@@ -12829,8 +12833,11 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                         );
                       }),
                       const SizedBox(height: 12),
-                      FilledButton.icon(
-                        onPressed: () {
+                      SafeArea(
+                        top: false,
+                        minimum: const EdgeInsets.only(bottom: 12),
+                        child: FilledButton.icon(
+                          onPressed: () {
                           final title = titleController.text.trim();
                           if (title.isEmpty || selectedIds.isEmpty) {
                             ScaffoldMessenger.of(sheetContext).showSnackBar(
@@ -12861,9 +12868,10 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                                 )
                                 .toList(),
                           });
-                        },
-                        icon: const Icon(Icons.notifications_active_rounded),
-                        label: const Text('Schedule & Notify Users'),
+                          },
+                          icon: const Icon(Icons.notifications_active_rounded),
+                          label: const Text('Schedule & Notify Users'),
+                        ),
                       ),
                     ],
                   ),
