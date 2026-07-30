@@ -2,6 +2,20 @@
 
 All notable changes to BBT HRMS are recorded here. Versions follow Semantic Versioning (`MAJOR.MINOR.PATCH`) and Flutter build numbers increase with every distributable build.
 
+## [1.2.0+5] - 2026-07-30
+
+### Changed
+
+- Replaced the default Flutter launcher icon with the official BitByte logo.
+- Added adaptive Android, iOS, web, Windows, and macOS launcher-icon generation.
+
+## [1.1.2+4] - 2026-07-30
+
+### Fixed
+
+- Declared Pillow as a direct backend dependency so clean Render deployments can start the image-validation code.
+- Cleared stale Flutter/Dart processes that were blocking local Android build commands.
+
 ## [1.1.1+3] - 2026-07-30
 
 ### Fixed
