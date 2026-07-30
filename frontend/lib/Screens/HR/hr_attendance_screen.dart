@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 import 'hr_employee_detail_screen.dart';
+import 'hr_service.dart';
 import 'hr_shared.dart';
 
 class HrAttendanceScreen extends StatelessWidget {
@@ -113,10 +114,39 @@ class HrAttendanceScreen extends StatelessWidget {
   }
 }
 
-class HrAttendanceDetailScreen extends StatelessWidget {
+class HrAttendanceDetailScreen extends StatefulWidget {
   final Map<String, dynamic> record;
 
   const HrAttendanceDetailScreen({super.key, required this.record});
+
+  @override
+  State<HrAttendanceDetailScreen> createState() => _HrAttendanceDetailScreenState();
+}
+
+class _HrAttendanceDetailScreenState extends State<HrAttendanceDetailScreen> {
+  late Map<String, dynamic> record = Map<String, dynamic>.from(widget.record);
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final id = int.tryParse('${record['attendance_id'] ?? ''}');
+    if (id == null) return;
+    setState(() => _loading = true);
+    try {
+      final response = await HrService().fetchAttendanceDetails(id);
+      final loaded = response['attendance'];
+      if (mounted && loaded is Map) {
+        setState(() => record = Map<String, dynamic>.from(loaded));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -132,6 +162,7 @@ class HrAttendanceDetailScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_loading) const LinearProgressIndicator(),
           HrCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,6 +205,15 @@ class HrAttendanceDetailScreen extends StatelessWidget {
             color: c.teal,
           ),
           const SizedBox(height: 12),
+          HrCard(
+            child: Column(
+              children: [
+                _detailRow('Check-in location', _location('check_in'), c),
+                _detailRow('Check-out location', _location('check_out'), c),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           _AttendanceSelfieCard(
             title: 'Check-out Image',
             time: '${record['check_out'] ?? '-'}',
@@ -194,6 +234,14 @@ class HrAttendanceDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _location(String prefix) {
+    final latitude = '${record['${prefix}_latitude'] ?? ''}'.trim();
+    final longitude = '${record['${prefix}_longitude'] ?? ''}'.trim();
+    final accuracy = '${record['${prefix}_accuracy'] ?? ''}'.trim();
+    if (latitude.isEmpty || longitude.isEmpty) return 'Not available';
+    return '$latitude, $longitude${accuracy.isEmpty ? '' : ' (±$accuracy m)'}';
   }
 
   Widget _detailRow(String label, String value, HrPalette c) => Padding(

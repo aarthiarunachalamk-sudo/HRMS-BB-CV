@@ -14,8 +14,8 @@ class PushNotificationService {
   static final PushNotificationService instance = PushNotificationService._();
   static const _channel = AndroidNotificationChannel(
     'hrms_updates',
-    'HRMS updates',
-    description: 'Attendance, leave, approvals, payroll, tasks and HRMS updates.',
+    'BBT HRMS updates',
+    description: 'Attendance, leave, approvals, payroll, tasks and BBT HRMS updates.',
     importance: Importance.high,
   );
   final StreamController<Map<String, dynamic>> _notificationTapController =
@@ -142,9 +142,9 @@ class PushNotificationService {
       NotificationDetails(
         android: const AndroidNotificationDetails(
           'hrms_updates',
-          'HRMS updates',
+          'BBT HRMS updates',
           channelDescription:
-              'Attendance, leave, approvals, payroll, tasks and HRMS updates.',
+              'Attendance, leave, approvals, payroll, tasks and BBT HRMS updates.',
           importance: Importance.high,
           priority: Priority.high,
           category: AndroidNotificationCategory.message,

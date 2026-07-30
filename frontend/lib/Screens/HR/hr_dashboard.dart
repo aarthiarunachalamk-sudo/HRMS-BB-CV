@@ -178,6 +178,7 @@ class _HrDashboardState extends State<HrDashboard> {
               HrTrainingScreen(data: data),
               HrTasksScreen(data: data),
               HrProfileScreen(
+                userId: widget.userId,
                 email: widget.email,
                 name: widget.firstName,
                 onLogout: _logout,

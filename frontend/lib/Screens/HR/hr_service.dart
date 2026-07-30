@@ -4,6 +4,19 @@ import 'package:http/http.dart' as http;
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class HrService {
+  Future<Map<String, dynamic>> fetchUserProfile(String userId) async {
+    final response = await http.get(ApiConfig.uri('/profile/?user_id=$userId')).timeout(_timeout);
+    return _decodeEmployeeResponse(response, 'Unable to load profile');
+  }
+
+  Future<Map<String, dynamic>> updateUserProfile(String userId, Map<String, dynamic> fields) async {
+    final response = await http.patch(
+      ApiConfig.uri('/profile/'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'user_id': userId, ...fields}),
+    ).timeout(_timeout);
+    return _decodeEmployeeResponse(response, 'Unable to update profile');
+  }
   static const String baseUrl = '${ApiConfig.baseUrl}/hr';
   static const Duration _timeout = Duration(seconds: 60);
 
@@ -23,6 +36,20 @@ class HrService {
         .get(ApiConfig.uri('/hr/employees/$employeeId/identity/'))
         .timeout(_timeout);
     return _decodeEmployeeResponse(response, 'Unable to load employee identity');
+  }
+
+  Future<Map<String, dynamic>> fetchEmployeeDetails(String employeeId) async {
+    final response = await http
+        .get(ApiConfig.uri('/hr/employees/$employeeId/details/'))
+        .timeout(_timeout);
+    return _decodeEmployeeResponse(response, 'Unable to load employee details');
+  }
+
+  Future<Map<String, dynamic>> fetchAttendanceDetails(int attendanceId) async {
+    final response = await http
+        .get(ApiConfig.uri('/hr/attendance/$attendanceId/'))
+        .timeout(_timeout);
+    return _decodeEmployeeResponse(response, 'Unable to load attendance details');
   }
 
   Future<Map<String, dynamic>> updateEmployeeIdentity(

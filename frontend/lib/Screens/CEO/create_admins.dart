@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/india_locations.dart';
 import 'ceo_widgets.dart';
@@ -266,7 +268,19 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
   bool _showPassword = false;
   bool _showConfirm = false;
   bool _loading = false;
+  File? _profilePhoto;
   int _step = 0; // 0=role, 1=personal, 2=password, 3=address, 4=identity
+
+  Future<void> _pickProfilePhoto() async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1200,
+    );
+    if (picked != null && mounted) {
+      setState(() => _profilePhoto = File(picked.path));
+    }
+  }
 
   @override
   void dispose() {
@@ -392,10 +406,11 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
     }
     setState(() => _loading = true);
     try {
-      final res = await http.post(
+      final request = http.MultipartRequest(
+        'POST',
         ApiConfig.uri('/create-user/'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      );
+      request.fields.addAll({
           'first_name': _firstName.text.trim(),
           'last_name': _lastName.text.trim(),
           'email': _email.text.trim(),
@@ -420,8 +435,15 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
           'pan': _pan.text.trim().toUpperCase(),
           'aadhar': _aadhar.text.trim().replaceAll(' ', ''),
           'role': _role,
-        }),
+        });
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'profile_photo',
+          _profilePhoto!.path,
+        ),
       );
+      final streamed = await request.send();
+      final res = await http.Response.fromStream(streamed);
       Map<String, dynamic> data;
       try {
         final decoded = jsonDecode(res.body);
@@ -461,7 +483,8 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
         _validateName(_lastName.text, 'Last name') != null ||
         _validateEmail(_email.text) != null ||
         _validatePhone(_phone.text) != null ||
-        _validateDob(_dob.text) != null) {
+        _validateDob(_dob.text) != null ||
+        _profilePhoto == null) {
       return 1;
     }
     if (_validatePassword(_password.text) != null ||
@@ -518,6 +541,7 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
 
   void _resetForm() {
     _formKey.currentState?.reset();
+    _profilePhoto = null;
     for (final c in [
       _firstName,
       _lastName,
@@ -570,9 +594,20 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 260),
-                    child: _buildStep(),
+                  child: Column(
+                    children: [
+                      if (_step == 1) ...[
+                        _MandatoryProfilePhoto(
+                          photo: _profilePhoto,
+                          onPick: _loading ? null : _pickProfilePhoto,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        child: _buildStep(),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -592,6 +627,10 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
   }
 
   void _handleNext() {
+    if (_step == 1 && _profilePhoto == null) {
+      _showError('Display picture is required.');
+      return;
+    }
     if (_formKey.currentState?.validate() ?? false) {
       setState(() => _step++);
     }
@@ -718,6 +757,69 @@ class _CeoCreateAdminsPageState extends State<CeoCreateAdminsPage> {
     }
 
     return 'Something went wrong';
+  }
+}
+
+class _MandatoryProfilePhoto extends StatelessWidget {
+  final File? photo;
+  final VoidCallback? onPick;
+
+  const _MandatoryProfilePhoto({required this.photo, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Upload mandatory display picture',
+      child: InkWell(
+        onTap: onPick,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: CeoColors.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: photo == null ? Colors.orangeAccent : CeoColors.green,
+            ),
+          ),
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 46,
+                backgroundColor: CeoColors.border,
+                backgroundImage: photo == null ? null : FileImage(photo!),
+                child: photo == null
+                    ? const Icon(
+                        Icons.add_a_photo_rounded,
+                        color: CeoColors.cyan,
+                        size: 34,
+                      )
+                    : null,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                photo == null
+                    ? 'Display Picture *'
+                    : 'Display Picture Selected',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                photo == null
+                    ? 'Tap to select a JPG or PNG photo'
+                    : 'Tap to change the selected photo',
+                style: const TextStyle(color: CeoColors.muted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

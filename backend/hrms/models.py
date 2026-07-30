@@ -115,6 +115,8 @@ class User(AbstractBaseUser):
     created_by = models.CharField(max_length=40, blank=True, db_index=True)
     pan = models.CharField(max_length=10, blank=True)
     aadhar = models.CharField(max_length=12, blank=True)
+    profile_photo = CloudinaryField('image', blank=True, null=True)
+    notification_preferences = models.JSONField(default=dict, blank=True)
 
     USERNAME_FIELD = 'user_id'
     objects = UserManager()

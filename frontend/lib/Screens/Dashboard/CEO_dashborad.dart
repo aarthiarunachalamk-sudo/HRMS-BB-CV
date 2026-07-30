@@ -54,7 +54,8 @@ class CeoDashboard extends StatefulWidget {
   State<CeoDashboard> createState() => _CeoDashboardState();
 }
 
-class _CeoDashboardState extends State<CeoDashboard> {
+class _CeoDashboardState extends State<CeoDashboard>
+    with WidgetsBindingObserver {
   int _selectedIndex = 0;
   final List<int> _tabHistory = <int>[];
   String _dashboardRole = 'CEO';
@@ -82,10 +83,25 @@ class _CeoDashboardState extends State<CeoDashboard> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _drawerProfileFuture = CeoService().fetchProfile(widget.userId);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showPendingMemberCreationPopup();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      CeoService.invalidateDashboardCache();
+      setState(() => _dashboardRefreshTick++);
+    }
   }
 
   void _refreshDrawerProfile() {
@@ -155,6 +171,7 @@ class _CeoDashboardState extends State<CeoDashboard> {
     setState(() {
       _selectedIndex = 0;
       _tabHistory.clear();
+      CeoService.invalidateDashboardCache();
       _dashboardRefreshTick++;
       _refreshDrawerProfile();
     });
@@ -165,16 +182,23 @@ class _CeoDashboardState extends State<CeoDashboard> {
     setState(() {
       if (remember) _tabHistory.add(_selectedIndex);
       _selectedIndex = index;
+      if (index == 0) _dashboardRefreshTick++;
     });
   }
 
   void _handleSystemBack() {
     if (_tabHistory.isNotEmpty) {
-      setState(() => _selectedIndex = _tabHistory.removeLast());
+      setState(() {
+        _selectedIndex = _tabHistory.removeLast();
+        if (_selectedIndex == 0) _dashboardRefreshTick++;
+      });
       return;
     }
     if (_selectedIndex != 0) {
-      setState(() => _selectedIndex = 0);
+      setState(() {
+        _selectedIndex = 0;
+        _dashboardRefreshTick++;
+      });
       return;
     }
     showLogoutExitConfirmation(context: context, onLogout: _logout);
@@ -813,12 +837,31 @@ class _DashboardView extends StatefulWidget {
 }
 
 class _DashboardViewState extends State<_DashboardView> {
-  late final Future<Map<String, dynamic>> _dashboardFuture;
+  late Future<Map<String, dynamic>> _dashboardFuture;
 
   @override
   void initState() {
     super.initState();
     _dashboardFuture = CeoService().fetchHomeDashboard(widget.userId);
+  }
+
+  Future<void> _openApprovalCategory(Map<String, dynamic> item) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CeoApprovalCategoryScreen(
+          category: _displayText(item['key']),
+          title: _displayText(item['title'], fallback: 'Approval'),
+          userId: widget.userId,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _dashboardFuture = CeoService().fetchHomeDashboard(
+        widget.userId,
+        forceRefresh: true,
+      );
+    });
   }
 
   @override
@@ -910,15 +953,7 @@ class _DashboardViewState extends State<_DashboardView> {
             _ApprovalsExecutiveCard(
               items: _mapList(data['approvals_summary']),
               onTap: widget.onOpenApprovals,
-              onItemTap: (item) => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => CeoApprovalCategoryScreen(
-                    category: _displayText(item['key']),
-                    title: _displayText(item['title'], fallback: 'Approval'),
-                    userId: widget.userId,
-                  ),
-                ),
-              ),
+              onItemTap: _openApprovalCategory,
             ),
             const SizedBox(height: 14),
             _DepartmentPerformanceExecutiveCard(
@@ -5458,18 +5493,21 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
                 _displayText(category['title'], fallback: 'Approval'),
                 '${_displayText(category['count'], fallback: '0')} pending - $priority',
                 _priorityColor(priority),
-                () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CeoApprovalCategoryScreen(
-                      category: _displayText(category['key']),
-                      title: _displayText(
-                        category['title'],
-                        fallback: 'Approval',
+                () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => CeoApprovalCategoryScreen(
+                        category: _displayText(category['key']),
+                        title: _displayText(
+                          category['title'],
+                          fallback: 'Approval',
+                        ),
+                        userId: widget.userId,
                       ),
-                      userId: widget.userId,
                     ),
-                  ),
-                ),
+                  );
+                  if (mounted) setState(() {});
+                },
               );
             }),
           ],

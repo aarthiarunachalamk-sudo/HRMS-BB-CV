@@ -269,10 +269,16 @@ class HrListTile extends StatelessWidget {
       ),
     );
     if (onTap == null) return tile;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: tile,
+    return Semantics(
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: tile,
+        ),
+      ),
     );
   }
 }

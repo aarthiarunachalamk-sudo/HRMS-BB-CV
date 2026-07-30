@@ -5,6 +5,8 @@ from . import employee_views
 urlpatterns = [
     path('health/', views.health_view, name='health'),
     path('login/', views.login_view, name='login'),
+    path('profile/photo/', views.profile_photo_upload_view, name='profile_photo_upload'),
+    path('profile/', views.user_profile_view, name='user_profile'),
     path('forgot-password/', views.forgot_password_view, name='forgot_password'),
     path('create-user/', views.create_user_view, name='create_user'),
     path('register-employee/', views.register_employee_view, name='register_employee'),
@@ -72,6 +74,8 @@ urlpatterns = [
     path('superadmin/notifications/', views.superadmin_notifications_view, name='superadmin_notifications'),
     path('hr/dashboard/', views.hr_dashboard_view, name='hr_dashboard'),
     path('hr/employees/<str:employee_id>/identity/', views.hr_employee_identity_view, name='hr_employee_identity'),
+    path('hr/employees/<str:employee_id>/details/', views.hr_employee_detail_view, name='hr_employee_detail'),
+    path('hr/attendance/<int:pk>/', views.hr_attendance_detail_view, name='hr_attendance_detail'),
     path('hr/payroll/generate/', views.hr_generate_payroll_view, name='hr_generate_payroll'),
     path('hr/payroll/process/', views.hr_payroll_process_view, name='hr_payroll_process'),
     path('hr/payslip-pdf/upload/', views.hr_upload_payslip_pdf_view, name='hr_upload_payslip_pdf'),

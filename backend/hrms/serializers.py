@@ -77,6 +77,9 @@ class LoginSerializer(serializers.Serializer):
     login_as = serializers.CharField(required=False, allow_blank=True)
 
 class CreateUserSerializer(serializers.Serializer):
+    # CEO creation supplies this immediately. Legacy HR/Super Admin creation
+    # flows are gated at first login until the user uploads a display picture.
+    profile_photo = serializers.ImageField(required=False, allow_null=True)
     first_name = serializers.CharField()
     last_name = serializers.CharField()
     email = serializers.EmailField()

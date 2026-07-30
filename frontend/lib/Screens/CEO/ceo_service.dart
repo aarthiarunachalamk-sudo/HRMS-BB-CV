@@ -10,8 +10,20 @@ class CeoService {
   static final Map<String, Future<Map<String, dynamic>>> _inFlight = {};
 
   // ── Dashboard ─────────────────────────────────────────────
-  Future<Map<String, dynamic>> fetchHomeDashboard(String userId) async {
+  static void invalidateDashboardCache() {
+    _cache.removeWhere((key, _) => key.startsWith('home:'));
+    _inFlight.removeWhere((key, _) => key.startsWith('home:'));
+  }
+
+  Future<Map<String, dynamic>> fetchHomeDashboard(
+    String userId, {
+    bool forceRefresh = false,
+  }) async {
     final key = 'home:$userId';
+    if (forceRefresh) {
+      _cache.remove(key);
+      _inFlight.remove(key);
+    }
     final cached = _cache[key];
     if (cached != null && !cached.isExpired) return cached.data;
     final running = _inFlight[key];
@@ -196,12 +208,18 @@ class CeoService {
     String status,
     String reviewedBy,
     String approverComments,
-  ) => _post('/approvals/$leaveId/', {
-    'status': status,
-    'user_id': reviewedBy,
-    'reviewed_by': reviewedBy,
-    'approver_comments': approverComments,
-  });
+  ) async {
+    final result = await _post('/approvals/$leaveId/', {
+      'status': status,
+      'user_id': reviewedBy,
+      'reviewed_by': reviewedBy,
+      'approver_comments': approverComments,
+    });
+    if (result['success'] == true) {
+      invalidateDashboardCache();
+    }
+    return result;
+  }
 
   // ── Employees ─────────────────────────────────────────────
   Future<Map<String, dynamic>> fetchEmployees(String userId) =>

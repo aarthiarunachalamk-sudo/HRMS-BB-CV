@@ -91,6 +91,8 @@ def login_view(request):
                 'first_name': user.first_name,
                 'user_id': user.user_id,
                 'employee_id': employee_account.employee_id if employee_account else user.user_id,
+                'profile_photo_url': _passport_photo_for_email(user.email),
+                'requires_profile_photo': not bool(_passport_photo_for_email(user.email)),
                 'permissions': permissions_for_role(login_role),
             })
         if not candidates:
@@ -102,6 +104,76 @@ def login_view(request):
             }, status=409)
         return Response({'success': False, 'message': 'Wrong password'}, status=400)
     return Response(serializer.errors, status=400)
+
+
+@api_view(['POST'])
+def profile_photo_upload_view(request):
+    user_id = str(request.data.get('user_id') or '').strip()
+    upload = request.FILES.get('profile_photo')
+    if not user_id:
+        return Response({'success': False, 'message': 'User ID is required.'}, status=400)
+    if upload is None:
+        return Response({'success': False, 'message': 'Display picture is required.'}, status=400)
+    if not str(getattr(upload, 'content_type', '')).lower().startswith('image/'):
+        return Response({'success': False, 'message': 'Display picture must be an image.'}, status=400)
+    if upload.size > 5 * 1024 * 1024:
+        return Response({'success': False, 'message': 'Display picture must be 5 MB or smaller.'}, status=400)
+    user = User.objects.filter(user_id=user_id, is_active=True).first()
+    if user is None:
+        return Response({'success': False, 'message': 'Active user was not found.'}, status=404)
+    user.profile_photo = upload
+    user.save(update_fields=['profile_photo'])
+    return Response({
+        'success': True,
+        'message': 'Display picture uploaded successfully.',
+        'profile_photo_url': _passport_photo_for_email(user.email),
+    })
+
+
+@api_view(['GET', 'PATCH'])
+def user_profile_view(request):
+    user_id = str(request.query_params.get('user_id') or request.data.get('user_id') or '').strip()
+    user = User.objects.filter(user_id=user_id, is_active=True).first()
+    if user is None:
+        return Response({'success': False, 'message': 'Active user was not found.'}, status=404)
+    if request.method == 'PATCH':
+        for field in ['first_name', 'last_name', 'country_code', 'phone', 'door_no', 'street', 'city', 'state', 'pincode']:
+            if field in request.data:
+                setattr(user, field, str(request.data.get(field) or '').strip())
+        preferences = request.data.get('notification_preferences')
+        if isinstance(preferences, dict):
+            user.notification_preferences = {
+                'push': bool(preferences.get('push', True)),
+                'leave': bool(preferences.get('leave', True)),
+                'attendance': bool(preferences.get('attendance', True)),
+                'meetings': bool(preferences.get('meetings', True)),
+            }
+        user.save()
+    preferences = {
+        'push': True,
+        'leave': True,
+        'attendance': True,
+        'meetings': True,
+        **(user.notification_preferences or {}),
+    }
+    return Response({'success': True, 'profile': {
+        'user_id': user.user_id,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'email': user.email,
+        'country_code': user.country_code,
+        'phone': user.phone,
+        'role': user.get_role_display(),
+        'department': user.department,
+        'designation': user.occupation,
+        'door_no': user.door_no,
+        'street': user.street,
+        'city': user.city,
+        'state': user.state,
+        'pincode': user.pincode,
+        'profile_photo_url': _passport_photo_for_email(user.email),
+        'notification_preferences': preferences,
+    }})
 
 
 @api_view(['POST'])
@@ -921,6 +993,12 @@ def _user_brief(user_id):
 def _passport_photo_for_email(email):
     if not email:
         return ''
+    user = User.objects.filter(email__iexact=email).exclude(profile_photo='').first()
+    if user and user.profile_photo:
+        try:
+            return user.profile_photo.url
+        except (AttributeError, ValueError):
+            return str(user.profile_photo)
     registration = EmployeeRegistration.objects.filter(personal_email__iexact=email).order_by('-submitted_at').first()
     if not registration:
         return ''
@@ -1352,10 +1430,6 @@ def _ceo_approvals_summary():
     leave_count = _active_pending_leave_queryset().count()
     salary_count = PayrollProcess.objects.filter(status='approval').count()
     hiring_count = EmployeeRegistration.objects.filter(status='pending').count()
-    if leave_count == 0 and salary_count == 0 and hiring_count == 0:
-        leave_count = 3
-        salary_count = 1
-        hiring_count = 2
     return [
         {'key': 'leave', 'title': 'Leave Approval', 'count': leave_count, 'priority': 'High' if leave_count else 'Clear'},
         {'key': 'claim', 'title': 'Claim Approval', 'count': 0, 'priority': 'Clear'},
@@ -3081,6 +3155,7 @@ def hr_dashboard_view(request):
         details = employee_details.get(record.employee_id, {})
         attendance_records.append({
             **details,
+            'attendance_id': record.id,
             'employee_id': record.employee_id,
             'name': details.get('name') or record.employee_id,
             'subtitle': f"{record.attendance_date} · {record.status}",
@@ -6258,6 +6333,65 @@ def admin_employees_view(request):
     return Response({'success': True, 'employees': _admin_employee_items()})
 
 
+@api_view(['GET'])
+def hr_employee_detail_view(request, employee_id):
+    employee = next(
+        (
+            item
+            for item in _employee_directory_items(include_attendance=True)
+            if str(item.get('id') or item.get('employee_id') or '') == employee_id
+        ),
+        None,
+    )
+    if employee is None:
+        return Response(
+            {'success': False, 'message': 'Employee details were not found.'},
+            status=404,
+        )
+    return Response({'success': True, 'employee': employee})
+
+
+@api_view(['GET'])
+def hr_attendance_detail_view(request, pk):
+    record = EmployeeAttendanceRecord.objects.filter(pk=pk).first()
+    if record is None:
+        return Response(
+            {'success': False, 'message': 'Attendance record was not found.'},
+            status=404,
+        )
+    employee = next(
+        (
+            item
+            for item in _employee_directory_items()
+            if str(item.get('id') or '') == record.employee_id
+        ),
+        {},
+    )
+    return Response({
+        'success': True,
+        'attendance': {
+            **employee,
+            'attendance_id': record.id,
+            'employee_id': record.employee_id,
+            'name': employee.get('name') or record.employee_id,
+            'attendance_date': record.attendance_date.isoformat(),
+            'attendance_status': record.status,
+            'status': record.status,
+            'check_in': _format_time(record.check_in, record.check_in_timezone_offset_minutes),
+            'check_out': _format_time(record.check_out, record.check_out_timezone_offset_minutes),
+            'working_hours': record.working_hours or '',
+            'check_in_selfie': _file_url(request, record.check_in_selfie),
+            'check_out_selfie': _file_url(request, record.check_out_selfie),
+            'check_in_latitude': record.check_in_latitude or '',
+            'check_in_longitude': record.check_in_longitude or '',
+            'check_in_accuracy': record.check_in_accuracy or '',
+            'check_out_latitude': record.check_out_latitude or '',
+            'check_out_longitude': record.check_out_longitude or '',
+            'check_out_accuracy': record.check_out_accuracy or '',
+        },
+    })
+
+
 @api_view(['GET', 'PATCH'])
 def hr_employee_identity_view(request, employee_id):
     """Allow HR to maintain office identity without touching registration data."""
@@ -6807,6 +6941,7 @@ def create_user_view(request):
             created_by=data.get('created_by', ''),
             pan=data['pan'],
             aadhar=data['aadhar'],
+            profile_photo=data.get('profile_photo'),
         )
         user.set_password(data['password'])
         user.save()

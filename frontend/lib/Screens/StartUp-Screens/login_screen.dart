@@ -25,6 +25,7 @@ import 'Change_Password.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Employee_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/meeting_notification_gate.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/mandatory_profile_photo_gate.dart';
 import 'package:hrms_mobileapp_bitbyte/Services/push_notification_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -322,6 +323,12 @@ class _LoginScreenState extends State<LoginScreen> {
         dashboard = MeetingNotificationGate(
           userId: notificationUserId,
           role: role,
+          child: dashboard,
+        );
+
+        dashboard = MandatoryProfilePhotoGate(
+          userId: sessionUserId,
+          required: data['requires_profile_photo'] == true,
           child: dashboard,
         );
 

@@ -18,6 +18,35 @@ class HrEmployeeDetailScreen extends StatefulWidget {
 class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
   late Map<String, dynamic> employee = Map<String, dynamic>.from(widget.employee);
   bool _saving = false;
+  bool _loading = false;
+  String? _loadError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDetails();
+  }
+
+  Future<void> _loadDetails() async {
+    final employeeId = _get('id').isNotEmpty ? _get('id') : _get('trailing');
+    if (employeeId.isEmpty) return;
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final response = await HrService().fetchEmployeeDetails(employeeId);
+      final loaded = response['employee'];
+      if (!mounted) return;
+      if (loaded is Map) {
+        setState(() => employee = Map<String, dynamic>.from(loaded));
+      }
+    } catch (error) {
+      if (mounted) setState(() => _loadError = '$error');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   String _get(String key) => '${employee[key] ?? ''}';
 
@@ -112,6 +141,15 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 30),
         children: [
+          if (_loading) const LinearProgressIndicator(),
+          if (_loadError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Unable to refresh details. Showing available information.',
+                style: TextStyle(color: c.danger, fontWeight: FontWeight.w700),
+              ),
+            ),
           // ── Header ─────────────────────────────────────────────
           _card(c, [
             Center(
@@ -241,6 +279,9 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
               if (_get('pan').isNotEmpty) _row('PAN', _get('pan'), c),
             ]),
           ],
+          const SizedBox(height: 14),
+          _sectionLabel('Attendance Details', c),
+          _attendanceSection(c),
         ],
       ),
     );
@@ -341,6 +382,35 @@ class _HrEmployeeDetailScreenState extends State<HrEmployeeDetailScreen> {
         ],
       ),
     );
+  }
+  Widget _attendanceSection(HrPalette c) {
+    final summary = employee['attendance_summary'] is Map
+        ? Map<String, dynamic>.from(employee['attendance_summary'] as Map)
+        : <String, dynamic>{};
+    final records = employee['recent_attendance'] is List
+        ? (employee['recent_attendance'] as List)
+              .whereType<Map>()
+              .map(Map<String, dynamic>.from)
+              .toList()
+        : <Map<String, dynamic>>[];
+    return _card(c, [
+      _row('Present', '${summary['present'] ?? 0}', c),
+      _row('Late', '${summary['late'] ?? 0}', c),
+      _row('Absent', '${summary['absent'] ?? 0}', c),
+      if (records.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Text('No attendance records available.', style: TextStyle(color: c.muted)),
+        )
+      else
+        ...records.take(10).map(
+          (record) => _row(
+            '${record['date'] ?? record['attendance_date'] ?? '-'}',
+            '${record['status'] ?? '-'} · ${record['check_in'] ?? '-'} - ${record['check_out'] ?? '-'}',
+            c,
+          ),
+        ),
+    ]);
   }
 }
 
@@ -443,4 +513,38 @@ class _EmploymentIdentityEditorState
       ),
     );
   }
+
+  /* Legacy misplaced helper retained temporarily by patch history.
+  Widget _attendanceSection(HrPalette c) {
+    final rawSummary = employee['attendance_summary'];
+    final summary = rawSummary is Map
+        ? Map<String, dynamic>.from(rawSummary)
+        : <String, dynamic>{};
+    final rawRecords = employee['recent_attendance'];
+    final records = rawRecords is List
+        ? rawRecords.whereType<Map>().map(Map<String, dynamic>.from).toList()
+        : <Map<String, dynamic>>[];
+    return _card(c, [
+      _row('Present', '${summary['present'] ?? 0}', c),
+      _row('Late', '${summary['late'] ?? 0}', c),
+      _row('Absent', '${summary['absent'] ?? 0}', c),
+      if (records.isEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Text(
+            'No attendance records available.',
+            style: TextStyle(color: c.muted),
+          ),
+        )
+      else
+        ...records.take(10).map(
+          (record) => _row(
+            '${record['date'] ?? record['attendance_date'] ?? '-'}',
+            '${record['status'] ?? '-'} · ${record['check_in'] ?? '-'} - ${record['check_out'] ?? '-'}',
+            c,
+          ),
+        ),
+    ]);
+  }
+  */
 }

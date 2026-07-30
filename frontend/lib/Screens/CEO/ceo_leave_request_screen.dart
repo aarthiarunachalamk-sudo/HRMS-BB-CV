@@ -107,6 +107,7 @@ class _CeoLeaveRequestScreenState extends State<CeoLeaveRequestScreen> {
               status == 'approved' ? CeoColors.green : Colors.redAccent,
         ),
       );
+      Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
