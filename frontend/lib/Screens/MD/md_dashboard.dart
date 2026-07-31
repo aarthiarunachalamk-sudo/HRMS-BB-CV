@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
@@ -2206,7 +2207,11 @@ class _MdMorePage extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         InkWell(
-          onTap: () => onOpenFlow('settings-preferences'),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => UserPersonalInformationScreen(userId: userId),
+            ),
+          ),
           borderRadius: BorderRadius.circular(18),
           child: Container(
             padding: const EdgeInsets.all(16),

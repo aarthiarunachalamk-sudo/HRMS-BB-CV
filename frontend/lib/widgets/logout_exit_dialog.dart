@@ -12,12 +12,34 @@ Future<void> showLogoutConfirmation({
     builder: (dialogContext) => AlertDialog(
       backgroundColor: ThemeConfig.getCardBg(dialogContext),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      icon: const Icon(Icons.logout_rounded, color: Colors.orangeAccent, size: 42),
-      title: Text('Logout?', textAlign: TextAlign.center, style: TextStyle(color: ThemeConfig.getTextPrimary(dialogContext), fontWeight: FontWeight.w900)),
-      content: Text('Are you sure you want to logout from this session?', textAlign: TextAlign.center, style: TextStyle(color: ThemeConfig.getTextSecondary(dialogContext))),
+      icon: const Icon(
+        Icons.logout_rounded,
+        color: Colors.orangeAccent,
+        size: 42,
+      ),
+      title: Text(
+        'Logout?',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: ThemeConfig.getTextPrimary(dialogContext),
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      content: Text(
+        'Are you sure you want to logout?',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: ThemeConfig.getTextSecondary(dialogContext)),
+      ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-        FilledButton.icon(onPressed: () => Navigator.pop(dialogContext, true), icon: const Icon(Icons.logout_rounded), label: const Text('Logout')),
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          icon: const Icon(Icons.logout_rounded),
+          label: const Text('Logout'),
+        ),
       ],
     ),
   );
@@ -52,9 +74,7 @@ Future<void> showLogoutExitConfirmation({
         content: Text(
           'Do you want to log out and close the HRMS app?',
           textAlign: TextAlign.center,
-          style: TextStyle(
-            color: ThemeConfig.getTextSecondary(dialogContext),
-          ),
+          style: TextStyle(color: ThemeConfig.getTextSecondary(dialogContext)),
         ),
         actions: [
           TextButton(

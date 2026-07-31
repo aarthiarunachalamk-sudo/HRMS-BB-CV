@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/separated_date_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
-import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/Change_Password.dart';
 
 import 'admin_palette.dart';
 import 'admin_service.dart';
@@ -783,78 +783,8 @@ class AdminProfileScreen extends StatelessWidget {
   const AdminProfileScreen({super.key, required this.userId});
 
   @override
-  Widget build(BuildContext context) {
-    final c = AdminPalette.of(context);
-    return AdminShell(
-      title: 'Profile',
-      child: FutureBuilder<Map<String, dynamic>>(
-        future: AdminService().fetchProfile(userId),
-        builder: (context, snapshot) {
-          final profile = _map(snapshot.data?['profile']);
-          final name = _text(profile['name'], 'Admin');
-          return adminPageList([
-            AdminCard(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 42,
-                    backgroundColor: c.primary.withOpacity(0.14),
-                    child: Icon(
-                      Icons.admin_panel_settings_rounded,
-                      color: c.primary,
-                      size: 38,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  adminTitle(name, 18, c),
-                  adminMuted(_text(profile['email'], '-'), 12, c),
-                ],
-              ),
-            ),
-            AdminCard(
-              child: Column(
-                children: [
-                  AdminInfoRow('Mobile', _text(profile['phone'], 'N/A')),
-                  Divider(color: c.border),
-                  AdminInfoRow(
-                    'Department',
-                    _text(profile['department'], 'N/A'),
-                  ),
-                  Divider(color: c.border),
-                  AdminInfoRow('Role', _text(profile['role'], 'Admin')),
-                  Divider(color: c.border),
-                  AdminInfoRow('Status', _text(profile['status'], 'Active')),
-                ],
-              ),
-            ),
-            AdminListTile(
-              icon: Icons.lock_reset_rounded,
-              titleText: 'Change Password',
-              subtitle: 'Update login password',
-              color: c.purple,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ChangePasswordScreen(employeeId: userId, otc: ''),
-                ),
-              ),
-            ),
-            AdminListTile(
-              icon: Icons.history_rounded,
-              titleText: 'Activity Log',
-              subtitle: 'Shown through backend notifications',
-              color: c.orange,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => AdminNotificationsScreen(userId: userId),
-                ),
-              ),
-            ),
-          ]);
-        },
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      UserPersonalInformationScreen(userId: userId);
 }
 
 class AdminChangePasswordScreen extends StatelessWidget {
@@ -1223,9 +1153,6 @@ Color _priorityColor(String priority, AdminPalette c) {
       return c.green;
   }
 }
-
-Map<String, dynamic> _map(dynamic value) =>
-    value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
 
 List<Map<String, dynamic>> _mapList(dynamic value) => value is List
     ? value

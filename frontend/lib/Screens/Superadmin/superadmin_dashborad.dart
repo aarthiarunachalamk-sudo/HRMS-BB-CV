@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
@@ -71,70 +72,74 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
         }
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-      value: colors.isDark
-          ? SystemUiOverlayStyle.light
-          : SystemUiOverlayStyle.dark,
-      child: Scaffold(
-        key: _scaffoldKey,
-        backgroundColor: colors.background,
-        drawer: _buildDrawer(colors),
-        body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [colors.background, colors.backgroundAlt],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+        value: colors.isDark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          key: _scaffoldKey,
+          backgroundColor: colors.background,
+          drawer: _buildDrawer(colors),
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [colors.background, colors.backgroundAlt],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
             ),
-          ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                _buildTopBar(colors),
-                if (_selectedIndex == 0)
-                  _SuperAdminRoleBasedBar(
+            child: SafeArea(
+              child: Column(
+                children: [
+                  _buildTopBar(colors),
+                  if (_selectedIndex == 0)
+                    _SuperAdminRoleBasedBar(
+                      colors: colors,
+                      email: widget.email,
+                      role: _dashboardRole,
+                      onChanged: (role) =>
+                          setState(() => _dashboardRole = role),
+                    ),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _selectedIndex,
+                      children: [
+                        _DashboardView(
+                          colors: colors,
+                          email: widget.email,
+                          name: widget.firstName,
+                          onOpenCreateUser: _openCreateAdmins,
+                          onOpenSection: _setSection,
+                          onOpenUsersFocus: _openUsersFocus,
+                          onOpenWorkflowFocus: _openWorkflowFocus,
+                        ),
+                        _UsersView(
+                          colors: colors,
+                          onOpenCreateUser: _openCreateAdmins,
+                          focus: _usersFocus,
+                        ),
+                        _WorkflowView(colors: colors, focus: _workflowFocus),
+                        _ReportsView(colors: colors),
+                        _SettingsView(
+                          colors: colors,
+                          email: widget.email,
+                          onLogout: () => showLogoutConfirmation(
+                            context: context,
+                            onLogout: _logout,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _BottomNav(
                     colors: colors,
-                    email: widget.email,
-                    role: _dashboardRole,
-                    onChanged: (role) => setState(() => _dashboardRole = role),
+                    selectedIndex: _selectedIndex,
+                    onTap: _setSection,
                   ),
-                Expanded(
-                  child: IndexedStack(
-                    index: _selectedIndex,
-                    children: [
-                      _DashboardView(
-                        colors: colors,
-                        email: widget.email,
-                        name: widget.firstName,
-                        onOpenCreateUser: _openCreateAdmins,
-                        onOpenSection: _setSection,
-                        onOpenUsersFocus: _openUsersFocus,
-                        onOpenWorkflowFocus: _openWorkflowFocus,
-                      ),
-                      _UsersView(
-                        colors: colors,
-                        onOpenCreateUser: _openCreateAdmins,
-                        focus: _usersFocus,
-                      ),
-                      _WorkflowView(colors: colors, focus: _workflowFocus),
-                      _ReportsView(colors: colors),
-                      _SettingsView(
-                        colors: colors,
-                        email: widget.email,
-                        onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
-                      ),
-                    ],
-                  ),
-                ),
-                _BottomNav(
-                  colors: colors,
-                  selectedIndex: _selectedIndex,
-                  onTap: _setSection,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -398,6 +403,21 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         _setSection(4);
                       },
                     ),
+                    _DrawerActionTile(
+                      colors: colors,
+                      icon: Icons.account_circle_rounded,
+                      title: 'Profile',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => UserPersonalInformationScreen(
+                              userId: widget.userId,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -435,7 +455,8 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                 icon: Icons.logout_rounded,
                 title: 'Logout',
                 danger: true,
-                onTap: () => showLogoutConfirmation(context: context, onLogout: _logout),
+                onTap: () =>
+                    showLogoutConfirmation(context: context, onLogout: _logout),
               ),
               const SizedBox(height: 4),
             ],

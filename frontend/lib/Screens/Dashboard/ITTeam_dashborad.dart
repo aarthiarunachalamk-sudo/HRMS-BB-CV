@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
@@ -396,6 +397,22 @@ class _ITTeamDashboardState extends State<ITTeamDashboard> {
             const Divider(),
             ListTile(
               leading: const Icon(
+                Icons.account_circle_rounded,
+                color: Color(0xFFA18CD1),
+              ),
+              title: Text('Profile', style: TextStyle(color: textPrimary)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        UserPersonalInformationScreen(userId: widget.userId),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(
                 Icons.logout_rounded,
                 color: Colors.redAccent,
               ),
@@ -406,7 +423,8 @@ class _ITTeamDashboardState extends State<ITTeamDashboard> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              onTap: () => showLogoutConfirmation(context: context, onLogout: _logout),
+              onTap: () =>
+                  showLogoutConfirmation(context: context, onLogout: _logout),
             ),
           ],
         ),

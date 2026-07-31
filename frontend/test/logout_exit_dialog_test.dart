@@ -37,4 +37,31 @@ void main() {
     expect(find.text('Log Out & Exit?'), findsNothing);
     expect(loggedOut, isFalse);
   });
+
+  testWidgets('regular logout asks for confirmation', (tester) async {
+    var loggedOut = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showLogoutConfirmation(
+              context: context,
+              onLogout: () => loggedOut = true,
+            ),
+            child: const Text('Logout'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Logout'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Are you sure you want to logout?'), findsOneWidget);
+    expect(loggedOut, isFalse);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(loggedOut, isFalse);
+  });
 }

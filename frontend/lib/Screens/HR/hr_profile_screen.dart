@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/Change_Password.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 import 'hr_service.dart';
 import 'hr_shared.dart';
 
@@ -46,11 +47,7 @@ class _HrProfileScreenState extends State<HrProfileScreen> {
           backgroundColor: colors.primary.withAlpha(30),
           foregroundImage: photoUrl.isEmpty ? null : NetworkImage(photoUrl),
           onForegroundImageError: photoUrl.isEmpty ? null : (_, __) {},
-          child: Icon(
-            Icons.person_rounded,
-            color: colors.primary,
-            size: 34,
-          ),
+          child: Icon(Icons.person_rounded, color: colors.primary, size: 34),
         );
       },
     );
@@ -92,7 +89,10 @@ class _HrProfileScreenState extends State<HrProfileScreen> {
           title: 'Personal Information',
           subtitle: 'Profile and contact details',
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => _HrPersonalInformationScreen(userId: widget.userId)),
+            MaterialPageRoute(
+              builder: (_) =>
+                  UserPersonalInformationScreen(userId: widget.userId),
+            ),
           ),
         ),
         const SizedBox(height: 10),
@@ -102,7 +102,8 @@ class _HrProfileScreenState extends State<HrProfileScreen> {
           subtitle: 'Security settings',
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => ChangePasswordScreen(employeeId: widget.userId, otc: ''),
+              builder: (_) =>
+                  ChangePasswordScreen(employeeId: widget.userId, otc: ''),
             ),
           ),
         ),
@@ -112,7 +113,10 @@ class _HrProfileScreenState extends State<HrProfileScreen> {
           title: 'Notification Settings',
           subtitle: 'Alerts and reminders',
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => _HrNotificationSettingsScreen(userId: widget.userId)),
+            MaterialPageRoute(
+              builder: (_) =>
+                  _HrNotificationSettingsScreen(userId: widget.userId),
+            ),
           ),
         ),
         const SizedBox(height: 10),
@@ -142,10 +146,12 @@ class _HrPersonalInformationScreen extends StatefulWidget {
   const _HrPersonalInformationScreen({required this.userId});
 
   @override
-  State<_HrPersonalInformationScreen> createState() => _HrPersonalInformationScreenState();
+  State<_HrPersonalInformationScreen> createState() =>
+      _HrPersonalInformationScreenState();
 }
 
-class _HrPersonalInformationScreenState extends State<_HrPersonalInformationScreen> {
+class _HrPersonalInformationScreenState
+    extends State<_HrPersonalInformationScreen> {
   late Future<Map<String, dynamic>> _future;
 
   @override
@@ -163,18 +169,27 @@ class _HrPersonalInformationScreenState extends State<_HrPersonalInformationScre
       body: FutureBuilder<Map<String, dynamic>>(
         future: _future,
         builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData)
+            return const Center(child: CircularProgressIndicator());
           final raw = snapshot.data!['profile'];
-          final profile = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
-          final name = '${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}'.trim();
+          final profile = raw is Map
+              ? Map<String, dynamic>.from(raw)
+              : <String, dynamic>{};
+          final name =
+              '${profile['first_name'] ?? ''} ${profile['last_name'] ?? ''}'
+                  .trim();
           final photoUrl = '${profile['profile_photo_url'] ?? ''}'.trim();
-          final address = [
-            profile['door_no'],
-            profile['street'],
-            profile['city'],
-            profile['state'],
-            profile['pincode'],
-          ].map((value) => '${value ?? ''}'.trim()).where((value) => value.isNotEmpty).join(', ');
+          final address =
+              [
+                    profile['door_no'],
+                    profile['street'],
+                    profile['city'],
+                    profile['state'],
+                    profile['pincode'],
+                  ]
+                  .map((value) => '${value ?? ''}'.trim())
+                  .where((value) => value.isNotEmpty)
+                  .join(', ');
 
           return SafeArea(
             top: false,
@@ -188,9 +203,17 @@ class _HrPersonalInformationScreenState extends State<_HrPersonalInformationScre
                       CircleAvatar(
                         radius: 34,
                         backgroundColor: c.primary.withAlpha(28),
-                        foregroundImage: photoUrl.isEmpty ? null : NetworkImage(photoUrl),
-                        onForegroundImageError: photoUrl.isEmpty ? null : (_, __) {},
-                        child: Icon(Icons.person_rounded, color: c.primary, size: 34),
+                        foregroundImage: photoUrl.isEmpty
+                            ? null
+                            : NetworkImage(photoUrl),
+                        onForegroundImageError: photoUrl.isEmpty
+                            ? null
+                            : (_, __) {},
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: c.primary,
+                          size: 34,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -201,23 +224,38 @@ class _HrPersonalInformationScreenState extends State<_HrPersonalInformationScre
                               name.isEmpty ? 'HR Manager' : name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: c.text, fontSize: 18, fontWeight: FontWeight.w900),
+                              style: TextStyle(
+                                color: c.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                             const SizedBox(height: 5),
                             Text(
                               _displayValue(profile['designation']),
-                              style: TextStyle(color: c.muted, fontSize: 12, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                color: c.muted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             const SizedBox(height: 10),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
                                 color: c.primary.withAlpha(24),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Text(
                                 _displayValue(profile['user_id']),
-                                style: TextStyle(color: c.primary, fontSize: 11, fontWeight: FontWeight.w800),
+                                style: TextStyle(
+                                  color: c.primary,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ],
@@ -230,11 +268,17 @@ class _HrPersonalInformationScreenState extends State<_HrPersonalInformationScre
                 _ProfileSection(
                   title: 'Contact information',
                   children: [
-                    _ProfileInfoRow(icon: Icons.email_outlined, label: 'Email', value: profile['email']),
+                    _ProfileInfoRow(
+                      icon: Icons.email_outlined,
+                      label: 'Email',
+                      value: profile['email'],
+                    ),
                     _ProfileInfoRow(
                       icon: Icons.phone_outlined,
                       label: 'Phone',
-                      value: '${profile['country_code'] ?? ''} ${profile['phone'] ?? ''}'.trim(),
+                      value:
+                          '${profile['country_code'] ?? ''} ${profile['phone'] ?? ''}'
+                              .trim(),
                       showDivider: false,
                     ),
                   ],
@@ -243,8 +287,16 @@ class _HrPersonalInformationScreenState extends State<_HrPersonalInformationScre
                 _ProfileSection(
                   title: 'Employment information',
                   children: [
-                    _ProfileInfoRow(icon: Icons.badge_outlined, label: 'Role', value: profile['role']),
-                    _ProfileInfoRow(icon: Icons.work_outline_rounded, label: 'Designation', value: profile['designation']),
+                    _ProfileInfoRow(
+                      icon: Icons.badge_outlined,
+                      label: 'Role',
+                      value: profile['role'],
+                    ),
+                    _ProfileInfoRow(
+                      icon: Icons.work_outline_rounded,
+                      label: 'Designation',
+                      value: profile['designation'],
+                    ),
                     _ProfileInfoRow(
                       icon: Icons.account_tree_outlined,
                       label: 'Department',
@@ -303,10 +355,18 @@ class _ProfileSection extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
             title.toUpperCase(),
-            style: TextStyle(color: c.muted, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: .8),
+            style: TextStyle(
+              color: c.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .8,
+            ),
           ),
         ),
-        HrCard(padding: EdgeInsets.zero, child: Column(children: children)),
+        HrCard(
+          padding: EdgeInsets.zero,
+          child: Column(children: children),
+        ),
       ],
     );
   }
@@ -362,9 +422,24 @@ class _ProfileInfoRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: TextStyle(color: c.muted, fontSize: 11, fontWeight: FontWeight.w600)),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: c.muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text(displayValue, style: TextStyle(color: c.text, fontSize: 13, height: 1.35, fontWeight: FontWeight.w700)),
+                    Text(
+                      displayValue,
+                      style: TextStyle(
+                        color: c.text,
+                        fontSize: 13,
+                        height: 1.35,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -382,11 +457,18 @@ class _HrNotificationSettingsScreen extends StatefulWidget {
   const _HrNotificationSettingsScreen({required this.userId});
 
   @override
-  State<_HrNotificationSettingsScreen> createState() => _HrNotificationSettingsScreenState();
+  State<_HrNotificationSettingsScreen> createState() =>
+      _HrNotificationSettingsScreenState();
 }
 
-class _HrNotificationSettingsScreenState extends State<_HrNotificationSettingsScreen> {
-  final Map<String, bool> _values = {'push': true, 'leave': true, 'attendance': true, 'meetings': true};
+class _HrNotificationSettingsScreenState
+    extends State<_HrNotificationSettingsScreen> {
+  final Map<String, bool> _values = {
+    'push': true,
+    'leave': true,
+    'attendance': true,
+    'meetings': true,
+  };
   bool _loading = true;
 
   @override
@@ -399,9 +481,12 @@ class _HrNotificationSettingsScreenState extends State<_HrNotificationSettingsSc
     try {
       final response = await HrService().fetchUserProfile(widget.userId);
       final profile = response['profile'];
-      final preferences = profile is Map ? profile['notification_preferences'] : null;
+      final preferences = profile is Map
+          ? profile['notification_preferences']
+          : null;
       if (preferences is Map) {
-        for (final key in _values.keys) _values[key] = preferences[key] != false;
+        for (final key in _values.keys)
+          _values[key] = preferences[key] != false;
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -412,7 +497,9 @@ class _HrNotificationSettingsScreenState extends State<_HrNotificationSettingsSc
     final previous = _values[key]!;
     setState(() => _values[key] = value);
     try {
-      await HrService().updateUserProfile(widget.userId, {'notification_preferences': _values});
+      await HrService().updateUserProfile(widget.userId, {
+        'notification_preferences': _values,
+      });
     } catch (_) {
       if (mounted) setState(() => _values[key] = previous);
     }
@@ -421,7 +508,12 @@ class _HrNotificationSettingsScreenState extends State<_HrNotificationSettingsSc
   @override
   Widget build(BuildContext context) {
     final c = HrPalette.of(context);
-    const labels = {'push': 'Push Notifications', 'leave': 'Leave Updates', 'attendance': 'Attendance Alerts', 'meetings': 'Meeting Reminders'};
+    const labels = {
+      'push': 'Push Notifications',
+      'leave': 'Leave Updates',
+      'attendance': 'Attendance Alerts',
+      'meetings': 'Meeting Reminders',
+    };
     return Scaffold(
       backgroundColor: c.bg,
       appBar: AppBar(title: const Text('Notification Settings')),
@@ -429,14 +521,24 @@ class _HrNotificationSettingsScreenState extends State<_HrNotificationSettingsSc
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: AppLayout.pagePadding,
-              children: labels.entries.map((entry) => HrCard(
-                child: SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(entry.value, style: TextStyle(color: c.text, fontWeight: FontWeight.w700)),
-                  value: _values[entry.key]!,
-                  onChanged: (value) => _change(entry.key, value),
-                ),
-              )).toList(),
+              children: labels.entries
+                  .map(
+                    (entry) => HrCard(
+                      child: SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          entry.value,
+                          style: TextStyle(
+                            color: c.text,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        value: _values[entry.key]!,
+                        onChanged: (value) => _change(entry.key, value),
+                      ),
+                    ),
+                  )
+                  .toList(),
             ),
     );
   }
