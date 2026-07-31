@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # Release builds are created with build_release.ps1. The user-facing version
 # advances as 1.0, 1.1, 1.2, while versionCode always increases for Android
 # in-place upgrades.
-version: 1.4.0+17
+version: 1.5.0+18
 environment:
   sdk: ^3.12.0
 

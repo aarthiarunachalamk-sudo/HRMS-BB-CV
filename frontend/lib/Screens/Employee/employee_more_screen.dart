@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 
 import 'employee_documents_screen.dart';
 import 'employee_approvals_screen.dart';
@@ -7,7 +8,6 @@ import 'employee_meetings_screen.dart';
 import 'employee_models.dart';
 import 'employee_notifications_screen.dart';
 import 'employee_payslip_screen.dart';
-import 'employee_profile_screen.dart';
 import 'employee_service.dart';
 import 'employee_settings_screen.dart';
 import 'employee_shared.dart';
@@ -94,7 +94,8 @@ class EmployeeMoreScreen extends StatelessWidget {
           Icons.person_rounded,
           'Profile',
           EmployeeColors.pink,
-          EmployeeProfileScreen(data: data, userId: userId),
+          UserPersonalInformationScreen(userId: userId),
+          standaloneScreen: true,
         ),
         _tile(
           context,
@@ -112,8 +113,9 @@ class EmployeeMoreScreen extends StatelessWidget {
     IconData icon,
     String title,
     Color color,
-    Widget screen,
-  ) {
+    Widget screen, {
+    bool standaloneScreen = false,
+  }) {
     return EmployeeListTile(
       icon: icon,
       title: title,
@@ -122,10 +124,12 @@ class EmployeeMoreScreen extends StatelessWidget {
       color: color,
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: AppBarLogoTitle(title: title)),
-            body: screen,
-          ),
+          builder: (_) => standaloneScreen
+              ? screen
+              : Scaffold(
+                  appBar: AppBar(title: AppBarLogoTitle(title: title)),
+                  body: screen,
+                ),
         ),
       ),
     );

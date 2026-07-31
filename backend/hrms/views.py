@@ -113,6 +113,25 @@ def login_view(request):
     return Response(serializer.errors, status=400)
 
 
+def _active_profile_user(identifier):
+    user = User.objects.filter(user_id=identifier, is_active=True).first()
+    if user is not None:
+        return user
+    account = (
+        EmployeeAccount.objects.select_related('user')
+        .filter(employee_id=identifier, is_active=True)
+        .first()
+    )
+    if account is None:
+        return None
+    if account.user is not None and account.user.is_active:
+        return account.user
+    return User.objects.filter(
+        email__iexact=account.employee_email,
+        is_active=True,
+    ).first()
+
+
 @api_view(['POST'])
 def profile_photo_upload_view(request):
     user_id = str(request.data.get('user_id') or '').strip()
@@ -134,24 +153,25 @@ def profile_photo_upload_view(request):
             {'success': False, 'message': 'Select a valid JPG, PNG, or WebP image.'},
             status=400,
         )
-    user = User.objects.filter(user_id=user_id, is_active=True).first()
-    if user is None:
-        account = (
-            EmployeeAccount.objects.select_related('user')
-            .filter(employee_id=user_id, is_active=True)
-            .first()
-        )
-        if account is not None and account.user is not None and account.user.is_active:
-            user = account.user
-        elif account is not None:
-            user = User.objects.filter(
-                email__iexact=account.employee_email,
-                is_active=True,
-            ).first()
+    user = _active_profile_user(user_id)
     if user is None:
         return Response({'success': False, 'message': 'Active user was not found.'}, status=404)
-    user.profile_photo = upload
-    user.save(update_fields=['profile_photo'])
+    previous_photo = user.profile_photo
+    try:
+        user.profile_photo = upload
+        user.save(update_fields=['profile_photo'])
+    except Exception:
+        user.profile_photo = previous_photo
+        return Response(
+            {
+                'success': False,
+                'message': (
+                    'Profile photo storage is temporarily unavailable. '
+                    'Please check the server media configuration and retry.'
+                ),
+            },
+            status=503,
+        )
     return Response({
         'success': True,
         'message': 'Display picture uploaded successfully.',
@@ -162,7 +182,7 @@ def profile_photo_upload_view(request):
 @api_view(['GET', 'PATCH'])
 def user_profile_view(request):
     user_id = str(request.query_params.get('user_id') or request.data.get('user_id') or '').strip()
-    user = User.objects.filter(user_id=user_id, is_active=True).first()
+    user = _active_profile_user(user_id)
     if user is None:
         return Response({'success': False, 'message': 'Active user was not found.'}, status=404)
     if request.method == 'PATCH':
