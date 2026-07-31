@@ -2126,7 +2126,12 @@ def _md_meeting_payload(meeting):
 
 
 def _meeting_agenda_with_metadata(payload):
-    agenda = payload.get('agenda') if isinstance(payload.get('agenda'), list) else []
+    raw_agenda = payload.get('agenda') if isinstance(payload.get('agenda'), list) else []
+    agenda = [
+        item
+        for item in raw_agenda
+        if not (isinstance(item, dict) and item.get('_meta') == 'meeting')
+    ]
     return [
         *agenda,
         {
@@ -6646,7 +6651,8 @@ def ceo_meetings_view(request):
             or request.data.get('location')
             or ''
         ).strip()
-        if platform.lower() == 'in person':
+        is_in_person = platform.lower() in {'in person', 'office', 'on site', 'onsite'}
+        if is_in_person:
             if not meeting_link:
                 return Response(
                     {'success': False, 'message': 'Enter the meeting room or office location.'},
