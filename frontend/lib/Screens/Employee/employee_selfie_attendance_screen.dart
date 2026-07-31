@@ -15,6 +15,19 @@ enum EmployeeAttendanceAction { checkIn, checkOut }
 
 const int _fullDayCheckInCutoffHour = 12;
 const double _selfiePreviewAspectRatio = .76;
+const double _targetGpsAccuracyMeters = 15;
+const double _maximumGpsAccuracyMeters = 50;
+const Duration _gpsCaptureTimeout = Duration(seconds: 25);
+const Duration _maximumGpsAge = Duration(seconds: 45);
+
+class _GpsCaptureException implements Exception {
+  final String message;
+
+  const _GpsCaptureException(this.message);
+
+  @override
+  String toString() => message;
+}
 
 class EmployeeSelfieAttendanceScreen extends StatefulWidget {
   final String userId;
@@ -55,7 +68,13 @@ class _EmployeeSelfieAttendanceScreenState
   String? _policyStatus;
 
   bool get _isCheckIn => widget.action == EmployeeAttendanceAction.checkIn;
-  bool get _locationReady => _position != null;
+  bool get _locationReady {
+    final position = _position;
+    return position != null &&
+        !position.isMocked &&
+        position.accuracy > 0 &&
+        position.accuracy <= _maximumGpsAccuracyMeters;
+  }
 
   @override
   void initState() {
@@ -132,6 +151,8 @@ class _EmployeeSelfieAttendanceScreenState
     setState(() {
       _loadingLocation = true;
       _locationPermissionDeniedForever = false;
+      _position = null;
+      _gpsAddress = null;
       _error = null;
     });
 
@@ -166,42 +187,107 @@ class _EmployeeSelfieAttendanceScreenState
         return;
       }
 
-      const locationSettings = LocationSettings(
-        accuracy: LocationAccuracy.high,
-      );
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: locationSettings,
-      );
+      final position = await _capturePrecisePosition();
       if (!mounted) return;
       setState(() {
         _position = position;
         _loadingLocation = false;
         _error = null;
       });
-      // Address lookup can be slow on some devices. It is not required to
-      // start the camera, so run it in the background.
-      unawaited(_loadAddress(position));
+      await _loadAddress(position);
       await _initCamera();
+    } on _GpsCaptureException catch (error) {
+      if (mounted) {
+        setState(() {
+          _loadingLocation = false;
+          _error = error.message;
+        });
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
           _loadingLocation = false;
-          _error = 'Unable to capture GPS location.';
+          _error = 'Unable to capture an exact GPS location. Please retry.';
         });
       }
     }
   }
 
+  Future<Position> _capturePrecisePosition() async {
+    final completer = Completer<Position>();
+    Position? bestPosition;
+    late final StreamSubscription<Position> subscription;
+    final timer = Timer(_gpsCaptureTimeout, () {
+      if (completer.isCompleted) return;
+      final best = bestPosition;
+      if (best != null && best.accuracy <= _maximumGpsAccuracyMeters) {
+        completer.complete(best);
+      } else {
+        final accuracy = best == null ? '' : ' (${best.accuracy.round()} m)';
+        completer.completeError(
+          _GpsCaptureException(
+            'GPS accuracy is too low$accuracy. Move near a window or outdoors, keep GPS on, and retry.',
+          ),
+        );
+      }
+    });
+
+    const settings = LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 0,
+    );
+    subscription = Geolocator.getPositionStream(locationSettings: settings).listen(
+      (candidate) {
+        if (completer.isCompleted) return;
+        if (candidate.isMocked) {
+          completer.completeError(
+            const _GpsCaptureException(
+              'Mock location detected. Disable mock-location apps and retry with device GPS.',
+            ),
+          );
+          return;
+        }
+        final age = DateTime.now().difference(candidate.timestamp).abs();
+        if (age > _maximumGpsAge || candidate.accuracy <= 0) return;
+        if (bestPosition == null ||
+            candidate.accuracy < bestPosition!.accuracy) {
+          bestPosition = candidate;
+        }
+        if (candidate.accuracy <= _targetGpsAccuracyMeters) {
+          completer.complete(candidate);
+        }
+      },
+      onError: (Object error) {
+        if (!completer.isCompleted) {
+          completer.completeError(
+            const _GpsCaptureException(
+              'Unable to receive a fresh GPS signal. Check location settings and retry.',
+            ),
+          );
+        }
+      },
+    );
+
+    try {
+      return await completer.future;
+    } finally {
+      timer.cancel();
+      await subscription.cancel();
+    }
+  }
+
   Future<void> _loadAddress(Position position) async {
     try {
-      final placemarks = await _geocoding.placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
+      final placemarks = await _geocoding
+          .placemarkFromCoordinates(position.latitude, position.longitude)
+          .timeout(const Duration(seconds: 8));
       if (placemarks.isEmpty || !mounted) return;
       final place = placemarks.first;
       final parts = <String>[
+        place.name ?? '',
         place.street ?? '',
+        place.thoroughfare ?? '',
+        place.subThoroughfare ?? '',
         place.subLocality ?? '',
         place.locality ?? '',
         place.administrativeArea ?? '',
@@ -238,9 +324,14 @@ class _EmployeeSelfieAttendanceScreenState
 
   Future<void> _captureSelfie() async {
     if (_submitting || _processingCapture) return;
-    if (_position == null) {
+    final currentPosition = _position;
+    final locationIsStale =
+        currentPosition == null ||
+        DateTime.now().difference(currentPosition.timestamp).abs() >
+            _maximumGpsAge;
+    if (!_locationReady || locationIsStale) {
       await _loadLocation();
-      if (_position == null) return;
+      if (!_locationReady) return;
     }
 
     final controller = _cameraController;
@@ -356,7 +447,7 @@ class _EmployeeSelfieAttendanceScreenState
     final latitude = position?.latitude;
     final longitude = position?.longitude;
 
-    final mapSize = (h * 0.14).round().clamp(76, 190) as int;
+    final mapSize = (h * 0.14).round().clamp(76, 190);
     final mapLeft = (w * 0.04).round();
     final mapTop = h - mapSize - (h * 0.02).round();
     _drawMiniMapStamp(photo, x: mapLeft, y: mapTop, size: mapSize);
@@ -368,8 +459,7 @@ class _EmployeeSelfieAttendanceScreenState
     final address = gpsAddress?.trim().isNotEmpty == true
         ? gpsAddress!.trim()
         : 'GPS location';
-    final latLong =
-        latitude != null && longitude != null
+    final latLong = latitude != null && longitude != null
         ? 'Lat ${latitude.toStringAsFixed(6)}\u00B0 Long ${longitude.toStringAsFixed(6)}\u00B0'
         : 'GPS coordinates unavailable';
     final timestamp = _formatTimestamp(now);
@@ -568,6 +658,9 @@ class _EmployeeSelfieAttendanceScreenState
       'latitude': position.latitude,
       'longitude': position.longitude,
       'accuracy': position.accuracy,
+      'location_address': _gpsAddress ?? '',
+      'location_timestamp': position.timestamp.toIso8601String(),
+      'is_mocked': position.isMocked,
       'mobile_timestamp': mobileTime.toIso8601String(),
       'timezone_offset_minutes': mobileTime.timeZoneOffset.inMinutes,
       if (_isCheckIn) 'work_mode': widget.workMode,
@@ -671,6 +764,15 @@ class _EmployeeSelfieAttendanceScreenState
             ),
           ),
           const SizedBox(height: 14),
+          if (_locationReady) ...[
+            _LiveGpsCard(
+              position: _position!,
+              address: _gpsAddress,
+              refreshing: _loadingLocation,
+              onRefresh: _loadLocation,
+            ),
+            const SizedBox(height: 14),
+          ],
           Container(
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -974,11 +1076,17 @@ class _LocationRows extends StatelessWidget {
     return Column(
       children: [
         _LocationRow(
+          icon: Icons.gps_fixed_rounded,
+          label: 'Exact GPS coordinates',
+          value:
+              '${result['latitude'] ?? '--'}, ${result['longitude'] ?? '--'}',
+        ),
+        _LocationRow(
           icon: Icons.location_on_rounded,
-          label: 'Location',
+          label: 'Nearest mapped address',
           value: gpsAddress?.trim().isNotEmpty == true
               ? gpsAddress!.trim()
-              : 'Lat ${result['latitude'] ?? '--'}, Long ${result['longitude'] ?? '--'}',
+              : 'Address lookup unavailable',
         ),
         _LocationRow(
           icon: Icons.my_location_rounded,
@@ -1002,6 +1110,105 @@ class _LocationRows extends StatelessWidget {
   String _accuracyText(dynamic value) {
     final text = '${value ?? '--'}'.trim();
     return text.toLowerCase().contains('meter') ? text : '$text meters';
+  }
+}
+
+class _LiveGpsCard extends StatelessWidget {
+  final Position position;
+  final String? address;
+  final bool refreshing;
+  final VoidCallback onRefresh;
+
+  const _LiveGpsCard({
+    required this.position,
+    required this.address,
+    required this.refreshing,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accuracy = position.accuracy;
+    final accuracyColor = accuracy <= _targetGpsAccuracyMeters
+        ? EmployeeColors.green
+        : EmployeeColors.gold;
+    final mappedAddress = address?.trim() ?? '';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ThemeConfig.getCardBg(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accuracyColor.withAlpha(100)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.gps_fixed_rounded, color: accuracyColor, size: 20),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Exact GPS captured',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accuracyColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '±${accuracy.toStringAsFixed(1)} m',
+                  style: TextStyle(
+                    color: accuracyColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SelectableText(
+            '${position.latitude.toStringAsFixed(7)}, ${position.longitude.toStringAsFixed(7)}',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .2,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            mappedAddress.isEmpty
+                ? 'Nearest mapped address is unavailable.'
+                : 'Nearest mapped address: $mappedAddress',
+            style: TextStyle(
+              color: ThemeConfig.getTextSecondary(context),
+              fontSize: 11,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: refreshing ? null : onRefresh,
+              icon: refreshing
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded, size: 17),
+              label: const Text('Refresh exact GPS'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

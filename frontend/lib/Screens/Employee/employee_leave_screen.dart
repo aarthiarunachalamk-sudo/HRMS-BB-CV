@@ -103,7 +103,7 @@ class _EmployeeLeaveScreenState extends State<EmployeeLeaveScreen> {
       final result = await widget.service.fetchLeaveHistory(
         widget.userId,
         DateTime(now.year, 1, 1),
-        DateTime(now.year, 12, 31),
+        DateTime(now.year, now.month, now.day).add(const Duration(days: 730)),
       );
       if (mounted) {
         setState(() {
@@ -346,6 +346,7 @@ class _LeaveDashboard extends StatelessWidget {
       title: 'Leave',
       child: _LeaveDashboardBody(
         overview: overview,
+        records: records,
         loading: loading,
         onApply: onApply,
         onLeaves: onLeaves,
@@ -356,12 +357,14 @@ class _LeaveDashboard extends StatelessWidget {
 
 class _LeaveDashboardBody extends StatelessWidget {
   final _LeaveBalanceOverview overview;
+  final List<Map<String, dynamic>> records;
   final bool loading;
   final VoidCallback onApply;
   final VoidCallback onLeaves;
 
   const _LeaveDashboardBody({
     required this.overview,
+    required this.records,
     required this.loading,
     required this.onApply,
     required this.onLeaves,
@@ -380,6 +383,8 @@ class _LeaveDashboardBody extends StatelessWidget {
         const SizedBox(height: 20),
         // ── Leave Type Summary ────────────────────────────────────
         _LeaveTypeSummaryCard(overview: overview),
+        const SizedBox(height: 16),
+        _CompanyLeaveSchedule(records: records, loading: loading),
         const SizedBox(height: 16),
         // ── Accrual footer cards ──────────────────────────────────
         _AccrualFooterRow(overview: overview),
@@ -2150,6 +2155,307 @@ class _ColHeader extends StatelessWidget {
 // ════════════════════════════════════════════════════════════
 //  Accrual footer row (2 cards side by side)
 // ════════════════════════════════════════════════════════════
+class _CompanyLeaveSchedule extends StatelessWidget {
+  final List<Map<String, dynamic>> records;
+  final bool loading;
+
+  const _CompanyLeaveSchedule({required this.records, required this.loading});
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final startOfToday = DateTime(today.year, today.month, today.day);
+    final leaves =
+        records.where((record) {
+          final type = '${record['leave_type'] ?? record['type'] ?? ''}'
+              .toLowerCase();
+          final isCompanyLeave =
+              record['company_leave'] == true ||
+              type.replaceAll(RegExp(r'[^a-z]'), '') == 'companyleave';
+          final toDate = _parseIsoDate('${record['to_date'] ?? ''}');
+          return isCompanyLeave &&
+              toDate != null &&
+              !toDate.isBefore(startOfToday);
+        }).toList()..sort((left, right) {
+          final leftDate =
+              _parseIsoDate('${left['from_date'] ?? ''}') ?? DateTime(2999);
+          final rightDate =
+              _parseIsoDate('${right['from_date'] ?? ''}') ?? DateTime(2999);
+          return leftDate.compareTo(rightDate);
+        });
+
+    final isDark = ThemeConfig.isDark(context);
+    final cardBackground = isDark ? const Color(0xFF1A2035) : Colors.white;
+    final textPrimary = ThemeConfig.getTextPrimary(context);
+    final textSecondary = ThemeConfig.getTextSecondary(context);
+    final border = ThemeConfig.getCardBorder(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7259FF).withAlpha(28),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.event_available_rounded,
+                  color: Color(0xFF8B72FF),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Company Leave Schedule',
+                      style: TextStyle(
+                        color: textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Official leave announced by the company',
+                      style: TextStyle(
+                        color: textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (loading && leaves.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.4),
+                ),
+              ),
+            )
+          else if (leaves.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF7259FF).withAlpha(isDark ? 18 : 10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'No upcoming company leave has been announced.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            )
+          else
+            ...leaves.map(
+              (leave) =>
+                  _CompanyLeaveScheduleItem(leave: leave, today: startOfToday),
+            ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(
+                Icons.verified_rounded,
+                size: 16,
+                color: Color(0xFF13C77A),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'Company leave does not reduce your personal leave balance.',
+                  style: TextStyle(
+                    color: textSecondary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompanyLeaveScheduleItem extends StatelessWidget {
+  final Map<String, dynamic> leave;
+  final DateTime today;
+
+  const _CompanyLeaveScheduleItem({required this.leave, required this.today});
+
+  @override
+  Widget build(BuildContext context) {
+    final fromDate = _parseIsoDate('${leave['from_date'] ?? ''}');
+    final toDate = _parseIsoDate('${leave['to_date'] ?? ''}');
+    if (fromDate == null || toDate == null) return const SizedBox.shrink();
+
+    final ongoing = !today.isBefore(fromDate) && !today.isAfter(toDate);
+    final accent = ongoing ? const Color(0xFF13C77A) : const Color(0xFF4FACFE);
+    final status = ongoing ? 'Ongoing' : 'Upcoming';
+    final dateLabel = fromDate == toDate
+        ? _displayShortDate(fromDate)
+        : '${_displayShortDate(fromDate)} - ${_displayShortDate(toDate)}';
+    final days = toDate.difference(fromDate).inDays + 1;
+    final title = '${leave['title'] ?? 'Company Leave'}'.trim();
+    final message = '${leave['message'] ?? leave['reason'] ?? ''}'.trim();
+    final textPrimary = ThemeConfig.getTextPrimary(context);
+    final textSecondary = ThemeConfig.getTextSecondary(context);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: accent.withAlpha(12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accent.withAlpha(75)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: accent.withAlpha(28),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  fromDate.day.toString().padLeft(2, '0'),
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  _companyLeaveMonth(fromDate),
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title.isEmpty ? 'Company Leave' : title,
+                        style: TextStyle(
+                          color: textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accent.withAlpha(24),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        status,
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '$dateLabel  •  ${_dayCountText(days)}',
+                  style: TextStyle(
+                    color: textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (message.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    message,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: textSecondary,
+                      fontSize: 11,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _companyLeaveMonth(DateTime date) {
+  const months = [
+    'JAN',
+    'FEB',
+    'MAR',
+    'APR',
+    'MAY',
+    'JUN',
+    'JUL',
+    'AUG',
+    'SEP',
+    'OCT',
+    'NOV',
+    'DEC',
+  ];
+  return months[date.month - 1];
+}
+
 class _AccrualFooterRow extends StatelessWidget {
   final _LeaveBalanceOverview overview;
 

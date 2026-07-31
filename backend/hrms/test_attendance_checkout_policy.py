@@ -20,6 +20,13 @@ from .employee_views import _format_time, _leave_balance_payload
 
 class AttendanceCheckoutPolicyTests(TestCase):
     employee_id = 'EMP-POLICY-01'
+    gps = {
+        'latitude': '11.6643251',
+        'longitude': '78.1460142',
+        'accuracy': '8.4',
+        'location_address': 'Salem, Tamil Nadu, India',
+        'is_mocked': 'false',
+    }
 
     def setUp(self):
         self.client = APIClient()
@@ -104,6 +111,7 @@ class AttendanceCheckoutPolicyTests(TestCase):
                 'mobile_timestamp': local_now.isoformat(),
                 'timezone_offset_minutes': 330,
                 'work_mode': 'work_from_home',
+                **self.gps,
                 'selfie': SimpleUploadedFile(
                     'selfie.jpg', b'photo', content_type='image/jpeg'
                 ),
@@ -128,6 +136,7 @@ class AttendanceCheckoutPolicyTests(TestCase):
                 'user_id': self.employee_id,
                 'mobile_timestamp': local_now.isoformat(),
                 'timezone_offset_minutes': 330,
+                **self.gps,
                 'selfie': SimpleUploadedFile('selfie.jpg', b'photo', content_type='image/jpeg'),
             },
             format='multipart',
@@ -179,6 +188,7 @@ class AttendanceCheckoutPolicyTests(TestCase):
                 'user_id': self.employee_id,
                 'mobile_timestamp': local_now.isoformat(),
                 'timezone_offset_minutes': 330,
+                **self.gps,
                 'selfie': SimpleUploadedFile(
                     'checkout.jpg',
                     b'photo',
@@ -198,6 +208,49 @@ class AttendanceCheckoutPolicyTests(TestCase):
             module='attendance', action='manual_checkout',
             reference_id=str(record.pk),
         ).exists())
+
+    def test_check_in_requires_precise_gps_and_persists_mapped_address(self):
+        local_now = datetime(2026, 7, 27, 9, 0, tzinfo=IST)
+        inaccurate = self.client.post(
+            '/api/employee/check-in/',
+            {
+                'user_id': self.employee_id,
+                'mobile_timestamp': local_now.isoformat(),
+                'timezone_offset_minutes': 330,
+                **self.gps,
+                'accuracy': '85.0',
+                'selfie': SimpleUploadedFile(
+                    'inaccurate.jpg', b'photo', content_type='image/jpeg'
+                ),
+            },
+            format='multipart',
+        )
+        self.assertEqual(inaccurate.status_code, 400)
+        self.assertIn('within 50', inaccurate.data['message'])
+
+        response = self.client.post(
+            '/api/employee/check-in/',
+            {
+                'user_id': self.employee_id,
+                'mobile_timestamp': local_now.isoformat(),
+                'timezone_offset_minutes': 330,
+                'work_mode': 'office',
+                **self.gps,
+                'selfie': SimpleUploadedFile(
+                    'precise.jpg', b'photo', content_type='image/jpeg'
+                ),
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['location'], self.gps['location_address'])
+        record = EmployeeAttendanceRecord.objects.get(
+            employee_id=self.employee_id,
+            attendance_date=local_now.date(),
+        )
+        self.assertEqual(record.check_in_latitude, self.gps['latitude'])
+        self.assertEqual(record.check_in_longitude, self.gps['longitude'])
+        self.assertEqual(record.check_in_address, self.gps['location_address'])
 
     def test_morning_permission_approval_creates_only_one_first_half_leave(self):
         permission = AttendanceRegularizationRequest.objects.create(

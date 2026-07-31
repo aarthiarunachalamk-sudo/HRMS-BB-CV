@@ -320,7 +320,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
 
-        dashboard = MeetingNotificationGate(
+        dashboard = DashboardNotificationGate(
           userId: notificationUserId,
           role: role,
           child: dashboard,

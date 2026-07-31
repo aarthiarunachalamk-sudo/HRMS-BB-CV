@@ -7,12 +7,12 @@ import 'package:http/http.dart' as http;
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 
-class MeetingNotificationGate extends StatefulWidget {
+class DashboardNotificationGate extends StatefulWidget {
   final String userId;
   final String role;
   final Widget child;
 
-  const MeetingNotificationGate({
+  const DashboardNotificationGate({
     super.key,
     required this.userId,
     required this.role,
@@ -20,11 +20,11 @@ class MeetingNotificationGate extends StatefulWidget {
   });
 
   @override
-  State<MeetingNotificationGate> createState() =>
-      _MeetingNotificationGateState();
+  State<DashboardNotificationGate> createState() =>
+      _DashboardNotificationGateState();
 }
 
-class _MeetingNotificationGateState extends State<MeetingNotificationGate> {
+class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
   static const _storage = FlutterSecureStorage();
   Timer? _timer;
   bool _dialogOpen = false;
@@ -36,15 +36,17 @@ class _MeetingNotificationGateState extends State<MeetingNotificationGate> {
     super.initState();
     _dismissedIdsLoaded = _loadDismissedIds();
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _checkMeetingNotification(waitForGreeting: true),
+      (_) => _checkDashboardNotification(waitForGreeting: true),
     );
     _timer = Timer.periodic(
       const Duration(seconds: 120),
-      (_) => _checkMeetingNotification(),
+      (_) => _checkDashboardNotification(),
     );
   }
 
-  Future<void> _checkMeetingNotification({bool waitForGreeting = false}) async {
+  Future<void> _checkDashboardNotification({
+    bool waitForGreeting = false,
+  }) async {
     if (_dialogOpen || widget.userId.trim().isEmpty) return;
     if (waitForGreeting) {
       await AppGreetingSession.waitUntilDismissed();
@@ -64,59 +66,63 @@ class _MeetingNotificationGateState extends State<MeetingNotificationGate> {
 
       final notification = (decoded['notifications'] as List)
           .whereType<Map>()
-          .firstWhere(
-            (item) =>
-                '${item['module']}'.toLowerCase() == 'meeting' &&
-                item['is_read'] != true,
-            orElse: () => const {},
-          );
+          .firstWhere((item) {
+            final id = int.tryParse('${item['id']}');
+            return id != null &&
+                !_shownNotificationIds.contains(id) &&
+                item['is_read'] != true &&
+                _notificationPresentation(item) != null;
+          }, orElse: () => const {});
       if (notification.isEmpty || !mounted) return;
       final notificationId = int.tryParse('${notification['id']}');
-      if (notificationId != null &&
-          _shownNotificationIds.contains(notificationId)) {
-        return;
-      }
       if (notificationId != null) {
         _shownNotificationIds.add(notificationId);
         await _persistDismissedIds();
       }
       if (!mounted) return;
 
-      final title = '${notification['title'] ?? 'Meeting Scheduled'}';
+      final presentation = _notificationPresentation(notification);
+      if (presentation == null) return;
+      final title = '${notification['title'] ?? presentation.fallbackTitle}';
       final message =
           '${notification['message'] ?? notification['subtitle'] ?? ''}';
       _dialogOpen = true;
       await showDialog<void>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(title),
-          content: Text(
-            message.isEmpty ? 'You have a scheduled meeting.' : message,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('OK'),
-            ),
-          ],
+        builder: (dialogContext) => AppCelebrationDialog(
+          title: title,
+          message: message.isEmpty ? presentation.fallbackMessage : message,
+          icon: presentation.icon,
+          accent: presentation.accent,
+          buttonLabel: presentation.buttonLabel,
         ),
       );
       _dialogOpen = false;
       await _markRead(notification['id']);
     } catch (_) {
       _dialogOpen = false;
-      // Notification popups should never block dashboard loading.
+      // Dashboard popups should never block dashboard loading.
     }
   }
 
   String get _dismissedStorageKey =>
+      'dismissed_dashboard_popups_${widget.userId.trim()}';
+
+  String get _legacyMeetingStorageKey =>
       'dismissed_meeting_notifications_${widget.userId.trim()}';
 
   Future<void> _loadDismissedIds() async {
     try {
-      final value = await _storage.read(key: _dismissedStorageKey) ?? '';
+      final values = await Future.wait([
+        _storage.read(key: _dismissedStorageKey),
+        _storage.read(key: _legacyMeetingStorageKey),
+      ]);
       _shownNotificationIds.addAll(
-        value.split(',').map(int.tryParse).whereType<int>(),
+        values
+            .whereType<String>()
+            .expand((value) => value.split(','))
+            .map(int.tryParse)
+            .whereType<int>(),
       );
     } catch (_) {
       // The backend read-state remains the fallback when secure storage fails.
@@ -126,7 +132,7 @@ class _MeetingNotificationGateState extends State<MeetingNotificationGate> {
   Future<void> _persistDismissedIds() async {
     try {
       final ids = _shownNotificationIds.toList()..sort();
-      final retained = ids.length > 100 ? ids.sublist(ids.length - 100) : ids;
+      final retained = ids.length > 150 ? ids.sublist(ids.length - 150) : ids;
       await _storage.write(
         key: _dismissedStorageKey,
         value: retained.join(','),
@@ -158,4 +164,75 @@ class _MeetingNotificationGateState extends State<MeetingNotificationGate> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+class _NotificationPresentation {
+  final String fallbackTitle;
+  final String fallbackMessage;
+  final IconData icon;
+  final Color accent;
+  final String buttonLabel;
+
+  const _NotificationPresentation({
+    required this.fallbackTitle,
+    required this.fallbackMessage,
+    required this.icon,
+    required this.accent,
+    required this.buttonLabel,
+  });
+}
+
+_NotificationPresentation? _notificationPresentation(Map notification) {
+  final module = '${notification['module'] ?? ''}'.trim().toLowerCase();
+  final type = '${notification['type'] ?? ''}'.trim().toLowerCase();
+  final searchable = [
+    notification['title'],
+    notification['message'],
+    notification['subtitle'],
+  ].join(' ').toLowerCase();
+
+  if (module == 'company_leave' || module == 'company-leave') {
+    return const _NotificationPresentation(
+      fallbackTitle: 'Company Leave Announced',
+      fallbackMessage: 'The company has announced an upcoming leave day.',
+      icon: Icons.beach_access_rounded,
+      accent: Color(0xFF8B72FF),
+      buttonLabel: 'Got it',
+    );
+  }
+
+  if (module == 'meeting') {
+    return const _NotificationPresentation(
+      fallbackTitle: 'Meeting Scheduled',
+      fallbackMessage: 'You have a scheduled meeting.',
+      icon: Icons.video_camera_front_rounded,
+      accent: Color(0xFF2F91FF),
+      buttonLabel: 'Got it',
+    );
+  }
+
+  const celebrationModules = {
+    'announcement',
+    'announcements',
+    'company_news',
+    'company-news',
+    'happy_news',
+    'happy-news',
+    'celebration',
+    'celebrations',
+  };
+  final happyNews = RegExp(
+    r'\b(happy|congrat|celebrat|birthday|anniversary|award|achievement|promotion|welcome|festival|holiday|good news|milestone)\w*',
+  ).hasMatch(searchable);
+  if (celebrationModules.contains(module) && (type == 'success' || happyNews)) {
+    return const _NotificationPresentation(
+      fallbackTitle: 'Happy News!',
+      fallbackMessage: 'The company has shared something worth celebrating.',
+      icon: Icons.celebration_rounded,
+      accent: Color(0xFFFFB020),
+      buttonLabel: 'Wonderful!',
+    );
+  }
+
+  return null;
 }

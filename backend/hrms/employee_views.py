@@ -950,6 +950,7 @@ def _attendance_payload(record, request=None):
     accuracy = _accuracy_display(record.check_out_accuracy or record.check_in_accuracy)
     latitude = record.check_out_latitude or record.check_in_latitude
     longitude = record.check_out_longitude or record.check_in_longitude
+    location = record.check_out_address or record.check_in_address
     calc = _attendance_calculation(
         record.check_in,
         record.check_out,
@@ -974,7 +975,9 @@ def _attendance_payload(record, request=None):
         'shift_time': calc['shift_time'],
         'lunch_time': calc['lunch_time'],
         'grace_time': calc['grace_time'],
-        'location': '',
+        'location': location,
+        'check_in_location': record.check_in_address,
+        'check_out_location': record.check_out_address,
         'latitude': latitude,
         'longitude': longitude,
         'accuracy': accuracy,
@@ -1035,6 +1038,40 @@ def _accuracy_display(value):
     if rounded.is_integer():
         rounded = int(rounded)
     return f'{rounded} meters'
+
+
+MAX_ATTENDANCE_GPS_ACCURACY_METERS = Decimal('50')
+
+
+def _validated_attendance_gps(data):
+    latitude_text = str(data.get('latitude') or '').strip()
+    longitude_text = str(data.get('longitude') or '').strip()
+    accuracy_text = str(data.get('accuracy') or '').strip()
+    if not latitude_text or not longitude_text or not accuracy_text:
+        return None, 'Fresh GPS coordinates and accuracy are required.'
+    try:
+        latitude = Decimal(latitude_text)
+        longitude = Decimal(longitude_text)
+        accuracy = Decimal(accuracy_text)
+    except Exception:
+        return None, 'GPS coordinates or accuracy are invalid.'
+    if not latitude.is_finite() or not longitude.is_finite() or not accuracy.is_finite():
+        return None, 'GPS coordinates or accuracy are invalid.'
+    if latitude < -90 or latitude > 90 or longitude < -180 or longitude > 180:
+        return None, 'GPS coordinates are outside the valid range.'
+    if accuracy <= 0 or accuracy > MAX_ATTENDANCE_GPS_ACCURACY_METERS:
+        return None, (
+            f'GPS accuracy must be within {MAX_ATTENDANCE_GPS_ACCURACY_METERS} meters. '
+            'Move near a window or outdoors and retry.'
+        )
+    if str(data.get('is_mocked') or '').strip().lower() in {'1', 'true', 'yes'}:
+        return None, 'Mock locations are not allowed for attendance.'
+    return {
+        'latitude': latitude_text,
+        'longitude': longitude_text,
+        'accuracy': accuracy_text,
+        'address': str(data.get('location_address') or '').strip()[:1000],
+    }, None
 
 
 def _certificate_name(record):
@@ -1475,6 +1512,13 @@ def employee_check_in_view(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    gps, gps_error = _validated_attendance_gps(request.data)
+    if gps_error:
+        return Response(
+            {'success': False, 'message': gps_error},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     work_mode = (request.data.get('work_mode') or '').strip().lower()
     valid_work_modes = dict(EmployeeAttendanceRecord.WORK_MODE_CHOICES)
     if not work_mode:
@@ -1500,9 +1544,10 @@ def employee_check_in_view(request):
     record.check_in_timezone_offset_minutes = offset_minutes
     calc = _attendance_calculation(record.check_in, None, offset_minutes)
     record.status = calc['status']
-    record.check_in_latitude = request.data.get('latitude') or ''
-    record.check_in_longitude = request.data.get('longitude') or ''
-    record.check_in_accuracy = request.data.get('accuracy') or ''
+    record.check_in_latitude = gps['latitude']
+    record.check_in_longitude = gps['longitude']
+    record.check_in_accuracy = gps['accuracy']
+    record.check_in_address = gps['address']
     record.check_in_selfie = selfie
     record.save()
     _notify_employee_presence(record, 'check_in')
@@ -1532,6 +1577,13 @@ def employee_check_out_view(request):
     if not employee_id:
         return Response(
             {'success': False, 'message': 'Employee ID is required.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    gps, gps_error = _validated_attendance_gps(request.data)
+    if gps_error:
+        return Response(
+            {'success': False, 'message': gps_error},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -1615,9 +1667,10 @@ def employee_check_out_view(request):
     record.is_auto_checkout = False
     record.check_out_timezone_offset_minutes = offset_minutes
     record.working_hours = calc['working_hours']
-    record.check_out_latitude = request.data.get('latitude') or ''
-    record.check_out_longitude = request.data.get('longitude') or ''
-    record.check_out_accuracy = request.data.get('accuracy') or ''
+    record.check_out_latitude = gps['latitude']
+    record.check_out_longitude = gps['longitude']
+    record.check_out_accuracy = gps['accuracy']
+    record.check_out_address = gps['address']
     record.check_out_selfie = selfie
     record.save()
     AuditLog.objects.create(
