@@ -845,17 +845,22 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
         _message('Enter the meeting room or office location.');
         return false;
       }
-      if (_platform != 'In Person' && link.isEmpty) {
+      if (_platform != 'In Person' &&
+          _platform != 'Google Meet' &&
+          link.isEmpty) {
         _message('Paste the attendee meeting link created by the organizer.');
         return false;
       }
       if (_platform != 'In Person' &&
+          _platform != 'Google Meet' &&
           !link.startsWith('http://') &&
           !link.startsWith('https://')) {
         _message('Meeting link must start with http:// or https://.');
         return false;
       }
-      if (_platform != 'In Person' && _isGenericMeetingPage(link)) {
+      if (_platform != 'In Person' &&
+          _platform != 'Google Meet' &&
+          _isGenericMeetingPage(link)) {
         _message(
           'Paste the unique attendee link, not the platform’s new-meeting page.',
         );
@@ -900,8 +905,9 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
         'duration': _duration,
         'platform': _platform,
         'meeting_type': _platform,
-        'meeting_link': _link.text.trim(),
-        'location': _link.text.trim(),
+        'meeting_link': _platform == 'Google Meet' ? '' : _link.text.trim(),
+        'location': _platform == 'Google Meet' ? '' : _link.text.trim(),
+        'auto_generate_link': _platform == 'Google Meet',
         'participants': selected,
         'agenda': _agenda.text
             .split('\n')
@@ -1146,26 +1152,64 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
               .toList(),
         ),
         const SizedBox(height: 16),
-        TextField(
-          controller: _link,
-          keyboardType: TextInputType.url,
-          decoration: InputDecoration(
-            labelText: _platform == 'In Person'
-                ? 'Room / location'
-                : 'Attendee meeting link *',
-            hintText: _platform == 'In Person'
-                ? 'Conference Room A'
-                : 'https://meet.google.com/...',
-            prefixIcon: Icon(
-              _platform == 'In Person'
-                  ? Icons.location_on_outlined
-                  : Icons.link_rounded,
+        if (_platform == 'Google Meet')
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: c.primary.withAlpha(16),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: c.primary.withAlpha(70)),
             ),
-            helperText: _platform == 'In Person'
-                ? null
-                : 'Paste the unique link participants will use to join.',
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.auto_awesome_rounded, color: c.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Google Meet link generated automatically',
+                        style: TextStyle(
+                          color: c.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'A unique room is created when you schedule. Employees and Team Leads receive the same join link.',
+                        style: TextStyle(color: c.muted, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          TextField(
+            controller: _link,
+            keyboardType: _platform == 'In Person'
+                ? TextInputType.streetAddress
+                : TextInputType.url,
+            decoration: InputDecoration(
+              labelText: _platform == 'In Person'
+                  ? 'Room / location'
+                  : 'Attendee meeting link *',
+              hintText: _platform == 'In Person'
+                  ? 'Conference Room A'
+                  : 'https://teams.microsoft.com/...',
+              prefixIcon: Icon(
+                _platform == 'In Person'
+                    ? Icons.location_on_outlined
+                    : Icons.link_rounded,
+              ),
+              helperText: _platform == 'In Person'
+                  ? null
+                  : 'Paste the unique link participants will use to join.',
+            ),
           ),
-        ),
       ],
     );
   }

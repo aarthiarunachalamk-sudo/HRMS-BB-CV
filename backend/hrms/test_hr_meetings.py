@@ -219,3 +219,37 @@ class HrMeetingApiTests(TestCase):
             reference_id=str(meeting_id),
         ).exists())
         self.assertEqual(push.call_count, 2)
+
+    @patch('hrms.views.create_google_meet_space')
+    def test_google_meet_link_is_generated_automatically(self, create_space):
+        create_space.return_value = {
+            'meeting_uri': 'https://meet.google.com/auto-link-test',
+            'meeting_code': 'auto-link-test',
+            'space_name': 'spaces/test-space',
+        }
+        response = self.client.post(
+            '/api/hr/meetings/',
+            {
+                'user_id': self.hr.user_id,
+                'title': 'Automatically linked meeting',
+                'description': 'Create the Google Meet room on the server.',
+                **self._future_schedule(),
+                'platform': 'Google Meet',
+                'auto_generate_link': True,
+                'participants': [{'id': self.employee.user_id}],
+                'agenda': ['Automatic room creation'],
+                'invite_email': False,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        create_space.assert_called_once_with()
+        self.assertEqual(
+            response.data['meeting']['meeting_link'],
+            'https://meet.google.com/auto-link-test',
+        )
+        self.assertEqual(
+            response.data['google_meet']['space_name'],
+            'spaces/test-space',
+        )
