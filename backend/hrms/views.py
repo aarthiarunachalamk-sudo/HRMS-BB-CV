@@ -5405,6 +5405,13 @@ def ceo_leave_intelligence_view(request):
         'generated_at': timezone.now().isoformat(),
         'year': year,
         'month': month,
+        'company_leave_audience': {
+            'active_employees': len(_company_leave_employee_ids()),
+            'active_team_leads': User.objects.filter(
+                role='tl',
+                is_active=True,
+            ).count(),
+        },
         'summary': {'total': queryset.count(), **status_counts},
         'requests': requests,
         'calendar': calendar_items,
@@ -5429,6 +5436,25 @@ def ceo_leave_intelligence_view(request):
     })
 
 
+def _company_leave_employee_ids():
+    employee_ids = set(
+        EmployeeAccount.objects.filter(is_active=True).filter(
+            Q(user__isnull=True) | Q(user__is_active=True)
+        ).values_list('employee_id', flat=True)
+    )
+    employee_ids.update(
+        User.objects.filter(role='employee', is_active=True).values_list(
+            'user_id',
+            flat=True,
+        )
+    )
+    return {
+        str(employee_id).strip()
+        for employee_id in employee_ids
+        if str(employee_id or '').strip()
+    }
+
+
 @api_view(['POST'])
 def ceo_company_leave_view(request):
     user_id = str(request.data.get('user_id') or '').strip()
@@ -5443,13 +5469,29 @@ def ceo_company_leave_view(request):
         return Response({'success': False, 'message': 'Select valid leave dates.'}, status=400)
     if not title:
         return Response({'success': False, 'message': 'Company leave title is required.'}, status=400)
+    if len(title) > 180:
+        return Response({'success': False, 'message': 'Company leave title must be 180 characters or fewer.'}, status=400)
+    if not message:
+        return Response({'success': False, 'message': 'An announcement message is required.'}, status=400)
+    if len(message) > 2000:
+        return Response({'success': False, 'message': 'Announcement message must be 2000 characters or fewer.'}, status=400)
     if to_date < from_date:
         return Response({'success': False, 'message': 'End date cannot be before start date.'}, status=400)
+    if from_date < timezone.localdate():
+        return Response({'success': False, 'message': 'Company leave cannot start in the past.'}, status=400)
+    if CompanyLeave.objects.filter(
+        from_date__lte=to_date,
+        to_date__gte=from_date,
+    ).exists():
+        return Response(
+            {'success': False, 'message': 'Another company leave already overlaps these dates.'},
+            status=409,
+        )
 
     with transaction.atomic():
         announcement = Announcement.objects.create(
             title=title,
-            message=message or 'The company has announced a company-wide leave.',
+            message=message,
             target_roles=['admin', 'tl', 'hr', 'md', 'director', 'employee'],
             status='published',
             publish_at=timezone.now(),
@@ -5477,8 +5519,7 @@ def ceo_company_leave_view(request):
             module='company_leave',
             reference_id=company_leave.id,
         )
-    employee_ids = set(EmployeeAccount.objects.filter(is_active=True).values_list('employee_id', flat=True))
-    employee_ids.update(User.objects.filter(role='employee', is_active=True).values_list('user_id', flat=True))
+    employee_ids = _company_leave_employee_ids()
     for employee_id in employee_ids:
         _create_notification(
             user_id=employee_id,
@@ -5488,9 +5529,27 @@ def ceo_company_leave_view(request):
             module='company_leave',
             reference_id=company_leave.id,
         )
+    AuditLog.objects.create(
+        actor_user_id=user_id,
+        actor_role='ceo',
+        action='company_leave_published',
+        module='company_leave',
+        reference_id=str(company_leave.id),
+        after={
+            'title': title,
+            'message': message,
+            'from_date': from_date.isoformat(),
+            'to_date': to_date.isoformat(),
+            'employee_recipients': len(employee_ids),
+        },
+        ip_address=request.META.get('REMOTE_ADDR') or None,
+        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+    )
     return Response({
         'success': True,
-        'message': 'Company leave announced to all dashboards.',
+        'message': 'Company leave published to the active workforce.',
+        'notified_to': len(employee_ids),
+        'audience_roles': ['employee', 'tl', 'hr', 'admin', 'md', 'director'],
         'company_leave': {
             'id': company_leave.id,
             'title': company_leave.title,

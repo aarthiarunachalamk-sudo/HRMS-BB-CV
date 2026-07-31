@@ -71,94 +71,30 @@ class _CeoLeaveIntelligenceScreenState
     setState(_load);
   }
 
-  Future<void> _announceCompanyLeave() async {
-    final titleController = TextEditingController();
-    final messageController = TextEditingController();
-    DateTimeRange range = DateTimeRange(
-      start: DateTime.now(),
-      end: DateTime.now(),
-    );
-    final submitted = await showDialog<bool>(
+  Future<void> _announceCompanyLeave(Map<String, dynamic> data) async {
+    final audience = _map(data['company_leave_audience']);
+    final draft = await showDialog<_CompanyLeaveDraft>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Announce Company Leave'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Title',
-                    hintText: 'Example: Company Foundation Day',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Company leave dates'),
-                  subtitle: Text(
-                    '${_isoDate(range.start)} to ${_isoDate(range.end)}',
-                  ),
-                  trailing: const Icon(Icons.date_range_rounded),
-                  onTap: () async {
-                    final picked = await showDateRangePicker(
-                      context: context,
-                      firstDate: DateTime.now().subtract(
-                        const Duration(days: 1),
-                      ),
-                      lastDate: DateTime.now().add(const Duration(days: 730)),
-                      initialDateRange: range,
-                    );
-                    if (picked != null) setDialogState(() => range = picked);
-                  },
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: messageController,
-                  minLines: 3,
-                  maxLines: 5,
-                  decoration: const InputDecoration(
-                    labelText: 'Announcement message',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton.icon(
-              onPressed: () {
-                if (titleController.text.trim().isNotEmpty) {
-                  Navigator.pop(dialogContext, true);
-                }
-              },
-              icon: const Icon(Icons.campaign_rounded),
-              label: const Text('Announce'),
-            ),
-          ],
-        ),
+      builder: (_) => _CompanyLeaveDialog(
+        activeEmployees: (audience['active_employees'] as num?)?.toInt() ?? 0,
+        activeTeamLeads: (audience['active_team_leads'] as num?)?.toInt() ?? 0,
       ),
     );
-    if (submitted == true && mounted) {
+    if (draft != null && mounted) {
       try {
         final result = await CeoService().announceCompanyLeave(
           widget.userId,
-          title: titleController.text.trim(),
-          fromDate: range.start,
-          toDate: range.end,
-          message: messageController.text.trim(),
+          title: draft.title,
+          fromDate: draft.range.start,
+          toDate: draft.range.end,
+          message: draft.message,
         );
         if (mounted) {
+          final notified = result['notified_to'] ?? 0;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '${result['message'] ?? 'Company leave announced'}',
+                '${result['message'] ?? 'Company leave published'} $notified employee(s) notified.',
               ),
             ),
           );
@@ -174,14 +110,7 @@ class _CeoLeaveIntelligenceScreenState
         }
       }
     }
-    titleController.dispose();
-    messageController.dispose();
   }
-
-  String _isoDate(DateTime value) =>
-      '${value.year.toString().padLeft(4, '0')}-'
-      '${value.month.toString().padLeft(2, '0')}-'
-      '${value.day.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) => CeoShell(
@@ -312,7 +241,7 @@ class _CeoLeaveIntelligenceScreenState
         ),
         const SizedBox(height: 14),
         FilledButton.icon(
-          onPressed: _announceCompanyLeave,
+          onPressed: () => _announceCompanyLeave(data),
           icon: const Icon(Icons.campaign_rounded),
           label: const Text('Announce Company Leave'),
         ),
@@ -645,6 +574,181 @@ class _CeoLeaveIntelligenceScreenState
   ];
 }
 
+class _CompanyLeaveDraft {
+  final String title;
+  final String message;
+  final DateTimeRange range;
+
+  const _CompanyLeaveDraft({
+    required this.title,
+    required this.message,
+    required this.range,
+  });
+}
+
+class _CompanyLeaveDialog extends StatefulWidget {
+  final int activeEmployees;
+  final int activeTeamLeads;
+
+  const _CompanyLeaveDialog({
+    required this.activeEmployees,
+    required this.activeTeamLeads,
+  });
+
+  @override
+  State<_CompanyLeaveDialog> createState() => _CompanyLeaveDialogState();
+}
+
+class _CompanyLeaveDialogState extends State<_CompanyLeaveDialog> {
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
+  late DateTimeRange _range = DateTimeRange(
+    start: DateTime.now(),
+    end: DateTime.now(),
+  );
+  String? _error;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDates() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+      initialDateRange: _range,
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _range = picked;
+        _error = null;
+      });
+    }
+  }
+
+  void _publish() {
+    final title = _titleController.text.trim();
+    final message = _messageController.text.trim();
+    if (title.isEmpty || message.isEmpty) {
+      setState(() {
+        _error = 'Enter both a title and an announcement message.';
+      });
+      return;
+    }
+    Navigator.pop(
+      context,
+      _CompanyLeaveDraft(title: title, message: message, range: _range),
+    );
+  }
+
+  String _date(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-${value.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Row(
+        children: [
+          Icon(Icons.campaign_rounded, color: CeoColors.cyan),
+          SizedBox(width: 9),
+          Expanded(child: Text('Publish Company Leave')),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: CeoColors.cyan.withAlpha(18),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: CeoColors.cyan.withAlpha(70)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.groups_rounded, color: CeoColors.cyan),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      'This update goes to ${widget.activeEmployees} active employees and ${widget.activeTeamLeads} Team Leads, and appears in the company leave calendar.',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _titleController,
+              maxLength: 180,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Update title *',
+                hintText: 'Example: Company Foundation Day',
+                prefixIcon: Icon(Icons.title_rounded),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+              title: const Text('Company leave dates'),
+              subtitle: Text('${_date(_range.start)} to ${_date(_range.end)}'),
+              trailing: const Icon(Icons.date_range_rounded),
+              onTap: _pickDates,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _messageController,
+              minLines: 3,
+              maxLines: 5,
+              maxLength: 2000,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Message to employees *',
+                hintText: 'Explain the leave and any employee instructions.',
+                alignLabelWithHint: true,
+                prefixIcon: Icon(Icons.notes_rounded),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _publish,
+          icon: const Icon(Icons.send_rounded),
+          label: const Text('Publish update'),
+        ),
+      ],
+    );
+  }
+}
+
 class _FlowTabs extends StatelessWidget {
   final int selected;
   final ValueChanged<int> onSelected;
@@ -657,7 +761,7 @@ class _FlowTabs extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
       scrollDirection: Axis.horizontal,
       itemCount: _CeoLeaveIntelligenceScreenState._titles.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 7),
+      separatorBuilder: (_, _) => const SizedBox(width: 7),
       itemBuilder: (_, index) => ChoiceChip(
         label: Text(
           '${index + 1}. ${_CeoLeaveIntelligenceScreenState._titles[index]}',
