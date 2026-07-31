@@ -763,6 +763,7 @@ class HrScheduleMeetingScreen extends StatefulWidget {
 }
 
 class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
+  static const MethodChannel _platformChannel = MethodChannel('hrms/location');
   final TextEditingController _title = TextEditingController();
   final TextEditingController _description = TextEditingController();
   final TextEditingController _agenda = TextEditingController();
@@ -782,6 +783,42 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
   bool get _autoGenerationConfigured =>
       _platform != 'In Person' &&
       widget.providerConfiguration[_platform] == true;
+
+  String get _providerCreationUrl => switch (_platform) {
+    'Google Meet' => 'https://meet.google.com/new',
+    'Zoom' => 'https://zoom.us/meeting/schedule',
+    'Microsoft Teams' => 'https://teams.microsoft.com/l/meeting/new',
+    _ => '',
+  };
+
+  Future<void> _openProviderMeetingCreator() async {
+    final url = _providerCreationUrl;
+    if (url.isEmpty) return;
+    try {
+      final opened = await _platformChannel.invokeMethod<bool>('openUrl', {
+        'url': url,
+      });
+      if (opened != true && mounted) {
+        _message('Unable to open $_platform.');
+      }
+    } on PlatformException catch (error) {
+      if (mounted) _message(error.message ?? 'Unable to open $_platform.');
+    }
+  }
+
+  Future<void> _pasteMeetingLink() async {
+    final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
+    final value = clipboard?.text?.trim() ?? '';
+    if (!mounted) return;
+    if (value.isEmpty) {
+      _message('No meeting link was found on the clipboard.');
+      return;
+    }
+    setState(() {
+      _link.text = value;
+      _link.selection = TextSelection.collapsed(offset: value.length);
+    });
+  }
 
   @override
   void initState() {
@@ -1159,7 +1196,10 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
                         : Icons.videocam_rounded,
                     size: 16,
                   ),
-                  onSelected: (_) => setState(() => _platform = platform),
+                  onSelected: (_) => setState(() {
+                    if (_platform != platform) _link.clear();
+                    _platform = platform;
+                  }),
                 ),
               )
               .toList(),
@@ -1201,35 +1241,9 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
             ),
           )
         else ...[
-          if (_platform != 'In Person') ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: c.warning.withAlpha(18),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: c.warning.withAlpha(80)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline_rounded, color: c.warning),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Text(
-                      '$_platform auto-generation is not configured on the server. Paste a real attendee link to continue.',
-                      style: TextStyle(
-                        color: c.text,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
           TextField(
             controller: _link,
+            enabled: true,
             keyboardType: _platform == 'In Person'
                 ? TextInputType.streetAddress
                 : TextInputType.url,
@@ -1252,8 +1266,35 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
               helperText: _platform == 'In Person'
                   ? null
                   : 'Paste the unique link participants will use to join.',
+              suffixIcon: _platform == 'In Person'
+                  ? null
+                  : IconButton(
+                      tooltip: 'Paste link',
+                      onPressed: _pasteMeetingLink,
+                      icon: const Icon(Icons.content_paste_rounded),
+                    ),
             ),
           ),
+          if (_platform != 'In Person') ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _openProviderMeetingCreator,
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    label: Text('Create in $_platform'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: _pasteMeetingLink,
+                  icon: const Icon(Icons.content_paste_rounded),
+                  label: const Text('Paste'),
+                ),
+              ],
+            ),
+          ],
         ],
       ],
     );
