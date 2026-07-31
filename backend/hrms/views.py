@@ -12,8 +12,8 @@ from django.utils import timezone
 from django.utils.html import escape
 from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
-from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
-from .models import AuditLog, BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, ReportExportHistory, WorkflowApprovalRequest, Announcement, CompanyLeave, AttendanceRegularizationRequest, EmployeeApprovalRequest
+from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, MeetingParticipantStatus, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
+from .models import AuditLog, BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, DocumentRecord, ReportExportHistory, WorkflowApprovalRequest, Announcement, CompanyLeave, AttendanceRegularizationRequest, EmployeeApprovalRequest
 from .performance_service import calculate_employee_performance
 from .employee_views import _attendance_calculation, _file_url, _format_time, _leave_balance_payload, _notify_employee_presence, _approval_payload
 from .payroll import (
@@ -2044,8 +2044,19 @@ def _md_meeting_payload(meeting):
         'duration': meeting.duration,
         'status': meeting.status,
         'participants': meeting.participants,
+        'participant_statuses': [
+            {
+                'user_id': item.participant_user_id,
+                'name': item.participant_name,
+                'email': item.participant_email,
+                'status': item.status,
+                'notification_sent': item.notification_sent,
+            }
+            for item in meeting.participant_statuses.all()
+        ],
         'agenda': agenda_items,
         'created_by': meeting.created_by,
+        'created_at': meeting.created_at.isoformat() if meeting.created_at else '',
     }
 
 
@@ -2096,13 +2107,70 @@ def _notify_meeting_participants(meeting):
     for participant in meeting.participants if isinstance(meeting.participants, list) else []:
         if not isinstance(participant, dict):
             continue
-        participant_id = participant.get('id') or participant.get('employee_id') or participant.get('trailing')
+        participant_id = (
+            participant.get('id')
+            or participant.get('employee_id')
+            or participant.get('user_id')
+            or participant.get('trailing')
+        )
         if participant_id:
+            participant_id = str(participant_id).strip()
+            participant_status, _ = MeetingParticipantStatus.objects.update_or_create(
+                meeting=meeting,
+                participant_user_id=participant_id,
+                defaults={
+                    'participant_name': str(
+                        participant.get('name')
+                        or participant.get('title')
+                        or participant_id
+                    ).strip(),
+                    'participant_email': str(participant.get('email') or '').strip(),
+                    'status': 'invited',
+                },
+            )
+            notification = AppNotification.objects.filter(
+                recipient_user_id=participant_id,
+                title='Meeting Scheduled',
+                module='meeting',
+                reference_id=str(meeting.id),
+            ).first()
+            if notification is None:
+                notification = _create_notification(
+                    user_id=participant_id,
+                    title='Meeting Scheduled',
+                    message=f'{meeting.title} is scheduled for {meeting.date_label} at {meeting.time_label}.',
+                    notification_type='info',
+                    module='meeting',
+                    reference_id=meeting.id,
+                )
+            participant_status.notification_sent = True
+            participant_status.save(update_fields=['notification_sent'])
+
+
+def _notify_meeting_cancelled(meeting):
+    for participant in meeting.participants if isinstance(meeting.participants, list) else []:
+        if not isinstance(participant, dict):
+            continue
+        participant_id = str(
+            participant.get('id')
+            or participant.get('employee_id')
+            or participant.get('user_id')
+            or participant.get('trailing')
+            or ''
+        ).strip()
+        if not participant_id:
+            continue
+        if not AppNotification.objects.filter(
+            recipient_user_id=participant_id,
+            title='Meeting Cancelled',
+            module='meeting',
+            reference_id=str(meeting.id),
+        ).exists():
             _create_notification(
                 user_id=participant_id,
-                title='Meeting Scheduled',
-                message=f'{meeting.title} is scheduled for {meeting.date_label} at {meeting.time_label}.',
-                notification_type='info',
+                title='Meeting Cancelled',
+                message=f'{meeting.title}, scheduled for {meeting.date_label} at {meeting.time_label}, has been cancelled.',
+                notification_type='warning',
                 module='meeting',
                 reference_id=meeting.id,
             )
@@ -2898,7 +2966,7 @@ def _checkout_permission_item(item):
         'approval_type': 'early_checkout',
         'employee_id': item.employee_id,
         'name': employee_name,
-        'doc_passport_photo': _profile_photo_for_employee_id(leave.employee_id),
+        'doc_passport_photo': _profile_photo_for_employee_id(item.employee_id),
         'initials': _initials(employee_name),
         'title': f'{employee_name} - {permission_label}',
         'subtitle': f'{permission_label} - {item.attendance_date:%d %b %Y}',
@@ -2913,6 +2981,7 @@ def _checkout_permission_item(item):
         'status': item.status.title(),
         'reviewed_by': item.reviewed_by,
         'reviewed_at': item.reviewed_at.isoformat() if item.reviewed_at else '',
+        'approver_comments': item.review_note,
     }
 
 
@@ -2945,6 +3014,7 @@ def _create_half_day_leave_for_permission(permission, reviewer):
         approved_by=reviewer,
         tl_approved_by=reviewer if reviewer.lower().startswith('tl') else 'Permission workflow',
         hr_approved_by=reviewer if reviewer.lower().startswith('hr') else 'Permission workflow',
+        approver_comments=permission.review_note,
         tl_reviewed_at=permission.reviewed_at,
         hr_reviewed_at=permission.reviewed_at,
         reviewed_at=permission.reviewed_at,
@@ -2970,6 +3040,18 @@ def _checkout_permission_decision(request, pk, role):
     decision = request.data.get('status')
     if decision not in ('approved', 'rejected'):
         return Response({'success': False, 'message': 'Status must be approved or rejected.'}, status=400)
+    review_note = str(
+        request.data.get('review_note')
+        or request.data.get('approver_comments')
+        or request.data.get('comment')
+        or request.data.get('remarks')
+        or ''
+    ).strip()
+    if role == 'hr' and not review_note:
+        return Response(
+            {'success': False, 'message': 'HR remarks are required.'},
+            status=400,
+        )
     try:
         permission = AttendanceRegularizationRequest.objects.get(
             pk=pk,
@@ -2983,7 +3065,7 @@ def _checkout_permission_decision(request, pk, role):
     permission.status = decision
     permission.reviewed_by = request.data.get('reviewed_by') or request.data.get('user_id') or role.upper()
     permission.reviewed_at = timezone.now()
-    permission.review_note = request.data.get('review_note') or request.data.get('reason') or ''
+    permission.review_note = review_note
     permission.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_note'])
 
     half_day_leave = None
@@ -2998,9 +3080,9 @@ def _checkout_permission_decision(request, pk, role):
         user_id=permission.employee_id,
         title=f'Early Check-Out {decision.title()}',
         message=(
-            'Your permission was approved and 0.5 day Casual Leave was automatically applied.'
+            f'Your permission was approved and 0.5 day Casual Leave was automatically applied. HR remarks: {review_note}'
             if decision == 'approved'
-            else f'Your early check-out permission was rejected by {role.upper()}.'
+            else f'Your early check-out permission was rejected by {role.upper()}. HR remarks: {review_note}'
         ),
         notification_type='success' if decision == 'approved' else 'error',
         module='attendance_permission',
@@ -3031,6 +3113,18 @@ def _leave_decision(request, pk, role):
 
     reviewer = request.data.get('reviewed_by') or request.data.get('user_id') or role.upper()
     rejection_reason = (request.data.get('rejection_reason') or request.data.get('reason') or '').strip()
+    approver_comments = str(
+        request.data.get('approver_comments')
+        or request.data.get('comment')
+        or request.data.get('remarks')
+        or rejection_reason
+        or ''
+    ).strip()
+    if role == 'hr' and not approver_comments:
+        return Response(
+            {'success': False, 'message': 'HR remarks are required.'},
+            status=400,
+        )
     now = timezone.now()
     if role == 'tl':
         leave.tl_status = decision
@@ -3070,19 +3164,620 @@ def _leave_decision(request, pk, role):
         leave.status = decision
         leave.approved_by = reviewer
         leave.reviewed_at = now
+        leave.approver_comments = approver_comments
         _notify_leave_employee(
             leave,
             'Leave Request Approved' if decision == 'approved' else 'Leave Request Rejected',
-            f'Your {leave.leave_type} request was {decision} by HR.' + (f' Reason: {rejection_reason}' if decision == 'rejected' and rejection_reason else ''),
+            f'Your {leave.leave_type} request was {decision} by HR. HR remarks: {approver_comments}',
             'success' if decision == 'approved' else 'error',
         )
     leave.save()
     return Response({'success': True, 'message': f'Leave {decision} by {role.upper()}.', 'leave': _leave_dashboard_item(leave)})
 
 
+HR_DOCUMENT_EXTENSIONS = {'.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'}
+HR_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024
+HR_DOCUMENT_STATUSES = {'pending', 'verified', 'rejected', 'expired'}
+
+
+def _hr_actor(request):
+    user_id = str(
+        request.query_params.get('user_id')
+        or request.data.get('user_id')
+        or ''
+    ).strip()
+    user = User.objects.filter(user_id=user_id, role='hr', is_active=True).first()
+    return user_id, user
+
+
+def _hr_meeting_participant_options():
+    options = []
+    seen_ids = set()
+    account_emails = set()
+
+    for user in User.objects.filter(role='tl', is_active=True).order_by(
+        'first_name', 'last_name', 'user_id',
+    ):
+        participant_id = str(user.user_id or '').strip()
+        if not participant_id or participant_id in seen_ids:
+            continue
+        seen_ids.add(participant_id)
+        options.append({
+            'id': participant_id,
+            'employee_id': participant_id,
+            'name': f'{user.first_name} {user.last_name}'.strip() or user.email,
+            'email': user.email,
+            'role': 'tl',
+            'role_label': 'Team Lead',
+            'department': _department_label(user.department) if user.department else '',
+        })
+
+    accounts = EmployeeAccount.objects.select_related('registration').filter(
+        is_active=True,
+        designation__in=['associate', 'intern'],
+    ).order_by(
+        'registration__first_name',
+        'registration__last_name',
+        'employee_id',
+    )
+    for account in accounts[:500]:
+        participant_id = str(account.employee_id or '').strip()
+        if not participant_id or participant_id in seen_ids:
+            continue
+        seen_ids.add(participant_id)
+        account_emails.add(account.employee_email.lower())
+        options.append({
+            'id': participant_id,
+            'employee_id': participant_id,
+            'name': (
+                f'{account.registration.first_name} {account.registration.last_name}'.strip()
+                or account.employee_email
+            ),
+            'email': account.employee_email,
+            'role': 'employee',
+            'role_label': account.get_designation_display() or 'Employee',
+            'department': account.get_department_display(),
+        })
+
+    for user in User.objects.filter(role='employee', is_active=True).order_by(
+        'first_name', 'last_name', 'user_id',
+    ):
+        participant_id = str(user.user_id or '').strip()
+        if (
+            not participant_id
+            or participant_id in seen_ids
+            or user.email.lower() in account_emails
+        ):
+            continue
+        seen_ids.add(participant_id)
+        options.append({
+            'id': participant_id,
+            'employee_id': participant_id,
+            'name': f'{user.first_name} {user.last_name}'.strip() or user.email,
+            'email': user.email,
+            'role': 'employee',
+            'role_label': 'Employee',
+            'department': _department_label(user.department) if user.department else '',
+        })
+
+    options.sort(key=lambda item: (
+        0 if item['role'] == 'tl' else 1,
+        str(item['name']).lower(),
+    ))
+    return options
+
+
+def _normalize_hr_meeting_participants(raw_participants, options):
+    allowed = {str(item['id']): item for item in options}
+    selected = []
+    seen = set()
+    for raw in raw_participants if isinstance(raw_participants, list) else []:
+        participant_id = str(
+            (
+                raw.get('id')
+                or raw.get('employee_id')
+                or raw.get('user_id')
+                or ''
+            )
+            if isinstance(raw, dict)
+            else raw
+        ).strip()
+        if (
+            not participant_id
+            or participant_id in seen
+            or participant_id not in allowed
+        ):
+            continue
+        seen.add(participant_id)
+        selected.append(allowed[participant_id])
+    return selected
+
+
+def _sync_hr_meeting_statuses(meetings):
+    now = timezone.now()
+    stale_ids = [
+        meeting.id
+        for meeting in meetings
+        if meeting.status == 'upcoming'
+        and _parse_meeting_start(meeting.date_label, meeting.time_label) < now
+    ]
+    if stale_ids:
+        MdMeeting.objects.filter(id__in=stale_ids).update(status='past')
+        for meeting in meetings:
+            if meeting.id in stale_ids:
+                meeting.status = 'past'
+
+
+@api_view(['GET', 'POST'])
+def hr_meetings_view(request):
+    user_id, actor = _hr_actor(request)
+    if actor is None:
+        return Response(
+            {'success': False, 'message': 'Only an active HR user can manage meetings.'},
+            status=403,
+        )
+    participant_options = _hr_meeting_participant_options()
+    if request.method == 'GET':
+        meetings = list(
+            MdMeeting.objects.filter(created_by=user_id)
+            .prefetch_related('participant_statuses')
+            .order_by('-created_at')[:150]
+        )
+        _sync_hr_meeting_statuses(meetings)
+        return Response({
+            'success': True,
+            'meetings': [_md_meeting_payload(item) for item in meetings],
+            'participants': participant_options,
+            'counts': {
+                'total': len(meetings),
+                'upcoming': sum(item.status == 'upcoming' for item in meetings),
+                'past': sum(item.status == 'past' for item in meetings),
+                'cancelled': sum(item.status == 'cancelled' for item in meetings),
+            },
+        })
+
+    title = str(request.data.get('title') or '').strip()
+    if not title:
+        return Response(
+            {'success': False, 'message': 'Meeting title is required.'},
+            status=400,
+        )
+    if len(title) > 120:
+        return Response(
+            {'success': False, 'message': 'Meeting title must be 120 characters or fewer.'},
+            status=400,
+        )
+    date_label = str(request.data.get('date_label') or '').strip()
+    time_label = str(request.data.get('time_label') or '').strip()
+    meeting_start = _parse_meeting_start(date_label, time_label)
+    if not date_label or not time_label or meeting_start <= timezone.now():
+        return Response({
+            'success': False,
+            'message': 'Choose a valid future meeting date and time.',
+        }, status=400)
+    participants = _normalize_hr_meeting_participants(
+        request.data.get('participants'),
+        participant_options,
+    )
+    if not participants:
+        return Response({
+            'success': False,
+            'message': 'Select at least one employee or Team Lead.',
+        }, status=400)
+    description = str(request.data.get('description') or '').strip()
+    agenda = request.data.get('agenda')
+    if not description and not (
+        isinstance(agenda, list)
+        and any(str(item).strip() for item in agenda)
+    ):
+        return Response(
+            {'success': False, 'message': 'Add a meeting agenda.'},
+            status=400,
+        )
+    platform = str(
+        request.data.get('platform')
+        or request.data.get('meeting_type')
+        or 'Google Meet'
+    ).strip()
+    meeting_link = str(
+        request.data.get('meeting_link')
+        or request.data.get('location')
+        or ''
+    ).strip()
+    if platform.lower() == 'in person' and not meeting_link:
+        return Response(
+            {'success': False, 'message': 'Enter the meeting room or office location.'},
+            status=400,
+        )
+    if (
+        platform.lower() != 'in person'
+        and meeting_link
+        and not meeting_link.lower().startswith(('http://', 'https://'))
+    ):
+        return Response(
+            {'success': False, 'message': 'Meeting link must start with http:// or https://.'},
+            status=400,
+        )
+
+    payload = request.data.copy()
+    payload['title'] = title
+    payload['participants'] = participants
+    payload['created_by'] = user_id
+    payload['status'] = 'upcoming'
+    meeting = _create_meeting_from_payload(payload, 'HR Meeting')
+    _notify_meeting_participants(meeting)
+    email_count = 0
+    email_error = ''
+    if request.data.get('invite_email', True):
+        try:
+            email_count = _send_meeting_invite(meeting)
+        except Exception as error:
+            email_error = str(error)
+    meeting = MdMeeting.objects.prefetch_related('participant_statuses').get(
+        pk=meeting.pk,
+    )
+    AuditLog.objects.create(
+        actor_user_id=user_id,
+        actor_role='hr',
+        action='meeting_scheduled',
+        module='meeting',
+        reference_id=str(meeting.id),
+        after=_md_meeting_payload(meeting),
+        ip_address=request.META.get('REMOTE_ADDR') or None,
+        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+    )
+    return Response({
+        'success': True,
+        'message': 'Meeting scheduled and participants notified.',
+        'meeting': _md_meeting_payload(meeting),
+        'notified_to': len(participants),
+        'email_sent_to': email_count,
+        'email_error': email_error,
+    }, status=201)
+
+
+@api_view(['GET', 'PATCH'])
+def hr_meeting_detail_view(request, pk):
+    user_id, actor = _hr_actor(request)
+    if actor is None:
+        return Response(
+            {'success': False, 'message': 'Only an active HR user can manage meetings.'},
+            status=403,
+        )
+    meeting = MdMeeting.objects.prefetch_related('participant_statuses').filter(
+        pk=pk,
+        created_by=user_id,
+    ).first()
+    if meeting is None:
+        return Response(
+            {'success': False, 'message': 'Meeting was not found.'},
+            status=404,
+        )
+    if request.method == 'GET':
+        return Response({
+            'success': True,
+            'meeting': _md_meeting_payload(meeting),
+        })
+    action = str(request.data.get('action') or '').strip().lower()
+    if action != 'cancel':
+        return Response(
+            {'success': False, 'message': 'Unsupported meeting action.'},
+            status=400,
+        )
+    if meeting.status == 'cancelled':
+        return Response(
+            {'success': False, 'message': 'Meeting is already cancelled.'},
+            status=409,
+        )
+    if meeting.status == 'past':
+        return Response(
+            {'success': False, 'message': 'Past meetings cannot be cancelled.'},
+            status=409,
+        )
+    before = _md_meeting_payload(meeting)
+    meeting.status = 'cancelled'
+    meeting.save(update_fields=['status'])
+    _notify_meeting_cancelled(meeting)
+    AuditLog.objects.create(
+        actor_user_id=user_id,
+        actor_role='hr',
+        action='meeting_cancelled',
+        module='meeting',
+        reference_id=str(meeting.id),
+        before=before,
+        after=_md_meeting_payload(meeting),
+        ip_address=request.META.get('REMOTE_ADDR') or None,
+        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+    )
+    return Response({
+        'success': True,
+        'message': 'Meeting cancelled and participants notified.',
+        'meeting': _md_meeting_payload(meeting),
+    })
+
+
+def _hr_document_owner_name(owner_user_id):
+    if owner_user_id.upper() == 'COMPANY':
+        return 'BitByte Technologies'
+    account = EmployeeAccount.objects.select_related('registration').filter(
+        employee_id=owner_user_id,
+    ).first()
+    if account is not None:
+        name = f'{account.registration.first_name} {account.registration.last_name}'.strip()
+        return name or account.employee_email
+    user = User.objects.filter(user_id=owner_user_id).first()
+    if user is not None:
+        return f'{user.first_name} {user.last_name}'.strip() or user.email
+    return owner_user_id
+
+
+def _hr_document_owner_names(documents):
+    owner_ids = {item.owner_user_id for item in documents if item.owner_user_id}
+    names = {'COMPANY': 'BitByte Technologies'}
+    accounts = EmployeeAccount.objects.select_related('registration').filter(
+        employee_id__in=owner_ids,
+    )
+    for account in accounts:
+        name = f'{account.registration.first_name} {account.registration.last_name}'.strip()
+        names[account.employee_id] = name or account.employee_email
+    for user in User.objects.filter(user_id__in=owner_ids):
+        names.setdefault(
+            user.user_id,
+            f'{user.first_name} {user.last_name}'.strip() or user.email,
+        )
+    for owner_id in owner_ids:
+        names.setdefault(owner_id, owner_id)
+    return names
+
+
+def _hr_document_payload(request, document, owner_names=None):
+    metadata = document.metadata if isinstance(document.metadata, dict) else {}
+    file_url = ''
+    file_size = metadata.get('size', 0)
+    if document.file:
+        try:
+            file_url = request.build_absolute_uri(document.file.url)
+        except (ValueError, NotImplementedError):
+            file_url = ''
+        try:
+            file_size = document.file.size
+        except (OSError, ValueError, NotImplementedError):
+            pass
+    return {
+        'id': document.id,
+        'title': document.document_type,
+        'document_type': document.document_type,
+        'document_number': document.document_number,
+        'owner_user_id': document.owner_user_id,
+        'owner_name': (
+            (owner_names or {}).get(document.owner_user_id)
+            or _hr_document_owner_name(document.owner_user_id)
+        ),
+        'owner_role': document.owner_role,
+        'file_url': file_url,
+        'file_name': metadata.get('original_name') or (
+            os.path.basename(document.file.name) if document.file else ''
+        ),
+        'file_size': file_size,
+        'content_type': metadata.get('content_type', ''),
+        'expiry_date': str(document.expiry_date) if document.expiry_date else '',
+        'status': document.status,
+        'status_label': document.get_status_display(),
+        'remarks': document.remarks,
+        'uploaded_by': metadata.get('uploaded_by', ''),
+        'uploaded_at': document.uploaded_at.isoformat() if document.uploaded_at else '',
+        'updated_at': document.updated_at.isoformat() if document.updated_at else '',
+        'verified_by': document.verified_by,
+        'verified_at': document.verified_at.isoformat() if document.verified_at else '',
+    }
+
+
+def _hr_dashboard_documents(request):
+    documents = list(DocumentRecord.objects.order_by('-uploaded_at')[:20])
+    owner_names = _hr_document_owner_names(documents)
+    return [
+        _hr_document_payload(request, item, owner_names)
+        for item in documents
+    ]
+
+
+@api_view(['GET', 'POST'])
+def hr_documents_view(request):
+    user_id, actor = _hr_actor(request)
+    if actor is None:
+        return Response(
+            {'success': False, 'message': 'Only an active HR user can manage documents.'},
+            status=403,
+        )
+
+    if request.method == 'GET':
+        queryset = DocumentRecord.objects.all().order_by('-uploaded_at')
+        search = str(request.query_params.get('query') or '').strip()
+        status_filter = str(request.query_params.get('status') or '').strip().lower()
+        owner_filter = str(request.query_params.get('owner_user_id') or '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(document_type__icontains=search)
+                | Q(document_number__icontains=search)
+                | Q(owner_user_id__icontains=search)
+                | Q(remarks__icontains=search)
+            )
+        if status_filter in HR_DOCUMENT_STATUSES:
+            queryset = queryset.filter(status=status_filter)
+        if owner_filter:
+            queryset = queryset.filter(owner_user_id__iexact=owner_filter)
+        documents = list(queryset[:250])
+        owner_names = _hr_document_owner_names(documents)
+        counts = DocumentRecord.objects.aggregate(
+            total=Count('id'),
+            pending=Count('id', filter=Q(status='pending')),
+            verified=Count('id', filter=Q(status='verified')),
+            rejected=Count('id', filter=Q(status='rejected')),
+            expired=Count('id', filter=Q(status='expired')),
+        )
+        return Response({
+            'success': True,
+            'counts': counts,
+            'documents': [
+                _hr_document_payload(request, item, owner_names)
+                for item in documents
+            ],
+        })
+
+    uploaded_file = request.FILES.get('file')
+    document_type = str(request.data.get('document_type') or '').strip()
+    owner_user_id = str(request.data.get('owner_user_id') or 'COMPANY').strip()
+    owner_role = str(request.data.get('owner_role') or 'company').strip().lower()
+    if not document_type:
+        return Response(
+            {'success': False, 'message': 'Document title is required.'},
+            status=400,
+        )
+    if len(document_type) > 100:
+        return Response(
+            {'success': False, 'message': 'Document title must be 100 characters or fewer.'},
+            status=400,
+        )
+    if uploaded_file is None:
+        return Response(
+            {'success': False, 'message': 'Choose a file to upload.'},
+            status=400,
+        )
+    extension = os.path.splitext(uploaded_file.name or '')[1].lower()
+    if extension not in HR_DOCUMENT_EXTENSIONS:
+        return Response({
+            'success': False,
+            'message': 'Unsupported file. Upload PDF, DOC, DOCX, JPG, JPEG, or PNG.',
+        }, status=400)
+    if uploaded_file.size > HR_DOCUMENT_MAX_BYTES:
+        return Response(
+            {'success': False, 'message': 'The file must be 10 MB or smaller.'},
+            status=400,
+        )
+    expiry_date = None
+    expiry_value = str(request.data.get('expiry_date') or '').strip()
+    if expiry_value:
+        try:
+            expiry_date = date.fromisoformat(expiry_value)
+        except ValueError:
+            return Response(
+                {'success': False, 'message': 'Expiry date must use YYYY-MM-DD format.'},
+                status=400,
+            )
+
+    document = DocumentRecord.objects.create(
+        owner_user_id=owner_user_id or 'COMPANY',
+        owner_role=owner_role,
+        document_type=document_type,
+        document_number=str(request.data.get('document_number') or '').strip(),
+        file=uploaded_file,
+        expiry_date=expiry_date,
+        status='pending',
+        remarks=str(request.data.get('remarks') or '').strip(),
+        metadata={
+            'uploaded_by': user_id,
+            'original_name': uploaded_file.name,
+            'content_type': uploaded_file.content_type or '',
+            'size': uploaded_file.size,
+            'source': 'hr_mobile',
+        },
+    )
+    AuditLog.objects.create(
+        actor_user_id=user_id,
+        actor_role='hr',
+        action='document_uploaded',
+        module='documents',
+        reference_id=str(document.id),
+        after=_hr_document_payload(request, document),
+        ip_address=request.META.get('REMOTE_ADDR') or None,
+        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+    )
+    return Response({
+        'success': True,
+        'message': 'Document uploaded successfully.',
+        'document': _hr_document_payload(request, document),
+    }, status=201)
+
+
+@api_view(['PATCH', 'DELETE'])
+def hr_document_detail_view(request, pk):
+    user_id, actor = _hr_actor(request)
+    if actor is None:
+        return Response(
+            {'success': False, 'message': 'Only an active HR user can manage documents.'},
+            status=403,
+        )
+    try:
+        document = DocumentRecord.objects.get(pk=pk)
+    except DocumentRecord.DoesNotExist:
+        return Response(
+            {'success': False, 'message': 'Document was not found.'},
+            status=404,
+        )
+
+    before = _hr_document_payload(request, document)
+    if request.method == 'DELETE':
+        file_field = document.file
+        document.delete()
+        if file_field:
+            file_field.delete(save=False)
+        AuditLog.objects.create(
+            actor_user_id=user_id,
+            actor_role='hr',
+            action='document_deleted',
+            module='documents',
+            reference_id=str(pk),
+            before=before,
+            ip_address=request.META.get('REMOTE_ADDR') or None,
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
+        return Response({'success': True, 'message': 'Document deleted.'})
+
+    status_value = str(request.data.get('status') or document.status).strip().lower()
+    if status_value not in HR_DOCUMENT_STATUSES:
+        return Response(
+            {'success': False, 'message': 'Invalid document status.'},
+            status=400,
+        )
+    document.status = status_value
+    if 'remarks' in request.data:
+        document.remarks = str(request.data.get('remarks') or '').strip()
+    if status_value == 'verified':
+        document.verified_by = user_id
+        document.verified_at = timezone.now()
+    else:
+        document.verified_by = ''
+        document.verified_at = None
+    document.save()
+    after = _hr_document_payload(request, document)
+    AuditLog.objects.create(
+        actor_user_id=user_id,
+        actor_role='hr',
+        action='document_status_updated',
+        module='documents',
+        reference_id=str(pk),
+        before=before,
+        after=after,
+        ip_address=request.META.get('REMOTE_ADDR') or None,
+        user_agent=request.META.get('HTTP_USER_AGENT', ''),
+    )
+    return Response({
+        'success': True,
+        'message': 'Document status updated.',
+        'document': after,
+    })
+
+
 @api_view(['GET'])
 def hr_dashboard_view(request):
     today = timezone.localdate()
+    hr_user_id = str(request.query_params.get('user_id') or '').strip()
+    hr_meetings = list(
+        MdMeeting.objects.filter(created_by=hr_user_id)
+        .prefetch_related('participant_statuses')
+        .order_by('-created_at')[:30]
+    ) if hr_user_id else []
+    _sync_hr_meeting_statuses(hr_meetings)
     pending_leaves = _hr_pending_leave_items()
     approved_leaves = [_leave_dashboard_item(leave) for leave in EmployeeLeaveRequest.objects.filter(status='approved')[:20]]
     rejected_leaves = [_leave_dashboard_item(leave) for leave in EmployeeLeaveRequest.objects.filter(status='rejected')[:20]]
@@ -3317,9 +4012,12 @@ def hr_dashboard_view(request):
         'checkout_permissions_approved': _checkout_permissions('approved'),
         'checkout_permissions_rejected': _checkout_permissions('rejected'),
         'notifications': notifications,
+        'calendar_month': today.strftime('%B %Y'),
+        'calendar_day': today.day,
+        'meetings': [_md_meeting_payload(item) for item in hr_meetings],
         'upcoming': [],
         'tasks': hr_tasks,
-        'documents': [],
+        'documents': _hr_dashboard_documents(request),
         'payroll_month': payroll_month.strftime('%B %Y'),
         'payroll_processed': len(month_payslips),
         'payroll_pending': max(total_employees - len(month_payslips), 0),

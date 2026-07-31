@@ -24,16 +24,40 @@ class HrLeaveRequestsScreen extends StatefulWidget {
 class _HrLeaveRequestsScreenState extends State<HrLeaveRequestsScreen> {
   int? _savingId;
   String _tab = 'pending';
+  final Map<String, String> _comments = {};
+
+  String _leaveKey(Map<String, dynamic> leave) =>
+      '${leave['approval_type'] ?? 'leave'}-${leave['id']}';
 
   Future<void> _decide(Map<String, dynamic> leave, String status) async {
     final id = int.tryParse('${leave['id'] ?? ''}');
     if (id == null || _savingId != null) return;
+    final comment = (_comments[_leaveKey(leave)] ?? '').trim();
+    if (comment.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter HR remarks before making a decision.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     setState(() => _savingId = id);
     try {
       if (leave['approval_type'] == 'early_checkout') {
-        await HrService().updateCheckoutPermission(id, status, widget.userId);
+        await HrService().updateCheckoutPermission(
+          id,
+          status,
+          widget.userId,
+          comment,
+        );
       } else {
-        await HrService().updateLeaveRequest(id, status, widget.userId);
+        await HrService().updateLeaveRequest(
+          id,
+          status,
+          widget.userId,
+          comment,
+        );
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -45,10 +69,11 @@ class _HrLeaveRequestsScreenState extends State<HrLeaveRequestsScreen> {
       );
       widget.onChanged();
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$error')));
+      }
     } finally {
       if (mounted) setState(() => _savingId = null);
     }
@@ -154,8 +179,42 @@ class _HrLeaveRequestsScreenState extends State<HrLeaveRequestsScreen> {
                       label: 'Requested Check-Out',
                       value: '${leave['requested_check_out'] ?? ''}',
                     ),
+                  if (_tab != 'pending' &&
+                      '${leave['approver_comments'] ?? ''}'.trim().isNotEmpty)
+                    _Detail(
+                      label: 'HR Remarks',
+                      value: '${leave['approver_comments']}',
+                    ),
                   if (_tab == 'pending') ...[
                     const SizedBox(height: 10),
+                    TextFormField(
+                      initialValue: _comments[_leaveKey(leave)] ?? '',
+                      minLines: 2,
+                      maxLines: 4,
+                      maxLength: 500,
+                      textCapitalization: TextCapitalization.sentences,
+                      onChanged: (value) => _comments[_leaveKey(leave)] = value,
+                      decoration: InputDecoration(
+                        labelText: 'HR Remarks *',
+                        hintText: 'Add the reason or context for your decision',
+                        alignLabelWithHint: true,
+                        filled: true,
+                        fillColor: c.row,
+                        prefixIcon: Icon(
+                          Icons.comment_outlined,
+                          color: c.primary,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: c.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: c.primary, width: 1.4),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     Builder(
                       builder: (context) {
                         final id = int.tryParse('${leave['id'] ?? ''}');

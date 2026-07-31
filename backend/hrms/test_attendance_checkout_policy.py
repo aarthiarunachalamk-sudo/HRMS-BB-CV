@@ -154,7 +154,11 @@ class AttendanceCheckoutPolicyTests(TestCase):
         )
         approval = self.client.post(
             f'/api/hr/checkout-permissions/{permission.id}/',
-            {'status': 'approved', 'user_id': 'HR-01'},
+            {
+                'status': 'approved',
+                'user_id': 'HR-01',
+                'review_note': 'Approved against available casual leave.',
+            },
             format='json',
         )
         self.assertEqual(approval.status_code, 200)

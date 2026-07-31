@@ -6,7 +6,6 @@ import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_attendance_screen.dart';
-import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_create_employee_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_documents_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_employee_directory_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_employees_screen.dart';
@@ -160,7 +159,7 @@ class _HrDashboardState extends State<HrDashboard> {
                 onPipeline: () => _setIndex(7),
                 onSchedule: () => _setIndex(8),
               ),
-              HrMeetingsScreen(data: data),
+              HrMeetingsScreen(userId: widget.userId),
               HrRecruitmentPipelineScreen(data: data),
               HrScheduleInterviewScreen(
                 data: data,
@@ -168,7 +167,7 @@ class _HrDashboardState extends State<HrDashboard> {
                 onChanged: _refreshDashboard,
               ),
               HrOnboardingScreen(data: data),
-              HrDocumentsScreen(data: data),
+              HrDocumentsScreen(userId: widget.userId),
               HrPerformanceScreen(data: data),
               HrPayrollScreen(
                 data: data,
@@ -181,7 +180,8 @@ class _HrDashboardState extends State<HrDashboard> {
                 userId: widget.userId,
                 email: widget.email,
                 name: widget.firstName,
-                onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
+                onLogout: () =>
+                    showLogoutConfirmation(context: context, onLogout: _logout),
               ),
             ];
 
@@ -192,7 +192,8 @@ class _HrDashboardState extends State<HrDashboard> {
                 data: data,
                 email: widget.email,
                 onTap: _setIndex,
-                onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
+                onLogout: () =>
+                    showLogoutConfirmation(context: context, onLogout: _logout),
               ),
               body: Container(
                 decoration: BoxDecoration(
@@ -345,7 +346,8 @@ class _HrHome extends StatelessWidget {
     final modules = notifications
         .map((item) => '${item['module'] ?? ''}'.toLowerCase())
         .toSet();
-    if (modules.isNotEmpty && modules.every((m) => m.startsWith('attendance'))) {
+    if (modules.isNotEmpty &&
+        modules.every((m) => m.startsWith('attendance'))) {
       return 'Attendance Notifications';
     }
     if (modules.length == 1 && modules.first == 'meeting') {
@@ -356,7 +358,8 @@ class _HrHome extends StatelessWidget {
 
   IconData _notificationIcon(Map<String, dynamic> item) {
     final module = '${item['module'] ?? ''}'.toLowerCase();
-    final message = '${item['subtitle'] ?? item['message'] ?? ''}'.toLowerCase();
+    final message = '${item['subtitle'] ?? item['message'] ?? ''}'
+        .toLowerCase();
     if (module.startsWith('attendance') && message.contains('checked out')) {
       return Icons.logout_rounded;
     }
@@ -371,7 +374,8 @@ class _HrHome extends StatelessWidget {
 
   Color _notificationColor(Map<String, dynamic> item, HrPalette c) {
     final module = '${item['module'] ?? ''}'.toLowerCase();
-    final message = '${item['subtitle'] ?? item['message'] ?? ''}'.toLowerCase();
+    final message = '${item['subtitle'] ?? item['message'] ?? ''}'
+        .toLowerCase();
     if (module.startsWith('attendance') && message.contains('checked out')) {
       return c.primary;
     }
@@ -482,7 +486,7 @@ class _HrHome extends StatelessWidget {
                       controller: scrollCtrl,
                       padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
                       itemCount: employees.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           Divider(color: c.border, height: 1),
                       itemBuilder: (_, i) {
                         final emp = employees[i];
