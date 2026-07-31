@@ -1,19 +1,38 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
 
-class UserPersonalInformationScreen extends StatelessWidget {
+class UserPersonalInformationScreen extends StatefulWidget {
   final String userId;
 
   const UserPersonalInformationScreen({super.key, required this.userId});
 
+  @override
+  State<UserPersonalInformationScreen> createState() =>
+      _UserPersonalInformationScreenState();
+}
+
+class _UserPersonalInformationScreenState
+    extends State<UserPersonalInformationScreen> {
+  late Future<Map<String, dynamic>> _profileFuture;
+  bool _uploadingPhoto = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = _load();
+  }
+
   Future<Map<String, dynamic>> _load() async {
     final response = await http
-        .get(ApiConfig.uri('/profile/?user_id=$userId'))
+        .get(ApiConfig.uri('/profile/?user_id=${widget.userId}'))
         .timeout(const Duration(seconds: 60));
     final data = jsonDecode(response.body);
     if (response.statusCode < 200 ||
@@ -25,12 +44,140 @@ class UserPersonalInformationScreen extends StatelessWidget {
     return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
   }
 
+  Future<void> _changeProfilePhoto() async {
+    if (_uploadingPhoto) return;
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(8, 0, 8, 10),
+                child: Text(
+                  'Change Profile Photo',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera_rounded),
+                title: const Text('Take a photo'),
+                subtitle: const Text('Use your camera'),
+                onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_rounded),
+                title: const Text('Choose from gallery'),
+                subtitle: const Text('JPG, PNG or WebP • Maximum 5 MB'),
+                onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+
+    final picked = await ImagePicker().pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 1200,
+      maxHeight: 1200,
+      preferredCameraDevice: CameraDevice.front,
+    );
+    if (picked == null || !mounted) return;
+    final pickedLength = await picked.length();
+    if (!mounted) return;
+    if (pickedLength > 5 * 1024 * 1024) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile photo must be 5 MB or smaller.')),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Use this profile photo?'),
+        content: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: Image.file(File(picked.path), fit: BoxFit.cover),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Choose again'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.check_rounded),
+            label: const Text('Use Photo'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _uploadingPhoto = true);
+    try {
+      final extension = picked.path.split('.').last.toLowerCase();
+      final subtype = extension == 'png'
+          ? 'png'
+          : extension == 'webp'
+          ? 'webp'
+          : 'jpeg';
+      final request =
+          http.MultipartRequest('POST', ApiConfig.uri('/profile/photo/'))
+            ..fields['user_id'] = widget.userId
+            ..files.add(
+              await http.MultipartFile.fromPath(
+                'profile_photo',
+                picked.path,
+                contentType: MediaType('image', subtype),
+              ),
+            );
+      final response = await http.Response.fromStream(
+        await request.send().timeout(const Duration(seconds: 90)),
+      );
+      final decoded = jsonDecode(response.body);
+      final result = decoded is Map
+          ? Map<String, dynamic>.from(decoded)
+          : <String, dynamic>{};
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          result['success'] != true) {
+        throw Exception(result['message'] ?? 'Unable to update profile photo.');
+      }
+      if (!mounted) return;
+      setState(() => _profileFuture = _load());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile photo updated successfully.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$error'.replaceFirst(RegExp(r'^Exception:\s*'), '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile & Settings')),
       body: FutureBuilder<Map<String, dynamic>>(
-        future: _load(),
+        future: _profileFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -106,14 +253,62 @@ class UserPersonalInformationScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      EmployeeAvatar(
-                        name: name,
-                        photoUrl: photoUrl,
-                        radius: 38,
-                        backgroundColor: Theme.of(
-                          context,
-                        ).colorScheme.primary.withAlpha(28),
-                        foregroundColor: Theme.of(context).colorScheme.primary,
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          EmployeeAvatar(
+                            name: name,
+                            photoUrl: photoUrl,
+                            radius: 46,
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(28),
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
+                          ),
+                          Positioned(
+                            right: -4,
+                            bottom: -4,
+                            child: Material(
+                              color: Theme.of(context).colorScheme.primary,
+                              shape: const CircleBorder(),
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: _uploadingPhoto
+                                    ? null
+                                    : _changeProfilePhoto,
+                                child: SizedBox(
+                                  width: 36,
+                                  height: 36,
+                                  child: _uploadingPhoto
+                                      ? const Padding(
+                                          padding: EdgeInsets.all(9),
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.camera_alt_rounded,
+                                          color: Colors.white,
+                                          size: 19,
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton.icon(
+                        onPressed: _uploadingPhoto ? null : _changeProfilePhoto,
+                        icon: const Icon(Icons.edit_rounded, size: 17),
+                        label: Text(
+                          _uploadingPhoto
+                              ? 'Uploading photo...'
+                              : 'Change profile photo',
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Text(

@@ -136,6 +136,19 @@ def profile_photo_upload_view(request):
         )
     user = User.objects.filter(user_id=user_id, is_active=True).first()
     if user is None:
+        account = (
+            EmployeeAccount.objects.select_related('user')
+            .filter(employee_id=user_id, is_active=True)
+            .first()
+        )
+        if account is not None and account.user is not None and account.user.is_active:
+            user = account.user
+        elif account is not None:
+            user = User.objects.filter(
+                email__iexact=account.employee_email,
+                is_active=True,
+            ).first()
+    if user is None:
         return Response({'success': False, 'message': 'Active user was not found.'}, status=404)
     user.profile_photo = upload
     user.save(update_fields=['profile_photo'])
