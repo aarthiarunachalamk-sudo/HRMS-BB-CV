@@ -2176,6 +2176,29 @@ def _notify_meeting_cancelled(meeting):
             )
 
 
+def _notify_meeting_link_updated(meeting):
+    for participant in meeting.participants if isinstance(meeting.participants, list) else []:
+        if not isinstance(participant, dict):
+            continue
+        participant_id = str(
+            participant.get('id')
+            or participant.get('employee_id')
+            or participant.get('user_id')
+            or participant.get('trailing')
+            or ''
+        ).strip()
+        if not participant_id:
+            continue
+        _create_notification(
+            user_id=participant_id,
+            title='Meeting Link Updated',
+            message=f'The attendee link for {meeting.title} has been updated. Open the meeting again to join.',
+            notification_type='info',
+            module='meeting',
+            reference_id=meeting.id,
+        )
+
+
 def _parse_meeting_start(date_label, time_label):
     try:
         parsed_date = datetime.strptime(date_label.strip(), '%d-%m-%Y').date()
@@ -3389,13 +3412,34 @@ def hr_meetings_view(request):
             {'success': False, 'message': 'Enter the meeting room or office location.'},
             status=400,
         )
+    if platform.lower() != 'in person' and not meeting_link:
+        return Response(
+            {'success': False, 'message': 'Paste the attendee meeting link created by the organizer.'},
+            status=400,
+        )
     if (
         platform.lower() != 'in person'
-        and meeting_link
         and not meeting_link.lower().startswith(('http://', 'https://'))
     ):
         return Response(
             {'success': False, 'message': 'Meeting link must start with http:// or https://.'},
+            status=400,
+        )
+    generic_meeting_pages = {
+        'https://meet.google.com',
+        'https://meet.google.com/new',
+        'https://teams.microsoft.com',
+        'https://zoom.us/join',
+    }
+    if (
+        platform.lower() != 'in person'
+        and meeting_link.lower().rstrip('/') in generic_meeting_pages
+    ):
+        return Response(
+            {
+                'success': False,
+                'message': 'Paste the unique attendee link, not the platform new-meeting page.',
+            },
             status=400,
         )
 
@@ -3459,6 +3503,67 @@ def hr_meeting_detail_view(request, pk):
             'meeting': _md_meeting_payload(meeting),
         })
     action = str(request.data.get('action') or '').strip().lower()
+    if action == 'update_link':
+        if meeting.status != 'upcoming':
+            return Response(
+                {'success': False, 'message': 'Only upcoming meetings can be updated.'},
+                status=409,
+            )
+        meeting_link = str(request.data.get('meeting_link') or '').strip()
+        generic_meeting_pages = {
+            'https://meet.google.com',
+            'https://meet.google.com/new',
+            'https://teams.microsoft.com',
+            'https://zoom.us/join',
+        }
+        if not meeting_link.lower().startswith(('http://', 'https://')):
+            return Response(
+                {'success': False, 'message': 'Enter a valid attendee meeting link.'},
+                status=400,
+            )
+        if meeting_link.lower().rstrip('/') in generic_meeting_pages:
+            return Response(
+                {'success': False, 'message': 'Enter the unique attendee link, not the platform new-meeting page.'},
+                status=400,
+            )
+        agenda = list(meeting.agenda) if isinstance(meeting.agenda, list) else []
+        metadata_updated = False
+        for item in agenda:
+            if isinstance(item, dict) and item.get('_meta') == 'meeting':
+                item['meeting_link'] = meeting_link
+                metadata_updated = True
+        if not metadata_updated:
+            agenda.append({
+                '_meta': 'meeting',
+                'platform': meeting.meeting_type,
+                'meeting_link': meeting_link,
+                'invite_email': True,
+                'invite_sms': False,
+            })
+        before = _md_meeting_payload(meeting)
+        meeting.location = meeting_link
+        meeting.agenda = agenda
+        meeting.save(update_fields=['location', 'agenda'])
+        _notify_meeting_link_updated(meeting)
+        meeting = MdMeeting.objects.prefetch_related('participant_statuses').get(
+            pk=meeting.pk,
+        )
+        AuditLog.objects.create(
+            actor_user_id=user_id,
+            actor_role='hr',
+            action='meeting_link_updated',
+            module='meeting',
+            reference_id=str(meeting.id),
+            before=before,
+            after=_md_meeting_payload(meeting),
+            ip_address=request.META.get('REMOTE_ADDR') or None,
+            user_agent=request.META.get('HTTP_USER_AGENT', ''),
+        )
+        return Response({
+            'success': True,
+            'message': 'Meeting link updated and participants notified.',
+            'meeting': _md_meeting_payload(meeting),
+        })
     if action != 'cancel':
         return Response(
             {'success': False, 'message': 'Unsupported meeting action.'},

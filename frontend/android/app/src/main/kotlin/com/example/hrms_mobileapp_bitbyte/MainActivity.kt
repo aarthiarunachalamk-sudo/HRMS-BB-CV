@@ -16,11 +16,9 @@ class MainActivity : FlutterActivity() {
     private val channelName = "hrms/location"
 
     private fun openExternalUrl(url: String): Boolean {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-            addCategory(Intent.CATEGORY_BROWSABLE)
-        }
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         return try {
-            startActivity(Intent.createChooser(intent, "Open link with"))
+            startActivity(intent)
             true
         } catch (_: ActivityNotFoundException) {
             false

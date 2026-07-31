@@ -158,3 +158,64 @@ class HrMeetingApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('location', response.data['message'].lower())
         self.assertEqual(MdMeeting.objects.count(), 0)
+
+    def test_online_meeting_rejects_platform_creation_page(self):
+        response = self.client.post(
+            '/api/hr/meetings/',
+            {
+                'user_id': self.hr.user_id,
+                'title': 'Invalid attendee link',
+                'description': 'Ensure participants receive a real room link.',
+                **self._future_schedule(),
+                'platform': 'Google Meet',
+                'meeting_link': 'https://meet.google.com/new',
+                'participants': [{'id': self.employee.user_id}],
+                'agenda': ['Link validation'],
+                'invite_email': False,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('unique attendee link', response.data['message'])
+        self.assertEqual(MdMeeting.objects.count(), 0)
+
+    @patch('hrms.push_notifications.send_mobile_push', return_value=True)
+    def test_hr_can_replace_attendee_link_and_notify_employee(self, push):
+        created = self.client.post(
+            '/api/hr/meetings/',
+            {
+                'user_id': self.hr.user_id,
+                'title': 'Link update test',
+                'description': 'Update a participant link.',
+                **self._future_schedule(),
+                'platform': 'Google Meet',
+                'meeting_link': 'https://meet.google.com/abc-defg-hij',
+                'participants': [{'id': self.employee.user_id}],
+                'agenda': ['Verify the link'],
+                'invite_email': False,
+            },
+            format='json',
+        )
+        self.assertEqual(created.status_code, 201)
+
+        meeting_id = created.data['meeting']['id']
+        replacement = 'https://meet.google.com/xyz-abcd-efg'
+        updated = self.client.patch(
+            f'/api/hr/meetings/{meeting_id}/',
+            {
+                'user_id': self.hr.user_id,
+                'action': 'update_link',
+                'meeting_link': replacement,
+            },
+            format='json',
+        )
+
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.data['meeting']['meeting_link'], replacement)
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_user_id=self.employee.user_id,
+            title='Meeting Link Updated',
+            reference_id=str(meeting_id),
+        ).exists())
+        self.assertEqual(push.call_count, 2)

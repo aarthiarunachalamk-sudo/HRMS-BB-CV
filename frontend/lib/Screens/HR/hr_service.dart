@@ -121,6 +121,25 @@ class HrService {
     return _decodeEmployeeResponse(response, 'Unable to cancel meeting');
   }
 
+  Future<Map<String, dynamic>> updateMeetingLink(
+    String userId,
+    int meetingId,
+    String meetingLink,
+  ) async {
+    final response = await http
+        .patch(
+          ApiConfig.uri('/hr/meetings/$meetingId/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'user_id': userId,
+            'action': 'update_link',
+            'meeting_link': meetingLink,
+          }),
+        )
+        .timeout(_timeout);
+    return _decodeEmployeeResponse(response, 'Unable to update meeting link');
+  }
+
   Future<Map<String, dynamic>> uploadDocument(
     String userId, {
     required String filePath,

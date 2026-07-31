@@ -237,7 +237,8 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
               .toList()
         : const [];
     final link = _meetingLink(meeting);
-    final canJoin = link.isNotEmpty && _isMeetingDate(meeting);
+    final hasAttendeeLink = _isValidAttendeeLink(link);
+    final canJoin = hasAttendeeLink && _isMeetingDate(meeting);
     final joinColor = canJoin ? EmployeeColors.blue : Colors.blueGrey;
     return EmployeePage(
       title: 'Meeting Details',
@@ -321,7 +322,9 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               InkWell(
-                onTap: canJoin
+                onTap: !hasAttendeeLink
+                    ? null
+                    : canJoin
                     ? () => _openLink(context, link)
                     : () => _showJoinUnavailable(context),
                 borderRadius: BorderRadius.circular(8),
@@ -339,7 +342,9 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          link.isEmpty ? 'Meeting link is not available' : link,
+                          hasAttendeeLink
+                              ? link
+                              : 'Organizer has not added the attendee link',
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ),
@@ -352,7 +357,17 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              if (!canJoin && link.isNotEmpty) ...[
+              if (!hasAttendeeLink) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Ask HR to update this meeting with its unique attendee link.',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ] else if (!canJoin) ...[
                 const SizedBox(height: 8),
                 const Text(
                   'Join button will be enabled on the meeting date.',
@@ -377,7 +392,11 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
                   onPressed: canJoin ? () => _openLink(context, link) : null,
                   icon: const Icon(Icons.video_call_rounded),
                   label: Text(
-                    canJoin ? 'Join Meeting' : 'Available on Meeting Date',
+                    canJoin
+                        ? 'Join Meeting'
+                        : hasAttendeeLink
+                        ? 'Available on Meeting Date'
+                        : 'Waiting for Attendee Link',
                     style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
                 ),
@@ -427,20 +446,22 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
   }
 
   static String _meetingLink(Map<String, dynamic> item) {
-    final link =
-        '${item['meeting_link'] ?? item['link'] ?? item['location'] ?? ''}'
-            .trim();
-    if (link.contains('meet.bitbyte.in')) {
-      return _defaultPlatformLink('${item['platform'] ?? item['mode'] ?? ''}');
-    }
-    return link;
+    return '${item['meeting_link'] ?? item['link'] ?? item['location'] ?? ''}'
+        .trim();
   }
 
-  static String _defaultPlatformLink(String platform) {
-    final value = platform.toLowerCase();
-    if (value.contains('google')) return 'https://meet.google.com/new';
-    if (value.contains('team')) return 'https://teams.microsoft.com/';
-    return 'https://zoom.us/join';
+  static bool _isValidAttendeeLink(String value) {
+    final normalized = value.toLowerCase().replaceFirst(RegExp(r'/+$'), '');
+    if (!normalized.startsWith('http://') &&
+        !normalized.startsWith('https://')) {
+      return false;
+    }
+    return !const {
+      'https://meet.google.com',
+      'https://meet.google.com/new',
+      'https://teams.microsoft.com',
+      'https://zoom.us/join',
+    }.contains(normalized);
   }
 
   static bool _isMeetingDate(Map<String, dynamic> item) {

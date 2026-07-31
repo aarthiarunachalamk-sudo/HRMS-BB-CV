@@ -110,8 +110,75 @@ class _HrMeetingsScreenState extends State<HrMeetingsScreen> {
     if (action == null || !mounted) return;
     if (action == 'join') {
       await _openMeetingLink(meeting);
+    } else if (action == 'update_link') {
+      await _updateMeetingLink(meeting);
     } else if (action == 'cancel') {
       await _confirmCancel(meeting);
+    }
+  }
+
+  Future<void> _updateMeetingLink(Map<String, dynamic> meeting) async {
+    final currentLink =
+        '${meeting['meeting_link'] ?? meeting['location'] ?? ''}'.trim();
+    final controller = TextEditingController(
+      text: _isGenericMeetingPage(currentLink) ? '' : currentLink,
+    );
+    final link = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Update attendee link'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            labelText: 'Unique meeting link',
+            hintText: 'https://meet.google.com/abc-defg-hij',
+            helperText: 'Participants will be notified after this update.',
+            prefixIcon: Icon(Icons.link_rounded),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Update link'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (link == null || !mounted) return;
+    if (!link.startsWith('http://') && !link.startsWith('https://')) {
+      _showError('Enter a valid attendee meeting link.');
+      return;
+    }
+    if (_isGenericMeetingPage(link)) {
+      _showError('Enter the unique attendee link, not a new-meeting page.');
+      return;
+    }
+    final id = _intValue(meeting['id']);
+    if (id == null) return;
+    try {
+      final response = await _service.updateMeetingLink(
+        widget.userId,
+        id,
+        link,
+      );
+      await _load(showLoader: false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${response['message'] ?? 'Meeting link updated.'}'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (mounted) _showError(_errorText(error));
     }
   }
 
@@ -778,11 +845,20 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
         _message('Enter the meeting room or office location.');
         return false;
       }
+      if (_platform != 'In Person' && link.isEmpty) {
+        _message('Paste the attendee meeting link created by the organizer.');
+        return false;
+      }
       if (_platform != 'In Person' &&
-          link.isNotEmpty &&
           !link.startsWith('http://') &&
           !link.startsWith('https://')) {
         _message('Meeting link must start with http:// or https://.');
+        return false;
+      }
+      if (_platform != 'In Person' && _isGenericMeetingPage(link)) {
+        _message(
+          'Paste the unique attendee link, not the platform’s new-meeting page.',
+        );
         return false;
       }
     }
@@ -1075,8 +1151,8 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
           keyboardType: TextInputType.url,
           decoration: InputDecoration(
             labelText: _platform == 'In Person'
-                ? 'Room / location (optional)'
-                : 'Meeting link (optional)',
+                ? 'Room / location'
+                : 'Attendee meeting link *',
             hintText: _platform == 'In Person'
                 ? 'Conference Room A'
                 : 'https://meet.google.com/...',
@@ -1087,7 +1163,7 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
             ),
             helperText: _platform == 'In Person'
                 ? null
-                : 'If empty, the platform’s meeting page will be used.',
+                : 'Paste the unique link participants will use to join.',
           ),
         ),
       ],
@@ -1460,6 +1536,16 @@ class _HrMeetingDetailsSheet extends StatelessWidget {
               label: const Text('Open meeting link'),
             ),
           if (status == 'upcoming') ...[
+            if ('${meeting['platform'] ?? meeting['meeting_type'] ?? ''}'
+                    .toLowerCase() !=
+                'in person') ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.pop(context, 'update_link'),
+                icon: const Icon(Icons.link_rounded),
+                label: const Text('Update attendee link'),
+              ),
+            ],
             const SizedBox(height: 10),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(foregroundColor: c.danger),
@@ -1702,6 +1788,19 @@ List<Map<String, dynamic>> _mapList(dynamic value) {
       .whereType<Map>()
       .map((item) => Map<String, dynamic>.from(item))
       .toList();
+}
+
+bool _isGenericMeetingPage(String value) {
+  final normalized = value.trim().toLowerCase().replaceFirst(
+    RegExp(r'/+$'),
+    '',
+  );
+  return const {
+    'https://meet.google.com',
+    'https://meet.google.com/new',
+    'https://teams.microsoft.com',
+    'https://zoom.us/join',
+  }.contains(normalized);
 }
 
 DateTime _meetingDate(Map<String, dynamic> meeting) {
