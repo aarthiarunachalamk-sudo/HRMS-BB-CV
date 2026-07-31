@@ -29,10 +29,11 @@ from sendgrid.helpers.mail import Attachment, Disposition, FileContent, FileName
 from .models import EmployeeAccount
 from .leadership_employees import ensure_leadership_employee_account
 from .role_permissions import permissions_for_role
-from .google_meet import (
-    GoogleMeetConfigurationError,
-    GoogleMeetCreationError,
-    create_google_meet_space,
+from .meeting_providers import (
+    MeetingProviderConfigurationError,
+    MeetingProviderCreationError,
+    create_provider_meeting,
+    provider_configuration,
 )
 from .serializers import EmployeeAccountSerializer
 import random
@@ -3356,6 +3357,7 @@ def hr_meetings_view(request):
             'success': True,
             'meetings': [_md_meeting_payload(item) for item in meetings],
             'participants': participant_options,
+            'provider_configuration': provider_configuration(),
             'counts': {
                 'total': len(meetings),
                 'upcoming': sum(item.status == 'upcoming' for item in meetings),
@@ -3413,20 +3415,25 @@ def hr_meetings_view(request):
         or ''
     ).strip()
     auto_generate_link = request.data.get('auto_generate_link') is True
-    generated_meet = None
-    if (
-        platform.lower() == 'google meet'
-        and (auto_generate_link or not meeting_link)
-    ):
+    generated_provider_meeting = None
+    if auto_generate_link:
+        duration_match = re.search(r'\d+', str(request.data.get('duration') or ''))
+        duration_minutes = int(duration_match.group()) if duration_match else 30
         try:
-            generated_meet = create_google_meet_space()
-            meeting_link = generated_meet['meeting_uri']
-        except GoogleMeetConfigurationError as error:
+            generated_provider_meeting = create_provider_meeting(
+                platform,
+                title=title,
+                description=description,
+                starts_at=meeting_start,
+                duration_minutes=duration_minutes,
+            )
+            meeting_link = generated_provider_meeting['join_url']
+        except MeetingProviderConfigurationError as error:
             return Response(
                 {'success': False, 'message': str(error)},
                 status=503,
             )
-        except GoogleMeetCreationError as error:
+        except MeetingProviderCreationError as error:
             return Response(
                 {'success': False, 'message': str(error)},
                 status=502,
@@ -3503,7 +3510,7 @@ def hr_meetings_view(request):
         'notified_to': len(participants),
         'email_sent_to': email_count,
         'email_error': email_error,
-        'google_meet': generated_meet or {},
+        'provider_meeting': generated_provider_meeting or {},
     }, status=201)
 
 

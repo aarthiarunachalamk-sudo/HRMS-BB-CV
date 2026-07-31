@@ -22,6 +22,7 @@ class _HrMeetingsScreenState extends State<HrMeetingsScreen> {
   List<Map<String, dynamic>> _meetings = const [];
   List<Map<String, dynamic>> _participants = const [];
   Map<String, dynamic> _counts = const {};
+  Map<String, bool> _providerConfiguration = const {};
   late DateTime _displayMonth;
   DateTime? _selectedDate;
   String _status = 'upcoming';
@@ -52,6 +53,11 @@ class _HrMeetingsScreenState extends State<HrMeetingsScreen> {
         _counts = response['counts'] is Map
             ? Map<String, dynamic>.from(response['counts'] as Map)
             : const {};
+        _providerConfiguration = response['provider_configuration'] is Map
+            ? Map<String, dynamic>.from(
+                response['provider_configuration'] as Map,
+              ).map((key, value) => MapEntry(key, value == true))
+            : const {};
         _error = null;
       });
     } catch (error) {
@@ -81,6 +87,7 @@ class _HrMeetingsScreenState extends State<HrMeetingsScreen> {
         builder: (_) => HrScheduleMeetingScreen(
           userId: widget.userId,
           participants: _participants,
+          providerConfiguration: _providerConfiguration,
           service: _service,
         ),
       ),
@@ -739,12 +746,14 @@ class _HrMeetingsScreenState extends State<HrMeetingsScreen> {
 class HrScheduleMeetingScreen extends StatefulWidget {
   final String userId;
   final List<Map<String, dynamic>> participants;
+  final Map<String, bool> providerConfiguration;
   final HrService service;
 
   const HrScheduleMeetingScreen({
     super.key,
     required this.userId,
     required this.participants,
+    required this.providerConfiguration,
     required this.service,
   });
 
@@ -769,6 +778,10 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
   final Set<String> _selectedIds = {};
   bool _inviteEmail = true;
   bool _saving = false;
+
+  bool get _autoGenerationConfigured =>
+      _platform != 'In Person' &&
+      widget.providerConfiguration[_platform] == true;
 
   @override
   void initState() {
@@ -846,20 +859,20 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
         return false;
       }
       if (_platform != 'In Person' &&
-          _platform != 'Google Meet' &&
+          !_autoGenerationConfigured &&
           link.isEmpty) {
         _message('Paste the attendee meeting link created by the organizer.');
         return false;
       }
       if (_platform != 'In Person' &&
-          _platform != 'Google Meet' &&
+          !_autoGenerationConfigured &&
           !link.startsWith('http://') &&
           !link.startsWith('https://')) {
         _message('Meeting link must start with http:// or https://.');
         return false;
       }
       if (_platform != 'In Person' &&
-          _platform != 'Google Meet' &&
+          !_autoGenerationConfigured &&
           _isGenericMeetingPage(link)) {
         _message(
           'Paste the unique attendee link, not the platform’s new-meeting page.',
@@ -905,9 +918,9 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
         'duration': _duration,
         'platform': _platform,
         'meeting_type': _platform,
-        'meeting_link': _platform == 'Google Meet' ? '' : _link.text.trim(),
-        'location': _platform == 'Google Meet' ? '' : _link.text.trim(),
-        'auto_generate_link': _platform == 'Google Meet',
+        'meeting_link': _autoGenerationConfigured ? '' : _link.text.trim(),
+        'location': _autoGenerationConfigured ? '' : _link.text.trim(),
+        'auto_generate_link': _autoGenerationConfigured,
         'participants': selected,
         'agenda': _agenda.text
             .split('\n')
@@ -1152,7 +1165,7 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
               .toList(),
         ),
         const SizedBox(height: 16),
-        if (_platform == 'Google Meet')
+        if (_autoGenerationConfigured)
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -1170,7 +1183,7 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Google Meet link generated automatically',
+                        '$_platform link generated automatically',
                         style: TextStyle(
                           color: c.text,
                           fontWeight: FontWeight.w900,
@@ -1187,7 +1200,34 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
               ],
             ),
           )
-        else
+        else ...[
+          if (_platform != 'In Person') ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: c.warning.withAlpha(18),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: c.warning.withAlpha(80)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: c.warning),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      '$_platform auto-generation is not configured on the server. Paste a real attendee link to continue.',
+                      style: TextStyle(
+                        color: c.text,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           TextField(
             controller: _link,
             keyboardType: _platform == 'In Person'
@@ -1199,7 +1239,11 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
                   : 'Attendee meeting link *',
               hintText: _platform == 'In Person'
                   ? 'Conference Room A'
-                  : 'https://teams.microsoft.com/...',
+                  : _platform == 'Google Meet'
+                  ? 'https://meet.google.com/abc-defg-hij'
+                  : _platform == 'Zoom'
+                  ? 'https://zoom.us/j/123456789'
+                  : 'https://teams.microsoft.com/l/meetup-join/...',
               prefixIcon: Icon(
                 _platform == 'In Person'
                     ? Icons.location_on_outlined
@@ -1210,6 +1254,7 @@ class _HrScheduleMeetingScreenState extends State<HrScheduleMeetingScreen> {
                   : 'Paste the unique link participants will use to join.',
             ),
           ),
+        ],
       ],
     );
   }
