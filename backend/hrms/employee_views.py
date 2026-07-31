@@ -1331,15 +1331,25 @@ def _employee_meetings(employee_id, employee_email):
         participants = meeting.participants if isinstance(meeting.participants, list) else []
         if not _meeting_has_employee(participants, employee_id, employee_email):
             continue
-        agenda = meeting.agenda if isinstance(meeting.agenda, list) else []
+        raw_agenda = meeting.agenda if isinstance(meeting.agenda, list) else []
+        agenda = []
         metadata = {}
-        if agenda and isinstance(agenda[-1], dict) and agenda[-1].get('_meta') == 'meeting':
-            metadata = agenda[-1]
-            agenda = agenda[:-1]
-        meeting_link = metadata.get('meeting_link') or meeting.location
+        for item in raw_agenda:
+            if isinstance(item, dict) and item.get('_meta') == 'meeting':
+                metadata = item
+            else:
+                agenda.append(item)
+        meeting_link = next(
+            (
+                str(metadata.get(key) or '').strip()
+                for key in ('meeting_link', 'attendee_link', 'join_url', 'link', 'url')
+                if str(metadata.get(key) or '').strip()
+            ),
+            str(meeting.location or '').strip(),
+        )
         platform = metadata.get('platform') or meeting.meeting_type or _meeting_mode(meeting_link)
         if 'meet.bitbyte.in' in str(meeting_link):
-            meeting_link = _default_employee_meeting_link(platform)
+            meeting_link = ''
         meetings.append({
             'id': meeting.id,
             'title': meeting.title,

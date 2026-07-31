@@ -12821,7 +12821,7 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                         controller: linkController,
                         decoration: const InputDecoration(
                           labelText: 'Meeting link / location',
-                          hintText: 'Leave empty to auto-create online link',
+                          hintText: 'Paste the unique attendee link',
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -12886,13 +12886,26 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                             );
                             return;
                           }
+                          final meetingLink = linkController.text.trim();
+                          if (meetingLink.isEmpty) {
+                            ScaffoldMessenger.of(sheetContext).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  platform == 'Office' || platform == 'In Person'
+                                      ? 'Enter the meeting room or office location.'
+                                      : 'Paste the unique attendee meeting link.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
                           Navigator.pop(sheetContext, {
                             'title': title,
                             'platform': platform,
                             'meeting_platform': platform,
                             'meeting_type': platform,
-                            'meeting_link': linkController.text.trim(),
-                            'location': linkController.text.trim(),
+                            'meeting_link': meetingLink,
+                            'location': meetingLink,
                             'date_label': _dateLabel(selectedDate),
                             'time_label': _timeLabel(selectedTime),
                             'duration': durationController.text.trim(),

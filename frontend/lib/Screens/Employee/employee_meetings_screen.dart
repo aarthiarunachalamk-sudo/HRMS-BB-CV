@@ -446,8 +446,17 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
   }
 
   static String _meetingLink(Map<String, dynamic> item) {
-    return '${item['meeting_link'] ?? item['link'] ?? item['location'] ?? ''}'
-        .trim();
+    for (final key in const [
+      'meeting_link',
+      'attendee_link',
+      'join_url',
+      'link',
+      'location',
+    ]) {
+      final value = '${item[key] ?? ''}'.trim();
+      if (value.isNotEmpty) return value;
+    }
+    return '';
   }
 
   static bool _isValidAttendeeLink(String value) {

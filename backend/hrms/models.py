@@ -136,7 +136,7 @@ class RecruitmentJobOpening(models.Model):
     STATUS_CHOICES = [('open', 'Open'), ('paused', 'Paused'), ('closed', 'Closed')]
     title = models.CharField(max_length=140)
     department = models.CharField(max_length=100)
-    location = models.CharField(max_length=120, blank=True)
+    location = models.CharField(max_length=1000, blank=True)
     openings = models.PositiveIntegerField(default=1)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
     created_by = models.CharField(max_length=40, blank=True)

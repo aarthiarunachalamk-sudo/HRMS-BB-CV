@@ -32,6 +32,11 @@ class HrMeetingApiTests(TestCase):
             'Password1!',
             role='employee',
         )
+        self.ceo = User.objects.create_user(
+            'ceo.meetings@test.local',
+            'Password1!',
+            role='ceo',
+        )
 
     def _future_schedule(self):
         scheduled_at = timezone.localtime() + timedelta(days=2)
@@ -171,6 +176,73 @@ class HrMeetingApiTests(TestCase):
                 'meeting_link': 'https://meet.google.com/new',
                 'participants': [{'id': self.employee.user_id}],
                 'agenda': ['Link validation'],
+                'invite_email': False,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('unique attendee link', response.data['message'])
+        self.assertEqual(MdMeeting.objects.count(), 0)
+
+    def test_employee_dashboard_receives_saved_attendee_link(self):
+        attendee_link = 'https://meet.google.com/abc-defg-hij'
+        meeting = MdMeeting.objects.create(
+            title='Employee link visibility',
+            meeting_type='Google Meet',
+            location='',
+            date_label=self._future_schedule()['date_label'],
+            status='upcoming',
+            participants=[{'id': self.employee.user_id, 'email': self.employee.email}],
+            agenda=[
+                {'_meta': 'meeting', 'meeting_link': attendee_link, 'platform': 'Google Meet'},
+                'The metadata need not be the last agenda item',
+            ],
+        )
+
+        response = self.client.get(
+            '/api/employee/dashboard/',
+            {'user_id': self.employee.user_id, 'email': self.employee.email},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = next(
+            item for item in response.data['data']['meetings']
+            if item['id'] == meeting.id
+        )
+        self.assertEqual(payload['meeting_link'], attendee_link)
+        self.assertEqual(payload['agenda'], ['The metadata need not be the last agenda item'])
+
+    def test_ceo_meeting_preserves_unique_attendee_link(self):
+        attendee_link = 'https://teams.microsoft.com/l/meetup-join/' + ('a' * 180)
+        response = self.client.post(
+            '/api/ceo/meetings/',
+            {
+                'user_id': self.ceo.user_id,
+                'title': 'CEO company meeting',
+                'platform': 'Microsoft Teams',
+                'meeting_link': attendee_link,
+                **self._future_schedule(),
+                'participants': [{'id': self.employee.user_id}],
+                'invite_email': False,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['meeting']['meeting_link'], attendee_link)
+        self.assertEqual(MdMeeting.objects.get().location, attendee_link)
+
+    def test_ceo_meeting_rejects_generic_provider_page(self):
+        response = self.client.post(
+            '/api/ceo/meetings/',
+            {
+                'user_id': self.ceo.user_id,
+                'title': 'Invalid CEO meeting',
+                'platform': 'Google Meet',
+                'meeting_link': 'https://meet.google.com/new',
+                **self._future_schedule(),
+                'participants': [{'id': self.employee.user_id}],
                 'invite_email': False,
             },
             format='json',

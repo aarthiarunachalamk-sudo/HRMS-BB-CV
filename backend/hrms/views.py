@@ -2062,18 +2062,44 @@ def ceo_attendance_intelligence_view(request):
     })
 
 
-def _md_meeting_payload(meeting):
+def _meeting_metadata_and_agenda(meeting):
     metadata = {}
-    agenda_items = meeting.agenda if isinstance(meeting.agenda, list) else []
-    if agenda_items and isinstance(agenda_items[-1], dict) and agenda_items[-1].get('_meta') == 'meeting':
-        metadata = agenda_items[-1]
-        agenda_items = agenda_items[:-1]
+    agenda_items = []
+    for item in meeting.agenda if isinstance(meeting.agenda, list) else []:
+        if isinstance(item, dict) and item.get('_meta') == 'meeting':
+            metadata = item
+        else:
+            agenda_items.append(item)
+    return metadata, agenda_items
+
+
+def _meeting_attendee_link(meeting, metadata=None):
+    metadata = metadata or _meeting_metadata_and_agenda(meeting)[0]
+    for key in ('meeting_link', 'attendee_link', 'join_url', 'link', 'url'):
+        value = str(metadata.get(key) or '').strip()
+        if value:
+            return value
+    return str(meeting.location or '').strip()
+
+
+def _is_generic_meeting_page(value):
+    return str(value or '').strip().lower().rstrip('/') in {
+        'https://meet.google.com',
+        'https://meet.google.com/new',
+        'https://teams.microsoft.com',
+        'https://zoom.us/join',
+    }
+
+
+def _md_meeting_payload(meeting):
+    metadata, agenda_items = _meeting_metadata_and_agenda(meeting)
+    meeting_link = _meeting_attendee_link(meeting, metadata)
     return {
         'id': meeting.id,
         'title': meeting.title,
         'meeting_type': meeting.meeting_type,
         'location': meeting.location,
-        'meeting_link': metadata.get('meeting_link') or meeting.location,
+        'meeting_link': meeting_link,
         'platform': metadata.get('platform') or meeting.meeting_type,
         'invite_email': metadata.get('invite_email', True),
         'invite_sms': metadata.get('invite_sms', False),
@@ -2116,8 +2142,7 @@ def _meeting_agenda_with_metadata(payload):
 def _create_meeting_from_payload(payload, default_title='Meeting'):
     platform = payload.get('platform') or payload.get('meeting_platform') or payload.get('meeting_type') or ''
     link = payload.get('meeting_link') or payload.get('location') or ''
-    if not link or 'meet.bitbyte.in' in str(link):
-        link = _default_meeting_link(platform)
+    link = str(link).strip()
     return MdMeeting.objects.create(
         title=payload.get('title') or default_title,
         meeting_type=platform,
@@ -6611,7 +6636,40 @@ def ceo_meetings_view(request):
                 {'success': False, 'message': 'Select at least one scheduled user.'},
                 status=400,
             )
+        platform = str(
+            request.data.get('platform')
+            or request.data.get('meeting_type')
+            or 'Google Meet'
+        ).strip()
+        meeting_link = str(
+            request.data.get('meeting_link')
+            or request.data.get('location')
+            or ''
+        ).strip()
+        if platform.lower() == 'in person':
+            if not meeting_link:
+                return Response(
+                    {'success': False, 'message': 'Enter the meeting room or office location.'},
+                    status=400,
+                )
+        elif not meeting_link:
+            return Response(
+                {'success': False, 'message': 'Paste the unique attendee meeting link.'},
+                status=400,
+            )
+        elif not meeting_link.lower().startswith(('http://', 'https://')):
+            return Response(
+                {'success': False, 'message': 'Meeting link must start with http:// or https://.'},
+                status=400,
+            )
+        elif _is_generic_meeting_page(meeting_link):
+            return Response(
+                {'success': False, 'message': 'Paste the unique attendee link, not the platform home or new-meeting page.'},
+                status=400,
+            )
         payload = request.data.copy()
+        payload['meeting_link'] = meeting_link
+        payload['location'] = meeting_link
         payload['participants'] = participants
         payload['created_by'] = user_id
         meeting = _create_meeting_from_payload(payload, 'Meeting')
