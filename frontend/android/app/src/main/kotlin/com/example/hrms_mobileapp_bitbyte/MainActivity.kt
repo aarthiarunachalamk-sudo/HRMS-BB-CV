@@ -1,6 +1,7 @@
 package com.example.hrms_mobileapp_bitbyte
 
 import android.content.ContentValues
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -13,6 +14,18 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private val channelName = "hrms/location"
+
+    private fun openExternalUrl(url: String): Boolean {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
+        }
+        return try {
+            startActivity(Intent.createChooser(intent, "Open link with"))
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -27,14 +40,7 @@ class MainActivity : FlutterActivity() {
                     return@setMethodCallHandler
                 }
 
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                if (intent.resolveActivity(packageManager) == null) {
-                    result.success(false)
-                    return@setMethodCallHandler
-                }
-
-                startActivity(intent)
-                result.success(true)
+                result.success(openExternalUrl(url))
                 return@setMethodCallHandler
             }
 
@@ -87,22 +93,21 @@ class MainActivity : FlutterActivity() {
                     return@setMethodCallHandler
                 }
 
-                val uri = Uri.parse(url)
-                val intent = Intent(Intent.ACTION_VIEW).apply {
-                    if (mimeType.isNullOrBlank()) {
-                        data = uri
-                    } else {
-                        setDataAndType(uri, mimeType)
-                    }
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                if (intent.resolveActivity(packageManager) == null) {
-                    result.success(false)
+                if (mimeType.isNullOrBlank()) {
+                    result.success(openExternalUrl(url))
                     return@setMethodCallHandler
                 }
 
-                startActivity(intent)
-                result.success(true)
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(Uri.parse(url), mimeType)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try {
+                    startActivity(Intent.createChooser(intent, "Open file with"))
+                    result.success(true)
+                } catch (_: ActivityNotFoundException) {
+                    result.success(false)
+                }
                 return@setMethodCallHandler
             }
 

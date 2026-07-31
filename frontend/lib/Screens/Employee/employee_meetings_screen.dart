@@ -24,8 +24,6 @@ class EmployeeMeetingsScreen extends StatefulWidget {
 }
 
 class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen> {
-  static const MethodChannel _channel = MethodChannel('hrms/location');
-
   late EmployeeDashboardData _data = widget.data;
   bool _loading = false;
   DateTime? _selectedDate;
@@ -221,36 +219,6 @@ class _EmployeeMeetingsScreenState extends State<EmployeeMeetingsScreen> {
       if (mode.isNotEmpty) mode,
     ];
     return parts.join(' - ');
-  }
-
-  Future<void> _joinMeeting(
-    BuildContext context,
-    Map<String, dynamic> item,
-  ) async {
-    final link = '${item['link'] ?? item['location'] ?? ''}'.trim();
-    if (!link.startsWith('http')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Meeting link is not available.')),
-      );
-      return;
-    }
-    try {
-      final opened = await _channel.invokeMethod<bool>('openUrl', {
-        'url': link,
-      });
-      if (opened != true && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to open meeting link.')),
-        );
-      }
-    } on PlatformException catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.message ?? 'Unable to open meeting link.'),
-        ),
-      );
-    }
   }
 }
 
@@ -520,9 +488,7 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
         'url': link,
       });
       if (opened != true && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to open meeting link.')),
-        );
+        await _copyMeetingLink(context, link);
       }
     } on PlatformException catch (error) {
       if (!context.mounted) return;
@@ -533,6 +499,18 @@ class EmployeeMeetingDetailsScreen extends StatelessWidget {
       );
     }
   }
+}
+
+Future<void> _copyMeetingLink(BuildContext context, String link) async {
+  await Clipboard.setData(ClipboardData(text: link));
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text(
+        'No compatible browser was found. The meeting link was copied.',
+      ),
+    ),
+  );
 }
 
 class _MeetingDetailRow extends StatelessWidget {
