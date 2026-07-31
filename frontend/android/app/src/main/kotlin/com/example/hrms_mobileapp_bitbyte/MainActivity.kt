@@ -16,11 +16,44 @@ class MainActivity : FlutterActivity() {
     private val channelName = "hrms/location"
 
     private fun openExternalUrl(url: String): Boolean {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        val uri = Uri.parse(url)
+        val providerPackages = when {
+            uri.host?.contains("meet.google.com", ignoreCase = true) == true ->
+                listOf("com.google.android.apps.tachyon")
+            uri.host?.contains("teams.microsoft.com", ignoreCase = true) == true ->
+                listOf("com.microsoft.teams", "com.microsoft.teams2")
+            uri.host?.contains("zoom.us", ignoreCase = true) == true ->
+                listOf("us.zoom.videomeetings")
+            else -> emptyList()
+        }
+
+        for (packageName in providerPackages) {
+            val appIntent = Intent(Intent.ACTION_VIEW, uri).apply {
+                setPackage(packageName)
+                addCategory(Intent.CATEGORY_BROWSABLE)
+            }
+            try {
+                startActivity(appIntent)
+                return true
+            } catch (_: ActivityNotFoundException) {
+                // The provider app is not installed; use the browser below.
+            } catch (_: SecurityException) {
+                // The installed package cannot accept this URL from our app.
+            }
+        }
+
+        val browserIntent = Intent.makeMainSelectorActivity(
+            Intent.ACTION_MAIN,
+            Intent.CATEGORY_APP_BROWSER
+        ).apply {
+            data = uri
+        }
         return try {
-            startActivity(intent)
+            startActivity(browserIntent)
             true
         } catch (_: ActivityNotFoundException) {
+            false
+        } catch (_: SecurityException) {
             false
         }
     }

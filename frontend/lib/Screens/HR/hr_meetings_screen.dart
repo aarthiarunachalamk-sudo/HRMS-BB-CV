@@ -127,38 +127,12 @@ class _HrMeetingsScreenState extends State<HrMeetingsScreen> {
   Future<void> _updateMeetingLink(Map<String, dynamic> meeting) async {
     final currentLink =
         '${meeting['meeting_link'] ?? meeting['location'] ?? ''}'.trim();
-    final controller = TextEditingController(
-      text: _isGenericMeetingPage(currentLink) ? '' : currentLink,
-    );
     final link = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Update attendee link'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
-            labelText: 'Unique meeting link',
-            hintText: 'https://meet.google.com/abc-defg-hij',
-            helperText: 'Participants will be notified after this update.',
-            prefixIcon: Icon(Icons.link_rounded),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Update link'),
-          ),
-        ],
+      builder: (_) => _MeetingLinkUpdateDialog(
+        initialLink: _isGenericMeetingPage(currentLink) ? '' : currentLink,
       ),
     );
-    controller.dispose();
     if (link == null || !mounted) return;
     if (!link.startsWith('http://') && !link.startsWith('https://')) {
       _showError('Enter a valid attendee meeting link.');
@@ -1686,6 +1660,56 @@ class _HrMeetingDetailsSheet extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _MeetingLinkUpdateDialog extends StatefulWidget {
+  final String initialLink;
+
+  const _MeetingLinkUpdateDialog({required this.initialLink});
+
+  @override
+  State<_MeetingLinkUpdateDialog> createState() =>
+      _MeetingLinkUpdateDialogState();
+}
+
+class _MeetingLinkUpdateDialogState extends State<_MeetingLinkUpdateDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialLink,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Update attendee link'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.url,
+        decoration: const InputDecoration(
+          labelText: 'Unique meeting link',
+          hintText: 'https://meet.google.com/abc-defg-hij',
+          helperText: 'Participants will be notified after this update.',
+          prefixIcon: Icon(Icons.link_rounded),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('Update link'),
+        ),
+      ],
     );
   }
 }
