@@ -1,4 +1,5 @@
 from django.db import models
+from django.db import transaction
 
 
 class ClientVisit(models.Model):
@@ -59,9 +60,11 @@ class ClientVisit(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.visit_id:
-            super().save(*args, **kwargs)
-            self.visit_id = f'VST-{self.created_at.year}-{self.pk:05d}'
-            return super().save(update_fields=['visit_id'])
+            with transaction.atomic():
+                super().save(*args, **kwargs)
+                self.visit_id = f'VST-{self.created_at.year}-{self.pk:05d}'
+                super().save(update_fields=['visit_id'])
+            return None
         return super().save(*args, **kwargs)
 
 
