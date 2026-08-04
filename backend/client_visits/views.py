@@ -1,9 +1,11 @@
 from decimal import Decimal, InvalidOperation
 import json
+import logging
+import re
 
 from django.db import transaction
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.decorators import api_view, parser_classes
@@ -17,6 +19,7 @@ from .storage import upload_client_visit_file
 
 
 SUPERVISOR_ROLES = {'manager', 'tl', 'hr', 'admin', 'superadmin'}
+logger = logging.getLogger(__name__)
 EDITABLE_FIELDS = (
     'client_name', 'contact_person', 'contact_phone', 'address', 'latitude',
     'longitude', 'scheduled_date', 'scheduled_time', 'duration_minutes',
@@ -78,6 +81,75 @@ def _notify_visit_submitted(visit):
         notification_type='info',
         visit=visit,
     )
+
+
+def _safe_notify_visit_submitted(visit):
+    try:
+        _notify_visit_submitted(visit)
+    except Exception:
+        # A notification provider/schema issue must never turn a successfully
+        # saved visit into an HTML 500 response or encourage duplicate retries.
+        logger.exception('Unable to send submitted Client Visit notifications for %s', visit.pk)
+
+
+def _resolve_reporting_manager(value):
+    raw = str(value or '').strip()
+    if not raw:
+        return None, ''
+    supervisors = User.objects.filter(
+        role__in={'manager', 'tl', 'hr'},
+        is_active=True,
+    )
+    direct = supervisors.filter(
+        Q(user_id__iexact=raw) | Q(email__iexact=raw)
+    ).first()
+    if direct:
+        return direct, ''
+
+    normalized = ' '.join(raw.casefold().split())
+    name_matches = [
+        user for user in supervisors.only('user_id', 'first_name', 'last_name')
+        if ' '.join(f'{user.first_name} {user.last_name}'.casefold().split()) == normalized
+        or user.first_name.strip().casefold() == normalized
+    ]
+    if len(name_matches) == 1:
+        return name_matches[0], ''
+    if len(name_matches) > 1:
+        return None, 'More than one approver has this name. Select the approver user ID.'
+    return None, 'TL/HR approver was not found. Select a valid approver.'
+
+
+def _normalize_contact_phone(value):
+    raw = str(value or '').strip()
+    digits = re.sub(r'\D', '', raw)
+    if len(digits) == 12 and digits.startswith('91'):
+        digits = digits[2:]
+    if not re.fullmatch(r'[6-9]\d{9}', digits):
+        return '', 'Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.'
+    return digits, ''
+
+
+@api_view(['GET'])
+def visit_approvers(request):
+    _, user = _actor(request)
+    if not user:
+        return _error('An active user_id is required.', 401)
+    approvers = []
+    role_order = {'tl': 0, 'hr': 1}
+    queryset = User.objects.filter(
+        role__in={'tl', 'hr'},
+        is_active=True,
+    ).order_by('role', 'first_name', 'last_name', 'user_id')
+    for approver in queryset:
+        name = f'{approver.first_name} {approver.last_name}'.strip()
+        approvers.append({
+            'employee_id': approver.user_id,
+            'label': name or approver.email,
+            'role': approver.role,
+            'role_label': 'Team Lead' if approver.role == 'tl' else 'HR',
+        })
+    approvers.sort(key=lambda item: (role_order[item['role']], item['label'].casefold()))
+    return Response({'success': True, 'approvers': approvers})
 
 
 def _notify_visit_progress(visit, *, title, message, notification_type='info', include_employee=False):
@@ -183,7 +255,9 @@ def visit_list_create(request):
             if employee:
                 queryset = queryset.filter(employee_user_id=employee)
         elif user.role in {'manager', 'tl'}:
-            queryset = queryset.filter(manager_user_id=user_id)
+            queryset = queryset.filter(
+                Q(manager_user_id=user_id) | Q(employee_user_id=user_id)
+            )
         else:
             queryset = queryset.filter(employee_user_id=user_id)
         status_filter = str(request.query_params.get('status') or '').strip()
@@ -195,22 +269,35 @@ def visit_list_create(request):
             counts[value] = counts.get(value, 0) + 1
         return Response({'success': True, 'summary': counts, 'visits': [_visit_payload(item, False) for item in items]})
 
-    required = ('client_name', 'contact_person', 'address', 'scheduled_date', 'scheduled_time', 'purpose')
+    required = ('client_name', 'contact_person', 'contact_phone', 'address', 'scheduled_date', 'scheduled_time', 'purpose')
     missing = [field for field in required if not str(request.data.get(field) or '').strip()]
     if missing:
         return _error(f"Required fields: {', '.join(missing)}.")
+    contact_phone, phone_error = _normalize_contact_phone(
+        request.data.get('contact_phone')
+    )
+    if phone_error:
+        return _error(phone_error)
+    reporting_manager, manager_error = _resolve_reporting_manager(
+        request.data.get('manager_user_id')
+    )
+    if manager_error:
+        return _error(manager_error)
     visit = ClientVisit(
         employee_user_id=user_id,
         employee_name=f'{user.first_name} {user.last_name}'.strip() or user.email,
     )
     _assign_fields(visit, request.data)
+    visit.contact_phone = contact_phone
+    if reporting_manager:
+        visit.manager_user_id = reporting_manager.user_id
     visit.status = 'pending' if str(request.data.get('submit') or '').lower() in {'1', 'true', 'yes'} else 'draft'
     try:
         visit.save()
     except (ValueError, TypeError) as exc:
         return _error(f'Invalid visit data: {exc}')
     if visit.status == 'pending':
-        _notify_visit_submitted(visit)
+        _safe_notify_visit_submitted(visit)
     return Response({'success': True, 'message': 'Visit request created.', 'visit': _visit_payload(visit)}, status=201)
 
 
@@ -225,7 +312,25 @@ def visit_detail(request, pk):
         return Response({'success': True, 'visit': _visit_payload(visit)})
     if visit.employee_user_id != user_id or visit.status not in {'draft', 'rejected'}:
         return _error('Only the employee can edit a draft or rejected visit.', 409)
+    contact_phone = None
+    if 'contact_phone' in request.data:
+        contact_phone, phone_error = _normalize_contact_phone(
+            request.data.get('contact_phone')
+        )
+        if phone_error:
+            return _error(phone_error)
+    reporting_manager = None
+    if 'manager_user_id' in request.data:
+        reporting_manager, manager_error = _resolve_reporting_manager(
+            request.data.get('manager_user_id')
+        )
+        if manager_error:
+            return _error(manager_error)
     _assign_fields(visit, request.data)
+    if contact_phone:
+        visit.contact_phone = contact_phone
+    if reporting_manager:
+        visit.manager_user_id = reporting_manager.user_id
     submitted = str(request.data.get('submit') or '').lower() in {'1', 'true', 'yes'}
     if submitted:
         visit.status = 'pending'
@@ -235,7 +340,7 @@ def visit_detail(request, pk):
     except (ValueError, TypeError) as exc:
         return _error(f'Invalid visit data: {exc}')
     if submitted:
-        _notify_visit_submitted(visit)
+        _safe_notify_visit_submitted(visit)
     return Response({'success': True, 'message': 'Visit updated.', 'visit': _visit_payload(visit)})
 
 

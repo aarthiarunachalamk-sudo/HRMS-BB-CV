@@ -5,10 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
 import 'client_visit_service.dart';
+import 'client_visit_theme.dart';
 
 class ClientVisitManagerApprovalScreen extends StatelessWidget {
   final String userId;
@@ -204,18 +205,46 @@ class ClientVisitSummaryScreen extends StatelessWidget {
   );
 }
 
+/// Displays the visit at its current workflow stage without exposing employee
+/// journey actions or approval controls.
+class ClientVisitReadOnlyFlowScreen extends StatelessWidget {
+  final String userId;
+  final int visitId;
+  final int step;
+  final ClientVisitService service;
+
+  const ClientVisitReadOnlyFlowScreen({
+    super.key,
+    required this.userId,
+    required this.visitId,
+    required this.step,
+    required this.service,
+  });
+
+  @override
+  Widget build(BuildContext context) => _VisitFlowPage(
+    step: step,
+    userId: userId,
+    visitId: visitId,
+    service: service,
+    readOnlyMode: true,
+  );
+}
+
 class _VisitFlowPage extends StatefulWidget {
   final int step;
   final String userId;
   final int visitId;
   final ClientVisitService service;
   final bool reviewerMode;
+  final bool readOnlyMode;
   const _VisitFlowPage({
     required this.step,
     required this.userId,
     required this.visitId,
     required this.service,
     this.reviewerMode = false,
+    this.readOnlyMode = false,
   });
   @override
   State<_VisitFlowPage> createState() => _VisitFlowPageState();
@@ -329,10 +358,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   Future<void> _review(String action) async {
     final comment = TextEditingController();
+    final title = switch (action) {
+      'approve' => 'Approve visit',
+      'reject' => 'Reject visit',
+      _ => 'Request changes',
+    };
+    final confirmLabel = switch (action) {
+      'approve' => 'Approve',
+      'reject' => 'Reject',
+      _ => 'Send changes',
+    };
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(action == 'approve' ? 'Approve visit' : 'Request changes'),
+        title: Text(title),
         content: TextField(
           controller: comment,
           maxLines: 3,
@@ -345,7 +384,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(action == 'approve' ? 'Approve' : 'Send back'),
+            child: Text(confirmLabel),
           ),
         ],
       ),
@@ -578,30 +617,29 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   @override
   Widget build(BuildContext context) {
     final visit = _visit;
-    return Scaffold(
-      appBar: AppBar(
-        title: AppBarLogoTitle(
-          title:
-              '${widget.step.toString().padLeft(2, '0')} ${_title(widget.step)}',
+    return ClientVisitTheme(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_title(widget.step)),
         ),
+        body: _error != null
+            ? _stateMessage(Icons.error_outline, _error!, _load)
+            : visit == null
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _stepHeader(visit),
+                  const SizedBox(height: 12),
+                  ..._content(visit),
+                  if (_working)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: LinearProgressIndicator(),
+                    ),
+                ],
+              ),
       ),
-      body: _error != null
-          ? _stateMessage(Icons.error_outline, _error!, _load)
-          : visit == null
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _stepHeader(visit),
-                const SizedBox(height: 12),
-                ..._content(visit),
-                if (_working)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 12),
-                    child: LinearProgressIndicator(),
-                  ),
-              ],
-            ),
     );
   }
 
@@ -609,30 +647,59 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     3 => [
       _visitInfo(visit),
       const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _working ? null : () => _review('changes'),
-              icon: const Icon(Icons.undo),
-              label: const Text('Request changes'),
+      if (widget.readOnlyMode)
+        _monitoringNotice()
+      else
+        Column(
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: ClientVisitColors.green,
+                ),
+                onPressed: _working ? null : () => _review('approve'),
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Approve'),
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: _working ? null : () => _review('approve'),
-              icon: const Icon(Icons.check),
-              label: const Text('Approve'),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: ClientVisitColors.red,
+                ),
+                onPressed: _working ? null : () => _review('reject'),
+                icon: const Icon(Icons.cancel_outlined),
+                label: const Text('Reject'),
+              ),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: ClientVisitColors.orange,
+                ),
+                onPressed: _working ? null : () => _review('changes'),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Request changes'),
+              ),
+            ),
+          ],
+        ),
     ],
     4 => [
+      if (visit.status == 'approved') ...[
+        _stageBadge('APPROVED', ClientVisitColors.green),
+        const SizedBox(height: 12),
+      ],
       _visitInfo(visit),
       const SizedBox(height: 12),
-      if (visit.status == 'approved')
+      if (widget.readOnlyMode)
+        _monitoringNotice()
+      else if (visit.status == 'approved')
         FilledButton.icon(
           onPressed: () => _replace(
             ClientVisitOfficeCheckoutScreen(
@@ -653,15 +720,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       EmployeeCard(
         child: Column(
           children: [
-            const Icon(
-              Icons.camera_alt_rounded,
-              size: 52,
-              color: EmployeeColors.blue,
-            ),
+            _captureTiles(),
             const SizedBox(height: 10),
             const Text('A selfie and current GPS location are required.'),
             TextField(
               controller: _odometer,
+              readOnly: widget.readOnlyMode,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -671,13 +735,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _working ? null : _officeCheckout,
-                child: const Text('Confirm office check-out'),
+            if (widget.readOnlyMode)
+              _monitoringNotice()
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _working ? null : _officeCheckout,
+                  child: const Text('Confirm office check-out'),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -686,26 +753,27 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       EmployeeCard(
         child: Column(
           children: [
-            const Icon(
-              Icons.route_rounded,
-              size: 56,
-              color: EmployeeColors.blue,
-            ),
+            const _RouteMapPreview(),
             const SizedBox(height: 8),
             Text(visit.address, textAlign: TextAlign.center),
             const SizedBox(height: 12),
             const LinearProgressIndicator(),
             const SizedBox(height: 8),
             const Text('Live GPS journey in progress'),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _working ? null : _reached,
-                icon: const Icon(Icons.flag),
-                label: const Text('Reached client'),
+            if (widget.readOnlyMode) ...[
+              const SizedBox(height: 14),
+              _monitoringNotice(),
+            ] else ...[
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _working ? null : _reached,
+                  icon: const Icon(Icons.flag),
+                  label: const Text('Reached client'),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -716,11 +784,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       EmployeeCard(
         child: Column(
           children: [
-            const Icon(
-              Icons.location_on_rounded,
-              size: 54,
-              color: EmployeeColors.green,
-            ),
+            _captureTiles(),
+            const SizedBox(height: 10),
             Text(
               'Within client location',
               style: Theme.of(context).textTheme.titleMedium,
@@ -728,13 +793,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             const SizedBox(height: 8),
             const Text('Capture arrival selfie and GPS to begin the visit.'),
             const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _working ? null : _clientCheckIn,
-                child: const Text('Client check-in'),
+            if (widget.readOnlyMode)
+              _monitoringNotice()
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _working ? null : _clientCheckIn,
+                  child: const Text('Client check-in'),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -751,39 +819,43 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               '${visit.checklist.where((item) => item is Map && item['done'] == true).length}/${visit.checklist.length} completed',
             ),
             const SizedBox(height: 8),
-            _flowButton(
-              Icons.edit_note,
-              'Work update & proof',
-              () => _push(
-                ClientVisitWorkUpdateScreen(
-                  userId: widget.userId,
-                  visitId: widget.visitId,
-                  service: widget.service,
+            if (widget.readOnlyMode)
+              _monitoringNotice()
+            else ...[
+              _flowButton(
+                Icons.edit_note,
+                'Work update & proof',
+                () => _push(
+                  ClientVisitWorkUpdateScreen(
+                    userId: widget.userId,
+                    visitId: widget.visitId,
+                    service: widget.service,
+                  ),
                 ),
               ),
-            ),
-            _flowButton(
-              Icons.receipt_long,
-              'Expense claim',
-              () => _push(
-                ClientVisitExpenseScreen(
-                  userId: widget.userId,
-                  visitId: widget.visitId,
-                  service: widget.service,
+              _flowButton(
+                Icons.receipt_long,
+                'Expense claim',
+                () => _push(
+                  ClientVisitExpenseScreen(
+                    userId: widget.userId,
+                    visitId: widget.visitId,
+                    service: widget.service,
+                  ),
                 ),
               ),
-            ),
-            _flowButton(
-              Icons.logout,
-              'Return / direct checkout',
-              () => _push(
-                ClientVisitReturnCheckoutScreen(
-                  userId: widget.userId,
-                  visitId: widget.visitId,
-                  service: widget.service,
+              _flowButton(
+                Icons.logout,
+                'Return / direct checkout',
+                () => _push(
+                  ClientVisitReturnCheckoutScreen(
+                    userId: widget.userId,
+                    visitId: widget.visitId,
+                    service: widget.service,
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -797,13 +869,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 Expanded(
                   child: TextField(
                     controller: _attendee,
+                    readOnly: widget.readOnlyMode,
                     decoration: const InputDecoration(
                       labelText: 'Attendee name',
                     ),
                   ),
                 ),
                 IconButton(
-                  onPressed: () {
+                  onPressed: widget.readOnlyMode ? null : () {
                     if (_attendee.text.trim().isNotEmpty) {
                       setState(() {
                         _attendees.add(_attendee.text.trim());
@@ -822,8 +895,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     .map(
                       (name) => Chip(
                         label: Text(name),
-                        onDeleted: () =>
-                            setState(() => _attendees.remove(name)),
+                        onDeleted: widget.readOnlyMode
+                            ? null
+                            : () => setState(() => _attendees.remove(name)),
                       ),
                     )
                     .toList(),
@@ -833,25 +907,31 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 contentPadding: EdgeInsets.zero,
                 value: entry.value['done'] == true,
                 title: Text('${entry.value['label']}'),
-                onChanged: (value) => setState(
-                  () => _checklist[entry.key]['done'] = value == true,
-                ),
+                onChanged: widget.readOnlyMode
+                    ? null
+                    : (value) => setState(
+                        () => _checklist[entry.key]['done'] = value == true,
+                      ),
               ),
             ),
             TextField(
               controller: _notes,
+              readOnly: widget.readOnlyMode,
               maxLines: 3,
               decoration: const InputDecoration(labelText: 'Notes / outcome'),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _working ? null : _saveWorkUpdate,
-                icon: const Icon(Icons.cloud_upload),
-                label: const Text('Save & upload proof'),
+            if (widget.readOnlyMode)
+              _monitoringNotice()
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _working ? null : _saveWorkUpdate,
+                  icon: const Icon(Icons.cloud_upload),
+                  label: const Text('Save & upload proof'),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -871,10 +951,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     ),
                   )
                   .toList(),
-              onChanged: (value) => setState(() => _expenseCategory = value!),
+              onChanged: widget.readOnlyMode
+                  ? null
+                  : (value) => setState(() => _expenseCategory = value!),
             ),
             TextField(
               controller: _amount,
+              readOnly: widget.readOnlyMode,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -885,17 +968,21 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             ),
             TextField(
               controller: _expenseNote,
+              readOnly: widget.readOnlyMode,
               decoration: const InputDecoration(labelText: 'Note'),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _working ? null : _addExpense,
-                icon: const Icon(Icons.add),
-                label: const Text('Add expense & receipt'),
+            if (widget.readOnlyMode)
+              _monitoringNotice()
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _working ? null : _addExpense,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add expense & receipt'),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -921,6 +1008,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       EmployeeCard(
         child: Column(
           children: [
+            _captureTiles(),
+            const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: _returnMode,
               decoration: const InputDecoration(labelText: 'Duty completion'),
@@ -934,38 +1023,48 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   child: Text('End duty from client'),
                 ),
               ],
-              onChanged: (value) => setState(() => _returnMode = value!),
+              onChanged: widget.readOnlyMode
+                  ? null
+                  : (value) => setState(() => _returnMode = value!),
             ),
             TextField(
               controller: _outcome,
+              readOnly: widget.readOnlyMode,
               maxLines: 3,
               decoration: const InputDecoration(labelText: 'Outcome *'),
             ),
             TextField(
               controller: _followUp,
+              readOnly: widget.readOnlyMode,
               maxLines: 2,
               decoration: const InputDecoration(labelText: 'Follow-up'),
             ),
             TextField(
               controller: _signature,
+              readOnly: widget.readOnlyMode,
               decoration: const InputDecoration(
                 labelText: 'Client signature / OTP name',
               ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _working ? null : _complete,
-                icon: const Icon(Icons.task_alt),
-                label: const Text('Complete duty'),
+            if (widget.readOnlyMode)
+              _monitoringNotice()
+            else
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _working ? null : _complete,
+                  icon: const Icon(Icons.task_alt),
+                  label: const Text('Complete duty'),
+                ),
               ),
-            ),
           ],
         ),
       ),
     ],
     12 => [
+      _stageBadge('COMPLETED', ClientVisitColors.green),
+      const SizedBox(height: 12),
       _timeline(visit),
       const SizedBox(height: 12),
       _summary(visit),
@@ -1004,6 +1103,98 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           ),
         ),
       );
+
+  Widget _captureTiles() {
+    final isDark = ThemeConfig.isDark(context);
+    final border = ThemeConfig.getCardBorder(context);
+    final text = ThemeConfig.getTextPrimary(context);
+    final muted = ThemeConfig.getTextSecondary(context);
+    final neutralSurface = isDark
+        ? const Color(0xFF182238)
+        : const Color(0xFFF2F4F7);
+    final mapSurface = isDark
+        ? const Color(0xFF102743)
+        : const Color(0xFFEAF3FC);
+    return Row(
+      children: [
+      Expanded(
+        child: Container(
+          height: 132,
+          decoration: BoxDecoration(
+            color: neutralSurface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircleAvatar(
+                radius: 28,
+                backgroundColor: Color(0xFFE2EEFF),
+                child: Icon(
+                  Icons.person_rounded,
+                  color: ClientVisitColors.navy,
+                  size: 34,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Selfie',
+                style: TextStyle(
+                  color: text,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Icon(
+                Icons.camera_alt,
+                color: ClientVisitColors.blue,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Container(
+          height: 132,
+          decoration: BoxDecoration(
+            color: mapSurface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: border),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.location_on_rounded,
+                color: ClientVisitColors.blue,
+                size: 42,
+              ),
+              const SizedBox(height: 7),
+              Text(
+                'GPS Location',
+                style: TextStyle(
+                  color: text,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                'Live location required',
+                style: TextStyle(
+                  color: muted,
+                  fontSize: 10,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      ],
+    );
+  }
   Widget _stepHeader(ClientVisit visit) => Row(
     children: [
       CircleAvatar(
@@ -1066,6 +1257,19 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               ? visit.approvalComment
               : 'Waiting for TL approval',
           textAlign: TextAlign.center,
+        ),
+      ],
+    ),
+  );
+  Widget _monitoringNotice() => EmployeeCard(
+    child: const Row(
+      children: [
+        Icon(Icons.visibility_rounded, color: EmployeeColors.blue),
+        SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Monitoring view. Visit actions are available only to the assigned employee.',
+          ),
         ),
       ],
     ),
@@ -1142,6 +1346,32 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     );
   }
 
+  Widget _stageBadge(String label, Color color) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+    decoration: BoxDecoration(
+      color: color.withAlpha(22),
+      borderRadius: BorderRadius.circular(7),
+      border: Border.all(color: color.withAlpha(90)),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.check_circle, color: color, size: 18),
+        const SizedBox(width: 7),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+            letterSpacing: .3,
+          ),
+        ),
+      ],
+    ),
+  );
+
   Widget _stateMessage(
     IconData icon,
     String text,
@@ -1204,6 +1434,109 @@ class _FlowTimerState extends State<_FlowTimer> {
       ),
     );
   }
+}
+
+class _RouteMapPreview extends StatelessWidget {
+  const _RouteMapPreview();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = ThemeConfig.isDark(context);
+    return Container(
+      height: 190,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF102743) : const Color(0xFFEAF3FC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: ThemeConfig.getCardBorder(context)),
+      ),
+      child: Stack(
+      children: [
+        Positioned.fill(
+          child: CustomPaint(painter: _RoutePainter(isDark: isDark)),
+        ),
+        const Positioned(
+          left: 18,
+          top: 24,
+          child: Icon(Icons.location_on, color: ClientVisitColors.green),
+        ),
+        const Positioned(
+          right: 20,
+          bottom: 28,
+          child: Icon(Icons.location_on, color: ClientVisitColors.red, size: 34),
+        ),
+        Positioned(
+          right: 10,
+          top: 10,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: ThemeConfig.getCardBg(context),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              'LIVE',
+              style: TextStyle(
+                color: ClientVisitColors.blue,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+      ],
+      ),
+    );
+  }
+}
+
+class _RoutePainter extends CustomPainter {
+  final bool isDark;
+  const _RoutePainter({required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final grid = Paint()
+      ..color = isDark ? const Color(0xFF29415E) : const Color(0xFFD5E1EC)
+      ..strokeWidth = 1;
+    for (double y = 25; y < size.height; y += 38) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y + 9), grid);
+    }
+    for (double x = 38; x < size.width; x += 54) {
+      canvas.drawLine(Offset(x, 0), Offset(x - 18, size.height), grid);
+    }
+
+    final route = Path()
+      ..moveTo(34, 42)
+      ..cubicTo(
+        size.width * .28,
+        size.height * .12,
+        size.width * .26,
+        size.height * .68,
+        size.width * .49,
+        size.height * .56,
+      )
+      ..cubicTo(
+        size.width * .68,
+        size.height * .46,
+        size.width * .70,
+        size.height * .86,
+        size.width - 34,
+        size.height - 42,
+      );
+    canvas.drawPath(
+      route,
+      Paint()
+        ..color = ClientVisitColors.blue
+        ..strokeWidth = 5
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RoutePainter oldDelegate) =>
+      oldDelegate.isDark != isDark;
 }
 
 String _title(int step) =>

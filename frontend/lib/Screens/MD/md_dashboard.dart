@@ -289,6 +289,10 @@ class _MdDashboardState extends State<MdDashboard> {
             email: widget.email,
             roleLabel: _roleLabel,
             select: _setDrawerStep,
+            openClientVisits: () {
+              Navigator.maybePop(context);
+              _openMoreFlow('client-visits');
+            },
             logout: _requestLogout,
           ),
           body: SafeArea(
@@ -1907,6 +1911,7 @@ class _MdDrawer extends StatelessWidget {
   final String email;
   final String roleLabel;
   final ValueChanged<_MdStep> select;
+  final VoidCallback openClientVisits;
   final VoidCallback logout;
 
   const _MdDrawer({
@@ -1915,6 +1920,7 @@ class _MdDrawer extends StatelessWidget {
     required this.email,
     required this.roleLabel,
     required this.select,
+    required this.openClientVisits,
     required this.logout,
   });
 
@@ -2061,6 +2067,12 @@ class _MdDrawer extends StatelessWidget {
                       icon: Icons.calendar_month_rounded,
                       title: 'Calendar',
                       onTap: () => select(_MdStep.calendar),
+                    ),
+                    _MdDrawerTile(
+                      colors: colors,
+                      icon: Icons.add_location_alt_rounded,
+                      title: 'Client Visits',
+                      onTap: openClientVisits,
                     ),
                   ],
                 ),

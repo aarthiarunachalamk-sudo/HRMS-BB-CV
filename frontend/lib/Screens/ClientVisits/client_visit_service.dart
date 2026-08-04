@@ -6,6 +6,36 @@ import 'client_visit_models.dart';
 class ClientVisitService {
   static final Uri _base = ApiConfig.uri('/client-visits/');
 
+  Future<List<Map<String, dynamic>>> fetchVisitApprovers(String userId) async {
+    var response = await http
+        .get(
+          ApiConfig.uri('/client-visits/approvers/').replace(
+            queryParameters: {'user_id': userId},
+          ),
+        )
+        .timeout(const Duration(seconds: 20));
+    var responseKey = 'approvers';
+    // Backward compatibility while an older Render release is still active.
+    // The new endpoint includes HR; the legacy endpoint contains TLs only.
+    if (response.statusCode == 404) {
+      response = await http
+          .get(ApiConfig.uri('/hr/reporting-tls/'))
+          .timeout(const Duration(seconds: 20));
+      responseKey = 'tls';
+    }
+    final body = _body(response);
+    return (body[responseKey] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) {
+          final value = Map<String, dynamic>.from(item);
+          value.putIfAbsent('role', () => 'tl');
+          value.putIfAbsent('role_label', () => 'Team Lead');
+          return value;
+        })
+        .where((item) => '${item['employee_id'] ?? ''}'.trim().isNotEmpty)
+        .toList();
+  }
+
   Future<ClientVisitListResult> fetchVisits(
     String userId, {
     String status = '',
@@ -110,7 +140,14 @@ class ClientVisitService {
     try {
       body = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
     } catch (_) {
-      throw Exception('The client visit server returned invalid data.');
+      if (response.statusCode >= 500) {
+        throw Exception(
+          'Client Visit server error (${response.statusCode}). Refresh the dashboard before retrying.',
+        );
+      }
+      throw Exception(
+        'Unexpected Client Visit response (${response.statusCode}). Please try again.',
+      );
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('${body['message'] ?? 'Client visit request failed.'}');

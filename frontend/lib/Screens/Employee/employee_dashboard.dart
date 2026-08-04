@@ -11,6 +11,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Services/push_notification_service.dart';
 import 'package:image_picker/image_picker.dart';
+import '../ClientVisits/client_visits.dart';
 import 'employee_attendance_screen.dart';
 import 'employee_approvals_screen.dart';
 import 'employee_documents_screen.dart';
@@ -503,6 +504,17 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
             _selectTab(index);
             if (index == 0) _load();
           },
+          onClientVisits: () {
+            Navigator.of(context).pop();
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(title: const Text('Client Visits')),
+                  body: ClientVisitDashboardScreen(userId: widget.userId),
+                ),
+              ),
+            );
+          },
           onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
         ),
         body: ConstellationBackground(
@@ -773,6 +785,7 @@ class _EmployeeDrawer extends StatelessWidget {
   final String? profileImagePath;
   final VoidCallback onPickProfileImage;
   final ValueChanged<int> onSelect;
+  final VoidCallback onClientVisits;
   final VoidCallback onLogout;
 
   const _EmployeeDrawer({
@@ -783,6 +796,7 @@ class _EmployeeDrawer extends StatelessWidget {
     required this.profileImagePath,
     required this.onPickProfileImage,
     required this.onSelect,
+    required this.onClientVisits,
     required this.onLogout,
   });
 
@@ -963,6 +977,12 @@ class _EmployeeDrawer extends StatelessWidget {
                         title: 'Approvals',
                         color: EmployeeColors.purple,
                         onTap: () => onSelect(3),
+                      ),
+                      _DrawerItem(
+                        icon: Icons.add_location_alt_rounded,
+                        title: 'Client Visits',
+                        color: EmployeeColors.blue,
+                        onTap: onClientVisits,
                       ),
                       _DrawerItem(
                         icon: Icons.payments_rounded,

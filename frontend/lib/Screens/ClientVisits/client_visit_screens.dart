@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
@@ -9,6 +10,7 @@ import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
 import 'client_visit_service.dart';
 import 'client_visit_flow_screens.dart';
+import 'client_visit_theme.dart';
 
 const _statuses = [
   'all',
@@ -75,14 +77,67 @@ class _ClientVisitDashboardScreenState
     if (changed == true) _load();
   }
 
-  Future<void> _openVisit(ClientVisit visit) async {
-    late final Widget screen;
-    if (widget.readOnlyMode) {
-      screen = ClientVisitSummaryScreen(
+  int _currentFlowStep(ClientVisit visit) => switch (visit.status) {
+    'pending' || 'rejected' || 'draft' => 3,
+    'approved' => 4,
+    'travelling' => 6,
+    'in_progress' => 8,
+    'completed' => 12,
+    _ => 3,
+  };
+
+  Widget _monitoringScreen(ClientVisit visit, {bool canVerify = false}) {
+    if (visit.status == 'completed') {
+      return ClientVisitSummaryScreen(
         userId: widget.userId,
         visitId: visit.id,
         service: _service,
+        reviewerMode: canVerify,
       );
+    }
+    return ClientVisitReadOnlyFlowScreen(
+      userId: widget.userId,
+      visitId: visit.id,
+      step: _currentFlowStep(visit),
+      service: _service,
+    );
+  }
+
+  Widget _employeeFlowScreen(ClientVisit visit) => switch (visit.status) {
+    'approved' => ClientVisitApprovedScreen(
+      userId: widget.userId,
+      visitId: visit.id,
+      service: _service,
+    ),
+    'travelling' => ClientVisitTravelProgressScreen(
+      userId: widget.userId,
+      visitId: visit.id,
+      service: _service,
+    ),
+    'in_progress' => ClientVisitActiveScreen(
+      userId: widget.userId,
+      visitId: visit.id,
+      service: _service,
+    ),
+    'completed' => ClientVisitSummaryScreen(
+      userId: widget.userId,
+      visitId: visit.id,
+      service: _service,
+    ),
+    _ => ClientVisitApprovedScreen(
+      userId: widget.userId,
+      visitId: visit.id,
+      service: _service,
+    ),
+  };
+
+  Future<void> _openVisit(ClientVisit visit) async {
+    late final Widget screen;
+    if (widget.readOnlyMode) {
+      screen = _monitoringScreen(visit);
+    } else if (widget.reviewerMode &&
+        visit.employeeUserId == widget.userId) {
+      screen = _employeeFlowScreen(visit);
     } else if (widget.reviewerMode) {
       screen = visit.status == 'pending'
           ? ClientVisitManagerApprovalScreen(
@@ -90,40 +145,9 @@ class _ClientVisitDashboardScreenState
               visitId: visit.id,
               service: _service,
             )
-          : ClientVisitSummaryScreen(
-              userId: widget.userId,
-              visitId: visit.id,
-              service: _service,
-              reviewerMode: true,
-            );
+          : _monitoringScreen(visit, canVerify: true);
     } else {
-      screen = switch (visit.status) {
-        'approved' => ClientVisitApprovedScreen(
-          userId: widget.userId,
-          visitId: visit.id,
-          service: _service,
-        ),
-        'travelling' => ClientVisitTravelProgressScreen(
-          userId: widget.userId,
-          visitId: visit.id,
-          service: _service,
-        ),
-        'in_progress' => ClientVisitActiveScreen(
-          userId: widget.userId,
-          visitId: visit.id,
-          service: _service,
-        ),
-        'completed' => ClientVisitSummaryScreen(
-          userId: widget.userId,
-          visitId: visit.id,
-          service: _service,
-        ),
-        _ => ClientVisitApprovedScreen(
-          userId: widget.userId,
-          visitId: visit.id,
-          service: _service,
-        ),
-      };
+      screen = _employeeFlowScreen(visit);
     }
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
     await _load();
@@ -132,9 +156,10 @@ class _ClientVisitDashboardScreenState
   @override
   Widget build(BuildContext context) {
     final result = _result;
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
+    return ClientVisitTheme(
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Row(
@@ -144,26 +169,31 @@ class _ClientVisitDashboardScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '01 Visit Dashboard',
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    Text(
-                      'Office → Client location → Closure',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      'VISIT DASHBOARD',
+                      style: TextStyle(
+                        color: ThemeConfig.getTextPrimary(context),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ],
                 ),
               ),
-              if (!widget.reviewerMode && !widget.readOnlyMode)
-                FilledButton.icon(
-                  onPressed: _create,
-                  icon: const Icon(Icons.add_location_alt_rounded),
-                  label: const Text('New'),
-                ),
             ],
           ),
           const SizedBox(height: 16),
           if (result != null) _Summary(summary: result.summary),
+          if (!widget.readOnlyMode) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _create,
+                icon: const Icon(Icons.add_location_alt_rounded),
+                label: const Text('+ New Visit'),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -203,7 +233,7 @@ class _ClientVisitDashboardScreenState
               icon: Icons.location_off_outlined,
               text:
                   'No ${_filter == 'all' ? '' : '${_label(_filter)} '}visits yet.',
-              onRetry: _create,
+              onRetry: widget.readOnlyMode ? _load : _create,
             )
           else
             ...result.visits.map(
@@ -211,6 +241,7 @@ class _ClientVisitDashboardScreenState
                   _VisitCard(visit: visit, onTap: () => _openVisit(visit)),
             ),
         ],
+        ),
       ),
     );
   }
@@ -241,7 +272,38 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   DateTime _date = DateTime.now();
   TimeOfDay _time = TimeOfDay.now();
   String _travelMode = 'car';
+  int _durationMinutes = 60;
+  List<Map<String, dynamic>> _visitApprovers = const [];
+  String? _selectedManagerId;
+  String? _tlLoadError;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReportingTls();
+  }
+
+  Future<void> _loadReportingTls() async {
+    setState(() => _tlLoadError = null);
+    try {
+      final values = await widget.service.fetchVisitApprovers(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        _visitApprovers = values;
+        _selectedManagerId = values.length == 1
+            ? '${values.first['employee_id']}'
+            : null;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _visitApprovers = const [];
+          _tlLoadError = '$error'.replaceFirst('Exception: ', '');
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -262,6 +324,15 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   String? _required(String? value) =>
       (value ?? '').trim().isEmpty ? 'Required' : null;
 
+  String? _mobileNumber(String? value) {
+    final mobile = (value ?? '').trim();
+    if (mobile.isEmpty) return 'Required';
+    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(mobile)) {
+      return 'Enter a valid 10-digit mobile number';
+    }
+    return null;
+  }
+
   Future<void> _submit(bool submit) async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -274,11 +345,11 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
         'scheduled_date': _ymd(_date),
         'scheduled_time':
             '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}',
-        'duration_minutes': 60,
+        'duration_minutes': _durationMinutes,
         'travel_mode': _travelMode,
         'purpose': _purpose.text.trim(),
         'notes': _notes.text.trim(),
-        'manager_user_id': _manager.text.trim(),
+        'manager_user_id': _selectedManagerId ?? _manager.text.trim(),
         'submit': submit,
       });
       if (mounted) Navigator.of(context).pop(true);
@@ -290,11 +361,12 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const AppBarLogoTitle(title: '02 Create Visit Request'),
-    ),
-    body: Form(
+  Widget build(BuildContext context) => ClientVisitTheme(
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Create Visit Request'),
+      ),
+      body: Form(
       key: _formKey,
       child: ListView(
         padding: const EdgeInsets.all(16),
@@ -316,8 +388,18 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
               ),
               TextFormField(
                 controller: _phone,
+                validator: _mobileNumber,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Contact phone'),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                maxLength: 10,
+                decoration: const InputDecoration(
+                  labelText: 'Mobile number',
+                  hintText: '9876543210',
+                  counterText: '',
+                ),
               ),
               TextFormField(
                 controller: _address,
@@ -382,17 +464,76 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                     .toList(),
                 onChanged: (value) => setState(() => _travelMode = value!),
               ),
+              DropdownButtonFormField<int>(
+                initialValue: _durationMinutes,
+                decoration: const InputDecoration(labelText: 'Duration'),
+                items: const [30, 60, 120, 240, 480]
+                    .map(
+                      (minutes) => DropdownMenuItem(
+                        value: minutes,
+                        child: Text(
+                          minutes < 60
+                              ? '$minutes minutes'
+                              : '${minutes ~/ 60} hour${minutes == 60 ? '' : 's'}',
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => _durationMinutes = value!),
+              ),
               TextFormField(
                 controller: _purpose,
                 validator: _required,
                 decoration: const InputDecoration(labelText: 'Purpose'),
               ),
-              TextFormField(
-                controller: _manager,
-                decoration: const InputDecoration(
-                  labelText: 'Reporting TL user ID',
+              if (_visitApprovers.isNotEmpty)
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedManagerId,
+                  validator: _required,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'TL / HR approver',
+                  ),
+                  items: _visitApprovers
+                      .map(
+                        (tl) => DropdownMenuItem<String>(
+                          value: '${tl['employee_id']}',
+                          child: Text(
+                            '${tl['label'] ?? 'Approver'} · ${tl['role_label'] ?? tl['role'] ?? ''} (${tl['employee_id']})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) =>
+                      setState(() => _selectedManagerId = value),
+                )
+              else
+                TextFormField(
+                  controller: _manager,
+                  validator: _required,
+                  decoration: InputDecoration(
+                    labelText: 'TL / HR approver user ID',
+                    hintText: 'Example: BBTL0001 or BBHR0001',
+                    helperText: _tlLoadError == null
+                        ? 'Loading TL and HR approvers…'
+                        : 'Approver list unavailable. Enter a TL/HR user ID.',
+                    suffixIcon: _tlLoadError == null
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            tooltip: 'Reload TL/HR approvers',
+                            onPressed: _loadReportingTls,
+                            icon: const Icon(Icons.refresh),
+                          ),
+                  ),
                 ),
-              ),
               TextFormField(
                 controller: _notes,
                 maxLines: 3,
@@ -419,6 +560,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
             ],
           ),
         ],
+      ),
       ),
     ),
   );
@@ -1079,27 +1221,64 @@ class _Summary extends StatelessWidget {
   final Map<String, int> summary;
   const _Summary({required this.summary});
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      _box(
-        context,
-        'Active',
-        (summary['approved'] ?? 0) +
-            (summary['travelling'] ?? 0) +
-            (summary['in_progress'] ?? 0),
-        EmployeeColors.blue,
+      Text('Today', style: _sectionStyle(context)),
+      const SizedBox(height: 7),
+      Row(
+        children: [
+          _box(
+            context,
+            'In Progress',
+            (summary['travelling'] ?? 0) + (summary['in_progress'] ?? 0),
+            ClientVisitColors.blue,
+          ),
+          const SizedBox(width: 8),
+          _box(
+            context,
+            'Pending Check-In',
+            summary['approved'] ?? 0,
+            ClientVisitColors.orange,
+          ),
+        ],
       ),
-      const SizedBox(width: 8),
-      _box(context, 'Pending', summary['pending'] ?? 0, EmployeeColors.gold),
-      const SizedBox(width: 8),
-      _box(
+      const SizedBox(height: 12),
+      Text('Upcoming', style: _sectionStyle(context)),
+      const SizedBox(height: 7),
+      _wideBox(
         context,
-        'Completed',
+        'Upcoming Visits',
+        summary['approved'] ?? 0,
+        ClientVisitColors.blue,
+      ),
+      const SizedBox(height: 12),
+      Text('Pending Approval', style: _sectionStyle(context)),
+      const SizedBox(height: 7),
+      _wideBox(
+        context,
+        'Pending Approval',
+        summary['pending'] ?? 0,
+        ClientVisitColors.orange,
+      ),
+      const SizedBox(height: 12),
+      Text('History', style: _sectionStyle(context)),
+      const SizedBox(height: 7),
+      _wideBox(
+        context,
+        'Completed Visits',
         summary['completed'] ?? 0,
-        EmployeeColors.green,
+        ClientVisitColors.green,
       ),
     ],
   );
+
+  TextStyle _sectionStyle(BuildContext context) => TextStyle(
+    color: ThemeConfig.getTextPrimary(context),
+    fontSize: 13,
+    fontWeight: FontWeight.w800,
+  );
+
   Widget _box(BuildContext context, String label, int count, Color color) =>
       Expanded(
         child: EmployeeCard(
@@ -1117,6 +1296,36 @@ class _Summary extends StatelessWidget {
           ),
         ),
       );
+
+  Widget _wideBox(
+    BuildContext context,
+    String label,
+    int count,
+    Color color,
+  ) => EmployeeCard(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    child: Row(
+      children: [
+        Text(
+          '$count',
+          style: TextStyle(
+            color: color,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: TextStyle(
+            color: ThemeConfig.getTextPrimary(context),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ElapsedTimer extends StatefulWidget {

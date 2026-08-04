@@ -412,6 +412,26 @@ class _CeoDashboardState extends State<CeoDashboard>
                         _openPage(_MeetingsDynamicPage(userId: widget.userId));
                       },
                     ),
+                    _drawerItem(
+                      context,
+                      Icons.add_location_alt_rounded,
+                      'Client Visits',
+                      false,
+                      () {
+                        Navigator.pop(context);
+                        _openPage(
+                          Scaffold(
+                            appBar: AppBar(
+                              title: const Text('Client Visits'),
+                            ),
+                            body: ClientVisitDashboardScreen(
+                              userId: widget.userId,
+                              readOnlyMode: true,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
