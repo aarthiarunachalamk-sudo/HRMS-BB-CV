@@ -13,6 +13,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_leave_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_meetings_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_palette.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_screens.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:image_picker/image_picker.dart';
@@ -297,6 +298,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     label: 'Meetings',
                     selected: _tab == _AdminTab.meetings,
                     onTap: () => _setTab(_AdminTab.meetings),
+                  ),
+                  _DrawerTile(
+                    c: c,
+                    icon: Icons.add_location_alt_rounded,
+                    label: 'Client Visits',
+                    selected: false,
+                    onTap: () => _openAdminPage(
+                      Scaffold(
+                        appBar: AppBar(title: const Text('Client Visits')),
+                        body: ClientVisitDashboardScreen(
+                          userId: widget.userId,
+                          reviewerMode: true,
+                        ),
+                      ),
+                    ),
                   ),
                   _DrawerTile(
                     c: c,

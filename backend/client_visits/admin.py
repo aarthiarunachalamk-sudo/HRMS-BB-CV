@@ -5,7 +5,10 @@ from .models import ClientVisit, VisitAttachment, VisitExpense
 class VisitAttachmentInline(admin.TabularInline):
     model = VisitAttachment
     extra = 0
-    readonly_fields = ('cloudinary_url', 'cloudinary_public_id', 'created_at')
+    readonly_fields = (
+        'cloudinary_url', 'cloudinary_public_id', 'cloudinary_cloud_name',
+        'storage_provider', 'created_at',
+    )
 
 
 class VisitExpenseInline(admin.TabularInline):

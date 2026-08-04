@@ -1,7 +1,8 @@
 from decimal import Decimal, InvalidOperation
+import json
 
-import cloudinary.uploader
 from django.db import transaction
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -9,8 +10,10 @@ from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
-from hrms.models import User
+from hrms.models import AppNotification, User
+from hrms.push_notifications import send_mobile_push
 from .models import ClientVisit, VisitAttachment, VisitExpense
+from .storage import upload_client_visit_file
 
 
 SUPERVISOR_ROLES = {'manager', 'tl', 'hr', 'admin', 'superadmin'}
@@ -31,16 +34,97 @@ def _error(message, status=400):
     return Response({'success': False, 'message': message}, status=status)
 
 
+def _notify(*, user_id='', role='', title, message, notification_type='info', visit):
+    notification = AppNotification.objects.create(
+        recipient_user_id=user_id,
+        recipient_role=role,
+        title=title,
+        message=message,
+        notification_type=notification_type,
+        module='client_visit',
+        reference_id=str(visit.id),
+    )
+    notification.push_sent = send_mobile_push(notification)
+    if notification.push_sent:
+        notification.save(update_fields=['push_sent'])
+    return notification
+
+
+def _notify_visit_submitted(visit):
+    message = (
+        f'{visit.employee_name} submitted {visit.visit_id} for '
+        f'{visit.client_name} on {visit.scheduled_date}.'
+    )
+    if visit.manager_user_id:
+        _notify(
+            user_id=visit.manager_user_id,
+            title='Client Visit Approval Required',
+            message=message,
+            notification_type='warning',
+            visit=visit,
+        )
+    else:
+        _notify(
+            role='tl',
+            title='Client Visit Approval Required',
+            message=message,
+            notification_type='warning',
+            visit=visit,
+        )
+    _notify(
+        role='ceo',
+        title='New Client Visit Request',
+        message=message,
+        notification_type='info',
+        visit=visit,
+    )
+
+
+def _notify_visit_progress(visit, *, title, message, notification_type='info', include_employee=False):
+    if visit.manager_user_id:
+        _notify(
+            user_id=visit.manager_user_id,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            visit=visit,
+        )
+    else:
+        _notify(
+            role='tl',
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            visit=visit,
+        )
+    _notify(
+        role='ceo',
+        title=title,
+        message=message,
+        notification_type=notification_type,
+        visit=visit,
+    )
+    if include_employee:
+        _notify(
+            user_id=visit.employee_user_id,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            visit=visit,
+        )
+
+
 def _can_view(visit, user_id, user):
     if visit.employee_user_id == user_id or visit.manager_user_id == user_id:
         return True
-    return bool(user and user.role in {'hr', 'admin', 'superadmin'})
+    return bool(user and user.role in {'hr', 'admin', 'superadmin', 'ceo', 'md', 'director'})
 
 
 def _attachment_payload(item):
     return {
         'id': item.id, 'category': item.category, 'url': item.cloudinary_url,
         'public_id': item.cloudinary_public_id, 'resource_type': item.resource_type,
+        'cloud_name': item.cloudinary_cloud_name, 'storage_provider': item.storage_provider,
         'original_name': item.original_name, 'created_at': item.created_at.isoformat(),
     }
 
@@ -58,9 +142,16 @@ def _visit_payload(item, detailed=True):
         'duration_minutes': item.duration_minutes, 'travel_mode': item.travel_mode,
         'purpose': item.purpose, 'notes': item.notes, 'status': item.status,
         'approval_comment': item.approval_comment, 'approved_by': item.approved_by,
+        'office_check_out_at': item.office_check_out_at.isoformat() if item.office_check_out_at else None,
+        'reached_client_at': item.reached_client_at.isoformat() if item.reached_client_at else None,
+        'start_odometer': float(item.start_odometer) if item.start_odometer is not None else None,
         'check_in_at': item.check_in_at.isoformat() if item.check_in_at else None,
         'check_out_at': item.check_out_at.isoformat() if item.check_out_at else None,
         'outcome': item.outcome, 'follow_up': item.follow_up,
+        'attendees': item.attendees, 'checklist': item.checklist,
+        'return_mode': item.return_mode,
+        'manager_verified_by': item.manager_verified_by,
+        'manager_verified_at': item.manager_verified_at.isoformat() if item.manager_verified_at else None,
         'expense_total': float(item.expenses.aggregate(total=Sum('amount'))['total'] or 0),
         'created_at': item.created_at.isoformat(), 'updated_at': item.updated_at.isoformat(),
     }
@@ -87,7 +178,7 @@ def visit_list_create(request):
         return _error('An active user_id is required.', 401)
     if request.method == 'GET':
         queryset = ClientVisit.objects.prefetch_related('attachments', 'expenses')
-        if user.role in {'hr', 'admin', 'superadmin'}:
+        if user.role in {'hr', 'admin', 'superadmin', 'ceo', 'md', 'director'}:
             employee = request.query_params.get('employee_user_id')
             if employee:
                 queryset = queryset.filter(employee_user_id=employee)
@@ -118,6 +209,8 @@ def visit_list_create(request):
         visit.save()
     except (ValueError, TypeError) as exc:
         return _error(f'Invalid visit data: {exc}')
+    if visit.status == 'pending':
+        _notify_visit_submitted(visit)
     return Response({'success': True, 'message': 'Visit request created.', 'visit': _visit_payload(visit)}, status=201)
 
 
@@ -133,13 +226,16 @@ def visit_detail(request, pk):
     if visit.employee_user_id != user_id or visit.status not in {'draft', 'rejected'}:
         return _error('Only the employee can edit a draft or rejected visit.', 409)
     _assign_fields(visit, request.data)
-    if str(request.data.get('submit') or '').lower() in {'1', 'true', 'yes'}:
+    submitted = str(request.data.get('submit') or '').lower() in {'1', 'true', 'yes'}
+    if submitted:
         visit.status = 'pending'
         visit.approval_comment = ''
     try:
         visit.save()
     except (ValueError, TypeError) as exc:
         return _error(f'Invalid visit data: {exc}')
+    if submitted:
+        _notify_visit_submitted(visit)
     return Response({'success': True, 'message': 'Visit updated.', 'visit': _visit_payload(visit)})
 
 
@@ -162,6 +258,13 @@ def visit_approval(request, pk):
     visit.approved_at = timezone.now()
     visit.save()
     message = 'Visit approved.' if action == 'approve' else 'Visit returned for changes.'
+    _notify_visit_progress(
+        visit,
+        title='Client Visit Approved' if action == 'approve' else 'Client Visit Changes Required',
+        message=f'{visit.visit_id} for {visit.client_name}: {message} {visit.approval_comment}'.strip(),
+        notification_type='success' if action == 'approve' else 'warning',
+        include_employee=True,
+    )
     return Response({'success': True, 'message': message, 'visit': _visit_payload(visit)})
 
 
@@ -171,14 +274,79 @@ def visit_check_in(request, pk):
     visit = get_object_or_404(ClientVisit, pk=pk)
     if not user or visit.employee_user_id != user_id:
         return _error('Only the assigned employee can check in.', 403)
-    if visit.status != 'approved':
-        return _error('The visit must be approved before check-in.', 409)
+    if visit.status not in {'approved', 'travelling'}:
+        return _error('The visit must be approved and active before check-in.', 409)
     visit.status = 'in_progress'
     visit.check_in_at = timezone.now()
     visit.check_in_latitude = request.data.get('latitude') or None
     visit.check_in_longitude = request.data.get('longitude') or None
     visit.save()
+    _notify_visit_progress(
+        visit,
+        title='Client Visit Started',
+        message=f'{visit.employee_name} checked in for {visit.visit_id} at {visit.client_name}.',
+        notification_type='info',
+    )
     return Response({'success': True, 'message': 'Client check-in recorded.', 'visit': _visit_payload(visit)})
+
+
+@api_view(['POST'])
+def visit_start_travel(request, pk):
+    user_id, user = _actor(request)
+    visit = get_object_or_404(ClientVisit, pk=pk)
+    if not user or visit.employee_user_id != user_id:
+        return _error('Only the assigned employee can start travel.', 403)
+    if visit.status != 'approved':
+        return _error('The visit must be approved before office check-out.', 409)
+    visit.status = 'travelling'
+    visit.office_check_out_at = timezone.now()
+    visit.office_check_out_latitude = request.data.get('latitude') or None
+    visit.office_check_out_longitude = request.data.get('longitude') or None
+    visit.start_odometer = request.data.get('odometer') or None
+    visit.save()
+    _notify_visit_progress(
+        visit, title='Employee Travelling to Client',
+        message=f'{visit.employee_name} started travel for {visit.visit_id} to {visit.client_name}.',
+    )
+    return Response({'success': True, 'message': 'Office check-out recorded.', 'visit': _visit_payload(visit)})
+
+
+@api_view(['POST'])
+def visit_reached_client(request, pk):
+    user_id, user = _actor(request)
+    visit = get_object_or_404(ClientVisit, pk=pk)
+    if not user or visit.employee_user_id != user_id:
+        return _error('Only the assigned employee can record arrival.', 403)
+    if visit.status != 'travelling':
+        return _error('Travel must be active before recording arrival.', 409)
+    visit.reached_client_at = timezone.now()
+    visit.save(update_fields=['reached_client_at', 'updated_at'])
+    return Response({'success': True, 'message': 'Client arrival recorded.', 'visit': _visit_payload(visit)})
+
+
+@api_view(['POST'])
+def visit_progress(request, pk):
+    user_id, user = _actor(request)
+    visit = get_object_or_404(ClientVisit, pk=pk)
+    if not user or visit.employee_user_id != user_id:
+        return _error('Only the assigned employee can update the visit.', 403)
+    if visit.status != 'in_progress':
+        return _error('An active client visit is required.', 409)
+    for field in ('attendees', 'checklist'):
+        if field in request.data:
+            value = request.data.get(field)
+            if isinstance(value, str):
+                try:
+                    value = json.loads(value)
+                except ValueError:
+                    return _error(f'{field.title()} must be a list.')
+            if not isinstance(value, list):
+                return _error(f'{field.title()} must be a list.')
+            setattr(visit, field, value)
+    if 'notes' in request.data:
+        visit.notes = str(request.data.get('notes') or '').strip()
+    visit.save()
+    return Response({'success': True, 'message': 'Visit progress updated.', 'visit': _visit_payload(visit)})
 
 
 @api_view(['POST'])
@@ -198,9 +366,37 @@ def visit_complete(request, pk):
     visit.check_out_longitude = request.data.get('longitude') or None
     visit.outcome = outcome
     visit.follow_up = str(request.data.get('follow_up') or '').strip()
+    visit.return_mode = str(request.data.get('return_mode') or 'return_office').strip()
     visit.client_signature_name = str(request.data.get('client_signature_name') or '').strip()
     visit.save()
+    _notify_visit_progress(
+        visit,
+        title='Client Visit Completed',
+        message=f'{visit.visit_id} at {visit.client_name} was completed. Outcome: {visit.outcome}',
+        notification_type='success',
+    )
     return Response({'success': True, 'message': 'Visit completed.', 'visit': _visit_payload(visit)})
+
+
+@api_view(['POST'])
+def visit_verify(request, pk):
+    user_id, user = _actor(request)
+    visit = get_object_or_404(ClientVisit, pk=pk)
+    if not user or user.role not in SUPERVISOR_ROLES:
+        return _error('TL, Manager, HR or Admin access is required.', 403)
+    if user.role in {'manager', 'tl'} and visit.manager_user_id != user_id:
+        return _error('This visit is not assigned to you.', 403)
+    if visit.status != 'completed':
+        return _error('Only completed visits can be verified.', 409)
+    visit.manager_verified_by = user_id
+    visit.manager_verified_at = timezone.now()
+    visit.save(update_fields=['manager_verified_by', 'manager_verified_at', 'updated_at'])
+    _notify(
+        user_id=visit.employee_user_id, title='Client Visit Verified',
+        message=f'{visit.visit_id} was verified by your reporting TL.',
+        notification_type='success', visit=visit,
+    )
+    return Response({'success': True, 'message': 'Visit verified.', 'visit': _visit_payload(visit)})
 
 
 @api_view(['POST'])
@@ -219,17 +415,21 @@ def visit_attachment(request, pk):
         return _error('At least one file is required.')
     created = []
     # Each category receives its own Cloudinary folder, keeping visit media separate.
-    folder = f'hrms/client_visits/{visit.visit_id}/{category}'
     try:
         with transaction.atomic():
             for upload in uploads:
-                result = cloudinary.uploader.upload(upload, folder=folder, resource_type='auto', use_filename=True, unique_filename=True)
+                result, cloud_name, _ = upload_client_visit_file(
+                    upload, visit_id=visit.visit_id, category=category,
+                )
                 item = VisitAttachment.objects.create(
                     visit=visit, category=category, cloudinary_url=result['secure_url'],
                     cloudinary_public_id=result['public_id'], resource_type=result.get('resource_type', 'image'),
+                    cloudinary_cloud_name=cloud_name,
                     original_name=upload.name, uploaded_by=user_id,
                 )
                 created.append(item)
+    except ImproperlyConfigured as exc:
+        return _error(str(exc), 503)
     except Exception:
         return _error('Cloudinary upload failed. Check the Cloudinary configuration and retry.', 502)
     return Response({'success': True, 'message': f'{len(created)} file(s) uploaded.', 'attachments': [_attachment_payload(item) for item in created]}, status=201)

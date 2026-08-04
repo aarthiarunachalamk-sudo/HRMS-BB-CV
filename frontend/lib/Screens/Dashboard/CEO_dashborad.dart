@@ -22,6 +22,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_local_documents.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/create_admins.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_screens.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_approvals_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
@@ -692,6 +693,15 @@ class _CeoDashboardState extends State<CeoDashboard>
       _EmployeeDirectoryDynamicPage(userId: widget.userId, embedded: true),
       _ApprovalsView(userId: widget.userId),
       _MoreView(
+        onClientVisits: () => _openPage(
+          Scaffold(
+            appBar: AppBar(title: const Text('Client Visits')),
+            body: ClientVisitDashboardScreen(
+              userId: widget.userId,
+              readOnlyMode: true,
+            ),
+          ),
+        ),
         onOrganization: () => _openPage(
           _OrganizationDynamicPage(
             userId: widget.userId,
@@ -5517,6 +5527,7 @@ class _ApprovalsViewState extends State<_ApprovalsView> {
 }
 
 class _MoreView extends StatelessWidget {
+  final VoidCallback onClientVisits;
   final VoidCallback onOrganization;
   final VoidCallback onSettings;
   final VoidCallback onBudget;
@@ -5533,6 +5544,7 @@ class _MoreView extends StatelessWidget {
   final VoidCallback onLogout;
 
   const _MoreView({
+    required this.onClientVisits,
     required this.onOrganization,
     required this.onSettings,
     required this.onBudget,
@@ -5552,6 +5564,11 @@ class _MoreView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
+      _MoreGridItem(
+        Icons.add_location_alt_rounded,
+        'Client\nVisits',
+        onClientVisits,
+      ),
       _MoreGridItem(Icons.account_tree_rounded, 'Organization', onOrganization),
       _MoreGridItem(Icons.apartment_rounded, 'Departments', onDepartment),
       _MoreGridItem(

@@ -1,6 +1,8 @@
 class ClientVisit {
   final int id;
   final String visitId;
+  final String employeeUserId;
+  final String employeeName;
   final String clientName;
   final String contactPerson;
   final String contactPhone;
@@ -14,6 +16,14 @@ class ClientVisit {
   final String approvalComment;
   final String outcome;
   final String followUp;
+  final DateTime? officeCheckOutAt;
+  final DateTime? reachedClientAt;
+  final DateTime? checkInAt;
+  final DateTime? checkOutAt;
+  final List<dynamic> attendees;
+  final List<dynamic> checklist;
+  final String returnMode;
+  final String managerVerifiedBy;
   final double expenseTotal;
   final List<Map<String, dynamic>> attachments;
   final List<Map<String, dynamic>> expenses;
@@ -21,6 +31,8 @@ class ClientVisit {
   const ClientVisit({
     required this.id,
     required this.visitId,
+    required this.employeeUserId,
+    required this.employeeName,
     required this.clientName,
     required this.contactPerson,
     required this.contactPhone,
@@ -34,6 +46,14 @@ class ClientVisit {
     required this.approvalComment,
     required this.outcome,
     required this.followUp,
+    required this.officeCheckOutAt,
+    required this.reachedClientAt,
+    required this.checkInAt,
+    required this.checkOutAt,
+    required this.attendees,
+    required this.checklist,
+    required this.returnMode,
+    required this.managerVerifiedBy,
     required this.expenseTotal,
     required this.attachments,
     required this.expenses,
@@ -45,6 +65,8 @@ class ClientVisit {
     return ClientVisit(
       id: int.tryParse('${json['id']}') ?? 0,
       visitId: '${json['visit_id'] ?? ''}',
+      employeeUserId: '${json['employee_user_id'] ?? ''}',
+      employeeName: '${json['employee_name'] ?? ''}',
       clientName: '${json['client_name'] ?? ''}',
       contactPerson: '${json['contact_person'] ?? ''}',
       contactPhone: '${json['contact_phone'] ?? ''}',
@@ -58,6 +80,20 @@ class ClientVisit {
       approvalComment: '${json['approval_comment'] ?? ''}',
       outcome: '${json['outcome'] ?? ''}',
       followUp: '${json['follow_up'] ?? ''}',
+      officeCheckOutAt: DateTime.tryParse(
+        '${json['office_check_out_at'] ?? ''}',
+      ),
+      reachedClientAt: DateTime.tryParse('${json['reached_client_at'] ?? ''}'),
+      checkInAt: DateTime.tryParse('${json['check_in_at'] ?? ''}'),
+      checkOutAt: DateTime.tryParse('${json['check_out_at'] ?? ''}'),
+      attendees: json['attendees'] is List
+          ? List<dynamic>.from(json['attendees'] as List)
+          : const [],
+      checklist: json['checklist'] is List
+          ? List<dynamic>.from(json['checklist'] as List)
+          : const [],
+      returnMode: '${json['return_mode'] ?? ''}',
+      managerVerifiedBy: '${json['manager_verified_by'] ?? ''}',
       expenseTotal: double.tryParse('${json['expense_total']}') ?? 0,
       attachments: _maps(json['attachments']),
       expenses: _maps(json['expenses']),

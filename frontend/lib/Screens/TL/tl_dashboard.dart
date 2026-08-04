@@ -11,6 +11,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/Change_Password.d
 import 'package:hrms_mobileapp_bitbyte/widgets/app_module_tabs.dart';
 import 'package:flutter/services.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_screens.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_approvals_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
@@ -233,6 +234,20 @@ class _TLDashboardState extends State<TLDashboard> {
                 name: widget.firstName,
                 select: _setIndex,
                 logout: () => showLogoutConfirmation(context: context, onLogout: _logout),
+                openClientVisits: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('Client Visits')),
+                        body: ClientVisitDashboardScreen(
+                          userId: widget.userId,
+                          reviewerMode: true,
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
               body: Container(
                 decoration: BoxDecoration(
@@ -7990,11 +8005,13 @@ class _Drawer extends StatelessWidget {
   final String name;
   final ValueChanged<int> select;
   final VoidCallback logout;
+  final VoidCallback openClientVisits;
   const _Drawer({
     required this.email,
     required this.name,
     required this.select,
     required this.logout,
+    required this.openClientVisits,
   });
   @override
   Widget build(BuildContext context) {
@@ -8113,8 +8130,29 @@ class _Drawer extends StatelessWidget {
               Expanded(
                 child: ListView(
                   padding: EdgeInsets.zero,
-                  children: _drawerItems.map((item) {
-                    return Padding(
+                  children: [
+                    ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      leading: Icon(
+                        Icons.add_location_alt_rounded,
+                        color: c.primary,
+                        size: 19,
+                      ),
+                      title: Text(
+                        'Client Visits',
+                        style: TextStyle(
+                          color: c.text,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      onTap: openClientVisits,
+                    ),
+                    ..._drawerItems.map((item) {
+                      return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: ListTile(
                         dense: true,
@@ -8132,8 +8170,9 @@ class _Drawer extends StatelessWidget {
                         ),
                         onTap: () => select(item.index),
                       ),
-                    );
-                  }).toList(),
+                      );
+                    }),
+                  ],
                 ),
               ),
               Divider(color: c.border),

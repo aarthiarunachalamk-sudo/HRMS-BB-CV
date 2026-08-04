@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,12 +8,14 @@ import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
 import 'client_visit_service.dart';
+import 'client_visit_flow_screens.dart';
 
 const _statuses = [
   'all',
   'draft',
   'pending',
   'approved',
+  'travelling',
   'in_progress',
   'completed',
   'rejected',
@@ -20,10 +24,12 @@ const _statuses = [
 class ClientVisitDashboardScreen extends StatefulWidget {
   final String userId;
   final bool reviewerMode;
+  final bool readOnlyMode;
   const ClientVisitDashboardScreen({
     super.key,
     required this.userId,
     this.reviewerMode = false,
+    this.readOnlyMode = false,
   });
 
   @override
@@ -69,6 +75,60 @@ class _ClientVisitDashboardScreenState
     if (changed == true) _load();
   }
 
+  Future<void> _openVisit(ClientVisit visit) async {
+    late final Widget screen;
+    if (widget.readOnlyMode) {
+      screen = ClientVisitSummaryScreen(
+        userId: widget.userId,
+        visitId: visit.id,
+        service: _service,
+      );
+    } else if (widget.reviewerMode) {
+      screen = visit.status == 'pending'
+          ? ClientVisitManagerApprovalScreen(
+              userId: widget.userId,
+              visitId: visit.id,
+              service: _service,
+            )
+          : ClientVisitSummaryScreen(
+              userId: widget.userId,
+              visitId: visit.id,
+              service: _service,
+              reviewerMode: true,
+            );
+    } else {
+      screen = switch (visit.status) {
+        'approved' => ClientVisitApprovedScreen(
+          userId: widget.userId,
+          visitId: visit.id,
+          service: _service,
+        ),
+        'travelling' => ClientVisitTravelProgressScreen(
+          userId: widget.userId,
+          visitId: visit.id,
+          service: _service,
+        ),
+        'in_progress' => ClientVisitActiveScreen(
+          userId: widget.userId,
+          visitId: visit.id,
+          service: _service,
+        ),
+        'completed' => ClientVisitSummaryScreen(
+          userId: widget.userId,
+          visitId: visit.id,
+          service: _service,
+        ),
+        _ => ClientVisitApprovedScreen(
+          userId: widget.userId,
+          visitId: visit.id,
+          service: _service,
+        ),
+      };
+    }
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final result = _result;
@@ -84,7 +144,7 @@ class _ClientVisitDashboardScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Client Visits',
+                      '01 Visit Dashboard',
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
                     Text(
@@ -94,11 +154,12 @@ class _ClientVisitDashboardScreenState
                   ],
                 ),
               ),
-              FilledButton.icon(
-                onPressed: _create,
-                icon: const Icon(Icons.add_location_alt_rounded),
-                label: const Text('New'),
-              ),
+              if (!widget.reviewerMode && !widget.readOnlyMode)
+                FilledButton.icon(
+                  onPressed: _create,
+                  icon: const Icon(Icons.add_location_alt_rounded),
+                  label: const Text('New'),
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -146,22 +207,8 @@ class _ClientVisitDashboardScreenState
             )
           else
             ...result.visits.map(
-              (visit) => _VisitCard(
-                visit: visit,
-                onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ClientVisitDetailScreen(
-                        userId: widget.userId,
-                        visitId: visit.id,
-                        service: _service,
-                        reviewerMode: widget.reviewerMode,
-                      ),
-                    ),
-                  );
-                  _load();
-                },
-              ),
+              (visit) =>
+                  _VisitCard(visit: visit, onTap: () => _openVisit(visit)),
             ),
         ],
       ),
@@ -244,7 +291,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const AppBarLogoTitle(title: 'Create Visit Request')),
+    appBar: AppBar(
+      title: const AppBarLogoTitle(title: '02 Create Visit Request'),
+    ),
     body: Form(
       key: _formKey,
       child: ListView(
@@ -341,7 +390,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
               TextFormField(
                 controller: _manager,
                 decoration: const InputDecoration(
-                  labelText: 'Reporting manager user ID',
+                  labelText: 'Reporting TL user ID',
                 ),
               ),
               TextFormField(
@@ -454,6 +503,175 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
     });
   }
 
+  Future<void> _startTravel() async {
+    final odometer = TextEditingController();
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Office check-out'),
+        content: TextField(
+          controller: odometer,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Odometer (optional)',
+            suffixText: 'km',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Take selfie'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true) return;
+    await _run(() async {
+      final selfie = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+      );
+      if (selfie == null) return;
+      await widget.service.uploadFiles(
+        widget.userId,
+        widget.visitId,
+        'check_in',
+        [selfie.path],
+      );
+      await widget.service.action(
+        widget.userId,
+        widget.visitId,
+        'start-travel',
+        {
+          ...await _position(),
+          if (odometer.text.trim().isNotEmpty) 'odometer': odometer.text.trim(),
+        },
+      );
+    });
+  }
+
+  Future<void> _reachedClient() async {
+    await _run(() async {
+      await widget.service.action(
+        widget.userId,
+        widget.visitId,
+        'reached-client',
+        await _position(),
+      );
+    });
+  }
+
+  Future<void> _updateActiveVisit() async {
+    final visit = _visit!;
+    final attendee = TextEditingController();
+    final notes = TextEditingController(text: visit.notes);
+    final checklist = visit.checklist.isEmpty
+        ? <Map<String, dynamic>>[
+            {'label': 'Discuss visit purpose', 'done': false},
+            {'label': 'Capture client requirements', 'done': false},
+            {'label': 'Confirm follow-up', 'done': false},
+            {'label': 'Upload visit proof', 'done': false},
+          ]
+        : visit.checklist
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList();
+    final attendees = visit.attendees.map((item) => '$item').toList();
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Active visit update'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: attendee,
+                          decoration: const InputDecoration(
+                            labelText: 'Add attendee',
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          if (attendee.text.trim().isNotEmpty) {
+                            setLocal(() {
+                              attendees.add(attendee.text.trim());
+                              attendee.clear();
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.add_circle),
+                      ),
+                    ],
+                  ),
+                  if (attendees.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 6,
+                        children: attendees
+                            .map(
+                              (name) => Chip(
+                                label: Text(name),
+                                onDeleted: () =>
+                                    setLocal(() => attendees.remove(name)),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                  ...checklist.asMap().entries.map(
+                    (entry) => CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: entry.value['done'] == true,
+                      title: Text('${entry.value['label']}'),
+                      onChanged: (value) => setLocal(
+                        () => checklist[entry.key]['done'] = value == true,
+                      ),
+                    ),
+                  ),
+                  TextField(
+                    controller: notes,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: 'Visit notes'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save update'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (accepted != true) return;
+    await _run(() async {
+      await widget.service.action(widget.userId, widget.visitId, 'progress', {
+        'attendees': attendees,
+        'checklist': checklist,
+        'notes': notes.text.trim(),
+      });
+    });
+  }
+
   Future<void> _uploadProof() async {
     await _run(() async {
       final images = await ImagePicker().pickMultiImage(imageQuality: 82);
@@ -470,35 +688,60 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
   Future<void> _complete() async {
     final outcome = TextEditingController();
     final follow = TextEditingController();
+    final signature = TextEditingController();
+    String returnMode = 'return_office';
     final accepted = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Complete visit'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: outcome,
-              maxLines: 3,
-              decoration: const InputDecoration(labelText: 'Outcome *'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Complete visit'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: outcome,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Outcome *'),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: returnMode,
+                decoration: const InputDecoration(labelText: 'After visit'),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'return_office',
+                    child: Text('Return to office'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'end_duty_client',
+                    child: Text('End duty from client'),
+                  ),
+                ],
+                onChanged: (value) => setLocal(() => returnMode = value!),
+              ),
+              TextField(
+                controller: follow,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'Follow-up'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
             ),
             TextField(
-              controller: follow,
-              maxLines: 2,
-              decoration: const InputDecoration(labelText: 'Follow-up'),
+              controller: signature,
+              decoration: const InputDecoration(
+                labelText: 'Client signature / OTP name',
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Complete'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Complete'),
-          ),
-        ],
       ),
     );
     if (accepted != true || outcome.text.trim().isEmpty) return;
@@ -507,7 +750,20 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
         ...await _position(),
         'outcome': outcome.text.trim(),
         'follow_up': follow.text.trim(),
+        'return_mode': returnMode,
+        'client_signature_name': signature.text.trim(),
       });
+    });
+  }
+
+  Future<void> _verifyVisit() async {
+    await _run(() async {
+      await widget.service.action(
+        widget.userId,
+        widget.visitId,
+        'verify',
+        const {},
+      );
     });
   }
 
@@ -569,6 +825,20 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
         note.text.trim(),
       ),
     );
+    final receipt = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 82,
+    );
+    if (receipt != null) {
+      await _run(() async {
+        await widget.service.uploadFiles(
+          widget.userId,
+          widget.visitId,
+          'expense',
+          [receipt.path],
+        );
+      });
+    }
   }
 
   Future<void> _review(String action) async {
@@ -687,6 +957,13 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
                       'Expenses',
                       '₹${visit.expenseTotal.toStringAsFixed(2)}',
                     ),
+                    if (visit.attendees.isNotEmpty)
+                      EmployeeInfoRow('Attendees', '${visit.attendees.length}'),
+                    if (visit.checklist.isNotEmpty)
+                      EmployeeInfoRow(
+                        'Checklist',
+                        '${visit.checklist.where((item) => item is Map && item['done'] == true).length}/${visit.checklist.length} completed',
+                      ),
                     if (visit.outcome.isNotEmpty)
                       EmployeeInfoRow('Outcome', visit.outcome),
                     if (!widget.reviewerMode)
@@ -711,15 +988,53 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
                 const SizedBox(height: 16),
                 if (!widget.reviewerMode && visit.status == 'approved')
                   FilledButton.icon(
-                    onPressed: _working ? null : _checkIn,
-                    icon: const Icon(Icons.location_on),
-                    label: const Text('Client check-in'),
+                    onPressed: _working ? null : _startTravel,
+                    icon: const Icon(Icons.directions_car_filled_rounded),
+                    label: const Text('Office check-out & start travel'),
                   ),
+                if (!widget.reviewerMode && visit.status == 'travelling') ...[
+                  _Section(
+                    title: 'Travel in progress',
+                    children: [
+                      EmployeeInfoRow('Destination', visit.address),
+                      EmployeeInfoRow('GPS', 'Live tracking active'),
+                      if (visit.reachedClientAt == null)
+                        FilledButton.icon(
+                          onPressed: _working ? null : _reachedClient,
+                          icon: const Icon(Icons.flag_rounded),
+                          label: const Text('Reached client'),
+                        )
+                      else
+                        FilledButton.icon(
+                          onPressed: _working ? null : _checkIn,
+                          icon: const Icon(Icons.location_on),
+                          label: const Text('Client check-in'),
+                        ),
+                    ],
+                  ),
+                ],
                 if (!widget.reviewerMode && visit.status == 'in_progress')
-                  FilledButton.icon(
-                    onPressed: _working ? null : _complete,
-                    icon: const Icon(Icons.task_alt),
-                    label: const Text('Complete visit'),
+                  Column(
+                    children: [
+                      if (visit.checkInAt != null) ...[
+                        _ElapsedTimer(startedAt: visit.checkInAt!),
+                        const SizedBox(height: 8),
+                      ],
+                      OutlinedButton.icon(
+                        onPressed: _working ? null : _updateActiveVisit,
+                        icon: const Icon(Icons.edit_note_rounded),
+                        label: const Text('Add active visit update'),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _working ? null : _complete,
+                          icon: const Icon(Icons.task_alt),
+                          label: const Text('Complete visit'),
+                        ),
+                      ),
+                    ],
                   ),
                 if (widget.reviewerMode && visit.status == 'pending')
                   Row(
@@ -741,6 +1056,14 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
                       ),
                     ],
                   ),
+                if (widget.reviewerMode &&
+                    visit.status == 'completed' &&
+                    visit.managerVerifiedBy.isEmpty)
+                  FilledButton.icon(
+                    onPressed: _working ? null : _verifyVisit,
+                    icon: const Icon(Icons.verified_rounded),
+                    label: const Text('Verify completed visit'),
+                  ),
                 if (_working)
                   const Padding(
                     padding: EdgeInsets.only(top: 12),
@@ -761,7 +1084,9 @@ class _Summary extends StatelessWidget {
       _box(
         context,
         'Active',
-        (summary['approved'] ?? 0) + (summary['in_progress'] ?? 0),
+        (summary['approved'] ?? 0) +
+            (summary['travelling'] ?? 0) +
+            (summary['in_progress'] ?? 0),
         EmployeeColors.blue,
       ),
       const SizedBox(width: 8),
@@ -792,6 +1117,56 @@ class _Summary extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _ElapsedTimer extends StatefulWidget {
+  final DateTime startedAt;
+  const _ElapsedTimer({required this.startedAt});
+
+  @override
+  State<_ElapsedTimer> createState() => _ElapsedTimerState();
+}
+
+class _ElapsedTimerState extends State<_ElapsedTimer> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final elapsed = DateTime.now().difference(widget.startedAt.toLocal());
+    final hours = elapsed.inHours.toString().padLeft(2, '0');
+    final minutes = (elapsed.inMinutes % 60).toString().padLeft(2, '0');
+    final seconds = (elapsed.inSeconds % 60).toString().padLeft(2, '0');
+    return EmployeeCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.timer_outlined, color: EmployeeColors.blue),
+          const SizedBox(width: 8),
+          Text(
+            '$hours:$minutes:$seconds',
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(color: EmployeeColors.blue),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _VisitCard extends StatelessWidget {

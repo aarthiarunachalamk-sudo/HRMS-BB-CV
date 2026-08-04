@@ -6,6 +6,7 @@ class ClientVisit(models.Model):
         ('draft', 'Draft'),
         ('pending', 'Pending approval'),
         ('approved', 'Approved'),
+        ('travelling', 'Travelling'),
         ('in_progress', 'In progress'),
         ('completed', 'Completed'),
         ('rejected', 'Rejected'),
@@ -31,6 +32,11 @@ class ClientVisit(models.Model):
     approval_comment = models.TextField(blank=True)
     approved_by = models.CharField(max_length=20, blank=True)
     approved_at = models.DateTimeField(null=True, blank=True)
+    office_check_out_at = models.DateTimeField(null=True, blank=True)
+    office_check_out_latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    office_check_out_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    start_odometer = models.DecimalField(max_digits=10, decimal_places=1, null=True, blank=True)
+    reached_client_at = models.DateTimeField(null=True, blank=True)
     check_in_at = models.DateTimeField(null=True, blank=True)
     check_in_latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     check_in_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
@@ -39,7 +45,12 @@ class ClientVisit(models.Model):
     check_out_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     outcome = models.TextField(blank=True)
     follow_up = models.TextField(blank=True)
+    attendees = models.JSONField(default=list, blank=True)
+    checklist = models.JSONField(default=list, blank=True)
+    return_mode = models.CharField(max_length=24, blank=True)
     client_signature_name = models.CharField(max_length=120, blank=True)
+    manager_verified_by = models.CharField(max_length=20, blank=True)
+    manager_verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -66,6 +77,8 @@ class VisitAttachment(models.Model):
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES)
     cloudinary_url = models.URLField(max_length=600)
     cloudinary_public_id = models.CharField(max_length=300)
+    cloudinary_cloud_name = models.CharField(max_length=120)
+    storage_provider = models.CharField(max_length=30, default='cloudinary_client_visits')
     resource_type = models.CharField(max_length=20, default='image')
     original_name = models.CharField(max_length=255, blank=True)
     uploaded_by = models.CharField(max_length=20)

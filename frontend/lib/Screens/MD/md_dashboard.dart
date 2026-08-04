@@ -10,6 +10,7 @@ import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_screens.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'md_models.dart';
@@ -391,6 +392,13 @@ class _MdDashboardState extends State<MdDashboard> {
       'documents': MdDocumentsScreen(userId: widget.userId),
       'settings-preferences': MdSettingsPreferencesScreen(
         userId: widget.userId,
+      ),
+      'client-visits': Scaffold(
+        appBar: AppBar(title: const Text('Client Visits')),
+        body: ClientVisitDashboardScreen(
+          userId: widget.userId,
+          readOnlyMode: true,
+        ),
       ),
     };
     final screen = screens[flow];
@@ -2363,6 +2371,13 @@ class _MdMorePage extends StatelessWidget {
           ],
           onOpen: onOpenFlow,
         ),
+        _MdMoreWideButton(
+          colors: colors,
+          icon: Icons.add_location_alt_rounded,
+          label: 'Client Visits',
+          onTap: () => onOpenFlow('client-visits'),
+        ),
+        const SizedBox(height: 12),
         _MdMoreWideButton(
           colors: colors,
           icon: Icons.settings_outlined,

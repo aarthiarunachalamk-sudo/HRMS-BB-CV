@@ -24,6 +24,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_tasks_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/hr_training_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/HR/register_employees.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_screens.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
@@ -194,6 +195,20 @@ class _HrDashboardState extends State<HrDashboard> {
                 onTap: _setIndex,
                 onLogout: () =>
                     showLogoutConfirmation(context: context, onLogout: _logout),
+                onClientVisits: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('Client Visits')),
+                        body: ClientVisitDashboardScreen(
+                          userId: widget.userId,
+                          reviewerMode: true,
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
               body: Container(
                 decoration: BoxDecoration(
@@ -989,12 +1004,14 @@ class _HrDrawer extends StatelessWidget {
   final String email;
   final ValueChanged<int> onTap;
   final VoidCallback onLogout;
+  final VoidCallback onClientVisits;
 
   const _HrDrawer({
     required this.data,
     required this.email,
     required this.onTap,
     required this.onLogout,
+    required this.onClientVisits,
   });
 
   @override
@@ -1037,8 +1054,24 @@ class _HrDrawer extends StatelessWidget {
             Divider(color: c.border),
             Expanded(
               child: ListView(
-                children: List.generate(_titles.length, (index) {
-                  return ListTile(
+                children: [
+                  ListTile(
+                    leading: Icon(
+                      Icons.add_location_alt_rounded,
+                      color: c.primary,
+                      size: 19,
+                    ),
+                    title: Text(
+                      'Client Visits',
+                      style: TextStyle(
+                        color: c.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    onTap: onClientVisits,
+                  ),
+                  ...List.generate(_titles.length, (index) {
+                    return ListTile(
                     leading: Icon(_icons[index], color: c.primary, size: 19),
                     title: Text(
                       _titles[index],
@@ -1048,8 +1081,9 @@ class _HrDrawer extends StatelessWidget {
                       ),
                     ),
                     onTap: () => onTap(index),
-                  );
-                }),
+                    );
+                  }),
+                ],
               ),
             ),
             Divider(color: c.border),

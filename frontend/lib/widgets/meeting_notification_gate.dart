@@ -26,6 +26,7 @@ class DashboardNotificationGate extends StatefulWidget {
 
 class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
   static const _storage = FlutterSecureStorage();
+  static const _popupFreshness = Duration(minutes: 15);
   Timer? _timer;
   bool _dialogOpen = false;
   final Set<int> _shownNotificationIds = <int>{};
@@ -64,15 +65,34 @@ class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
       final decoded = jsonDecode(response.body);
       if (decoded is! Map || decoded['notifications'] is! List) return;
 
-      final notification = (decoded['notifications'] as List)
+      final popupNotifications = (decoded['notifications'] as List)
           .whereType<Map>()
-          .firstWhere((item) {
-            final id = int.tryParse('${item['id']}');
-            return id != null &&
-                !_shownNotificationIds.contains(id) &&
-                item['is_read'] != true &&
-                _notificationPresentation(item) != null;
-          }, orElse: () => const {});
+          .where((item) => _notificationPresentation(item) != null)
+          .toList();
+
+      // Historical unread records remain available in notification history,
+      // but must never reopen as dashboard popups after a later login.
+      final staleIds = popupNotifications
+          .where((item) => item['is_read'] != true && !_isFresh(item))
+          .map((item) => int.tryParse('${item['id']}'))
+          .whereType<int>()
+          .where((id) => !_shownNotificationIds.contains(id))
+          .toList();
+      if (staleIds.isNotEmpty) {
+        _shownNotificationIds.addAll(staleIds);
+        await _persistDismissedIds();
+        for (final id in staleIds) {
+          unawaited(_markRead(id));
+        }
+      }
+
+      final notification = popupNotifications.firstWhere((item) {
+        final id = int.tryParse('${item['id']}');
+        return id != null &&
+            !_shownNotificationIds.contains(id) &&
+            item['is_read'] != true &&
+            _isFresh(item);
+      }, orElse: () => const {});
       if (notification.isEmpty || !mounted) return;
       final notificationId = int.tryParse('${notification['id']}');
       if (notificationId != null) {
@@ -103,6 +123,15 @@ class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
       _dialogOpen = false;
       // Dashboard popups should never block dashboard loading.
     }
+  }
+
+  bool _isFresh(Map notification) {
+    final createdAt = DateTime.tryParse('${notification['created_at'] ?? ''}');
+    if (createdAt == null) return false;
+    final age = DateTime.now().toUtc().difference(createdAt.toUtc());
+    // A slightly future timestamp can occur because of device/server clock
+    // skew, so it is still treated as a new notification.
+    return age <= _popupFreshness && age >= const Duration(minutes: -5);
   }
 
   String get _dismissedStorageKey =>
