@@ -14,8 +14,16 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 from urllib.parse import parse_qs, unquote, urlparse
+import cloudinary
  
 load_dotenv()
+
+cloudinary.config(
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME', ''),
+    api_key=os.getenv('CLOUDINARY_API_KEY', ''),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET', ''),
+    secure=True,
+)
  
 BASE_DIR = Path(__file__).resolve().parent.parent
  
@@ -63,6 +71,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'hrms',
+    'client_visits',
 ]
  
 MIDDLEWARE = [

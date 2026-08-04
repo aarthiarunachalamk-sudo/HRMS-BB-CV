@@ -19,6 +19,7 @@ urlpatterns = [
     path("", home, name="home"),
     path("admin/", admin.site.urls),
     path("api/", include("hrms.urls")),
+    path("api/client-visits/", include("client_visits.urls")),
 ]
 
 

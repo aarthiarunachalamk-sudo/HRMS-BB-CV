@@ -1,3 +1,5 @@
+// ignore_for_file: file_names
+
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
@@ -9,6 +11,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/constellation_bac
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_models.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_screens.dart';
 
 class ManagerDashboard extends StatefulWidget {
   final String email;
@@ -90,9 +93,6 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
                         )
                         .length;
                     final leavesAvail = '${leaves['total_available'] ?? '--'}';
-                    final leavesPending =
-                        '${leaves['pending_approval'] ?? '--'}';
-
                     return SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Column(
@@ -387,6 +387,30 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
                       style: TextStyle(color: textPrimary),
                     ),
                     onTap: () => Navigator.pop(context),
+                  ),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.add_location_alt_rounded,
+                      color: Color(0xFF11998E),
+                    ),
+                    title: Text(
+                      'Client Visit Approvals',
+                      style: TextStyle(color: textPrimary),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                            appBar: AppBar(title: const Text('Client Visits')),
+                            body: ClientVisitDashboardScreen(
+                              userId: widget.userId,
+                              reviewerMode: true,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   ListTile(
                     leading: const Icon(
