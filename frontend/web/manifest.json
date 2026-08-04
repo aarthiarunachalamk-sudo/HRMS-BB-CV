@@ -1,6 +1,6 @@
 {
-    "name": "BBT HRMS",
-    "short_name": "BBT HRMS",
+    "name": "HRMS-ERP",
+    "short_name": "HRMS-ERP",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",

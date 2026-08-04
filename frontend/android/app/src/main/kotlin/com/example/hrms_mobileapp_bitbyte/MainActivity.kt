@@ -163,7 +163,7 @@ class MainActivity : FlutterActivity() {
                         put(MediaStore.Downloads.MIME_TYPE, mimeType)
                         put(
                             MediaStore.Downloads.RELATIVE_PATH,
-                        Environment.DIRECTORY_DOWNLOADS + "/BBT HRMS"
+                        Environment.DIRECTORY_DOWNLOADS + "/HRMS-ERP"
                         )
                         put(MediaStore.Downloads.IS_PENDING, 1)
                     }
@@ -189,7 +189,7 @@ class MainActivity : FlutterActivity() {
                         Environment.getExternalStoragePublicDirectory(
                             Environment.DIRECTORY_DOWNLOADS
                         ),
-                        "BBT HRMS"
+                        "HRMS-ERP"
                     )
                     if (!downloads.exists() && !downloads.mkdirs()) {
                         throw IllegalStateException("Unable to create Downloads folder")
@@ -198,7 +198,7 @@ class MainActivity : FlutterActivity() {
                     file.writeBytes(bytes)
                     savedUri = Uri.fromFile(file)
                 }
-                result.success(savedUri?.toString() ?: "Downloads/BBT HRMS/$fileName")
+                result.success(savedUri?.toString() ?: "Downloads/HRMS-ERP/$fileName")
             } catch (error: Exception) {
                 result.error("SAVE_FAILED", error.message ?: "Unable to save report", null)
             }
