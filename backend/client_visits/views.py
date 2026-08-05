@@ -197,6 +197,16 @@ def visit_approvers(request):
 
 
 def _notify_visit_progress(visit, *, title, message, notification_type='info', include_employee=False):
+    # Notify the requester first. Approval observers must never delay or block
+    # the employee/TL/HR who raised the visit from receiving the outcome.
+    if include_employee:
+        _notify(
+            user_id=visit.employee_user_id,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            visit=visit,
+        )
     assigned_role = ''
     if visit.manager_user_id:
         assigned_role = (
@@ -225,14 +235,6 @@ def _notify_visit_progress(visit, *, title, message, notification_type='info', i
             continue
         _notify(
             role=dashboard_role,
-            title=title,
-            message=message,
-            notification_type=notification_type,
-            visit=visit,
-        )
-    if include_employee:
-        _notify(
-            user_id=visit.employee_user_id,
             title=title,
             message=message,
             notification_type=notification_type,

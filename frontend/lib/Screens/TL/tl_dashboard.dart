@@ -5596,7 +5596,19 @@ class _Notifications extends StatelessWidget {
       icon: Icons.notifications_rounded,
       color: c.danger,
       onTap: (item) {
-        if (item['module'] == 'approval') {
+        if (_isClientVisitNotification(item)) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ClientVisitModuleScreen(
+                userId: userId,
+                roleLabel: 'Team Lead - My Visits',
+                reviewerMode: true,
+                requesterRole: 'tl',
+                initialVisitId: int.tryParse('${item['reference_id'] ?? ''}'),
+              ),
+            ),
+          );
+        } else if (item['module'] == 'approval') {
           _openTlApprovalNotification(context, data, userId, item, onChanged);
         } else if (_isLeaveNotification(item)) {
           openApprovals();
@@ -7576,6 +7588,11 @@ bool _isLeaveNotification(Map<String, dynamic> item) {
   return module == 'leave' ||
       title.contains('leave') ||
       subtitle.contains('leave');
+}
+
+bool _isClientVisitNotification(Map<String, dynamic> item) {
+  final module = '${item['module'] ?? ''}'.trim().toLowerCase();
+  return module == 'client_visit' || module == 'client-visit';
 }
 
 bool _isMeetingNotification(Map<String, dynamic> item) {

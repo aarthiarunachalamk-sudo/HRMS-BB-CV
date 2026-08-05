@@ -121,6 +121,31 @@ class ClientVisitApiTests(APITestCase):
         self.assertEqual(hr_approval.status_code, 200)
         self.assertEqual(hr_approval.data['visit']['status'], 'approved')
         self.assertEqual(hr_approval.data['visit']['approved_by'], hr.user_id)
+        tl_notification = AppNotification.objects.filter(
+            recipient_user_id=requester.user_id,
+            module='client_visit',
+            reference_id=str(visit_id),
+            title='Client Visit Approved',
+            is_read=False,
+        ).first()
+        self.assertIsNotNone(tl_notification)
+        tl_dashboard = self.client.get('/api/tl/dashboard/', {
+            'user_id': requester.user_id,
+        })
+        self.assertEqual(tl_dashboard.status_code, 200)
+        self.assertIn(
+            tl_notification.id,
+            {item['id'] for item in tl_dashboard.data['notifications']},
+        )
+        shared_notifications = self.client.get('/api/notifications/', {
+            'user_id': requester.user_id,
+            'role': 'tl',
+        })
+        self.assertEqual(shared_notifications.status_code, 200)
+        self.assertIn(
+            tl_notification.id,
+            {item['id'] for item in shared_notifications.data['notifications']},
+        )
         listing = self.client.get('/api/client-visits/', {
             'user_id': requester.user_id,
         })

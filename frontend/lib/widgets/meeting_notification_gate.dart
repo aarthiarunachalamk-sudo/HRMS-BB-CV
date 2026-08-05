@@ -41,7 +41,7 @@ class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
       (_) => _checkDashboardNotification(waitForGreeting: true),
     );
     _timer = Timer.periodic(
-      const Duration(seconds: 120),
+      const Duration(seconds: 30),
       (_) => _checkDashboardNotification(),
     );
   }
