@@ -3,6 +3,7 @@ import json
 import logging
 import re
 
+from cloudinary.exceptions import Error as CloudinaryError
 from django.db import transaction
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q, Sum
@@ -695,6 +696,17 @@ def visit_attachment(request, pk):
     uploads = request.FILES.getlist('files') or request.FILES.getlist('file')
     if not uploads:
         return _error('At least one file is required.')
+    selfie_categories = {
+        'check_in', 'office_checkout', 'client_check_in', 'checkout',
+    }
+    for upload in uploads:
+        if upload.size <= 0:
+            return _error('The selected attachment is empty.')
+        if upload.size > 10 * 1024 * 1024:
+            return _error('Each Client Visit attachment must be 10 MB or smaller.', 413)
+        content_type = str(getattr(upload, 'content_type', '') or '').lower()
+        if category in selfie_categories and not content_type.startswith('image/'):
+            return _error('A valid camera image is required for this selfie.')
     created = []
     # Each category receives its own Cloudinary folder, keeping visit media separate.
     try:
@@ -712,8 +724,36 @@ def visit_attachment(request, pk):
                 created.append(item)
     except ImproperlyConfigured as exc:
         return _error(str(exc), 503)
+    except CloudinaryError as exc:
+        logger.exception(
+            'Client Visit Cloudinary rejected %s upload for %s',
+            category,
+            visit.visit_id,
+        )
+        reason = str(exc).lower()
+        if any(value in reason for value in ('api key', 'signature', 'auth')):
+            return _error(
+                'Client Visit Cloudinary credentials were rejected. '
+                'Update the Render API key and secret, then redeploy.',
+                503,
+            )
+        if 'file size' in reason or 'too large' in reason:
+            return _error('The selfie is too large for Cloudinary.', 413)
+        if 'invalid image' in reason or 'unsupported' in reason:
+            return _error('Cloudinary could not read this camera image. Retake the selfie.', 400)
+        return _error(
+            'Cloudinary rejected the selfie upload. Retake the image and retry.',
+            502,
+        )
     except Exception:
-        return _error('Cloudinary upload failed. Check the Cloudinary configuration and retry.', 502)
+        logger.exception(
+            'Unexpected Client Visit upload failure for %s',
+            visit.visit_id,
+        )
+        return _error(
+            'The Client Visit server could not upload the selfie. Please retry.',
+            502,
+        )
     return Response({'success': True, 'message': f'{len(created)} file(s) uploaded.', 'attachments': [_attachment_payload(item) for item in created]}, status=201)
 
 

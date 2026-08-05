@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from cloudinary.exceptions import Error as CloudinaryError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from rest_framework.test import APITestCase
@@ -518,6 +519,21 @@ class ClientVisitApiTests(APITestCase):
         self.assertEqual(response.status_code, 503)
         self.assertIn('Dedicated Client Visit Cloudinary', response.data['message'])
         upload.assert_not_called()
+        self.assertFalse(VisitAttachment.objects.filter(visit_id=visit_id).exists())
+
+    @patch('client_visits.storage.cloudinary.uploader.upload')
+    def test_attachment_reports_rejected_cloudinary_credentials(self, upload):
+        upload.side_effect = CloudinaryError('Invalid API key or signature')
+        visit_id = self._create().data['visit']['id']
+        response = self.client.post(f'/api/client-visits/{visit_id}/attachments/', {
+            'user_id': self.employee.user_id,
+            'category': 'office_checkout',
+            'files': SimpleUploadedFile(
+                'selfie.jpg', b'image-bytes', content_type='image/jpeg',
+            ),
+        }, format='multipart')
+        self.assertEqual(response.status_code, 503)
+        self.assertIn('credentials were rejected', response.data['message'])
         self.assertFalse(VisitAttachment.objects.filter(visit_id=visit_id).exists())
 
     def test_visit_module_is_visible_to_every_supported_role(self):
