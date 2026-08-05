@@ -74,17 +74,32 @@ def _notify_visit_submitted(visit):
             notification_type='warning',
             visit=visit,
         )
-    assigned_to_ceo = bool(
-        visit.manager_user_id
-        and User.objects.filter(
-            user_id=visit.manager_user_id,
-            role='ceo',
-            is_active=True,
-        ).exists()
+    assigned_role = ''
+    if visit.manager_user_id:
+        assigned_role = (
+            User.objects.filter(user_id=visit.manager_user_id, is_active=True)
+            .values_list('role', flat=True)
+            .first()
+            or ''
+        )
+
+    # Keep the requester informed in the Employee/TL/HR dashboard while the
+    # selected reporting approver receives the actionable alert above.
+    _notify(
+        user_id=visit.employee_user_id,
+        title='Client Visit Request Submitted',
+        message=f'{visit.visit_id} was submitted and is waiting for approval.',
+        notification_type='info',
+        visit=visit,
     )
-    if not assigned_to_ceo:
+
+    # Leadership dashboards monitor every raised request. The assigned CEO is
+    # excluded from the CEO broadcast to avoid showing the same request twice.
+    for dashboard_role in ('ceo', 'md', 'director', 'admin'):
+        if dashboard_role == assigned_role:
+            continue
         _notify(
-            role='ceo',
+            role=dashboard_role,
             title='New Client Visit Request',
             message=message,
             notification_type='info',
@@ -182,7 +197,14 @@ def visit_approvers(request):
 
 
 def _notify_visit_progress(visit, *, title, message, notification_type='info', include_employee=False):
+    assigned_role = ''
     if visit.manager_user_id:
+        assigned_role = (
+            User.objects.filter(user_id=visit.manager_user_id, is_active=True)
+            .values_list('role', flat=True)
+            .first()
+            or ''
+        )
         _notify(
             user_id=visit.manager_user_id,
             title=title,
@@ -198,13 +220,16 @@ def _notify_visit_progress(visit, *, title, message, notification_type='info', i
             notification_type=notification_type,
             visit=visit,
         )
-    _notify(
-        role='ceo',
-        title=title,
-        message=message,
-        notification_type=notification_type,
-        visit=visit,
-    )
+    for dashboard_role in ('ceo', 'md', 'director', 'admin'):
+        if dashboard_role == assigned_role:
+            continue
+        _notify(
+            role=dashboard_role,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            visit=visit,
+        )
     if include_employee:
         _notify(
             user_id=visit.employee_user_id,

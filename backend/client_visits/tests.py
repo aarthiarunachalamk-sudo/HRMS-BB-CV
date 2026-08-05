@@ -272,6 +272,11 @@ class ClientVisitApiTests(APITestCase):
         self.assertEqual(normalized.data['visit']['contact_phone'], '9876543210')
 
     def test_visit_follows_approval_check_in_and_completion_workflow(self):
+        md = User.objects.create_user('visit-monitor-md@example.com', role='md')
+        director = User.objects.create_user(
+            'visit-monitor-director@example.com', role='director'
+        )
+        admin = User.objects.create_user('visit-monitor-admin@example.com', role='admin')
         created = self._create()
         self.assertEqual(created.status_code, 201)
         visit_id = created.data['visit']['id']
@@ -286,6 +291,27 @@ class ClientVisitApiTests(APITestCase):
             title='New Client Visit Request',
             reference_id=str(visit_id),
         ).exists())
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_user_id=self.employee.user_id,
+            title='Client Visit Request Submitted',
+            reference_id=str(visit_id),
+        ).exists())
+        for role, user in (('md', md), ('director', director), ('admin', admin)):
+            self.assertTrue(AppNotification.objects.filter(
+                recipient_role=role,
+                title='New Client Visit Request',
+                reference_id=str(visit_id),
+            ).exists())
+            notifications = self.client.get('/api/notifications/', {
+                'user_id': user.user_id,
+                'role': role,
+            })
+            self.assertEqual(notifications.status_code, 200)
+            self.assertTrue(any(
+                item['module'] == 'client_visit'
+                and item['reference_id'] == str(visit_id)
+                for item in notifications.data['notifications']
+            ))
 
         approved = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
             'user_id': self.manager.user_id, 'action': 'approve', 'comment': 'Proceed.',

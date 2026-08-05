@@ -372,7 +372,7 @@ class AppCelebrationDialog extends StatelessWidget {
                       width: double.infinity,
                       height: 46,
                       child: FilledButton(
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () => Navigator.of(context).pop(true),
                         style: FilledButton.styleFrom(
                           backgroundColor: accent,
                           foregroundColor: const Color(0xFF061321),

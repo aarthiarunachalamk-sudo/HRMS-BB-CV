@@ -110,6 +110,23 @@ class _ClientVisitDashboardScreenState
     if (changed == true) _load();
   }
 
+  Future<void> _openStatusList(
+    String title,
+    Set<String> statuses,
+  ) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _ClientVisitStatusListScreen(
+          title: title,
+          userId: widget.userId,
+          statuses: statuses,
+          onOpenVisit: _openVisit,
+        ),
+      ),
+    );
+    await _load();
+  }
+
   int _currentFlowStep(ClientVisit visit) => switch (visit.status) {
     'pending' || 'rejected' || 'draft' => 3,
     'approved' => 4,
@@ -220,7 +237,30 @@ class _ClientVisitDashboardScreenState
             ],
           ),
           const SizedBox(height: 16),
-          if (result != null) _Summary(summary: result.summary),
+          if (result != null)
+            _Summary(
+              summary: result.summary,
+              onInProgress: () => _openStatusList(
+                'In Progress Visits',
+                const {'travelling', 'in_progress'},
+              ),
+              onPendingCheckIn: () => _openStatusList(
+                'Pending Check-In',
+                const {'approved'},
+              ),
+              onUpcoming: () => _openStatusList(
+                'Upcoming Visits',
+                const {'approved'},
+              ),
+              onPendingApproval: () => _openStatusList(
+                'Pending Approval',
+                const {'pending'},
+              ),
+              onHistory: () => _openStatusList(
+                'Visit History',
+                const {'completed', 'rejected'},
+              ),
+            ),
           if (!widget.readOnlyMode && widget.allowCreate) ...[
             const SizedBox(height: 14),
             SizedBox(
@@ -285,6 +325,98 @@ class _ClientVisitDashboardScreenState
       ),
     );
   }
+}
+
+class _ClientVisitStatusListScreen extends StatefulWidget {
+  final String title;
+  final String userId;
+  final Set<String> statuses;
+  final Future<void> Function(ClientVisit visit) onOpenVisit;
+
+  const _ClientVisitStatusListScreen({
+    required this.title,
+    required this.userId,
+    required this.statuses,
+    required this.onOpenVisit,
+  });
+
+  @override
+  State<_ClientVisitStatusListScreen> createState() =>
+      _ClientVisitStatusListScreenState();
+}
+
+class _ClientVisitStatusListScreenState
+    extends State<_ClientVisitStatusListScreen> {
+  final _service = ClientVisitService();
+  List<ClientVisit>? _visits;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final result = await _service.fetchVisits(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        _visits = result.visits
+            .where((visit) => widget.statuses.contains(visit.status))
+            .toList();
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = '$error'.replaceFirst('Exception: ', ''));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ClientVisitTheme(
+    child: Scaffold(
+      appBar: AppBar(title: Text(widget.title)),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            if (_error != null)
+              _Message(
+                icon: Icons.cloud_off_rounded,
+                text: _error!,
+                onRetry: _load,
+              )
+            else if (_visits == null)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_visits!.isEmpty)
+              _Message(
+                icon: Icons.event_available_outlined,
+                text: 'No ${widget.title.toLowerCase()} found.',
+                onRetry: _load,
+              )
+            else
+              ..._visits!.map(
+                (visit) => _VisitCard(
+                  visit: visit,
+                  onTap: () async {
+                    await widget.onOpenVisit(visit);
+                    await _load();
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class ClientVisitModuleScreen extends StatelessWidget {
@@ -1335,7 +1467,19 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
 
 class _Summary extends StatelessWidget {
   final Map<String, int> summary;
-  const _Summary({required this.summary});
+  final VoidCallback onInProgress;
+  final VoidCallback onPendingCheckIn;
+  final VoidCallback onUpcoming;
+  final VoidCallback onPendingApproval;
+  final VoidCallback onHistory;
+  const _Summary({
+    required this.summary,
+    required this.onInProgress,
+    required this.onPendingCheckIn,
+    required this.onUpcoming,
+    required this.onPendingApproval,
+    required this.onHistory,
+  });
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1349,6 +1493,7 @@ class _Summary extends StatelessWidget {
             'In Progress',
             (summary['travelling'] ?? 0) + (summary['in_progress'] ?? 0),
             ClientVisitColors.blue,
+            onInProgress,
           ),
           const SizedBox(width: 8),
           _box(
@@ -1356,6 +1501,7 @@ class _Summary extends StatelessWidget {
             'Pending Check-In',
             summary['approved'] ?? 0,
             ClientVisitColors.orange,
+            onPendingCheckIn,
           ),
         ],
       ),
@@ -1367,6 +1513,7 @@ class _Summary extends StatelessWidget {
         'Upcoming Visits',
         summary['approved'] ?? 0,
         ClientVisitColors.blue,
+        onUpcoming,
       ),
       const SizedBox(height: 12),
       Text('Pending Approval', style: _sectionStyle(context)),
@@ -1376,6 +1523,7 @@ class _Summary extends StatelessWidget {
         'Pending Approval',
         summary['pending'] ?? 0,
         ClientVisitColors.orange,
+        onPendingApproval,
       ),
       const SizedBox(height: 12),
       Text('History', style: _sectionStyle(context)),
@@ -1383,8 +1531,9 @@ class _Summary extends StatelessWidget {
       _wideBox(
         context,
         'Completed Visits',
-        summary['completed'] ?? 0,
+        (summary['completed'] ?? 0) + (summary['rejected'] ?? 0),
         ClientVisitColors.green,
+        onHistory,
       ),
     ],
   );
@@ -1395,20 +1544,30 @@ class _Summary extends StatelessWidget {
     fontWeight: FontWeight.w800,
   );
 
-  Widget _box(BuildContext context, String label, int count, Color color) =>
+  Widget _box(
+    BuildContext context,
+    String label,
+    int count,
+    Color color,
+    VoidCallback onTap,
+  ) =>
       Expanded(
-        child: EmployeeCard(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              Text(
-                '$count',
-                style: Theme.of(
-                  context,
-                ).textTheme.headlineMedium?.copyWith(color: color),
-              ),
-              Text(label, style: Theme.of(context).textTheme.bodySmall),
-            ],
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: EmployeeCard(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                Text(
+                  '$count',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineMedium?.copyWith(color: color),
+                ),
+                Text(label, style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
           ),
         ),
       );
@@ -1418,28 +1577,36 @@ class _Summary extends StatelessWidget {
     String label,
     int count,
     Color color,
-  ) => EmployeeCard(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    child: Row(
-      children: [
-        Text(
-          '$count',
-          style: TextStyle(
-            color: color,
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
+    VoidCallback onTap,
+  ) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(16),
+    child: EmployeeCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Text(
+            '$count',
+            style: TextStyle(
+              color: color,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          label,
-          style: TextStyle(
-            color: ThemeConfig.getTextPrimary(context),
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: ThemeConfig.getTextPrimary(context),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
-        ),
-      ],
+          Icon(Icons.chevron_right_rounded, color: color),
+        ],
+      ),
     ),
   );
 }

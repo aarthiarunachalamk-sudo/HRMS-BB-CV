@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_screens.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 
 class DashboardNotificationGate extends StatefulWidget {
@@ -107,7 +108,7 @@ class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
       final message =
           '${notification['message'] ?? notification['subtitle'] ?? ''}';
       _dialogOpen = true;
-      await showDialog<void>(
+      final shouldOpen = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AppCelebrationDialog(
           title: title,
@@ -119,11 +120,58 @@ class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
       );
       _dialogOpen = false;
       await _markRead(notification['id']);
+      if (shouldOpen == true &&
+          mounted &&
+          _isClientVisitNotification(notification)) {
+        await _openClientVisit(notification);
+      }
     } catch (_) {
       _dialogOpen = false;
       // Dashboard popups should never block dashboard loading.
     }
   }
+
+  bool _isClientVisitNotification(Map notification) {
+    final module = '${notification['module'] ?? ''}'.trim().toLowerCase();
+    return module == 'client_visit' || module == 'client-visit';
+  }
+
+  Future<void> _openClientVisit(Map notification) async {
+    final role = switch (widget.role.trim().toLowerCase()) {
+      'teamlead' || 'team_lead' => 'tl',
+      'hr_manager' => 'hr',
+      'administrator' => 'admin',
+      final value => value,
+    };
+    final isApprover = role == 'tl' || role == 'hr' || role == 'ceo';
+    final isReadOnly = role == 'md' || role == 'director';
+    final visitId = int.tryParse('${notification['reference_id'] ?? ''}');
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ClientVisitModuleScreen(
+          userId: widget.userId,
+          roleLabel: _clientVisitRoleLabel(role),
+          requesterRole: role,
+          reviewerMode: isApprover || role == 'admin',
+          readOnlyMode: isReadOnly,
+          allowCreate: role == 'employee' || role == 'tl' || role == 'hr',
+          assignedApprovalsOnly: isApprover,
+          allowVerification: role == 'tl' || role == 'hr' || role == 'admin',
+          initialVisitId: visitId,
+        ),
+      ),
+    );
+  }
+
+  String _clientVisitRoleLabel(String role) => switch (role) {
+    'tl' => 'Team Lead',
+    'hr' || 'hr_manager' => 'HR',
+    'ceo' => 'CEO',
+    'md' => 'Managing Director',
+    'director' => 'Executive Director',
+    'admin' || 'administrator' => 'Admin',
+    _ => 'Employee',
+  };
 
   bool _isFresh(Map notification) {
     final createdAt = DateTime.tryParse('${notification['created_at'] ?? ''}');
@@ -226,7 +274,7 @@ _NotificationPresentation? _notificationPresentation(Map notification) {
       fallbackMessage: 'A client visit request is waiting for your approval.',
       icon: Icons.approval_rounded,
       accent: Color(0xFF2F91FF),
-      buttonLabel: 'Got it',
+      buttonLabel: 'View request',
     );
   }
 
