@@ -1717,111 +1717,136 @@ class _FlowTimerState extends State<_FlowTimer> {
   }
 }
 
-class _RouteMapPreview extends StatelessWidget {
-  const _RouteMapPreview();
+class _LiveMapView extends StatelessWidget {
+  final MapController mapController;
+  final List<LatLng> routePoints;
+  final LatLng? origin;
+  final LatLng? current;
+
+  const _LiveMapView({
+    required this.mapController,
+    required this.routePoints,
+    this.origin,
+    this.current,
+  });
+
+  // Compute the initial center: prefer current position, then origin,
+  // then fall back to a generic India-center coordinate.
+  LatLng get _center =>
+      current ?? origin ?? const LatLng(20.5937, 78.9629);
 
   @override
   Widget build(BuildContext context) {
-    final isDark = ThemeConfig.isDark(context);
-    return Container(
-      height: 190,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF102743) : const Color(0xFFEAF3FC),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: ThemeConfig.getCardBorder(context)),
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(painter: _RoutePainter(isDark: isDark)),
-          ),
-          const Positioned(
-            left: 18,
-            top: 24,
-            child: Icon(Icons.location_on, color: ClientVisitColors.green),
-          ),
-          const Positioned(
-            right: 20,
-            bottom: 28,
-            child: Icon(
-              Icons.location_on,
-              color: ClientVisitColors.red,
-              size: 34,
-            ),
-          ),
-          Positioned(
-            right: 10,
-            top: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: ThemeConfig.getCardBg(context),
-                borderRadius: BorderRadius.circular(20),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        height: 240,
+        child: Stack(
+          children: [
+            FlutterMap(
+              mapController: mapController,
+              options: MapOptions(
+                initialCenter: _center,
+                initialZoom: 15,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.pinchZoom |
+                      InteractiveFlag.drag |
+                      InteractiveFlag.doubleTapZoom,
+                ),
               ),
-              child: const Text(
-                'LIVE',
-                style: TextStyle(
-                  color: ClientVisitColors.blue,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
+              children: [
+                // OpenStreetMap tile layer — no API key required.
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.bitbyte.hrms',
+                  maxNativeZoom: 19,
+                ),
+                // Live route polyline drawn from tracked GPS points.
+                if (routePoints.length >= 2)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: routePoints,
+                        color: ClientVisitColors.blue,
+                        strokeWidth: 5,
+                        strokeCap: StrokeCap.round,
+                        strokeJoin: StrokeJoin.round,
+                      ),
+                    ],
+                  ),
+                MarkerLayer(
+                  markers: [
+                    // Origin marker (office departure point) — green pin.
+                    if (origin != null)
+                      Marker(
+                        point: origin!,
+                        width: 36,
+                        height: 36,
+                        child: const Icon(
+                          Icons.location_on,
+                          color: ClientVisitColors.green,
+                          size: 36,
+                        ),
+                      ),
+                    // Current live position — blue pulsing dot.
+                    if (current != null)
+                      Marker(
+                        point: current!,
+                        width: 22,
+                        height: 22,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: ClientVisitColors.blue,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [
+                              BoxShadow(
+                                color: ClientVisitColors.blue.withAlpha(100),
+                                blurRadius: 8,
+                                spreadRadius: 4,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            // LIVE badge overlay.
+            Positioned(
+              right: 10,
+              top: 10,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withAlpha(160),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.circle, color: ClientVisitColors.red, size: 8),
+                    SizedBox(width: 4),
+                    Text(
+                      'LIVE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
-}
-
-class _RoutePainter extends CustomPainter {
-  final bool isDark;
-  const _RoutePainter({required this.isDark});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final grid = Paint()
-      ..color = isDark ? const Color(0xFF29415E) : const Color(0xFFD5E1EC)
-      ..strokeWidth = 1;
-    for (double y = 25; y < size.height; y += 38) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y + 9), grid);
-    }
-    for (double x = 38; x < size.width; x += 54) {
-      canvas.drawLine(Offset(x, 0), Offset(x - 18, size.height), grid);
-    }
-
-    final route = Path()
-      ..moveTo(34, 42)
-      ..cubicTo(
-        size.width * .28,
-        size.height * .12,
-        size.width * .26,
-        size.height * .68,
-        size.width * .49,
-        size.height * .56,
-      )
-      ..cubicTo(
-        size.width * .68,
-        size.height * .46,
-        size.width * .70,
-        size.height * .86,
-        size.width - 34,
-        size.height - 42,
-      );
-    canvas.drawPath(
-      route,
-      Paint()
-        ..color = ClientVisitColors.blue
-        ..strokeWidth = 5
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _RoutePainter oldDelegate) =>
-      oldDelegate.isDark != isDark;
 }
 
 String _title(int step) =>
