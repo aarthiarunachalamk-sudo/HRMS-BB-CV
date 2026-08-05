@@ -335,6 +335,18 @@ def _notifications_for_user(user_id):
     return [_notification_payload(item) for item in AppNotification.objects.filter(recipient_user_id=user_id)[:30]]
 
 
+def _notifications_for_recipient(role, user_id=''):
+    target = Q(recipient_role=role) if role else Q()
+    if user_id:
+        target |= Q(recipient_user_id=user_id)
+    if not role and not user_id:
+        return []
+    return [
+        _notification_payload(item)
+        for item in AppNotification.objects.filter(target)[:30]
+    ]
+
+
 def _create_notification(*, user_id='', role='', title, message, notification_type='info', module='', reference_id=''):
     notification = AppNotification.objects.create(
         recipient_user_id=user_id,
@@ -3988,7 +4000,7 @@ def hr_dashboard_view(request):
     month_payslips = list(
         Payslip.objects.filter(year=payroll_month.year, month=payroll_month.month)
     )
-    notifications = _notifications_for_role('hr')
+    notifications = _notifications_for_recipient('hr', hr_user_id)
 
     # Live attendance counts
     # Presence is based on a real check-in, not a pre-created/status-only row.

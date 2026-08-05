@@ -282,6 +282,21 @@ class _HrDashboardState extends State<HrDashboard> {
     final title = '${item['title'] ?? ''}'.toLowerCase();
     final subtitle = '${item['subtitle'] ?? item['message'] ?? ''}'
         .toLowerCase();
+    if (module == 'client_visit' || module == 'client-visit') {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('Client Visits')),
+            body: ClientVisitDashboardScreen(
+              userId: widget.userId,
+              reviewerMode: true,
+              requesterRole: 'hr',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     if (module.startsWith('attendance')) {
       final referenceId = '${item['reference_id'] ?? ''}';
       var employeeId = referenceId.split(':').first.trim();

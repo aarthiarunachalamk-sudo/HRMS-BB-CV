@@ -220,6 +220,16 @@ _NotificationPresentation? _notificationPresentation(Map notification) {
     notification['subtitle'],
   ].join(' ').toLowerCase();
 
+  if (module == 'client_visit' || module == 'client-visit') {
+    return const _NotificationPresentation(
+      fallbackTitle: 'Client Visit Approval Required',
+      fallbackMessage: 'A client visit request is waiting for your approval.',
+      icon: Icons.approval_rounded,
+      accent: Color(0xFF2F91FF),
+      buttonLabel: 'Got it',
+    );
+  }
+
   if (module == 'company_leave' || module == 'company-leave') {
     return const _NotificationPresentation(
       fallbackTitle: 'Company Leave Announced',

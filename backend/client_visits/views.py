@@ -74,13 +74,22 @@ def _notify_visit_submitted(visit):
             notification_type='warning',
             visit=visit,
         )
-    _notify(
-        role='ceo',
-        title='New Client Visit Request',
-        message=message,
-        notification_type='info',
-        visit=visit,
+    assigned_to_ceo = bool(
+        visit.manager_user_id
+        and User.objects.filter(
+            user_id=visit.manager_user_id,
+            role='ceo',
+            is_active=True,
+        ).exists()
     )
+    if not assigned_to_ceo:
+        _notify(
+            role='ceo',
+            title='New Client Visit Request',
+            message=message,
+            notification_type='info',
+            visit=visit,
+        )
 
 
 def _safe_notify_visit_submitted(visit):

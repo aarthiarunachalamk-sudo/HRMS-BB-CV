@@ -12531,6 +12531,28 @@ class _NotificationsDynamicPage extends StatefulWidget {
 class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
   bool _unreadOnly = false;
 
+  Future<void> _openClientVisitNotification(
+    Map<String, dynamic> notification,
+  ) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Client Visits')),
+          body: ClientVisitDashboardScreen(
+            userId: widget.userId,
+            reviewerMode: true,
+            requesterRole: 'ceo',
+          ),
+        ),
+      ),
+    );
+    final notificationId = notification['id'];
+    if (notificationId is int) {
+      await CeoService().markNotificationRead(notificationId, widget.userId);
+    }
+    if (mounted) setState(() {});
+  }
+
   Future<void> _openApprovalNotification(
     Map<String, dynamic> notification,
   ) async {
@@ -12667,9 +12689,12 @@ class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
                     fallback: _displayText(map['trailing']),
                   ),
                   _notificationColor(type),
-                  onTap: _displayText(map['module']) == 'approval'
-                      ? () => _openApprovalNotification(map)
-                      : null,
+                  onTap: switch (_displayText(map['module'])) {
+                    'approval' => () => _openApprovalNotification(map),
+                    'client_visit' || 'client-visit' =>
+                      () => _openClientVisitNotification(map),
+                    _ => null,
+                  },
                 );
               }),
             ],

@@ -96,6 +96,15 @@ class ClientVisitApiTests(APITestCase):
             module='client_visit',
             reference_id=str(response.data['visit']['id']),
         ).exists())
+        hr_dashboard = self.client.get('/api/hr/dashboard/', {
+            'user_id': hr.user_id,
+        })
+        self.assertEqual(hr_dashboard.status_code, 200)
+        self.assertTrue(any(
+            item['module'] == 'client_visit'
+            and item['reference_id'] == str(response.data['visit']['id'])
+            for item in hr_dashboard.data['notifications']
+        ))
         visit_id = response.data['visit']['id']
         tl_approval = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
             'user_id': self.manager.user_id,
@@ -194,6 +203,26 @@ class ClientVisitApiTests(APITestCase):
         }, format='json')
         self.assertEqual(created.status_code, 201)
         visit_id = created.data['visit']['id']
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_user_id=ceo.user_id,
+            module='client_visit',
+            reference_id=str(visit_id),
+            title='Client Visit Approval Required',
+        ).exists())
+        self.assertFalse(AppNotification.objects.filter(
+            recipient_role='ceo',
+            module='client_visit',
+            reference_id=str(visit_id),
+        ).exists())
+        ceo_notifications = self.client.get('/api/ceo/notifications/', {
+            'user_id': ceo.user_id,
+        })
+        self.assertEqual(ceo_notifications.status_code, 200)
+        self.assertTrue(any(
+            item['module'] == 'client_visit'
+            and item['reference_id'] == str(visit_id)
+            for item in ceo_notifications.data['notifications']
+        ))
 
         hr_approval = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
             'user_id': other_hr.user_id,
