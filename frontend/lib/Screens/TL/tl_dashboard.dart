@@ -223,7 +223,13 @@ class _TLDashboardState extends State<TLDashboard> {
                 name: widget.firstName,
                 profileImage: _profileImage,
                 onProfileTap: _pickProfileImage,
-                logout: () => showLogoutConfirmation(context: context, onLogout: _logout),
+                logout: () =>
+                    showLogoutConfirmation(context: context, onLogout: _logout),
+              ),
+              ClientVisitDashboardScreen(
+                userId: widget.userId,
+                reviewerMode: true,
+                requesterRole: 'tl',
               ),
             ];
             return Scaffold(
@@ -233,7 +239,8 @@ class _TLDashboardState extends State<TLDashboard> {
                 email: widget.email,
                 name: widget.firstName,
                 select: _setIndex,
-                logout: () => showLogoutConfirmation(context: context, onLogout: _logout),
+                logout: () =>
+                    showLogoutConfirmation(context: context, onLogout: _logout),
                 openClientVisits: () {
                   Navigator.of(context).pop();
                   Navigator.of(context).push(
@@ -501,6 +508,50 @@ class _Dashboard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
+        Text(
+          'Quick Actions',
+          style: TextStyle(
+            color: c.text,
+            fontSize: 15,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _DashboardQuickAction(
+              icon: Icons.groups_rounded,
+              label: 'Team',
+              color: c.success,
+              onTap: () => open(1),
+            ),
+            _DashboardQuickAction(
+              icon: Icons.task_alt_rounded,
+              label: 'Tasks',
+              color: c.primary,
+              onTap: () => open(2),
+            ),
+            _DashboardQuickAction(
+              icon: Icons.calendar_month_rounded,
+              label: 'Attendance',
+              color: c.warning,
+              onTap: () => open(4),
+            ),
+            _DashboardQuickAction(
+              icon: Icons.approval_rounded,
+              label: 'Approvals',
+              color: c.danger,
+              onTap: () => open(12),
+            ),
+            _DashboardQuickAction(
+              icon: Icons.add_location_alt_rounded,
+              label: 'Client Visits',
+              color: c.purple,
+              onTap: () => open(20),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
         if (meetings.isNotEmpty) ...[
           _Section(
             title: 'Meetings',
@@ -545,6 +596,60 @@ class _Dashboard extends StatelessWidget {
               '${tlText(data, 'on_track')} employee(s) on track by task completion',
         ),
       ],
+    );
+  }
+}
+
+class _DashboardQuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DashboardQuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TlPalette.of(context);
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            height: 72,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: c.border),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(height: 7),
+                FittedBox(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: c.text,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -7137,21 +7242,33 @@ class _Profile extends StatelessWidget {
           title: 'Personal Information',
           subtitle: 'Profile and contact details',
           color: c.primary,
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => UserPersonalInformationScreen(userId: userId))),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => UserPersonalInformationScreen(userId: userId),
+            ),
+          ),
         ),
         TlListTile(
           icon: Icons.lock_outline_rounded,
           title: 'Change Password',
           subtitle: 'Security settings',
           color: c.purple,
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChangePasswordScreen(employeeId: userId, otc: ''))),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ChangePasswordScreen(employeeId: userId, otc: ''),
+            ),
+          ),
         ),
         TlListTile(
           icon: Icons.notifications_none_rounded,
           title: 'Notification Settings',
           subtitle: 'Alerts and reminders',
           color: c.warning,
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => UserNotificationSettingsScreen(userId: userId))),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => UserNotificationSettingsScreen(userId: userId),
+            ),
+          ),
         ),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
@@ -8152,23 +8269,23 @@ class _Drawer extends StatelessWidget {
                     ),
                     ..._drawerItems.map((item) {
                       return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: ListTile(
-                        dense: true,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        leading: Icon(item.icon, color: c.primary, size: 19),
-                        title: Text(
-                          item.title,
-                          style: TextStyle(
-                            color: c.text,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: ListTile(
+                          dense: true,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
+                          leading: Icon(item.icon, color: c.primary, size: 19),
+                          title: Text(
+                            item.title,
+                            style: TextStyle(
+                              color: c.text,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          onTap: () => select(item.index),
                         ),
-                        onTap: () => select(item.index),
-                      ),
                       );
                     }),
                   ],
@@ -8215,7 +8332,7 @@ class _BottomNav extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) {
-    const items = [0, 1, 2, 3, 11];
+    const items = [0, 1, 2, 20, 3, 11];
     return Container(
       decoration: BoxDecoration(
         color: c.surface,
@@ -8306,6 +8423,7 @@ const _titles = [
   'Team Performance',
   'Details',
   'Profile',
+  'Client Visits',
 ];
 
 const _icons = [
@@ -8329,4 +8447,5 @@ const _icons = [
   Icons.insights_rounded,
   Icons.description_rounded,
   Icons.account_circle_rounded,
+  Icons.add_location_alt_rounded,
 ];

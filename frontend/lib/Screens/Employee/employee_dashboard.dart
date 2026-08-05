@@ -311,6 +311,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     final message = '${notification['message'] ?? ''}'.toLowerCase();
     final text = '$module $title $message';
 
+    if (module == 'client_visit' || module == 'client-visit') {
+      _selectTab(5);
+      return;
+    }
+
     if (text.contains('meeting')) {
       final meeting = _meetingForNotification(notification);
       if (meeting != null) {
@@ -473,9 +478,14 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
         userId: widget.userId,
         data: _data,
         service: _service,
-        onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
+        onLogout: () =>
+            showLogoutConfirmation(context: context, onLogout: _logout),
         onNotificationTap: _openNotification,
         onDocumentsChanged: _load,
+      ),
+      ClientVisitDashboardScreen(
+        userId: widget.userId,
+        requesterRole: 'employee',
       ),
     ];
 
@@ -516,7 +526,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
               ),
             );
           },
-          onLogout: () => showLogoutConfirmation(context: context, onLogout: _logout),
+          onLogout: () =>
+              showLogoutConfirmation(context: context, onLogout: _logout),
         ),
         body: ConstellationBackground(
           accentColor: EmployeeColors.blue,
@@ -625,6 +636,12 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
                             Icons.approval_outlined,
                             Icons.approval_rounded,
                             'Approvals',
+                          ),
+                          _navItem(
+                            5,
+                            Icons.add_location_alt_outlined,
+                            Icons.add_location_alt_rounded,
+                            'Client Visits',
                           ),
                           _navItem(
                             4,

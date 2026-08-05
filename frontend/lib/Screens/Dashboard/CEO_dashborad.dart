@@ -78,6 +78,11 @@ class _CeoDashboardState extends State<CeoDashboard>
     _NavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
     _NavItem(Icons.groups_2_outlined, Icons.groups_2_rounded, 'People'),
     _NavItem(Icons.approval_outlined, Icons.approval_rounded, 'Approvals'),
+    _NavItem(
+      Icons.add_location_alt_outlined,
+      Icons.add_location_alt_rounded,
+      'Client Visits',
+    ),
     _NavItem(Icons.more_horiz_outlined, Icons.more_horiz_rounded, 'More'),
   ];
 
@@ -164,7 +169,8 @@ class _CeoDashboardState extends State<CeoDashboard>
     );
   }
 
-  void _requestLogout() => showLogoutConfirmation(context: context, onLogout: _logout);
+  void _requestLogout() =>
+      showLogoutConfirmation(context: context, onLogout: _logout);
 
   Future<void> _openPage(Widget page) async {
     final result = await Navigator.of(
@@ -708,10 +714,19 @@ class _CeoDashboardState extends State<CeoDashboard>
             _openPage(_BranchPerformanceDynamicPage(userId: widget.userId)),
         onCreateMember: () =>
             _openPage(CeoCreateAdminsPage(createdBy: widget.userId)),
+        onOpenClientVisits: () => _selectTab(3),
         onNavigate: _selectTab,
       ),
       _EmployeeDirectoryDynamicPage(userId: widget.userId, embedded: true),
       _ApprovalsView(userId: widget.userId),
+      ClientVisitDashboardScreen(
+        userId: widget.userId,
+        reviewerMode: true,
+        requesterRole: 'ceo',
+        allowCreate: false,
+        assignedApprovalsOnly: true,
+        allowVerification: false,
+      ),
       _MoreView(
         onClientVisits: () => _openPage(
           ClientVisitModuleScreen(
@@ -784,6 +799,7 @@ class _CeoDashboardState extends State<CeoDashboard>
       'CEO Dashboard',
       'People Intelligence',
       'Approvals Center',
+      'Client Visits',
       '',
     ];
 
@@ -841,6 +857,7 @@ class _DashboardView extends StatefulWidget {
   final VoidCallback onOpenDepartment;
   final VoidCallback onOpenBranch;
   final VoidCallback onCreateMember;
+  final VoidCallback onOpenClientVisits;
   final ValueChanged<int> onNavigate;
 
   const _DashboardView({
@@ -860,6 +877,7 @@ class _DashboardView extends StatefulWidget {
     required this.onOpenDepartment,
     required this.onOpenBranch,
     required this.onCreateMember,
+    required this.onOpenClientVisits,
     required this.onNavigate,
   });
 
@@ -979,6 +997,46 @@ class _DashboardViewState extends State<_DashboardView> {
               ),
               trendPoints: _numberList(attendanceHealth['weekly_scores']),
               onTap: widget.onOpenAnalytics,
+            ),
+            const SizedBox(height: 14),
+            _GlassCard(
+              onTap: widget.onOpenClientVisits,
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: _CeoDashboardState._cyan.withAlpha(28),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.add_location_alt_rounded,
+                      color: _CeoDashboardState._cyan,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Quick Action',
+                          style: _CeoText.mutedFor(context, 10),
+                        ),
+                        Text(
+                          'Client Visits',
+                          style: _CeoText.titleFor(context, 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: _CeoDashboardState._cyan,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 14),
             _ApprovalsExecutiveCard(
@@ -12546,9 +12604,7 @@ class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
           allowCreate: false,
           assignedApprovalsOnly: true,
           allowVerification: false,
-          initialVisitId: int.tryParse(
-            '${notification['reference_id'] ?? ''}',
-          ),
+          initialVisitId: int.tryParse('${notification['reference_id'] ?? ''}'),
         ),
       ),
     );
@@ -12697,8 +12753,8 @@ class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
                   _notificationColor(type),
                   onTap: switch (_displayText(map['module'])) {
                     'approval' => () => _openApprovalNotification(map),
-                    'client_visit' || 'client-visit' =>
-                      () => _openClientVisitNotification(map),
+                    'client_visit' ||
+                    'client-visit' => () => _openClientVisitNotification(map),
                     _ => null,
                   },
                 );
@@ -12943,49 +12999,50 @@ class _MeetingsDynamicPageState extends State<_MeetingsDynamicPage> {
                         minimum: const EdgeInsets.only(bottom: 12),
                         child: FilledButton.icon(
                           onPressed: () {
-                          final title = titleController.text.trim();
-                          if (title.isEmpty || selectedIds.isEmpty) {
-                            ScaffoldMessenger.of(sheetContext).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Enter title and select at least one user.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-                          final meetingLink = linkController.text.trim();
-                          if (meetingLink.isEmpty) {
-                            ScaffoldMessenger.of(sheetContext).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  platform == 'Office' || platform == 'In Person'
-                                      ? 'Enter the meeting room or office location.'
-                                      : 'Paste the unique attendee meeting link.',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-                          Navigator.pop(sheetContext, {
-                            'title': title,
-                            'platform': platform,
-                            'meeting_platform': platform,
-                            'meeting_type': platform,
-                            'meeting_link': meetingLink,
-                            'location': meetingLink,
-                            'date_label': _dateLabel(selectedDate),
-                            'time_label': _timeLabel(selectedTime),
-                            'duration': durationController.text.trim(),
-                            'description': descriptionController.text.trim(),
-                            'participants': options
-                                .where(
-                                  (person) => selectedIds.contains(
-                                    _displayText(person['id']),
+                            final title = titleController.text.trim();
+                            if (title.isEmpty || selectedIds.isEmpty) {
+                              ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Enter title and select at least one user.',
                                   ),
-                                )
-                                .toList(),
-                          });
+                                ),
+                              );
+                              return;
+                            }
+                            final meetingLink = linkController.text.trim();
+                            if (meetingLink.isEmpty) {
+                              ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    platform == 'Office' ||
+                                            platform == 'In Person'
+                                        ? 'Enter the meeting room or office location.'
+                                        : 'Paste the unique attendee meeting link.',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+                            Navigator.pop(sheetContext, {
+                              'title': title,
+                              'platform': platform,
+                              'meeting_platform': platform,
+                              'meeting_type': platform,
+                              'meeting_link': meetingLink,
+                              'location': meetingLink,
+                              'date_label': _dateLabel(selectedDate),
+                              'time_label': _timeLabel(selectedTime),
+                              'duration': durationController.text.trim(),
+                              'description': descriptionController.text.trim(),
+                              'participants': options
+                                  .where(
+                                    (person) => selectedIds.contains(
+                                      _displayText(person['id']),
+                                    ),
+                                  )
+                                  .toList(),
+                            });
                           },
                           icon: const Icon(Icons.notifications_active_rounded),
                           label: const Text('Schedule & Notify Users'),

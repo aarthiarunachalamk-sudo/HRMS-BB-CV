@@ -37,6 +37,7 @@ enum _MdStep {
   meetings,
   reports,
   approvals,
+  clientVisits,
   more,
   calendar,
   time,
@@ -85,6 +86,16 @@ class MdDashboard extends StatefulWidget {
     this.initialScreen = MdDashboardScreen.dashboard,
     this.role = 'md',
   });
+
+  /// Explicit ED entry point. It shares the executive dashboard layout while
+  /// keeping Client Visits in Director read-only monitoring mode.
+  const MdDashboard.executiveDirector({
+    super.key,
+    required this.email,
+    required this.firstName,
+    required this.userId,
+    this.initialScreen = MdDashboardScreen.dashboard,
+  }) : role = 'director';
 
   @override
   State<MdDashboard> createState() => _MdDashboardState();
@@ -342,6 +353,7 @@ class _MdDashboardState extends State<MdDashboard> {
                         _MdStep.meetings,
                         _MdStep.reports,
                         _MdStep.approvals,
+                        _MdStep.clientVisits,
                         _MdStep.more,
                       ][index];
                     });
@@ -367,7 +379,8 @@ class _MdDashboardState extends State<MdDashboard> {
             _MdStep.list: 3,
             _MdStep.reports: 4,
             _MdStep.approvals: 5,
-            _MdStep.more: 6,
+            _MdStep.clientVisits: 6,
+            _MdStep.more: 7,
           }[step] ??
           0;
     });
@@ -435,7 +448,8 @@ class _MdDashboardState extends State<MdDashboard> {
                   _MdStep.meetings: 3,
                   _MdStep.reports: 4,
                   _MdStep.approvals: 5,
-                  _MdStep.more: 6,
+                  _MdStep.clientVisits: 6,
+                  _MdStep.more: 7,
                 }[step] ??
                 0;
           }),
@@ -519,6 +533,13 @@ class _MdDashboardState extends State<MdDashboard> {
             ),
           ],
         );
+      case _MdStep.clientVisits:
+        return ClientVisitDashboardScreen(
+          userId: widget.userId,
+          readOnlyMode: true,
+          allowCreate: false,
+          requesterRole: _isDirector ? 'director' : 'md',
+        );
       case _MdStep.more:
         return _MdMorePage(
           colors: colors,
@@ -537,7 +558,8 @@ class _MdDashboardState extends State<MdDashboard> {
                   _MdStep.meetings: 3,
                   _MdStep.reports: 4,
                   _MdStep.approvals: 5,
-                  _MdStep.more: 6,
+                  _MdStep.clientVisits: 6,
+                  _MdStep.more: 7,
                 }[step] ??
                 0;
           }),
@@ -1037,6 +1059,12 @@ class _MdRoleDashboardContent extends StatelessWidget {
               icon: Icons.analytics_outlined,
               label: 'Analytics',
               onTap: () => onNavigate(_MdStep.analytics),
+            ),
+            _ActionButton(
+              colors: colors,
+              icon: Icons.add_location_alt_rounded,
+              label: 'Client Visits',
+              onTap: () => onNavigate(_MdStep.clientVisits),
             ),
             _ActionButton(
               colors: colors,
@@ -2713,6 +2741,7 @@ class _BottomNav extends StatelessWidget {
       _BottomNavEntry(Icons.calendar_today_outlined, 'Meetings'),
       _BottomNavEntry(Icons.description_outlined, 'Reports'),
       _BottomNavEntry(Icons.verified_outlined, 'Approvals'),
+      _BottomNavEntry(Icons.add_location_alt_outlined, 'Client Visits'),
       _BottomNavEntry(Icons.more_horiz_rounded, 'More'),
     ];
     return Container(

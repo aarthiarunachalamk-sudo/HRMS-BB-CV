@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/MD/md_dashboard.dart';
 
-/// Dedicated Executive Director dashboard entry point.
+/// Dedicated Executive Director dashboard entry point with the shared
+/// Client Visits tab and Quick Action in read-only monitoring mode.
 class ExecutiveDirectorDashboard extends StatelessWidget {
   final String email;
   final String firstName;
@@ -16,11 +17,10 @@ class ExecutiveDirectorDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MdDashboard(
+    return MdDashboard.executiveDirector(
       email: email,
       firstName: firstName,
       userId: userId,
-      role: 'director',
     );
   }
 }

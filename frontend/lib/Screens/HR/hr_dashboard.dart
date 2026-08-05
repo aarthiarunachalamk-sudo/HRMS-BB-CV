@@ -184,6 +184,11 @@ class _HrDashboardState extends State<HrDashboard> {
                 onLogout: () =>
                     showLogoutConfirmation(context: context, onLogout: _logout),
               ),
+              ClientVisitDashboardScreen(
+                userId: widget.userId,
+                reviewerMode: true,
+                requesterRole: 'hr',
+              ),
             ];
 
             return Scaffold(
@@ -725,6 +730,12 @@ class _HrHome extends StatelessWidget {
               color: c.purple,
               onTap: () => onOpen(5),
             ),
+            _Action(
+              icon: Icons.add_location_alt_rounded,
+              label: 'Client Visits',
+              color: c.primary,
+              onTap: () => onOpen(16),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -1083,17 +1094,17 @@ class _HrDrawer extends StatelessWidget {
                     ),
                     onTap: onClientVisits,
                   ),
-                  ...List.generate(_titles.length, (index) {
+                  ...List.generate(_titles.length - 1, (index) {
                     return ListTile(
-                    leading: Icon(_icons[index], color: c.primary, size: 19),
-                    title: Text(
-                      _titles[index],
-                      style: TextStyle(
-                        color: c.text,
-                        fontWeight: FontWeight.w700,
+                      leading: Icon(_icons[index], color: c.primary, size: 19),
+                      title: Text(
+                        _titles[index],
+                        style: TextStyle(
+                          color: c.text,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    onTap: () => onTap(index),
+                      onTap: () => onTap(index),
                     );
                   }),
                 ],
@@ -1134,7 +1145,7 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [0, 2, 3, 10, 15];
+    final items = [0, 2, 3, 16, 10, 15];
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
@@ -1197,6 +1208,7 @@ const _titles = [
   'Training',
   'Tasks',
   'Profile',
+  'Client Visits',
 ];
 
 const _icons = [
@@ -1216,4 +1228,5 @@ const _icons = [
   Icons.school_rounded,
   Icons.task_alt_rounded,
   Icons.account_circle_rounded,
+  Icons.add_location_alt_rounded,
 ];

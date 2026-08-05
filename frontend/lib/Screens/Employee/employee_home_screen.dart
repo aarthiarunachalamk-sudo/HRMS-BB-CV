@@ -56,9 +56,7 @@ class EmployeeHomeScreen extends StatelessWidget {
     final circlePrimaryText = attendanceCompleted
         ? workingHours
         : attendanceStatus;
-    final circleSecondaryText = attendanceCompleted
-        ? 'Working Hours'
-        : 'Today';
+    final circleSecondaryText = attendanceCompleted ? 'Working Hours' : 'Today';
     final unreadNotifications = data.notifications
         .where((item) => item['is_read'] != true)
         .length;
@@ -257,7 +255,7 @@ class EmployeeHomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           GridView.count(
-            crossAxisCount: 4,
+            crossAxisCount: 3,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 10,
@@ -318,7 +316,14 @@ class EmployeeHomeScreen extends StatelessWidget {
                 Icons.settings_rounded,
                 'More',
                 EmployeeColors.pink,
-                () => onTabSelected(3),
+                () => onTabSelected(4),
+              ),
+              _action(
+                context,
+                Icons.add_location_alt_rounded,
+                'Client Visits',
+                EmployeeColors.blue,
+                () => onTabSelected(5),
               ),
             ],
           ),
