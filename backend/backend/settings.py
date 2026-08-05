@@ -19,11 +19,21 @@ import cloudinary
 load_dotenv()
 
 # All Cloudinary uploads (HRMS profiles, documents, and client visits) use
-# the single client-visit Cloudinary account. The legacy CLOUDINARY_* vars
-# are no longer used; configure CLIENT_VISIT_CLOUDINARY_* in .env instead.
-_cv_cloud_name = os.getenv('CLIENT_VISIT_CLOUDINARY_CLOUD_NAME', '').strip()
-_cv_api_key = os.getenv('CLIENT_VISIT_CLOUDINARY_API_KEY', '').strip()
-_cv_api_secret = os.getenv('CLIENT_VISIT_CLOUDINARY_API_SECRET', '').strip()
+# the same single Cloudinary account. Reads CLIENT_VISIT_CLOUDINARY_* first,
+# then falls back to CLOUDINARY_* so existing Render / server env vars
+# continue to work without any dashboard changes.
+_cv_cloud_name = (
+    os.getenv('CLIENT_VISIT_CLOUDINARY_CLOUD_NAME', '').strip()
+    or os.getenv('CLOUDINARY_CLOUD_NAME', '').strip()
+)
+_cv_api_key = (
+    os.getenv('CLIENT_VISIT_CLOUDINARY_API_KEY', '').strip()
+    or os.getenv('CLOUDINARY_API_KEY', '').strip()
+)
+_cv_api_secret = (
+    os.getenv('CLIENT_VISIT_CLOUDINARY_API_SECRET', '').strip()
+    or os.getenv('CLOUDINARY_API_SECRET', '').strip()
+)
 
 cloudinary.config(
     cloud_name=_cv_cloud_name,
