@@ -105,6 +105,43 @@ class ClientVisitApiTests(APITestCase):
             {item['id'] for item in listing.data['visits']},
         )
 
+    def test_team_lead_sees_only_hr_approvers_and_cannot_assign_a_tl(self):
+        requester = User.objects.create_user(
+            'client-visit-requester-tl-filter@example.com',
+            role='tl',
+        )
+        hr = User.objects.create_user(
+            'client-visit-hr-filter@example.com',
+            role='hr',
+        )
+        approvers = self.client.get('/api/client-visits/approvers/', {
+            'user_id': requester.user_id,
+        })
+        self.assertEqual(approvers.status_code, 200)
+        self.assertEqual(
+            {item['employee_id'] for item in approvers.data['approvers']},
+            {hr.user_id},
+        )
+
+        response = self.client.post('/api/client-visits/', {
+            'user_id': requester.user_id,
+            'manager_user_id': self.manager.user_id,
+            'client_name': 'Kumarapa Silks',
+            'contact_person': 'Bhanu',
+            'contact_phone': '9572646433',
+            'address': 'Omalur',
+            'scheduled_date': '2026-08-10',
+            'scheduled_time': '13:00',
+            'purpose': 'Client project discussion',
+            'submit': True,
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('HR approver was not found', response.data['message'])
+        self.assertFalse(ClientVisit.objects.filter(
+            employee_user_id=requester.user_id,
+            client_name='Kumarapa Silks',
+        ).exists())
+
     def test_contact_mobile_number_is_validated_and_normalized(self):
         invalid = self.client.post('/api/client-visits/', {
             'user_id': self.employee.user_id,

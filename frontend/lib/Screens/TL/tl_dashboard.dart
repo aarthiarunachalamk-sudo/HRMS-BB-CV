@@ -243,6 +243,7 @@ class _TLDashboardState extends State<TLDashboard> {
                         body: ClientVisitDashboardScreen(
                           userId: widget.userId,
                           reviewerMode: true,
+                          requesterRole: 'tl',
                         ),
                       ),
                     ),

@@ -27,11 +27,13 @@ class ClientVisitDashboardScreen extends StatefulWidget {
   final String userId;
   final bool reviewerMode;
   final bool readOnlyMode;
+  final String requesterRole;
   const ClientVisitDashboardScreen({
     super.key,
     required this.userId,
     this.reviewerMode = false,
     this.readOnlyMode = false,
+    this.requesterRole = '',
   });
 
   @override
@@ -71,7 +73,11 @@ class _ClientVisitDashboardScreenState
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) =>
-            ClientVisitCreateScreen(userId: widget.userId, service: _service),
+            ClientVisitCreateScreen(
+              userId: widget.userId,
+              service: _service,
+              requesterRole: widget.requesterRole,
+            ),
       ),
     );
     if (changed == true) _load();
@@ -250,10 +256,12 @@ class _ClientVisitDashboardScreenState
 class ClientVisitCreateScreen extends StatefulWidget {
   final String userId;
   final ClientVisitService service;
+  final String requesterRole;
   const ClientVisitCreateScreen({
     super.key,
     required this.userId,
     required this.service,
+    this.requesterRole = '',
   });
   @override
   State<ClientVisitCreateScreen> createState() =>
@@ -287,7 +295,10 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   Future<void> _loadReportingTls() async {
     setState(() => _tlLoadError = null);
     try {
-      final values = await widget.service.fetchVisitApprovers(widget.userId);
+      final values = await widget.service.fetchVisitApprovers(
+        widget.userId,
+        hrOnly: widget.requesterRole == 'tl',
+      );
       if (!mounted) return;
       setState(() {
         _visitApprovers = values;
@@ -491,8 +502,10 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   initialValue: _selectedManagerId,
                   validator: _required,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'TL / HR approver',
+                  decoration: InputDecoration(
+                    labelText: widget.requesterRole == 'tl'
+                        ? 'HR approver'
+                        : 'TL / HR approver',
                   ),
                   items: _visitApprovers
                       .map(
@@ -514,10 +527,18 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   controller: _manager,
                   validator: _required,
                   decoration: InputDecoration(
-                    labelText: 'TL / HR approver user ID',
-                    hintText: 'Example: BBTL0001 or BBHR0001',
+                    labelText: widget.requesterRole == 'tl'
+                        ? 'HR approver user ID'
+                        : 'TL / HR approver user ID',
+                    hintText: widget.requesterRole == 'tl'
+                        ? 'Example: BBHR0001'
+                        : 'Example: BBTL0001 or BBHR0001',
                     helperText: _tlLoadError == null
-                        ? 'Loading TL and HR approvers…'
+                        ? widget.requesterRole == 'tl'
+                              ? 'Loading HR approvers…'
+                              : 'Loading TL and HR approvers…'
+                        : widget.requesterRole == 'tl'
+                        ? 'HR list unavailable. Enter an HR user ID.'
                         : 'Approver list unavailable. Enter a TL/HR user ID.',
                     suffixIcon: _tlLoadError == null
                         ? const Padding(
@@ -528,7 +549,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                             ),
                           )
                         : IconButton(
-                            tooltip: 'Reload TL/HR approvers',
+                            tooltip: widget.requesterRole == 'tl'
+                                ? 'Reload HR approvers'
+                                : 'Reload TL/HR approvers',
                             onPressed: _loadReportingTls,
                             icon: const Icon(Icons.refresh),
                           ),

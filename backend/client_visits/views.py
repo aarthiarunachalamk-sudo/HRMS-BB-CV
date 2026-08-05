@@ -92,12 +92,15 @@ def _safe_notify_visit_submitted(visit):
         logger.exception('Unable to send submitted Client Visit notifications for %s', visit.pk)
 
 
-def _resolve_reporting_manager(value):
+def _resolve_reporting_manager(value, *, requester=None):
     raw = str(value or '').strip()
     if not raw:
         return None, ''
+    approver_roles = {'hr'} if requester and requester.role == 'tl' else {
+        'manager', 'tl', 'hr',
+    }
     supervisors = User.objects.filter(
-        role__in={'manager', 'tl', 'hr'},
+        role__in=approver_roles,
         is_active=True,
     )
     direct = supervisors.filter(
@@ -116,6 +119,8 @@ def _resolve_reporting_manager(value):
         return name_matches[0], ''
     if len(name_matches) > 1:
         return None, 'More than one approver has this name. Select the approver user ID.'
+    if requester and requester.role == 'tl':
+        return None, 'HR approver was not found. Select a valid HR approver.'
     return None, 'TL/HR approver was not found. Select a valid approver.'
 
 
@@ -136,8 +141,9 @@ def visit_approvers(request):
         return _error('An active user_id is required.', 401)
     approvers = []
     role_order = {'tl': 0, 'hr': 1}
+    approver_roles = {'hr'} if user.role == 'tl' else {'tl', 'hr'}
     queryset = User.objects.filter(
-        role__in={'tl', 'hr'},
+        role__in=approver_roles,
         is_active=True,
     ).order_by('role', 'first_name', 'last_name', 'user_id')
     for approver in queryset:
@@ -279,7 +285,8 @@ def visit_list_create(request):
     if phone_error:
         return _error(phone_error)
     reporting_manager, manager_error = _resolve_reporting_manager(
-        request.data.get('manager_user_id')
+        request.data.get('manager_user_id'),
+        requester=user,
     )
     if manager_error:
         return _error(manager_error)
@@ -322,7 +329,8 @@ def visit_detail(request, pk):
     reporting_manager = None
     if 'manager_user_id' in request.data:
         reporting_manager, manager_error = _resolve_reporting_manager(
-            request.data.get('manager_user_id')
+            request.data.get('manager_user_id'),
+            requester=user,
         )
         if manager_error:
             return _error(manager_error)
