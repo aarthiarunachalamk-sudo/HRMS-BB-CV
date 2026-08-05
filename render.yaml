@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: hrms-bitbyte-mobileapp
+    name: hrms_bitbyte_mobileapp-1
     runtime: python
     plan: free
     rootDir: backend
@@ -11,7 +11,7 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: CLIENT_VISIT_CLOUDINARY_CLOUD_NAME
-        value: dydd8vegt
+        value: duc0r8bd5
       - key: CLIENT_VISIT_CLOUDINARY_API_KEY
         sync: false
       - key: CLIENT_VISIT_CLOUDINARY_API_SECRET

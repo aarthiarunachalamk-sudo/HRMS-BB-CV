@@ -13,13 +13,9 @@ def client_visit_storage_config():
             'Dedicated Client Visit Cloudinary storage is not configured. '
             f"Missing: {', '.join(missing)}."
         )
-    primary_cloud = str(cloudinary.config().cloud_name or '').strip()
-    visit_cloud = str(config['cloud_name']).strip()
-    if primary_cloud and visit_cloud == primary_cloud:
-        raise ImproperlyConfigured(
-            'Client Visit Cloudinary must use a different cloud name from '
-            'the existing HRMS Cloudinary account.'
-        )
+    # A dedicated account is preferred, but an explicitly configured shared
+    # account is also supported. Client Visit media remains isolated by its
+    # required top-level folder and per-visit/category subfolders.
     config['folder'] = str(config.get('folder') or 'hrms-client-visits').strip('/')
     return config
 
