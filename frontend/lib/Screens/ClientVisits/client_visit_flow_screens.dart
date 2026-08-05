@@ -538,6 +538,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       return;
     }
     await _run(() async {
+      final selfie = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        imageQuality: 82,
+      );
+      if (selfie == null) {
+        throw Exception('A checkout selfie is required to complete the duty.');
+      }
+      await widget.service.uploadFiles(widget.userId, widget.visitId, 'proof', [
+        selfie.path,
+      ]);
       await widget.service.action(widget.userId, widget.visitId, 'complete', {
         ...await _position(),
         'outcome': _outcome.text.trim(),
@@ -619,9 +629,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     final visit = _visit;
     return ClientVisitTheme(
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(_title(widget.step)),
-        ),
+        appBar: AppBar(title: Text(_title(widget.step))),
         body: _error != null
             ? _stateMessage(Icons.error_outline, _error!, _load)
             : visit == null
@@ -692,10 +700,17 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     ],
     4 => [
       if (visit.status == 'approved') ...[
-        _stageBadge('APPROVED', ClientVisitColors.green),
+        _stageBadge(
+          _approvalBadgeLabel(visit.approvedByRole),
+          ClientVisitColors.green,
+        ),
         const SizedBox(height: 12),
       ],
       _visitInfo(visit),
+      if (visit.status == 'approved') ...[
+        const SizedBox(height: 12),
+        _approvalInfo(visit),
+      ],
       const SizedBox(height: 12),
       if (widget.readOnlyMode)
         _monitoringNotice()
@@ -876,14 +891,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   ),
                 ),
                 IconButton(
-                  onPressed: widget.readOnlyMode ? null : () {
-                    if (_attendee.text.trim().isNotEmpty) {
-                      setState(() {
-                        _attendees.add(_attendee.text.trim());
-                        _attendee.clear();
-                      });
-                    }
-                  },
+                  onPressed: widget.readOnlyMode
+                      ? null
+                      : () {
+                          if (_attendee.text.trim().isNotEmpty) {
+                            setState(() {
+                              _attendees.add(_attendee.text.trim());
+                              _attendee.clear();
+                            });
+                          }
+                        },
                   icon: const Icon(Icons.person_add),
                 ),
               ],
@@ -1117,84 +1134,82 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         : const Color(0xFFEAF3FC);
     return Row(
       children: [
-      Expanded(
-        child: Container(
-          height: 132,
-          decoration: BoxDecoration(
-            color: neutralSurface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: border),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircleAvatar(
-                radius: 28,
-                backgroundColor: Color(0xFFE2EEFF),
-                child: Icon(
-                  Icons.person_rounded,
-                  color: ClientVisitColors.navy,
-                  size: 34,
+        Expanded(
+          child: Container(
+            height: 132,
+            decoration: BoxDecoration(
+              color: neutralSurface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Color(0xFFE2EEFF),
+                  child: Icon(
+                    Icons.person_rounded,
+                    color: ClientVisitColors.navy,
+                    size: 34,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Selfie',
-                style: TextStyle(
-                  color: text,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
+                const SizedBox(height: 8),
+                Text(
+                  'Selfie',
+                  style: TextStyle(
+                    color: text,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              const Icon(
-                Icons.camera_alt,
-                color: ClientVisitColors.blue,
-                size: 18,
-              ),
-            ],
-          ),
-        ),
-      ),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Container(
-          height: 132,
-          decoration: BoxDecoration(
-            color: mapSurface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: border),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.location_on_rounded,
-                color: ClientVisitColors.blue,
-                size: 42,
-              ),
-              const SizedBox(height: 7),
-              Text(
-                'GPS Location',
-                style: TextStyle(
-                  color: text,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
+                const Icon(
+                  Icons.camera_alt,
+                  color: ClientVisitColors.blue,
+                  size: 18,
                 ),
-              ),
-              Text(
-                'Live location required',
-                style: TextStyle(
-                  color: muted,
-                  fontSize: 10,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Container(
+            height: 132,
+            decoration: BoxDecoration(
+              color: mapSurface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.location_on_rounded,
+                  color: ClientVisitColors.blue,
+                  size: 42,
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  'GPS Location',
+                  style: TextStyle(
+                    color: text,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  'Live location required',
+                  style: TextStyle(color: muted, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
+
   Widget _stepHeader(ClientVisit visit) => Row(
     children: [
       CircleAvatar(
@@ -1241,6 +1256,22 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         EmployeeInfoRow('Purpose', visit.purpose),
         EmployeeInfoRow('Travel mode', _label(visit.travelMode)),
         Align(alignment: Alignment.centerLeft, child: Text(visit.address)),
+      ],
+    ),
+  );
+  Widget _approvalInfo(ClientVisit visit) => EmployeeCard(
+    child: Column(
+      children: [
+        EmployeeInfoRow(
+          'Approved by',
+          visit.approvedByName.isNotEmpty
+              ? '${_approverRoleLabel(visit.approvedByRole)} - ${visit.approvedByName}'
+              : _approverRoleLabel(visit.approvedByRole),
+        ),
+        if (visit.approvedAt != null)
+          EmployeeInfoRow('Approved at', _dateTime(visit.approvedAt!)),
+        if (visit.approvalComment.isNotEmpty)
+          EmployeeInfoRow('Comment', visit.approvalComment),
       ],
     ),
   );
@@ -1310,7 +1341,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           visit.checkInAt == null
               ? '—'
               : _duration(
-                  DateTime.now().difference(visit.checkInAt!.toLocal()),
+                  (visit.checkOutAt ?? DateTime.now()).toLocal().difference(
+                    visit.checkInAt!.toLocal(),
+                  ),
                 ),
         ),
         EmployeeInfoRow('Attendees', '${visit.attendees.length}'),
@@ -1451,40 +1484,44 @@ class _RouteMapPreview extends StatelessWidget {
         border: Border.all(color: ThemeConfig.getCardBorder(context)),
       ),
       child: Stack(
-      children: [
-        Positioned.fill(
-          child: CustomPaint(painter: _RoutePainter(isDark: isDark)),
-        ),
-        const Positioned(
-          left: 18,
-          top: 24,
-          child: Icon(Icons.location_on, color: ClientVisitColors.green),
-        ),
-        const Positioned(
-          right: 20,
-          bottom: 28,
-          child: Icon(Icons.location_on, color: ClientVisitColors.red, size: 34),
-        ),
-        Positioned(
-          right: 10,
-          top: 10,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: ThemeConfig.getCardBg(context),
-              borderRadius: BorderRadius.circular(20),
+        children: [
+          Positioned.fill(
+            child: CustomPaint(painter: _RoutePainter(isDark: isDark)),
+          ),
+          const Positioned(
+            left: 18,
+            top: 24,
+            child: Icon(Icons.location_on, color: ClientVisitColors.green),
+          ),
+          const Positioned(
+            right: 20,
+            bottom: 28,
+            child: Icon(
+              Icons.location_on,
+              color: ClientVisitColors.red,
+              size: 34,
             ),
-            child: const Text(
-              'LIVE',
-              style: TextStyle(
-                color: ClientVisitColors.blue,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
+          ),
+          Positioned(
+            right: 10,
+            top: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: ThemeConfig.getCardBg(context),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'LIVE',
+                style: TextStyle(
+                  color: ClientVisitColors.blue,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -1562,5 +1599,22 @@ String _label(String value) => value
     .join(' ');
 String _date(DateTime value) =>
     '${value.day.toString().padLeft(2, '0')}-${value.month.toString().padLeft(2, '0')}-${value.year}';
+String _dateTime(DateTime value) {
+  final local = value.toLocal();
+  return '${_date(local)} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+}
+
+String _approverRoleLabel(String role) => switch (role.toLowerCase()) {
+  'hr' => 'HR',
+  'ceo' => 'CEO',
+  'tl' => 'TL',
+  'manager' => 'MANAGER',
+  'admin' => 'ADMIN',
+  'superadmin' => 'SUPER ADMIN',
+  _ => 'Approver',
+};
+String _approvalBadgeLabel(String role) => role.trim().isEmpty
+    ? 'APPROVED'
+    : '${_approverRoleLabel(role).toUpperCase()} APPROVED';
 String _duration(Duration value) =>
     '${value.inHours.toString().padLeft(2, '0')}:${(value.inMinutes % 60).toString().padLeft(2, '0')}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';

@@ -15,6 +15,10 @@ class ClientVisit {
   final String notes;
   final String status;
   final String approvalComment;
+  final String approvedBy;
+  final String approvedByName;
+  final String approvedByRole;
+  final DateTime? approvedAt;
   final String outcome;
   final String followUp;
   final DateTime? officeCheckOutAt;
@@ -46,6 +50,10 @@ class ClientVisit {
     required this.notes,
     required this.status,
     required this.approvalComment,
+    required this.approvedBy,
+    required this.approvedByName,
+    required this.approvedByRole,
+    required this.approvedAt,
     required this.outcome,
     required this.followUp,
     required this.officeCheckOutAt,
@@ -81,6 +89,10 @@ class ClientVisit {
       notes: '${json['notes'] ?? ''}',
       status: '${json['status'] ?? 'draft'}',
       approvalComment: '${json['approval_comment'] ?? ''}',
+      approvedBy: '${json['approved_by'] ?? ''}',
+      approvedByName: '${json['approved_by_name'] ?? ''}',
+      approvedByRole: '${json['approved_by_role'] ?? ''}',
+      approvedAt: DateTime.tryParse('${json['approved_at'] ?? ''}'),
       outcome: '${json['outcome'] ?? ''}',
       followUp: '${json['follow_up'] ?? ''}',
       officeCheckOutAt: DateTime.tryParse(

@@ -258,6 +258,17 @@ def _attachment_payload(item):
 
 
 def _visit_payload(item, detailed=True):
+    approver = None
+    if detailed and item.approved_by:
+        approver = User.objects.filter(
+            user_id=item.approved_by,
+            is_active=True,
+        ).only('role', 'first_name', 'last_name', 'email').first()
+    approver_name = ''
+    approver_role = ''
+    if approver:
+        approver_name = f'{approver.first_name} {approver.last_name}'.strip() or approver.email
+        approver_role = approver.role
     payload = {
         'id': item.id, 'visit_id': item.visit_id, 'employee_user_id': item.employee_user_id,
         'employee_name': item.employee_name, 'manager_user_id': item.manager_user_id,
@@ -270,6 +281,8 @@ def _visit_payload(item, detailed=True):
         'duration_minutes': item.duration_minutes, 'travel_mode': item.travel_mode,
         'purpose': item.purpose, 'notes': item.notes, 'status': item.status,
         'approval_comment': item.approval_comment, 'approved_by': item.approved_by,
+        'approved_by_name': approver_name, 'approved_by_role': approver_role,
+        'approved_at': item.approved_at.isoformat() if item.approved_at else None,
         'office_check_out_at': item.office_check_out_at.isoformat() if item.office_check_out_at else None,
         'reached_client_at': item.reached_client_at.isoformat() if item.reached_client_at else None,
         'start_odometer': float(item.start_odometer) if item.start_odometer is not None else None,
@@ -433,11 +446,24 @@ def visit_approval(request, pk):
     visit.approved_by = user_id
     visit.approved_at = timezone.now()
     visit.save()
+    actor_label = {
+        'hr': 'HR', 'ceo': 'CEO', 'tl': 'TL', 'manager': 'Manager',
+        'admin': 'Admin', 'superadmin': 'Super Admin',
+    }.get(user.role, user.role.upper())
     message = 'Visit approved.' if action == 'approve' else 'Visit returned for changes.'
+    notification_message = (
+        f'Visit approved by {actor_label}.'
+        if action == 'approve'
+        else f'Visit returned for changes by {actor_label}.'
+    )
     _notify_visit_progress(
         visit,
-        title='Client Visit Approved' if action == 'approve' else 'Client Visit Changes Required',
-        message=f'{visit.visit_id} for {visit.client_name}: {message} {visit.approval_comment}'.strip(),
+        title=(
+            f'{actor_label} Approved Client Visit'
+            if action == 'approve'
+            else f'{actor_label} Requested Client Visit Changes'
+        ),
+        message=f'{visit.visit_id} for {visit.client_name}: {notification_message} {visit.approval_comment}'.strip(),
         notification_type='success' if action == 'approve' else 'warning',
         include_employee=True,
     )

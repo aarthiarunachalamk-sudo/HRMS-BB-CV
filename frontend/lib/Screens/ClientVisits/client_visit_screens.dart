@@ -99,21 +99,17 @@ class _ClientVisitDashboardScreenState
   Future<void> _create() async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) =>
-            ClientVisitCreateScreen(
-              userId: widget.userId,
-              service: _service,
-              requesterRole: widget.requesterRole,
-            ),
+        builder: (_) => ClientVisitCreateScreen(
+          userId: widget.userId,
+          service: _service,
+          requesterRole: widget.requesterRole,
+        ),
       ),
     );
     if (changed == true) _load();
   }
 
-  Future<void> _openStatusList(
-    String title,
-    Set<String> statuses,
-  ) async {
+  Future<void> _openStatusList(String title, Set<String> statuses) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => _ClientVisitStatusListScreen(
@@ -130,7 +126,7 @@ class _ClientVisitDashboardScreenState
   int _currentFlowStep(ClientVisit visit) => switch (visit.status) {
     'pending' || 'rejected' || 'draft' => 3,
     'approved' => 4,
-    'travelling' => 6,
+    'travelling' => visit.reachedClientAt == null ? 6 : 7,
     'in_progress' => 8,
     'completed' => 12,
     _ => 3,
@@ -159,11 +155,18 @@ class _ClientVisitDashboardScreenState
       visitId: visit.id,
       service: _service,
     ),
-    'travelling' => ClientVisitTravelProgressScreen(
-      userId: widget.userId,
-      visitId: visit.id,
-      service: _service,
-    ),
+    'travelling' =>
+      visit.reachedClientAt == null
+          ? ClientVisitTravelProgressScreen(
+              userId: widget.userId,
+              visitId: visit.id,
+              service: _service,
+            )
+          : ClientVisitCheckInScreen(
+              userId: widget.userId,
+              visitId: visit.id,
+              service: _service,
+            ),
     'in_progress' => ClientVisitActiveScreen(
       userId: widget.userId,
       visitId: visit.id,
@@ -185,12 +188,11 @@ class _ClientVisitDashboardScreenState
     late final Widget screen;
     if (widget.readOnlyMode) {
       screen = _monitoringScreen(visit);
-    } else if (widget.reviewerMode &&
-        visit.employeeUserId == widget.userId) {
+    } else if (widget.reviewerMode && visit.employeeUserId == widget.userId) {
       screen = _employeeFlowScreen(visit);
     } else if (widget.reviewerMode) {
-      final canReview = !widget.assignedApprovalsOnly ||
-          visit.managerUserId == widget.userId;
+      final canReview =
+          !widget.assignedApprovalsOnly || visit.managerUserId == widget.userId;
       screen = visit.status == 'pending' && canReview
           ? ClientVisitManagerApprovalScreen(
               userId: widget.userId,
@@ -215,112 +217,106 @@ class _ClientVisitDashboardScreenState
       child: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'VISIT DASHBOARD',
-                      style: TextStyle(
-                        color: ThemeConfig.getTextPrimary(context),
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
+          padding: const EdgeInsets.all(16),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'VISIT DASHBOARD',
+                        style: TextStyle(
+                          color: ThemeConfig.getTextPrimary(context),
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (result != null)
+              _Summary(
+                summary: result.summary,
+                onInProgress: () => _openStatusList(
+                  'In Progress Visits',
+                  const {'travelling', 'in_progress'},
+                ),
+                onPendingCheckIn: () =>
+                    _openStatusList('Pending Check-In', const {'approved'}),
+                onUpcoming: () =>
+                    _openStatusList('Upcoming Visits', const {'approved'}),
+                onPendingApproval: () =>
+                    _openStatusList('Pending Approval', const {'pending'}),
+                onHistory: () => _openStatusList('Visit History', const {
+                  'completed',
+                  'rejected',
+                }),
+              ),
+            if (!widget.readOnlyMode && widget.allowCreate) ...[
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _create,
+                  icon: const Icon(Icons.add_location_alt_rounded),
+                  label: const Text('+ New Visit'),
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          if (result != null)
-            _Summary(
-              summary: result.summary,
-              onInProgress: () => _openStatusList(
-                'In Progress Visits',
-                const {'travelling', 'in_progress'},
-              ),
-              onPendingCheckIn: () => _openStatusList(
-                'Pending Check-In',
-                const {'approved'},
-              ),
-              onUpcoming: () => _openStatusList(
-                'Upcoming Visits',
-                const {'approved'},
-              ),
-              onPendingApproval: () => _openStatusList(
-                'Pending Approval',
-                const {'pending'},
-              ),
-              onHistory: () => _openStatusList(
-                'Visit History',
-                const {'completed', 'rejected'},
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _statuses.map((status) {
+                  final selected = status == _filter;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      selected: selected,
+                      label: Text(_label(status)),
+                      onSelected: (_) {
+                        setState(() => _filter = status);
+                        _load();
+                      },
+                    ),
+                  );
+                }).toList(),
               ),
             ),
-          if (!widget.readOnlyMode && widget.allowCreate) ...[
             const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _create,
-                icon: const Icon(Icons.add_location_alt_rounded),
-                label: const Text('+ New Visit'),
+            if (_error != null)
+              _Message(
+                icon: Icons.cloud_off_rounded,
+                text: _error!,
+                onRetry: _load,
+              )
+            else if (result == null)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (result.visits.isEmpty)
+              _Message(
+                icon: Icons.location_off_outlined,
+                text:
+                    'No ${_filter == 'all' ? '' : '${_label(_filter)} '}visits yet.',
+                onRetry: widget.readOnlyMode || !widget.allowCreate
+                    ? _load
+                    : _create,
+              )
+            else
+              ...result.visits.map(
+                (visit) =>
+                    _VisitCard(visit: visit, onTap: () => _openVisit(visit)),
               ),
-            ),
           ],
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _statuses.map((status) {
-                final selected = status == _filter;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    selected: selected,
-                    label: Text(_label(status)),
-                    onSelected: (_) {
-                      setState(() => _filter = status);
-                      _load();
-                    },
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 14),
-          if (_error != null)
-            _Message(
-              icon: Icons.cloud_off_rounded,
-              text: _error!,
-              onRetry: _load,
-            )
-          else if (result == null)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(40),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (result.visits.isEmpty)
-            _Message(
-              icon: Icons.location_off_outlined,
-              text:
-                  'No ${_filter == 'all' ? '' : '${_label(_filter)} '}visits yet.',
-              onRetry: widget.readOnlyMode || !widget.allowCreate
-                  ? _load
-                  : _create,
-            )
-          else
-            ...result.visits.map(
-              (visit) =>
-                  _VisitCard(visit: visit, onTap: () => _openVisit(visit)),
-            ),
-        ],
         ),
       ),
     );
@@ -599,204 +595,210 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   @override
   Widget build(BuildContext context) => ClientVisitTheme(
     child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Visit Request'),
-      ),
+      appBar: AppBar(title: const Text('Create Visit Request')),
       body: Form(
-      key: _formKey,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _Section(
-            title: 'Client',
-            children: [
-              TextFormField(
-                controller: _client,
-                validator: _required,
-                decoration: const InputDecoration(
-                  labelText: 'Client / company name',
-                ),
-              ),
-              TextFormField(
-                controller: _contact,
-                validator: _required,
-                decoration: const InputDecoration(labelText: 'Contact person'),
-              ),
-              TextFormField(
-                controller: _phone,
-                validator: _mobileNumber,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-                maxLength: 10,
-                decoration: const InputDecoration(
-                  labelText: 'Mobile number',
-                  hintText: '9876543210',
-                  counterText: '',
-                ),
-              ),
-              TextFormField(
-                controller: _address,
-                validator: _required,
-                maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Client address'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _Section(
-            title: 'Visit plan',
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Date'),
-                      subtitle: Text(_ymd(_date)),
-                      onTap: () async {
-                        final date = await showDatePicker(
-                          context: context,
-                          initialDate: _date,
-                          firstDate: DateTime.now().subtract(
-                            const Duration(days: 1),
-                          ),
-                          lastDate: DateTime.now().add(
-                            const Duration(days: 730),
-                          ),
-                        );
-                        if (date != null) setState(() => _date = date);
-                      },
-                    ),
-                  ),
-                  Expanded(
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Time'),
-                      subtitle: Text(_time.format(context)),
-                      onTap: () async {
-                        final time = await showTimePicker(
-                          context: context,
-                          initialTime: _time,
-                        );
-                        if (time != null) setState(() => _time = time);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: _travelMode,
-                decoration: const InputDecoration(labelText: 'Travel mode'),
-                items: const ['car', 'bike', 'public_transport', 'walk']
-                    .map(
-                      (value) => DropdownMenuItem(
-                        value: value,
-                        child: Text(_label(value)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) => setState(() => _travelMode = value!),
-              ),
-              DropdownButtonFormField<int>(
-                initialValue: _durationMinutes,
-                decoration: const InputDecoration(labelText: 'Duration'),
-                items: const [30, 60, 120, 240, 480]
-                    .map(
-                      (minutes) => DropdownMenuItem(
-                        value: minutes,
-                        child: Text(
-                          minutes < 60
-                              ? '$minutes minutes'
-                              : '${minutes ~/ 60} hour${minutes == 60 ? '' : 's'}',
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) => setState(() => _durationMinutes = value!),
-              ),
-              TextFormField(
-                controller: _purpose,
-                validator: _required,
-                decoration: const InputDecoration(labelText: 'Purpose'),
-              ),
-              if (_visitApprovers.isNotEmpty)
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedManagerId,
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _Section(
+              title: 'Client',
+              children: [
+                TextFormField(
+                  controller: _client,
                   validator: _required,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: '${_approverRoleLabel()} approver',
+                  decoration: const InputDecoration(
+                    labelText: 'Client / company name',
                   ),
-                  items: _visitApprovers
+                ),
+                TextFormField(
+                  controller: _contact,
+                  validator: _required,
+                  decoration: const InputDecoration(
+                    labelText: 'Contact person',
+                  ),
+                ),
+                TextFormField(
+                  controller: _phone,
+                  validator: _mobileNumber,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                  maxLength: 10,
+                  decoration: const InputDecoration(
+                    labelText: 'Mobile number',
+                    hintText: '9876543210',
+                    counterText: '',
+                  ),
+                ),
+                TextFormField(
+                  controller: _address,
+                  validator: _required,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Client address',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _Section(
+              title: 'Visit plan',
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Date'),
+                        subtitle: Text(_ymd(_date)),
+                        onTap: () async {
+                          final date = await showDatePicker(
+                            context: context,
+                            initialDate: _date,
+                            firstDate: DateTime.now().subtract(
+                              const Duration(days: 1),
+                            ),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 730),
+                            ),
+                          );
+                          if (date != null) setState(() => _date = date);
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Time'),
+                        subtitle: Text(_time.format(context)),
+                        onTap: () async {
+                          final time = await showTimePicker(
+                            context: context,
+                            initialTime: _time,
+                          );
+                          if (time != null) setState(() => _time = time);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: _travelMode,
+                  decoration: const InputDecoration(labelText: 'Travel mode'),
+                  items: const ['car', 'bike', 'public_transport', 'walk']
                       .map(
-                        (tl) => DropdownMenuItem<String>(
-                          value: '${tl['employee_id']}',
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text(_label(value)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() => _travelMode = value!),
+                ),
+                DropdownButtonFormField<int>(
+                  initialValue: _durationMinutes,
+                  decoration: const InputDecoration(labelText: 'Duration'),
+                  items: const [30, 60, 120, 240, 480]
+                      .map(
+                        (minutes) => DropdownMenuItem(
+                          value: minutes,
                           child: Text(
-                            '${tl['label'] ?? 'Approver'} · ${tl['role_label'] ?? tl['role'] ?? ''} (${tl['employee_id']})',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            minutes < 60
+                                ? '$minutes minutes'
+                                : '${minutes ~/ 60} hour${minutes == 60 ? '' : 's'}',
                           ),
                         ),
                       )
                       .toList(),
                   onChanged: (value) =>
-                      setState(() => _selectedManagerId = value),
-                )
-              else
+                      setState(() => _durationMinutes = value!),
+                ),
                 TextFormField(
-                  controller: _manager,
+                  controller: _purpose,
                   validator: _required,
-                  decoration: InputDecoration(
-                    labelText: '${_approverRoleLabel()} approver user ID',
-                    hintText: _approverHint(),
-                    helperText: _tlLoadError == null
-                        ? 'Loading ${_approverRoleLabel()} approvers…'
-                        : '${_approverRoleLabel()} list unavailable. Enter an approver user ID.',
-                    suffixIcon: _tlLoadError == null
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                  decoration: const InputDecoration(labelText: 'Purpose'),
+                ),
+                if (_visitApprovers.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedManagerId,
+                    validator: _required,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: '${_approverRoleLabel()} approver',
+                    ),
+                    items: _visitApprovers
+                        .map(
+                          (tl) => DropdownMenuItem<String>(
+                            value: '${tl['employee_id']}',
+                            child: Text(
+                              '${tl['label'] ?? 'Approver'} · ${tl['role_label'] ?? tl['role'] ?? ''} (${tl['employee_id']})',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          )
-                        : IconButton(
-                            tooltip: 'Reload ${_approverRoleLabel()} approvers',
-                            onPressed: _loadReportingTls,
-                            icon: const Icon(Icons.refresh),
                           ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _selectedManagerId = value),
+                  )
+                else
+                  TextFormField(
+                    controller: _manager,
+                    validator: _required,
+                    decoration: InputDecoration(
+                      labelText: '${_approverRoleLabel()} approver user ID',
+                      hintText: _approverHint(),
+                      helperText: _tlLoadError == null
+                          ? 'Loading ${_approverRoleLabel()} approvers…'
+                          : '${_approverRoleLabel()} list unavailable. Enter an approver user ID.',
+                      suffixIcon: _tlLoadError == null
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : IconButton(
+                              tooltip:
+                                  'Reload ${_approverRoleLabel()} approvers',
+                              onPressed: _loadReportingTls,
+                              icon: const Icon(Icons.refresh),
+                            ),
+                    ),
+                  ),
+                TextFormField(
+                  controller: _notes,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Notes'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _saving ? null : () => _submit(false),
+                    child: const Text('Save draft'),
                   ),
                 ),
-              TextFormField(
-                controller: _notes,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Notes'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _saving ? null : () => _submit(false),
-                  child: const Text('Save draft'),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _saving ? null : () => _submit(true),
+                    child: Text(_saving ? 'Saving…' : 'Submit request'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton(
-                  onPressed: _saving ? null : () => _submit(true),
-                  child: Text(_saving ? 'Saving…' : 'Submit request'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+              ],
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -1550,27 +1552,26 @@ class _Summary extends StatelessWidget {
     int count,
     Color color,
     VoidCallback onTap,
-  ) =>
-      Expanded(
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: EmployeeCard(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                Text(
-                  '$count',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.headlineMedium?.copyWith(color: color),
-                ),
-                Text(label, style: Theme.of(context).textTheme.bodySmall),
-              ],
+  ) => Expanded(
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: EmployeeCard(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Text(
+              '$count',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(color: color),
             ),
-          ),
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _wideBox(
     BuildContext context,

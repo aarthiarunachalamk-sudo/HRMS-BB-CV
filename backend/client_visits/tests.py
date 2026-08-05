@@ -121,11 +121,16 @@ class ClientVisitApiTests(APITestCase):
         self.assertEqual(hr_approval.status_code, 200)
         self.assertEqual(hr_approval.data['visit']['status'], 'approved')
         self.assertEqual(hr_approval.data['visit']['approved_by'], hr.user_id)
+        self.assertEqual(hr_approval.data['visit']['approved_by_role'], 'hr')
+        self.assertEqual(
+            hr_approval.data['visit']['approved_by_name'],
+            hr.email,
+        )
         tl_notification = AppNotification.objects.filter(
             recipient_user_id=requester.user_id,
             module='client_visit',
             reference_id=str(visit_id),
-            title='Client Visit Approved',
+            title='HR Approved Client Visit',
             is_read=False,
         ).first()
         self.assertIsNotNone(tl_notification)
@@ -345,12 +350,12 @@ class ClientVisitApiTests(APITestCase):
         self.assertEqual(approved.data['visit']['status'], 'approved')
         self.assertTrue(AppNotification.objects.filter(
             recipient_user_id=self.employee.user_id,
-            title='Client Visit Approved',
+            title='TL Approved Client Visit',
             reference_id=str(visit_id),
         ).exists())
         self.assertTrue(AppNotification.objects.filter(
             recipient_role='ceo',
-            title='Client Visit Approved',
+            title='TL Approved Client Visit',
             reference_id=str(visit_id),
         ).exists())
 

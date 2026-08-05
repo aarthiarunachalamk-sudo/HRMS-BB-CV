@@ -5595,9 +5595,19 @@ class _Notifications extends StatelessWidget {
       items: tlList(data, 'notifications'),
       icon: Icons.notifications_rounded,
       color: c.danger,
-      onTap: (item) {
+      onTap: (item) async {
         if (_isClientVisitNotification(item)) {
-          Navigator.of(context).push(
+          final notificationId = int.tryParse('${item['id'] ?? ''}');
+          if (notificationId != null && item['is_read'] != true) {
+            try {
+              await TlService().markNotificationRead(userId, notificationId);
+              onChanged();
+            } catch (_) {
+              // The visit can still open if read-state synchronization fails.
+            }
+          }
+          if (!context.mounted) return;
+          await Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => ClientVisitModuleScreen(
                 userId: userId,

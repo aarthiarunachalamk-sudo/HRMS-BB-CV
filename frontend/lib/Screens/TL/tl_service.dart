@@ -7,7 +7,11 @@ class TlService {
   static const String baseUrl = '${ApiConfig.baseUrl}/tl';
 
   Future<Map<String, dynamic>> fetchDashboard(String userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/dashboard/').replace(queryParameters: {'user_id': userId}));
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/dashboard/',
+      ).replace(queryParameters: {'user_id': userId}),
+    );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -16,7 +20,11 @@ class TlService {
   }
 
   Future<Map<String, dynamic>> fetchApprovals(String userId) async {
-    final response = await http.get(Uri.parse('$baseUrl/approvals/').replace(queryParameters: {'user_id': userId}));
+    final response = await http.get(
+      Uri.parse(
+        '$baseUrl/approvals/',
+      ).replace(queryParameters: {'user_id': userId}),
+    );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -24,8 +32,23 @@ class TlService {
     throw Exception(_errorMessage(response, 'TL approvals API failed'));
   }
 
+  Future<void> markNotificationRead(String userId, int notificationId) async {
+    final response = await http.post(
+      ApiConfig.uri('/notifications/$notificationId/read/'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'user_id': userId}),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        _errorMessage(response, 'Unable to mark notification as read'),
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> fetchLeaveRequest(int leaveId) async {
-    final response = await http.get(Uri.parse('$baseUrl/leave-requests/$leaveId/'));
+    final response = await http.get(
+      Uri.parse('$baseUrl/leave-requests/$leaveId/'),
+    );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -55,11 +78,21 @@ class TlService {
     }
   }
 
-  Future<void> updateLeaveRequest(int leaveId, String status, String userId, {String rejectionReason = ''}) async {
+  Future<void> updateLeaveRequest(
+    int leaveId,
+    String status,
+    String userId, {
+    String rejectionReason = '',
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/leave-requests/$leaveId/'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'status': status, 'user_id': userId, 'reviewed_by': userId, 'rejection_reason': rejectionReason}),
+      body: jsonEncode({
+        'status': status,
+        'user_id': userId,
+        'reviewed_by': userId,
+        'rejection_reason': rejectionReason,
+      }),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(_errorMessage(response, 'Leave approval failed'));
@@ -82,7 +115,9 @@ class TlService {
       }),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(_errorMessage(response, 'Check-out permission approval failed'));
+      throw Exception(
+        _errorMessage(response, 'Check-out permission approval failed'),
+      );
     }
   }
 
