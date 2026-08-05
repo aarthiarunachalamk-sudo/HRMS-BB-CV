@@ -109,13 +109,18 @@ class _ClientVisitDashboardScreenState
     if (changed == true) _load();
   }
 
-  Future<void> _openStatusList(String title, Set<String> statuses) async {
+  Future<void> _openStatusList(
+    String title,
+    Set<String> statuses, {
+    bool historyMode = false,
+  }) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => _ClientVisitStatusListScreen(
           title: title,
           userId: widget.userId,
           statuses: statuses,
+          historyMode: historyMode,
           onOpenVisit: _openVisit,
         ),
       ),
@@ -255,7 +260,7 @@ class _ClientVisitDashboardScreenState
                 onHistory: () => _openStatusList('Visit History', const {
                   'completed',
                   'rejected',
-                }),
+                }, historyMode: true),
               ),
             if (!widget.readOnlyMode && widget.allowCreate) ...[
               const SizedBox(height: 14),
@@ -327,12 +332,14 @@ class _ClientVisitStatusListScreen extends StatefulWidget {
   final String title;
   final String userId;
   final Set<String> statuses;
+  final bool historyMode;
   final Future<void> Function(ClientVisit visit) onOpenVisit;
 
   const _ClientVisitStatusListScreen({
     required this.title,
     required this.userId,
     required this.statuses,
+    this.historyMode = false,
     required this.onOpenVisit,
   });
 
@@ -359,15 +366,25 @@ class _ClientVisitStatusListScreenState
       final result = await _service.fetchVisits(widget.userId);
       if (!mounted) return;
       setState(() {
-        _visits = result.visits
-            .where((visit) => widget.statuses.contains(visit.status))
-            .toList();
+        _visits = widget.historyMode
+            ? result.visits.where(_isHistoryVisit).toList()
+            : result.visits
+                  .where((visit) => widget.statuses.contains(visit.status))
+                  .toList();
       });
     } catch (error) {
       if (mounted) {
         setState(() => _error = '$error'.replaceFirst('Exception: ', ''));
       }
     }
+  }
+
+  bool _isHistoryVisit(ClientVisit visit) {
+    final ownVisit = visit.employeeUserId == widget.userId;
+    if (ownVisit) return !const {'draft', 'pending'}.contains(visit.status);
+    return visit.managerUserId == widget.userId &&
+        !ownVisit &&
+        !const {'draft', 'pending'}.contains(visit.status);
   }
 
   @override
@@ -398,20 +415,44 @@ class _ClientVisitStatusListScreenState
                 text: 'No ${widget.title.toLowerCase()} found.',
                 onRetry: _load,
               )
+            else if (widget.historyMode)
+              ..._historySections(_visits!)
             else
-              ..._visits!.map(
-                (visit) => _VisitCard(
-                  visit: visit,
-                  onTap: () async {
-                    await widget.onOpenVisit(visit);
-                    await _load();
-                  },
-                ),
-              ),
+              ..._visits!.map(_visitCard),
           ],
         ),
       ),
     ),
+  );
+
+  List<Widget> _historySections(List<ClientVisit> visits) {
+    final own = visits
+        .where((visit) => visit.employeeUserId == widget.userId)
+        .toList();
+    final approvals = visits
+        .where((visit) => visit.employeeUserId != widget.userId)
+        .toList();
+    return [
+      _HistoryHeader(title: 'My Visit History', count: own.length),
+      if (own.isEmpty)
+        const _HistoryEmpty('No reviewed personal visits yet.')
+      else
+        ...own.map(_visitCard),
+      if (approvals.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _HistoryHeader(title: 'My Approval History', count: approvals.length),
+        ...approvals.map(_visitCard),
+      ],
+    ];
+  }
+
+  Widget _visitCard(ClientVisit visit) => _VisitCard(
+    visit: visit,
+    historyViewerUserId: widget.historyMode ? widget.userId : '',
+    onTap: () async {
+      await widget.onOpenVisit(visit);
+      await _load();
+    },
   );
 }
 
@@ -1662,10 +1703,71 @@ class _ElapsedTimerState extends State<_ElapsedTimer> {
   }
 }
 
+class _HistoryHeader extends StatelessWidget {
+  final String title;
+  final int count;
+  const _HistoryHeader({required this.title, required this.count});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        ),
+        Chip(label: Text('$count')),
+      ],
+    ),
+  );
+}
+
+class _HistoryEmpty extends StatelessWidget {
+  final String message;
+  const _HistoryEmpty(this.message);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: EmployeeCard(
+      child: Row(
+        children: [
+          const Icon(Icons.history_rounded, color: EmployeeColors.blue),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+        ],
+      ),
+    ),
+  );
+}
+
 class _VisitCard extends StatelessWidget {
   final ClientVisit visit;
   final VoidCallback onTap;
-  const _VisitCard({required this.visit, required this.onTap});
+  final String historyViewerUserId;
+  const _VisitCard({
+    required this.visit,
+    required this.onTap,
+    this.historyViewerUserId = '',
+  });
+
+  String get _historyDetails {
+    if (historyViewerUserId.isEmpty) return '';
+    final ownVisit = visit.employeeUserId == historyViewerUserId;
+    final relation = ownVisit
+        ? 'My visit'
+        : 'Approval for ${visit.employeeName.isEmpty ? visit.employeeUserId : visit.employeeName}';
+    if (visit.approvedBy.isEmpty) return relation;
+    final approver = visit.approvedByName.isNotEmpty
+        ? visit.approvedByName
+        : visit.approvedBy;
+    final role = visit.approvedByRole.isEmpty
+        ? ''
+        : '${visit.approvedByRole.toUpperCase()} - ';
+    final action = visit.status == 'rejected' ? 'Returned by' : 'Approved by';
+    return '$relation • $action $role$approver';
+  }
+
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
@@ -1682,8 +1784,10 @@ class _VisitCard extends StatelessWidget {
         ),
         title: Text(visit.clientName),
         subtitle: Text(
-          '${_ymd(visit.scheduledAt)} • ${visit.contactPerson}\n${visit.purpose}',
-          maxLines: 2,
+          '${_ymd(visit.scheduledAt)} • ${visit.contactPerson}\n'
+          '${visit.purpose}'
+          '${_historyDetails.isEmpty ? '' : '\n$_historyDetails'}',
+          maxLines: historyViewerUserId.isEmpty ? 2 : 3,
           overflow: TextOverflow.ellipsis,
         ),
         isThreeLine: true,

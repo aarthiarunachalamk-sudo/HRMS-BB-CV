@@ -12,9 +12,9 @@ class ClientVisitService {
   }) async {
     var response = await http
         .get(
-          ApiConfig.uri('/client-visits/approvers/').replace(
-            queryParameters: {'user_id': userId},
-          ),
+          ApiConfig.uri(
+            '/client-visits/approvers/',
+          ).replace(queryParameters: {'user_id': userId}),
         )
         .timeout(const Duration(seconds: 20));
     var responseKey = 'approvers';
@@ -121,6 +121,28 @@ class ClientVisitService {
         'category': category,
         'amount': amount,
         'note': note,
+      }),
+    );
+    _body(response);
+  }
+
+  Future<void> trackLocation(
+    String userId,
+    int id, {
+    required double latitude,
+    required double longitude,
+    required double accuracy,
+    required double speed,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$_base$id/location/'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'user_id': userId,
+        'latitude': latitude,
+        'longitude': longitude,
+        'accuracy': accuracy,
+        'speed': speed,
       }),
     );
     _body(response);

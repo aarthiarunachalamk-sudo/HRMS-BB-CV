@@ -38,6 +38,9 @@ class ClientVisit(models.Model):
     office_check_out_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     start_odometer = models.DecimalField(max_digits=10, decimal_places=1, null=True, blank=True)
     reached_client_at = models.DateTimeField(null=True, blank=True)
+    reached_client_latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    reached_client_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    travel_route = models.JSONField(default=list, blank=True, db_default=[])
     check_in_at = models.DateTimeField(null=True, blank=True)
     check_in_latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     check_in_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
@@ -74,7 +77,10 @@ class ClientVisit(models.Model):
 
 class VisitAttachment(models.Model):
     CATEGORY_CHOICES = [
-        ('check_in', 'Check-in selfie'),
+        ('check_in', 'Check-in selfie (legacy)'),
+        ('office_checkout', 'Office check-out selfie'),
+        ('client_check_in', 'Client check-in selfie'),
+        ('checkout', 'Return / checkout selfie'),
         ('proof', 'Visit proof'),
         ('document', 'Document'),
         ('signature', 'Client signature'),

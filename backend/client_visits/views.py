@@ -257,9 +257,11 @@ def _attachment_payload(item):
     }
 
 
-def _visit_payload(item, detailed=True):
+def _visit_payload(item, detailed=True, approver_lookup=None):
     approver = None
-    if detailed and item.approved_by:
+    if item.approved_by and approver_lookup is not None:
+        approver = approver_lookup.get(item.approved_by)
+    elif detailed and item.approved_by:
         approver = User.objects.filter(
             user_id=item.approved_by,
             is_active=True,
@@ -284,7 +286,12 @@ def _visit_payload(item, detailed=True):
         'approved_by_name': approver_name, 'approved_by_role': approver_role,
         'approved_at': item.approved_at.isoformat() if item.approved_at else None,
         'office_check_out_at': item.office_check_out_at.isoformat() if item.office_check_out_at else None,
+        'office_check_out_latitude': float(item.office_check_out_latitude) if item.office_check_out_latitude is not None else None,
+        'office_check_out_longitude': float(item.office_check_out_longitude) if item.office_check_out_longitude is not None else None,
         'reached_client_at': item.reached_client_at.isoformat() if item.reached_client_at else None,
+        'reached_client_latitude': float(item.reached_client_latitude) if item.reached_client_latitude is not None else None,
+        'reached_client_longitude': float(item.reached_client_longitude) if item.reached_client_longitude is not None else None,
+        'travel_route': item.travel_route,
         'start_odometer': float(item.start_odometer) if item.start_odometer is not None else None,
         'check_in_at': item.check_in_at.isoformat() if item.check_in_at else None,
         'check_out_at': item.check_out_at.isoformat() if item.check_out_at else None,
@@ -333,10 +340,25 @@ def visit_list_create(request):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
         items = list(queryset[:100])
+        approver_ids = {item.approved_by for item in items if item.approved_by}
+        approver_lookup = {
+            value.user_id: value
+            for value in User.objects.filter(
+                user_id__in=approver_ids,
+                is_active=True,
+            ).only('user_id', 'role', 'first_name', 'last_name', 'email')
+        }
         counts = {key: 0 for key, _ in ClientVisit.STATUS_CHOICES}
         for value in queryset.values_list('status', flat=True):
             counts[value] = counts.get(value, 0) + 1
-        return Response({'success': True, 'summary': counts, 'visits': [_visit_payload(item, False) for item in items]})
+        return Response({
+            'success': True,
+            'summary': counts,
+            'visits': [
+                _visit_payload(item, False, approver_lookup)
+                for item in items
+            ],
+        })
 
     required = ('client_name', 'contact_person', 'contact_phone', 'address', 'scheduled_date', 'scheduled_time', 'purpose')
     missing = [field for field in required if not str(request.data.get(field) or '').strip()]
@@ -504,6 +526,14 @@ def visit_start_travel(request, pk):
     visit.office_check_out_at = timezone.now()
     visit.office_check_out_latitude = request.data.get('latitude') or None
     visit.office_check_out_longitude = request.data.get('longitude') or None
+    if visit.office_check_out_latitude is not None and visit.office_check_out_longitude is not None:
+        visit.travel_route = [{
+            'latitude': round(float(visit.office_check_out_latitude), 7),
+            'longitude': round(float(visit.office_check_out_longitude), 7),
+            'accuracy': round(float(request.data.get('accuracy') or 0), 2),
+            'speed': 0,
+            'recorded_at': timezone.now().isoformat(),
+        }]
     visit.start_odometer = request.data.get('odometer') or None
     visit.save()
     _notify_visit_progress(
@@ -522,8 +552,50 @@ def visit_reached_client(request, pk):
     if visit.status != 'travelling':
         return _error('Travel must be active before recording arrival.', 409)
     visit.reached_client_at = timezone.now()
-    visit.save(update_fields=['reached_client_at', 'updated_at'])
+    visit.reached_client_latitude = request.data.get('latitude') or None
+    visit.reached_client_longitude = request.data.get('longitude') or None
+    visit.save(update_fields=[
+        'reached_client_at', 'reached_client_latitude',
+        'reached_client_longitude', 'updated_at',
+    ])
     return Response({'success': True, 'message': 'Client arrival recorded.', 'visit': _visit_payload(visit)})
+
+
+@api_view(['POST'])
+def visit_location(request, pk):
+    user_id, user = _actor(request)
+    visit = get_object_or_404(ClientVisit, pk=pk)
+    if not user or visit.employee_user_id != user_id:
+        return _error('Only the assigned employee can update travel location.', 403)
+    if visit.status != 'travelling':
+        return _error('Travel must be active to track location.', 409)
+    try:
+        latitude = float(request.data.get('latitude'))
+        longitude = float(request.data.get('longitude'))
+        accuracy = float(request.data.get('accuracy') or 0)
+        speed = float(request.data.get('speed') or 0)
+    except (TypeError, ValueError):
+        return _error('Valid GPS location values are required.')
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return _error('Latitude or longitude is outside the valid range.')
+    point = {
+        'latitude': round(latitude, 7),
+        'longitude': round(longitude, 7),
+        'accuracy': round(accuracy, 2),
+        'speed': round(speed, 2),
+        'recorded_at': timezone.now().isoformat(),
+    }
+    route = list(visit.travel_route or [])
+    route.append(point)
+    # Bound payload growth while retaining a detailed route for the visit report.
+    visit.travel_route = route[-2000:]
+    visit.save(update_fields=['travel_route', 'updated_at'])
+    return Response({
+        'success': True,
+        'message': 'Travel location recorded.',
+        'point': point,
+        'route_points': len(visit.travel_route),
+    })
 
 
 @api_view(['POST'])

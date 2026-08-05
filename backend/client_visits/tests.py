@@ -159,6 +159,12 @@ class ClientVisitApiTests(APITestCase):
             response.data['visit']['id'],
             {item['id'] for item in listing.data['visits']},
         )
+        listed_visit = next(
+            item for item in listing.data['visits']
+            if item['id'] == response.data['visit']['id']
+        )
+        self.assertEqual(listed_visit['approved_by_role'], 'hr')
+        self.assertEqual(listed_visit['approved_by_name'], hr.email)
 
     def test_team_lead_sees_only_hr_approvers_and_cannot_assign_a_tl(self):
         requester = User.objects.create_user(
@@ -365,11 +371,24 @@ class ClientVisitApiTests(APITestCase):
         }, format='json')
         self.assertEqual(travelling.status_code, 200)
         self.assertEqual(travelling.data['visit']['status'], 'travelling')
+        self.assertEqual(len(travelling.data['visit']['travel_route']), 1)
+
+        tracked = self.client.post(f'/api/client-visits/{visit_id}/location/', {
+            'user_id': self.employee.user_id,
+            'latitude': 13.0831,
+            'longitude': 80.2709,
+            'accuracy': 8.5,
+            'speed': 4.2,
+        }, format='json')
+        self.assertEqual(tracked.status_code, 200)
+        self.assertEqual(tracked.data['route_points'], 2)
 
         reached = self.client.post(f'/api/client-visits/{visit_id}/reached-client/', {
             'user_id': self.employee.user_id, 'latitude': 13.0844, 'longitude': 80.2710,
         }, format='json')
         self.assertEqual(reached.status_code, 200)
+        self.assertEqual(reached.data['visit']['reached_client_latitude'], 13.0844)
+        self.assertEqual(reached.data['visit']['reached_client_longitude'], 80.271)
 
         checked_in = self.client.post(f'/api/client-visits/{visit_id}/check-in/', {
             'user_id': self.employee.user_id, 'latitude': 13.0844, 'longitude': 80.2710,
@@ -406,8 +425,9 @@ class ClientVisitApiTests(APITestCase):
         upload.side_effect = [
             {'secure_url': 'https://res.cloudinary.com/test/check-in.jpg', 'public_id': 'check-in', 'resource_type': 'image'},
             {'secure_url': 'https://res.cloudinary.com/test/proof.jpg', 'public_id': 'proof', 'resource_type': 'image'},
+            {'secure_url': 'https://res.cloudinary.com/test/office.jpg', 'public_id': 'office', 'resource_type': 'image'},
         ]
-        for category in ('check_in', 'proof'):
+        for category in ('check_in', 'proof', 'office_checkout'):
             response = self.client.post(f'/api/client-visits/{visit_id}/attachments/', {
                 'user_id': self.employee.user_id, 'category': category,
                 'files': SimpleUploadedFile(f'{category}.jpg', b'image-bytes', content_type='image/jpeg'),
@@ -418,8 +438,9 @@ class ClientVisitApiTests(APITestCase):
         self.assertEqual(folders, [
             f'hrms-client-visits/{visit.visit_id}/check_in',
             f'hrms-client-visits/{visit.visit_id}/proof',
+            f'hrms-client-visits/{visit.visit_id}/office_checkout',
         ])
-        self.assertEqual(VisitAttachment.objects.filter(visit=visit).count(), 2)
+        self.assertEqual(VisitAttachment.objects.filter(visit=visit).count(), 3)
         self.assertFalse(VisitAttachment.objects.filter(
             visit=visit,
         ).exclude(

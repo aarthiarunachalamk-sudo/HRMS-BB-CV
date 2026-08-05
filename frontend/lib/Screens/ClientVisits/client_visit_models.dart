@@ -23,6 +23,11 @@ class ClientVisit {
   final String followUp;
   final DateTime? officeCheckOutAt;
   final DateTime? reachedClientAt;
+  final double? officeCheckOutLatitude;
+  final double? officeCheckOutLongitude;
+  final double? reachedClientLatitude;
+  final double? reachedClientLongitude;
+  final List<Map<String, dynamic>> travelRoute;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
   final List<dynamic> attendees;
@@ -58,6 +63,11 @@ class ClientVisit {
     required this.followUp,
     required this.officeCheckOutAt,
     required this.reachedClientAt,
+    required this.officeCheckOutLatitude,
+    required this.officeCheckOutLongitude,
+    required this.reachedClientLatitude,
+    required this.reachedClientLongitude,
+    required this.travelRoute,
     required this.checkInAt,
     required this.checkOutAt,
     required this.attendees,
@@ -99,6 +109,19 @@ class ClientVisit {
         '${json['office_check_out_at'] ?? ''}',
       ),
       reachedClientAt: DateTime.tryParse('${json['reached_client_at'] ?? ''}'),
+      officeCheckOutLatitude: double.tryParse(
+        '${json['office_check_out_latitude'] ?? ''}',
+      ),
+      officeCheckOutLongitude: double.tryParse(
+        '${json['office_check_out_longitude'] ?? ''}',
+      ),
+      reachedClientLatitude: double.tryParse(
+        '${json['reached_client_latitude'] ?? ''}',
+      ),
+      reachedClientLongitude: double.tryParse(
+        '${json['reached_client_longitude'] ?? ''}',
+      ),
+      travelRoute: _maps(json['travel_route']),
       checkInAt: DateTime.tryParse('${json['check_in_at'] ?? ''}'),
       checkOutAt: DateTime.tryParse('${json['check_out_at'] ?? ''}'),
       attendees: json['attendees'] is List

@@ -10,6 +10,7 @@ urlpatterns = [
     path('<int:pk>/check-in/', views.visit_check_in, name='client_visit_check_in'),
     path('<int:pk>/start-travel/', views.visit_start_travel, name='client_visit_start_travel'),
     path('<int:pk>/reached-client/', views.visit_reached_client, name='client_visit_reached_client'),
+    path('<int:pk>/location/', views.visit_location, name='client_visit_location'),
     path('<int:pk>/progress/', views.visit_progress, name='client_visit_progress'),
     path('<int:pk>/complete/', views.visit_complete, name='client_visit_complete'),
     path('<int:pk>/verify/', views.visit_verify, name='client_visit_verify'),

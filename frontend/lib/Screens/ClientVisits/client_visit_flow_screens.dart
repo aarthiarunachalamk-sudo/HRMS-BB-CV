@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -265,6 +266,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   final _odometer = TextEditingController();
   String _expenseCategory = 'travel';
   String _returnMode = 'return_office';
+  String? _selfiePath;
+  Map<String, double>? _capturedPosition;
+  bool _capturingSelfie = false;
+  bool _capturingPosition = false;
+  StreamSubscription<Position>? _travelSubscription;
+  Position? _lastTrackedPosition;
+  String? _trackingError;
+  bool _sendingLocation = false;
   List<String> _attendees = [];
   List<Map<String, dynamic>> _checklist = [];
 
@@ -288,6 +297,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     ]) {
       controller.dispose();
     }
+    _travelSubscription?.cancel();
     super.dispose();
   }
 
@@ -310,6 +320,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   .map((item) => Map<String, dynamic>.from(item))
                   .toList();
       });
+      if (widget.step == 6 && visit.status == 'travelling') {
+        unawaited(_startTravelTracking());
+      }
     } catch (error) {
       if (mounted) {
         setState(() => _error = '$error'.replaceFirst('Exception: ', ''));
@@ -325,16 +338,143 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   ];
 
   Future<Map<String, double>> _position() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      final opened = await Geolocator.openLocationSettings();
+      throw Exception(
+        opened
+            ? 'Turn on GPS, then tap GPS Location again.'
+            : 'GPS is turned off. Enable Location in device settings.',
+      );
+    }
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      throw Exception('Location permission is required.');
+    if (permission == LocationPermission.deniedForever) {
+      await Geolocator.openAppSettings();
+      throw Exception(
+        'Location permission is permanently denied. Allow it in App settings, then retry.',
+      );
     }
-    final value = await Geolocator.getCurrentPosition();
-    return {'latitude': value.latitude, 'longitude': value.longitude};
+    if (permission == LocationPermission.denied) {
+      throw Exception('Location permission is required to continue.');
+    }
+    final value = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 20),
+      ),
+    );
+    return {
+      'latitude': value.latitude,
+      'longitude': value.longitude,
+      'accuracy': value.accuracy,
+      'speed': value.speed,
+    };
+  }
+
+  Future<String?> _captureSelfie() async {
+    if (_capturingSelfie) return _selfiePath;
+    setState(() => _capturingSelfie = true);
+    try {
+      final selfie = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        imageQuality: 82,
+      );
+      if (selfie == null) {
+        _message('Selfie capture was cancelled.');
+        return null;
+      }
+      if (mounted) setState(() => _selfiePath = selfie.path);
+      return selfie.path;
+    } on PlatformException catch (error) {
+      if (error.code.contains('denied') || error.code.contains('permission')) {
+        await Geolocator.openAppSettings();
+        throw Exception(
+          'Camera permission is disabled. Allow Camera in App settings, then retry.',
+        );
+      }
+      throw Exception(error.message ?? 'Unable to open the camera.');
+    } finally {
+      if (mounted) setState(() => _capturingSelfie = false);
+    }
+  }
+
+  Future<Map<String, double>?> _capturePosition() async {
+    if (_capturingPosition) return _capturedPosition;
+    setState(() => _capturingPosition = true);
+    try {
+      final position = await _position();
+      if (mounted) setState(() => _capturedPosition = position);
+      return position;
+    } finally {
+      if (mounted) setState(() => _capturingPosition = false);
+    }
+  }
+
+  Future<void> _startTravelTracking() async {
+    if (_travelSubscription != null) return;
+    try {
+      await _position();
+      if (!mounted || _travelSubscription != null) return;
+      const settings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 15,
+      );
+      _travelSubscription =
+          Geolocator.getPositionStream(locationSettings: settings).listen(
+            (position) {
+              if (!mounted) return;
+              setState(() {
+                _lastTrackedPosition = position;
+                _trackingError = null;
+              });
+              unawaited(_sendTravelPosition(position));
+            },
+            onError: (Object error) {
+              if (mounted) setState(() => _trackingError = '$error');
+            },
+          );
+    } catch (error) {
+      if (mounted) setState(() => _trackingError = '$error');
+    }
+  }
+
+  Future<void> _sendTravelPosition(Position position) async {
+    if (_sendingLocation) return;
+    _sendingLocation = true;
+    try {
+      await widget.service.trackLocation(
+        widget.userId,
+        widget.visitId,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: position.accuracy,
+        speed: position.speed,
+      );
+    } catch (error) {
+      if (mounted) setState(() => _trackingError = '$error');
+    } finally {
+      _sendingLocation = false;
+    }
+  }
+
+  Future<void> _captureSelfieFromTile() async {
+    try {
+      await _captureSelfie();
+    } catch (error) {
+      if (mounted) _message('$error');
+    }
+  }
+
+  Future<void> _capturePositionFromTile() async {
+    try {
+      await _capturePosition();
+    } catch (error) {
+      if (mounted) _message('$error');
+    }
   }
 
   Future<void> _run(Future<void> Function() task) async {
@@ -401,20 +541,19 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   Future<void> _officeCheckout() async {
     await _run(() async {
-      final selfie = await ImagePicker().pickImage(
-        source: ImageSource.camera,
-        imageQuality: 82,
-      );
-      if (selfie == null) return;
+      final selfiePath = _selfiePath ?? await _captureSelfie();
+      if (selfiePath == null) return;
+      final position = _capturedPosition ?? await _capturePosition();
+      if (position == null) return;
       await widget.service.uploadFiles(
         widget.userId,
         widget.visitId,
-        'check_in',
-        [selfie.path],
+        'office_checkout',
+        [selfiePath],
       );
       await widget.service
           .action(widget.userId, widget.visitId, 'start-travel', {
-            ...await _position(),
+            ...position,
             if (_odometer.text.trim().isNotEmpty)
               'odometer': _odometer.text.trim(),
           });
@@ -432,6 +571,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   Future<void> _reached() async {
     await _run(() async {
+      await _travelSubscription?.cancel();
+      _travelSubscription = null;
       await widget.service.action(
         widget.userId,
         widget.visitId,
@@ -452,22 +593,21 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   Future<void> _clientCheckIn() async {
     await _run(() async {
-      final selfie = await ImagePicker().pickImage(
-        source: ImageSource.camera,
-        imageQuality: 82,
-      );
-      if (selfie == null) return;
+      final selfiePath = _selfiePath ?? await _captureSelfie();
+      if (selfiePath == null) return;
+      final position = _capturedPosition ?? await _capturePosition();
+      if (position == null) return;
       await widget.service.uploadFiles(
         widget.userId,
         widget.visitId,
-        'check_in',
-        [selfie.path],
+        'client_check_in',
+        [selfiePath],
       );
       await widget.service.action(
         widget.userId,
         widget.visitId,
         'check-in',
-        await _position(),
+        position,
       );
       if (mounted) {
         _replace(
@@ -538,18 +678,18 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       return;
     }
     await _run(() async {
-      final selfie = await ImagePicker().pickImage(
-        source: ImageSource.camera,
-        imageQuality: 82,
+      final selfiePath = _selfiePath ?? await _captureSelfie();
+      if (selfiePath == null) return;
+      final position = _capturedPosition ?? await _capturePosition();
+      if (position == null) return;
+      await widget.service.uploadFiles(
+        widget.userId,
+        widget.visitId,
+        'checkout',
+        [selfiePath],
       );
-      if (selfie == null) {
-        throw Exception('A checkout selfie is required to complete the duty.');
-      }
-      await widget.service.uploadFiles(widget.userId, widget.visitId, 'proof', [
-        selfie.path,
-      ]);
       await widget.service.action(widget.userId, widget.visitId, 'complete', {
-        ...await _position(),
+        ...position,
         'outcome': _outcome.text.trim(),
         'follow_up': _followUp.text.trim(),
         'client_signature_name': _signature.text.trim(),
@@ -775,6 +915,29 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             const LinearProgressIndicator(),
             const SizedBox(height: 8),
             const Text('Live GPS journey in progress'),
+            const SizedBox(height: 6),
+            if (_lastTrackedPosition != null)
+              Text(
+                '${_lastTrackedPosition!.latitude.toStringAsFixed(6)}, '
+                '${_lastTrackedPosition!.longitude.toStringAsFixed(6)} '
+                '(±${_lastTrackedPosition!.accuracy.toStringAsFixed(0)} m)',
+                textAlign: TextAlign.center,
+              )
+            else
+              const Text('Waiting for the first GPS route point...'),
+            if (_trackingError != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                _trackingError!.replaceFirst('Exception: ', ''),
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: ClientVisitColors.red),
+              ),
+              TextButton.icon(
+                onPressed: _startTravelTracking,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry GPS tracking'),
+              ),
+            ],
             if (widget.readOnlyMode) ...[
               const SizedBox(height: 14),
               _monitoringNotice(),
@@ -1124,8 +1287,6 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   Widget _captureTiles() {
     final isDark = ThemeConfig.isDark(context);
     final border = ThemeConfig.getCardBorder(context);
-    final text = ThemeConfig.getTextPrimary(context);
-    final muted = ThemeConfig.getTextSecondary(context);
     final neutralSurface = isDark
         ? const Color(0xFF182238)
         : const Color(0xFFF2F4F7);
@@ -1135,80 +1296,124 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     return Row(
       children: [
         Expanded(
-          child: Container(
-            height: 132,
-            decoration: BoxDecoration(
-              color: neutralSurface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: border),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Color(0xFFE2EEFF),
-                  child: Icon(
-                    Icons.person_rounded,
-                    color: ClientVisitColors.navy,
-                    size: 34,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Selfie',
-                  style: TextStyle(
-                    color: text,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const Icon(
-                  Icons.camera_alt,
-                  color: ClientVisitColors.blue,
-                  size: 18,
-                ),
-              ],
-            ),
+          child: _captureTile(
+            background: neutralSurface,
+            border: border,
+            icon: _selfiePath == null
+                ? Icons.camera_alt_rounded
+                : Icons.check_circle_rounded,
+            title: 'Selfie',
+            subtitle: _capturingSelfie
+                ? 'Opening camera...'
+                : _selfiePath == null
+                ? 'Tap to capture'
+                : 'Captured - tap to retake',
+            ready: _selfiePath != null,
+            busy: _capturingSelfie,
+            onTap: widget.readOnlyMode ? null : _captureSelfieFromTile,
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: Container(
-            height: 132,
-            decoration: BoxDecoration(
-              color: mapSurface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: border),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.location_on_rounded,
-                  color: ClientVisitColors.blue,
-                  size: 42,
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  'GPS Location',
-                  style: TextStyle(
-                    color: text,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  'Live location required',
-                  style: TextStyle(color: muted, fontSize: 10),
-                ),
-              ],
-            ),
+          child: _captureTile(
+            background: mapSurface,
+            border: border,
+            icon: _capturedPosition == null
+                ? Icons.location_on_rounded
+                : Icons.check_circle_rounded,
+            title: 'GPS Location',
+            subtitle: _capturingPosition
+                ? 'Getting location...'
+                : _capturedPosition == null
+                ? 'Tap to enable GPS'
+                : 'Location captured',
+            ready: _capturedPosition != null,
+            busy: _capturingPosition,
+            onTap: widget.readOnlyMode ? null : _capturePositionFromTile,
           ),
         ),
       ],
     );
   }
+
+  Widget _captureTile({
+    required Color background,
+    required Color border,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool ready,
+    required bool busy,
+    required Future<void> Function()? onTap,
+  }) => Material(
+    color: background,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+      side: BorderSide(
+        color: ready ? ClientVisitColors.green : border,
+        width: ready ? 1.5 : 1,
+      ),
+    ),
+    child: InkWell(
+      onTap: busy ? null : onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        height: 132,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (busy)
+              const SizedBox.square(
+                dimension: 34,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              )
+            else if (title == 'Selfie' && _selfiePath != null)
+              ClipOval(
+                child: Image.file(
+                  File(_selfiePath!),
+                  width: 58,
+                  height: 58,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const Icon(
+                    Icons.check_circle_rounded,
+                    color: ClientVisitColors.green,
+                    size: 40,
+                  ),
+                ),
+              )
+            else
+              Icon(
+                icon,
+                color: ready ? ClientVisitColors.green : ClientVisitColors.blue,
+                size: 40,
+              ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(
+                color: ThemeConfig.getTextPrimary(context),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: ready
+                      ? ClientVisitColors.green
+                      : ThemeConfig.getTextSecondary(context),
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 
   Widget _stepHeader(ClientVisit visit) => Row(
     children: [

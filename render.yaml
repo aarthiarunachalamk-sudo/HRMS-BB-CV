@@ -9,3 +9,12 @@ services:
     preDeployCommand: python manage.py migrate
     startCommand: gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --timeout 300 --graceful-timeout 30
     autoDeployTrigger: commit
+    envVars:
+      - key: CLIENT_VISIT_CLOUDINARY_CLOUD_NAME
+        value: dydd8vegt
+      - key: CLIENT_VISIT_CLOUDINARY_API_KEY
+        sync: false
+      - key: CLIENT_VISIT_CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLIENT_VISIT_CLOUDINARY_FOLDER
+        value: hrms-client-visits
