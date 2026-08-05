@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import '../Employee/employee_shared.dart';
@@ -272,6 +274,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   bool _capturingPosition = false;
   StreamSubscription<Position>? _travelSubscription;
   Position? _lastTrackedPosition;
+  final List<LatLng> _liveRoutePoints = [];
+  final MapController _mapController = MapController();
   String? _trackingError;
   bool _sendingLocation = false;
   List<String> _attendees = [];
@@ -298,6 +302,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       controller.dispose();
     }
     _travelSubscription?.cancel();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -416,6 +421,18 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   Future<void> _startTravelTracking() async {
     if (_travelSubscription != null) return;
+    // Pre-seed the polyline with any waypoints already stored on the backend.
+    if (_visit != null && _visit!.travelRoute.isNotEmpty) {
+      final seeded = _visit!.travelRoute.map((p) {
+        final lat = double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
+        final lng = double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
+        if (lat != null && lng != null) return LatLng(lat, lng);
+        return null;
+      }).whereType<LatLng>().toList();
+      if (seeded.isNotEmpty && mounted) {
+        setState(() => _liveRoutePoints.addAll(seeded));
+      }
+    }
     try {
       await _position();
       if (!mounted || _travelSubscription != null) return;
@@ -427,10 +444,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           Geolocator.getPositionStream(locationSettings: settings).listen(
             (position) {
               if (!mounted) return;
+              final point = LatLng(position.latitude, position.longitude);
               setState(() {
                 _lastTrackedPosition = position;
                 _trackingError = null;
+                _liveRoutePoints.add(point);
               });
+              // Pan and zoom the map to follow the current position.
+              try {
+                _mapController.move(point, _mapController.camera.zoom);
+              } catch (_) {}
               unawaited(_sendTravelPosition(position));
             },
             onError: (Object error) {
@@ -911,7 +934,24 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       EmployeeCard(
         child: Column(
           children: [
-            const _RouteMapPreview(),
+            _LiveMapView(
+              mapController: _mapController,
+              routePoints: _liveRoutePoints,
+              origin: _visit != null &&
+                      _visit!.officeCheckOutLatitude != null &&
+                      _visit!.officeCheckOutLongitude != null
+                  ? LatLng(
+                      _visit!.officeCheckOutLatitude!,
+                      _visit!.officeCheckOutLongitude!,
+                    )
+                  : null,
+              current: _lastTrackedPosition != null
+                  ? LatLng(
+                      _lastTrackedPosition!.latitude,
+                      _lastTrackedPosition!.longitude,
+                    )
+                  : null,
+            ),
             const SizedBox(height: 8),
             Text(visit.address, textAlign: TextAlign.center),
             const SizedBox(height: 12),
