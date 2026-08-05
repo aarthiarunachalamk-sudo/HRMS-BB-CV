@@ -508,9 +508,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
             Navigator.of(context).pop();
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(title: const Text('Client Visits')),
-                  body: ClientVisitDashboardScreen(userId: widget.userId),
+                builder: (_) => ClientVisitModuleScreen(
+                  userId: widget.userId,
+                  roleLabel: 'Employee · My Visits',
+                  requesterRole: 'employee',
                 ),
               ),
             );

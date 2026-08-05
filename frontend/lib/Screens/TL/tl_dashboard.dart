@@ -238,13 +238,11 @@ class _TLDashboardState extends State<TLDashboard> {
                   Navigator.of(context).pop();
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: const Text('Client Visits')),
-                        body: ClientVisitDashboardScreen(
-                          userId: widget.userId,
-                          reviewerMode: true,
-                          requesterRole: 'tl',
-                        ),
+                      builder: (_) => ClientVisitModuleScreen(
+                        userId: widget.userId,
+                        roleLabel: 'Team Lead · Create & Approve',
+                        reviewerMode: true,
+                        requesterRole: 'tl',
                       ),
                     ),
                   );

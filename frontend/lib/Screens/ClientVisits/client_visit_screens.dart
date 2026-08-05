@@ -27,13 +27,21 @@ class ClientVisitDashboardScreen extends StatefulWidget {
   final String userId;
   final bool reviewerMode;
   final bool readOnlyMode;
+  final bool allowCreate;
+  final bool assignedApprovalsOnly;
+  final bool allowVerification;
   final String requesterRole;
+  final int? initialVisitId;
   const ClientVisitDashboardScreen({
     super.key,
     required this.userId,
     this.reviewerMode = false,
     this.readOnlyMode = false,
+    this.allowCreate = true,
+    this.assignedApprovalsOnly = false,
+    this.allowVerification = true,
     this.requesterRole = '',
+    this.initialVisitId,
   });
 
   @override
@@ -47,6 +55,7 @@ class _ClientVisitDashboardScreenState
   ClientVisitListResult? _result;
   String _filter = 'all';
   String? _error;
+  bool _initialVisitOpened = false;
 
   @override
   void initState() {
@@ -61,7 +70,25 @@ class _ClientVisitDashboardScreenState
         widget.userId,
         status: _filter == 'all' ? '' : _filter,
       );
-      if (mounted) setState(() => _result = value);
+      if (!mounted) return;
+      setState(() => _result = value);
+      final initialVisitId = widget.initialVisitId;
+      if (!_initialVisitOpened && initialVisitId != null) {
+        ClientVisit? initialVisit;
+        for (final visit in value.visits) {
+          if (visit.id == initialVisitId) {
+            initialVisit = visit;
+            break;
+          }
+        }
+        _initialVisitOpened = true;
+        if (initialVisit != null) {
+          final visit = initialVisit;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _openVisit(visit);
+          });
+        }
+      }
     } catch (error) {
       if (mounted) {
         setState(() => _error = '$error'.replaceFirst('Exception: ', ''));
@@ -145,13 +172,18 @@ class _ClientVisitDashboardScreenState
         visit.employeeUserId == widget.userId) {
       screen = _employeeFlowScreen(visit);
     } else if (widget.reviewerMode) {
-      screen = visit.status == 'pending'
+      final canReview = !widget.assignedApprovalsOnly ||
+          visit.managerUserId == widget.userId;
+      screen = visit.status == 'pending' && canReview
           ? ClientVisitManagerApprovalScreen(
               userId: widget.userId,
               visitId: visit.id,
               service: _service,
             )
-          : _monitoringScreen(visit, canVerify: true);
+          : _monitoringScreen(
+              visit,
+              canVerify: widget.allowVerification && canReview,
+            );
     } else {
       screen = _employeeFlowScreen(visit);
     }
@@ -189,7 +221,7 @@ class _ClientVisitDashboardScreenState
           ),
           const SizedBox(height: 16),
           if (result != null) _Summary(summary: result.summary),
-          if (!widget.readOnlyMode) ...[
+          if (!widget.readOnlyMode && widget.allowCreate) ...[
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
@@ -239,7 +271,9 @@ class _ClientVisitDashboardScreenState
               icon: Icons.location_off_outlined,
               text:
                   'No ${_filter == 'all' ? '' : '${_label(_filter)} '}visits yet.',
-              onRetry: widget.readOnlyMode ? _load : _create,
+              onRetry: widget.readOnlyMode || !widget.allowCreate
+                  ? _load
+                  : _create,
             )
           else
             ...result.visits.map(
@@ -251,6 +285,64 @@ class _ClientVisitDashboardScreenState
       ),
     );
   }
+}
+
+class ClientVisitModuleScreen extends StatelessWidget {
+  final String userId;
+  final String roleLabel;
+  final String requesterRole;
+  final bool reviewerMode;
+  final bool readOnlyMode;
+  final bool allowCreate;
+  final bool assignedApprovalsOnly;
+  final bool allowVerification;
+  final int? initialVisitId;
+
+  const ClientVisitModuleScreen({
+    super.key,
+    required this.userId,
+    required this.roleLabel,
+    this.requesterRole = '',
+    this.reviewerMode = false,
+    this.readOnlyMode = false,
+    this.allowCreate = true,
+    this.assignedApprovalsOnly = false,
+    this.allowVerification = true,
+    this.initialVisitId,
+  });
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Client Visits'),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 190),
+              child: Text(
+                roleLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+    body: ClientVisitDashboardScreen(
+      userId: userId,
+      reviewerMode: reviewerMode,
+      readOnlyMode: readOnlyMode,
+      allowCreate: allowCreate,
+      assignedApprovalsOnly: assignedApprovalsOnly,
+      allowVerification: allowVerification,
+      requesterRole: requesterRole,
+      initialVisitId: initialVisitId,
+    ),
+  );
 }
 
 class ClientVisitCreateScreen extends StatefulWidget {

@@ -420,14 +420,14 @@ class _CeoDashboardState extends State<CeoDashboard>
                       () {
                         Navigator.pop(context);
                         _openPage(
-                          Scaffold(
-                            appBar: AppBar(
-                              title: const Text('Client Visits'),
-                            ),
-                            body: ClientVisitDashboardScreen(
-                              userId: widget.userId,
-                              readOnlyMode: true,
-                            ),
+                          ClientVisitModuleScreen(
+                            userId: widget.userId,
+                            roleLabel: 'CEO · Approvals',
+                            requesterRole: 'ceo',
+                            reviewerMode: true,
+                            allowCreate: false,
+                            assignedApprovalsOnly: true,
+                            allowVerification: false,
                           ),
                         );
                       },
@@ -714,12 +714,14 @@ class _CeoDashboardState extends State<CeoDashboard>
       _ApprovalsView(userId: widget.userId),
       _MoreView(
         onClientVisits: () => _openPage(
-          Scaffold(
-            appBar: AppBar(title: const Text('Client Visits')),
-            body: ClientVisitDashboardScreen(
-              userId: widget.userId,
-              readOnlyMode: true,
-            ),
+          ClientVisitModuleScreen(
+            userId: widget.userId,
+            roleLabel: 'CEO · Approvals',
+            requesterRole: 'ceo',
+            reviewerMode: true,
+            allowCreate: false,
+            assignedApprovalsOnly: true,
+            allowVerification: false,
           ),
         ),
         onOrganization: () => _openPage(
@@ -12536,12 +12538,16 @@ class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
   ) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Client Visits')),
-          body: ClientVisitDashboardScreen(
-            userId: widget.userId,
-            reviewerMode: true,
-            requesterRole: 'ceo',
+        builder: (_) => ClientVisitModuleScreen(
+          userId: widget.userId,
+          roleLabel: 'CEO · Approval',
+          requesterRole: 'ceo',
+          reviewerMode: true,
+          allowCreate: false,
+          assignedApprovalsOnly: true,
+          allowVerification: false,
+          initialVisitId: int.tryParse(
+            '${notification['reference_id'] ?? ''}',
           ),
         ),
       ),

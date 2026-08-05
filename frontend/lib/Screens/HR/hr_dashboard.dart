@@ -199,13 +199,11 @@ class _HrDashboardState extends State<HrDashboard> {
                   Navigator.of(context).pop();
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: const Text('Client Visits')),
-                        body: ClientVisitDashboardScreen(
-                          userId: widget.userId,
-                          reviewerMode: true,
-                          requesterRole: 'hr',
-                        ),
+                      builder: (_) => ClientVisitModuleScreen(
+                        userId: widget.userId,
+                        roleLabel: 'HR · Create & Approve',
+                        reviewerMode: true,
+                        requesterRole: 'hr',
                       ),
                     ),
                   );
@@ -285,13 +283,12 @@ class _HrDashboardState extends State<HrDashboard> {
     if (module == 'client_visit' || module == 'client-visit') {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: const Text('Client Visits')),
-            body: ClientVisitDashboardScreen(
-              userId: widget.userId,
-              reviewerMode: true,
-              requesterRole: 'hr',
-            ),
+          builder: (_) => ClientVisitModuleScreen(
+            userId: widget.userId,
+            roleLabel: 'HR · Approval',
+            reviewerMode: true,
+            requesterRole: 'hr',
+            initialVisitId: int.tryParse('${item['reference_id'] ?? ''}'),
           ),
         ),
       );

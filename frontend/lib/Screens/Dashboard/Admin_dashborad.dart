@@ -305,12 +305,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     label: 'Client Visits',
                     selected: false,
                     onTap: () => _openAdminPage(
-                      Scaffold(
-                        appBar: AppBar(title: const Text('Client Visits')),
-                        body: ClientVisitDashboardScreen(
-                          userId: widget.userId,
-                          reviewerMode: true,
-                        ),
+                      ClientVisitModuleScreen(
+                        userId: widget.userId,
+                        roleLabel: 'Admin · Review',
+                        requesterRole: 'admin',
+                        reviewerMode: true,
+                        allowCreate: false,
                       ),
                     ),
                   ),

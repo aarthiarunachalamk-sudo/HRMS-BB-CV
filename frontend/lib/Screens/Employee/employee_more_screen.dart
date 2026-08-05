@@ -42,7 +42,12 @@ class EmployeeMoreScreen extends StatelessWidget {
           Icons.add_location_alt_rounded,
           'Client Visits',
           EmployeeColors.blue,
-          ClientVisitDashboardScreen(userId: userId),
+          ClientVisitModuleScreen(
+            userId: userId,
+            roleLabel: 'Employee · My Visits',
+            requesterRole: 'employee',
+          ),
+          standaloneScreen: true,
         ),
         _tile(
           context,

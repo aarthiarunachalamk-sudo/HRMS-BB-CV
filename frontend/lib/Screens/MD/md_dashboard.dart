@@ -397,12 +397,12 @@ class _MdDashboardState extends State<MdDashboard> {
       'settings-preferences': MdSettingsPreferencesScreen(
         userId: widget.userId,
       ),
-      'client-visits': Scaffold(
-        appBar: AppBar(title: const Text('Client Visits')),
-        body: ClientVisitDashboardScreen(
-          userId: widget.userId,
-          readOnlyMode: true,
-        ),
+      'client-visits': ClientVisitModuleScreen(
+        userId: widget.userId,
+        roleLabel: '$_roleShortLabel · Monitoring',
+        requesterRole: _isDirector ? 'director' : 'md',
+        readOnlyMode: true,
+        allowCreate: false,
       ),
     };
     final screen = screens[flow];
