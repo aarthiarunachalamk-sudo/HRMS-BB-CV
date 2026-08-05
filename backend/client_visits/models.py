@@ -46,11 +46,15 @@ class ClientVisit(models.Model):
     check_out_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     outcome = models.TextField(blank=True)
     follow_up = models.TextField(blank=True)
-    attendees = models.JSONField(default=list, blank=True)
-    checklist = models.JSONField(default=list, blank=True)
-    return_mode = models.CharField(max_length=24, blank=True)
+    attendees = models.JSONField(default=list, blank=True, db_default=[])
+    checklist = models.JSONField(default=list, blank=True, db_default=[])
+    return_mode = models.CharField(max_length=24, blank=True, db_default='')
     client_signature_name = models.CharField(max_length=120, blank=True)
-    manager_verified_by = models.CharField(max_length=20, blank=True)
+    manager_verified_by = models.CharField(
+        max_length=20,
+        blank=True,
+        db_default='',
+    )
     manager_verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
