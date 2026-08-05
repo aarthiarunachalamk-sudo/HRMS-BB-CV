@@ -152,6 +152,25 @@ class ClientVisitService {
     String userId,
     int id,
     String category,
+    List<String> paths, {
+    String fallbackCategory = '',
+  }) async {
+    try {
+      await _uploadFiles(userId, id, category, paths);
+    } catch (error) {
+      final message = '$error'.toLowerCase();
+      if (fallbackCategory.isEmpty ||
+          !message.contains('invalid attachment category')) {
+        rethrow;
+      }
+      await _uploadFiles(userId, id, fallbackCategory, paths);
+    }
+  }
+
+  Future<void> _uploadFiles(
+    String userId,
+    int id,
+    String category,
     List<String> paths,
   ) async {
     final request = http.MultipartRequest(

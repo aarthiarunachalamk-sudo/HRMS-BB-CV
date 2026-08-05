@@ -550,6 +550,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         widget.visitId,
         'office_checkout',
         [selfiePath],
+        fallbackCategory: 'check_in',
       );
       await widget.service
           .action(widget.userId, widget.visitId, 'start-travel', {
@@ -602,6 +603,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         widget.visitId,
         'client_check_in',
         [selfiePath],
+        fallbackCategory: 'check_in',
       );
       await widget.service.action(
         widget.userId,
@@ -687,6 +689,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         widget.visitId,
         'checkout',
         [selfiePath],
+        fallbackCategory: 'proof',
       );
       await widget.service.action(widget.userId, widget.visitId, 'complete', {
         ...position,

@@ -203,6 +203,52 @@ class ClientVisitApiTests(APITestCase):
             client_name='Kumarapa Silks',
         ).exists())
 
+    @patch(
+        'client_visits.views.send_mobile_push',
+        side_effect=RuntimeError('Push provider unavailable'),
+    )
+    def test_hr_approval_notification_survives_push_failure(self, _push):
+        requester = User.objects.create_user(
+            'client-visit-push-failure-tl@example.com',
+            role='tl',
+        )
+        hr = User.objects.create_user(
+            'client-visit-push-failure-hr@example.com',
+            role='hr',
+        )
+        created = self.client.post('/api/client-visits/', {
+            'user_id': requester.user_id,
+            'manager_user_id': hr.user_id,
+            'client_name': 'Push Safe Client',
+            'contact_person': 'Nandhini',
+            'contact_phone': '9876543210',
+            'address': 'Chennai',
+            'scheduled_date': '2026-08-10',
+            'scheduled_time': '16:00',
+            'purpose': 'Project discussion',
+            'submit': True,
+        }, format='json')
+        self.assertEqual(created.status_code, 201)
+        visit_id = created.data['visit']['id']
+
+        approved = self.client.post(
+            f'/api/client-visits/{visit_id}/approval/',
+            {
+                'user_id': hr.user_id,
+                'action': 'approve',
+                'comment': 'Approved by HR.',
+            },
+            format='json',
+        )
+        self.assertEqual(approved.status_code, 200)
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_user_id=requester.user_id,
+            module='client_visit',
+            reference_id=str(visit_id),
+            title='HR Approved Client Visit',
+            push_sent=False,
+        ).exists())
+
     def test_hr_sees_only_ceo_approvers_and_only_ceo_can_approve(self):
         requester = User.objects.create_user(
             'client-visit-requester-hr@example.com',

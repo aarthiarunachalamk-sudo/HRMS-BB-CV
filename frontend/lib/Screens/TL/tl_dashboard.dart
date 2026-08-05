@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -38,7 +39,7 @@ class TLDashboard extends StatefulWidget {
   State<TLDashboard> createState() => _TLDashboardState();
 }
 
-class _TLDashboardState extends State<TLDashboard> {
+class _TLDashboardState extends State<TLDashboard> with WidgetsBindingObserver {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   late Future<Map<String, dynamic>> _future;
   int _index = 0;
@@ -46,11 +47,29 @@ class _TLDashboardState extends State<TLDashboard> {
   String _role = 'Team Lead';
   Map<String, dynamic> _selected = {};
   File? _profileImage;
+  Timer? _notificationRefreshTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _future = TlService().fetchDashboard(widget.userId);
+    _notificationRefreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _refreshDashboard(),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshDashboard();
+  }
+
+  @override
+  void dispose() {
+    _notificationRefreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   void _logout() {
@@ -76,6 +95,7 @@ class _TLDashboardState extends State<TLDashboard> {
   }
 
   void _refreshDashboard() {
+    if (!mounted) return;
     setState(() {
       _future = TlService().fetchDashboard(widget.userId);
     });

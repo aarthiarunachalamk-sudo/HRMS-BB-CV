@@ -47,9 +47,17 @@ def _notify(*, user_id='', role='', title, message, notification_type='info', vi
         module='client_visit',
         reference_id=str(visit.id),
     )
-    notification.push_sent = send_mobile_push(notification)
-    if notification.push_sent:
-        notification.save(update_fields=['push_sent'])
+    try:
+        notification.push_sent = send_mobile_push(notification)
+        if notification.push_sent:
+            notification.save(update_fields=['push_sent'])
+    except Exception:
+        # The in-app notification is authoritative. A provider/network failure
+        # must not discard it or interrupt the approval response.
+        logger.exception(
+            'Unable to send Client Visit push notification %s',
+            notification.pk,
+        )
     return notification
 
 
