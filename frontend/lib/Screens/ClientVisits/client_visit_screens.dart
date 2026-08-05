@@ -297,7 +297,8 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     try {
       final values = await widget.service.fetchVisitApprovers(
         widget.userId,
-        hrOnly: widget.requesterRole == 'tl',
+        requiresRoleAwareApprovers:
+            widget.requesterRole == 'tl' || widget.requesterRole == 'hr',
       );
       if (!mounted) return;
       setState(() {
@@ -503,9 +504,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   validator: _required,
                   isExpanded: true,
                   decoration: InputDecoration(
-                    labelText: widget.requesterRole == 'tl'
-                        ? 'HR approver'
-                        : 'TL / HR approver',
+                    labelText: '${_approverRoleLabel()} approver',
                   ),
                   items: _visitApprovers
                       .map(
@@ -527,19 +526,11 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   controller: _manager,
                   validator: _required,
                   decoration: InputDecoration(
-                    labelText: widget.requesterRole == 'tl'
-                        ? 'HR approver user ID'
-                        : 'TL / HR approver user ID',
-                    hintText: widget.requesterRole == 'tl'
-                        ? 'Example: BBHR0001'
-                        : 'Example: BBTL0001 or BBHR0001',
+                    labelText: '${_approverRoleLabel()} approver user ID',
+                    hintText: _approverHint(),
                     helperText: _tlLoadError == null
-                        ? widget.requesterRole == 'tl'
-                              ? 'Loading HR approvers…'
-                              : 'Loading TL and HR approvers…'
-                        : widget.requesterRole == 'tl'
-                        ? 'HR list unavailable. Enter an HR user ID.'
-                        : 'Approver list unavailable. Enter a TL/HR user ID.',
+                        ? 'Loading ${_approverRoleLabel()} approvers…'
+                        : '${_approverRoleLabel()} list unavailable. Enter an approver user ID.',
                     suffixIcon: _tlLoadError == null
                         ? const Padding(
                             padding: EdgeInsets.all(12),
@@ -549,9 +540,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                             ),
                           )
                         : IconButton(
-                            tooltip: widget.requesterRole == 'tl'
-                                ? 'Reload HR approvers'
-                                : 'Reload TL/HR approvers',
+                            tooltip: 'Reload ${_approverRoleLabel()} approvers',
                             onPressed: _loadReportingTls,
                             icon: const Icon(Icons.refresh),
                           ),
@@ -587,6 +576,18 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       ),
     ),
   );
+
+  String _approverRoleLabel() => switch (widget.requesterRole) {
+    'tl' => 'HR',
+    'hr' => 'CEO',
+    _ => 'TL / HR',
+  };
+
+  String _approverHint() => switch (widget.requesterRole) {
+    'tl' => 'Example: BBHR0001',
+    'hr' => 'Example: BBCEO0001',
+    _ => 'Example: BBTL0001 or BBHR0001',
+  };
 }
 
 class ClientVisitDetailScreen extends StatefulWidget {

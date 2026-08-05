@@ -8,7 +8,7 @@ class ClientVisitService {
 
   Future<List<Map<String, dynamic>>> fetchVisitApprovers(
     String userId, {
-    bool hrOnly = false,
+    bool requiresRoleAwareApprovers = false,
   }) async {
     var response = await http
         .get(
@@ -21,9 +21,9 @@ class ClientVisitService {
     // Backward compatibility while an older Render release is still active.
     // The new endpoint includes HR; the legacy endpoint contains TLs only.
     if (response.statusCode == 404) {
-      if (hrOnly) {
+      if (requiresRoleAwareApprovers) {
         throw Exception(
-          'The server update for HR approvers is not deployed yet. Please deploy the latest backend and retry.',
+          'The server update for role-based approvers is not deployed yet. Please deploy the latest backend and retry.',
         );
       }
       response = await http

@@ -96,6 +96,22 @@ class ClientVisitApiTests(APITestCase):
             module='client_visit',
             reference_id=str(response.data['visit']['id']),
         ).exists())
+        visit_id = response.data['visit']['id']
+        tl_approval = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
+            'user_id': self.manager.user_id,
+            'action': 'approve',
+            'comment': 'A TL must not approve another TL request.',
+        }, format='json')
+        self.assertEqual(tl_approval.status_code, 403)
+
+        hr_approval = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
+            'user_id': hr.user_id,
+            'action': 'approve',
+            'comment': 'Approved by HR.',
+        }, format='json')
+        self.assertEqual(hr_approval.status_code, 200)
+        self.assertEqual(hr_approval.data['visit']['status'], 'approved')
+        self.assertEqual(hr_approval.data['visit']['approved_by'], hr.user_id)
         listing = self.client.get('/api/client-visits/', {
             'user_id': requester.user_id,
         })
@@ -141,6 +157,59 @@ class ClientVisitApiTests(APITestCase):
             employee_user_id=requester.user_id,
             client_name='Kumarapa Silks',
         ).exists())
+
+    def test_hr_sees_only_ceo_approvers_and_only_ceo_can_approve(self):
+        requester = User.objects.create_user(
+            'client-visit-requester-hr@example.com',
+            role='hr',
+        )
+        ceo = User.objects.create_user(
+            'client-visit-approver-ceo@example.com',
+            role='ceo',
+        )
+        other_hr = User.objects.create_user(
+            'client-visit-non-approver-hr@example.com',
+            role='hr',
+        )
+        approvers = self.client.get('/api/client-visits/approvers/', {
+            'user_id': requester.user_id,
+        })
+        self.assertEqual(approvers.status_code, 200)
+        self.assertEqual(
+            {item['employee_id'] for item in approvers.data['approvers']},
+            {ceo.user_id},
+        )
+
+        created = self.client.post('/api/client-visits/', {
+            'user_id': requester.user_id,
+            'manager_user_id': ceo.user_id,
+            'client_name': 'HR Client Visit',
+            'contact_person': 'Bhanu',
+            'contact_phone': '9572646433',
+            'address': 'Omalur',
+            'scheduled_date': '2026-08-10',
+            'scheduled_time': '13:00',
+            'purpose': 'Client project discussion',
+            'submit': True,
+        }, format='json')
+        self.assertEqual(created.status_code, 201)
+        visit_id = created.data['visit']['id']
+
+        hr_approval = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
+            'user_id': other_hr.user_id,
+            'action': 'approve',
+        }, format='json')
+        self.assertEqual(hr_approval.status_code, 403)
+        self.assertIn('CEO approval is required', hr_approval.data['message'])
+
+        ceo_approval = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
+            'user_id': ceo.user_id,
+            'action': 'approve',
+            'comment': 'Approved by CEO.',
+        }, format='json')
+        self.assertEqual(ceo_approval.status_code, 200)
+        self.assertEqual(ceo_approval.data['visit']['status'], 'approved')
+        self.assertEqual(ceo_approval.data['visit']['approved_by'], ceo.user_id)
 
     def test_contact_mobile_number_is_validated_and_normalized(self):
         invalid = self.client.post('/api/client-visits/', {

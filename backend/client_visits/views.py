@@ -96,9 +96,12 @@ def _resolve_reporting_manager(value, *, requester=None):
     raw = str(value or '').strip()
     if not raw:
         return None, ''
-    approver_roles = {'hr'} if requester and requester.role == 'tl' else {
-        'manager', 'tl', 'hr',
-    }
+    if requester and requester.role == 'tl':
+        approver_roles = {'hr'}
+    elif requester and requester.role == 'hr':
+        approver_roles = {'ceo'}
+    else:
+        approver_roles = {'manager', 'tl', 'hr'}
     supervisors = User.objects.filter(
         role__in=approver_roles,
         is_active=True,
@@ -121,6 +124,8 @@ def _resolve_reporting_manager(value, *, requester=None):
         return None, 'More than one approver has this name. Select the approver user ID.'
     if requester and requester.role == 'tl':
         return None, 'HR approver was not found. Select a valid HR approver.'
+    if requester and requester.role == 'hr':
+        return None, 'CEO approver was not found. Select a valid CEO approver.'
     return None, 'TL/HR approver was not found. Select a valid approver.'
 
 
@@ -140,8 +145,13 @@ def visit_approvers(request):
     if not user:
         return _error('An active user_id is required.', 401)
     approvers = []
-    role_order = {'tl': 0, 'hr': 1}
-    approver_roles = {'hr'} if user.role == 'tl' else {'tl', 'hr'}
+    role_order = {'tl': 0, 'hr': 1, 'ceo': 2}
+    if user.role == 'tl':
+        approver_roles = {'hr'}
+    elif user.role == 'hr':
+        approver_roles = {'ceo'}
+    else:
+        approver_roles = {'tl', 'hr'}
     queryset = User.objects.filter(
         role__in=approver_roles,
         is_active=True,
@@ -152,7 +162,11 @@ def visit_approvers(request):
             'employee_id': approver.user_id,
             'label': name or approver.email,
             'role': approver.role,
-            'role_label': 'Team Lead' if approver.role == 'tl' else 'HR',
+            'role_label': {
+                'tl': 'Team Lead',
+                'hr': 'HR',
+                'ceo': 'CEO',
+            }[approver.role],
         })
     approvers.sort(key=lambda item: (role_order[item['role']], item['label'].casefold()))
     return Response({'success': True, 'approvers': approvers})
@@ -356,9 +370,22 @@ def visit_detail(request, pk):
 def visit_approval(request, pk):
     user_id, user = _actor(request)
     visit = get_object_or_404(ClientVisit, pk=pk)
-    if not user or user.role not in SUPERVISOR_ROLES:
-        return _error('Manager, TL, HR or Admin access is required.', 403)
-    if user.role in {'manager', 'tl'} and visit.manager_user_id != user_id:
+    approval_roles = SUPERVISOR_ROLES | {'ceo'}
+    if not user or user.role not in approval_roles:
+        return _error('Manager, TL, HR, CEO or Admin access is required.', 403)
+    requester = User.objects.filter(user_id=visit.employee_user_id).only('role').first()
+    requester_role = requester.role if requester else ''
+    required_approver_role = {'tl': 'hr', 'hr': 'ceo'}.get(requester_role)
+    if required_approver_role and (
+        user.role != required_approver_role or visit.manager_user_id != user_id
+    ):
+        return _error(
+            f'{required_approver_role.upper()} approval is required for this visit.',
+            403,
+        )
+    if not required_approver_role and user.role == 'ceo':
+        return _error('CEO approval applies only to HR client visits.', 403)
+    if not required_approver_role and user.role in {'manager', 'tl'} and visit.manager_user_id != user_id:
         return _error('This visit is not assigned to you.', 403)
     if visit.status != 'pending':
         return _error('Only pending visits can be reviewed.', 409)

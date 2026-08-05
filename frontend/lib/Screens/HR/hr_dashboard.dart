@@ -204,6 +204,7 @@ class _HrDashboardState extends State<HrDashboard> {
                         body: ClientVisitDashboardScreen(
                           userId: widget.userId,
                           reviewerMode: true,
+                          requesterRole: 'hr',
                         ),
                       ),
                     ),
