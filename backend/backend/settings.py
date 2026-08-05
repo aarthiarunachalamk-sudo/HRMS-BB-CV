@@ -18,19 +18,24 @@ import cloudinary
  
 load_dotenv()
 
+# All Cloudinary uploads (HRMS profiles, documents, and client visits) use
+# the single client-visit Cloudinary account. The legacy CLOUDINARY_* vars
+# are no longer used; configure CLIENT_VISIT_CLOUDINARY_* in .env instead.
+_cv_cloud_name = os.getenv('CLIENT_VISIT_CLOUDINARY_CLOUD_NAME', '').strip()
+_cv_api_key = os.getenv('CLIENT_VISIT_CLOUDINARY_API_KEY', '').strip()
+_cv_api_secret = os.getenv('CLIENT_VISIT_CLOUDINARY_API_SECRET', '').strip()
+
 cloudinary.config(
-    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME', ''),
-    api_key=os.getenv('CLOUDINARY_API_KEY', ''),
-    api_secret=os.getenv('CLOUDINARY_API_SECRET', ''),
+    cloud_name=_cv_cloud_name,
+    api_key=_cv_api_key,
+    api_secret=_cv_api_secret,
     secure=True,
 )
 
-# Client Visit media must use a separate Cloudinary account. These values
-# never silently fall back to the primary HRMS Cloudinary settings.
 CLIENT_VISIT_CLOUDINARY_STORAGE = {
-    'cloud_name': os.getenv('CLIENT_VISIT_CLOUDINARY_CLOUD_NAME', '').strip(),
-    'api_key': os.getenv('CLIENT_VISIT_CLOUDINARY_API_KEY', '').strip(),
-    'api_secret': os.getenv('CLIENT_VISIT_CLOUDINARY_API_SECRET', '').strip(),
+    'cloud_name': _cv_cloud_name,
+    'api_key': _cv_api_key,
+    'api_secret': _cv_api_secret,
     'folder': os.getenv('CLIENT_VISIT_CLOUDINARY_FOLDER', 'hrms-client-visits').strip(),
 }
  
