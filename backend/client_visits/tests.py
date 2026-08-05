@@ -1,12 +1,16 @@
+from io import BytesIO
 from unittest.mock import patch
 
 from cloudinary.exceptions import Error as CloudinaryError
+from django.core.exceptions import ImproperlyConfigured
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from rest_framework.test import APITestCase
+from PIL import Image
 
 from hrms.models import AppNotification, User
 from .models import ClientVisit, VisitAttachment
+from .storage import client_visit_storage_config
 
 
 @override_settings(CLIENT_VISIT_CLOUDINARY_STORAGE={
@@ -35,6 +39,16 @@ class ClientVisitApiTests(APITestCase):
             'purpose': 'Project discussion',
             'submit': True,
         }, format='json')
+
+    @patch('client_visits.storage.cloudinary.config')
+    def test_client_visit_cloudinary_must_differ_from_primary_account(self, config):
+        config.return_value.cloud_name = 'client-visits-test-cloud'
+
+        with self.assertRaisesMessage(
+            ImproperlyConfigured,
+            'must use a different cloud name',
+        ):
+            client_visit_storage_config()
 
     def test_reporting_tl_name_is_resolved_to_the_system_user_id(self):
         response = self._create(manager_user_id='Rajesh')
@@ -498,6 +512,29 @@ class ClientVisitApiTests(APITestCase):
             self.assertEqual(call.kwargs['cloud_name'], 'client-visits-test-cloud')
             self.assertEqual(call.kwargs['api_key'], 'client-visits-test-key')
             self.assertEqual(call.kwargs['api_secret'], 'client-visits-test-secret')
+
+    @patch('client_visits.storage.cloudinary.uploader.upload')
+    def test_android_camera_image_with_octet_stream_mime_is_accepted(self, upload):
+        image = BytesIO()
+        Image.new('RGB', (2, 2), color='white').save(image, format='JPEG')
+        upload.return_value = {
+            'secure_url': 'https://res.cloudinary.com/test/selfie.jpg',
+            'public_id': 'office-selfie',
+            'resource_type': 'image',
+        }
+        visit_id = self._create().data['visit']['id']
+
+        response = self.client.post(f'/api/client-visits/{visit_id}/attachments/', {
+            'user_id': self.employee.user_id,
+            'category': 'office_checkout',
+            'files': SimpleUploadedFile(
+                'image_picker_cache', image.getvalue(),
+                content_type='application/octet-stream',
+            ),
+        }, format='multipart')
+
+        self.assertEqual(response.status_code, 201)
+        upload.assert_called_once()
 
     def test_unassigned_manager_cannot_review_visit(self):
         visit_id = self._create().data['visit']['id']

@@ -11,7 +11,7 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: CLIENT_VISIT_CLOUDINARY_CLOUD_NAME
-        value: duc0r8bd5
+        sync: false
       - key: CLIENT_VISIT_CLOUDINARY_API_KEY
         sync: false
       - key: CLIENT_VISIT_CLOUDINARY_API_SECRET

@@ -12,6 +12,7 @@ from django.utils import timezone
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
+from PIL import Image, UnidentifiedImageError
 
 from hrms.models import AppNotification, User
 from hrms.push_notifications import send_mobile_push
@@ -36,6 +37,21 @@ def _actor(request):
 
 def _error(message, status=400):
     return Response({'success': False, 'message': message}, status=status)
+
+
+def _is_camera_image(upload):
+    """Accept declared images and verify Android cache files with no MIME type."""
+    content_type = str(getattr(upload, 'content_type', '') or '').lower()
+    if content_type.startswith('image/'):
+        return True
+    original_position = upload.tell()
+    try:
+        Image.open(upload).verify()
+        return True
+    except (UnidentifiedImageError, OSError, ValueError):
+        return False
+    finally:
+        upload.seek(original_position)
 
 
 def _notify(*, user_id='', role='', title, message, notification_type='info', visit):
@@ -704,8 +720,7 @@ def visit_attachment(request, pk):
             return _error('The selected attachment is empty.')
         if upload.size > 10 * 1024 * 1024:
             return _error('Each Client Visit attachment must be 10 MB or smaller.', 413)
-        content_type = str(getattr(upload, 'content_type', '') or '').lower()
-        if category in selfie_categories and not content_type.startswith('image/'):
+        if category in selfie_categories and not _is_camera_image(upload):
             return _error('A valid camera image is required for this selfie.')
     created = []
     # Each category receives its own Cloudinary folder, keeping visit media separate.

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'client_visit_models.dart';
 
@@ -178,8 +179,25 @@ class ClientVisitService {
       Uri.parse('$_base$id/attachments/'),
     );
     request.fields.addAll({'user_id': userId, 'category': category});
+    const selfieCategories = {
+      'check_in',
+      'office_checkout',
+      'client_check_in',
+      'checkout',
+    };
     for (final path in paths) {
-      request.files.add(await http.MultipartFile.fromPath('files', path));
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'files',
+          path,
+          filename: selfieCategories.contains(category)
+              ? 'client_visit_selfie_${DateTime.now().microsecondsSinceEpoch}.jpg'
+              : null,
+          contentType: selfieCategories.contains(category)
+              ? MediaType('image', 'jpeg')
+              : null,
+        ),
+      );
     }
     _body(await http.Response.fromStream(await request.send()));
   }

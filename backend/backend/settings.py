@@ -25,8 +25,8 @@ cloudinary.config(
     secure=True,
 )
 
-# Client Visit media uses explicit credentials and a dedicated folder. These
-# values never silently fall back to the primary HRMS Cloudinary settings.
+# Client Visit media must use a separate Cloudinary account. These values
+# never silently fall back to the primary HRMS Cloudinary settings.
 CLIENT_VISIT_CLOUDINARY_STORAGE = {
     'cloud_name': os.getenv('CLIENT_VISIT_CLOUDINARY_CLOUD_NAME', '').strip(),
     'api_key': os.getenv('CLIENT_VISIT_CLOUDINARY_API_KEY', '').strip(),
