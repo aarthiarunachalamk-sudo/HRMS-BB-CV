@@ -21,6 +21,7 @@ from .storage import upload_client_visit_file
 
 
 SUPERVISOR_ROLES = {'manager', 'tl', 'hr', 'admin', 'superadmin'}
+DAILY_VISIT_LIMIT = 5   # maximum visits any employee may schedule on a single date
 logger = logging.getLogger(__name__)
 EDITABLE_FIELDS = (
     'client_name', 'contact_person', 'contact_phone', 'address', 'latitude',
@@ -409,6 +410,23 @@ def visit_list_create(request):
     if reporting_manager:
         visit.manager_user_id = reporting_manager.user_id
     visit.status = 'pending' if str(request.data.get('submit') or '').lower() in {'1', 'true', 'yes'} else 'draft'
+
+    # Enforce the daily visit limit — count all non-rejected visits for this
+    # employee on the requested date.
+    scheduled_date = visit.scheduled_date
+    if scheduled_date:
+        existing_count = ClientVisit.objects.filter(
+            employee_user_id=user_id,
+            scheduled_date=scheduled_date,
+        ).exclude(status='rejected').count()
+        if existing_count >= DAILY_VISIT_LIMIT:
+            return _error(
+                f'Daily visit limit reached. You can schedule a maximum of '
+                f'{DAILY_VISIT_LIMIT} visits per day. '
+                f'You already have {existing_count} visit(s) on {scheduled_date}.',
+                400,
+            )
+
     try:
         visit.save()
     except (ValueError, TypeError) as exc:
