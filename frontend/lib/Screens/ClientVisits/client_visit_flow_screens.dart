@@ -334,9 +334,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       });
       if (widget.step == 6 && visit.status == 'travelling') {
         unawaited(_startTravelTracking());
-        // Geocode the client address to show destination pin on map.
+        // Use exact stored coordinates if available, else geocode the address.
         if (!_geocodingDone) {
-          unawaited(_geocodeDestination(visit.address));
+          if (visit.clientLatitude != null && visit.clientLongitude != null) {
+            _geocodingDone = true;
+            setState(() {
+              _destinationLatLng = LatLng(
+                visit.clientLatitude!,
+                visit.clientLongitude!,
+              );
+            });
+            _fitMapBounds();
+          } else {
+            unawaited(_geocodeDestination(visit.address));
+          }
         }
       }
     } catch (error) {

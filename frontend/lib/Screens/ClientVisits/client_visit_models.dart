@@ -27,6 +27,8 @@ class ClientVisit {
   final double? officeCheckOutLongitude;
   final double? reachedClientLatitude;
   final double? reachedClientLongitude;
+  final double? clientLatitude;   // planned destination set at visit creation
+  final double? clientLongitude;
   final List<Map<String, dynamic>> travelRoute;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
@@ -67,6 +69,8 @@ class ClientVisit {
     required this.officeCheckOutLongitude,
     required this.reachedClientLatitude,
     required this.reachedClientLongitude,
+    required this.clientLatitude,
+    required this.clientLongitude,
     required this.travelRoute,
     required this.checkInAt,
     required this.checkOutAt,
@@ -121,6 +125,8 @@ class ClientVisit {
       reachedClientLongitude: double.tryParse(
         '${json['reached_client_longitude'] ?? ''}',
       ),
+      clientLatitude: double.tryParse('${json['latitude'] ?? ''}'),
+      clientLongitude: double.tryParse('${json['longitude'] ?? ''}'),
       travelRoute: _maps(json['travel_route']),
       checkInAt: DateTime.tryParse('${json['check_in_at'] ?? ''}'),
       checkOutAt: DateTime.tryParse('${json['check_out_at'] ?? ''}'),

@@ -535,6 +535,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   final _contact = TextEditingController();
   final _phone = TextEditingController();
   final _address = TextEditingController();
+  final _locationCoords = TextEditingController(); // paste coords from WhatsApp
   final _purpose = TextEditingController();
   final _notes = TextEditingController();
   final _manager = TextEditingController();
@@ -585,6 +586,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       _contact,
       _phone,
       _address,
+      _locationCoords,
       _purpose,
       _notes,
       _manager,
@@ -596,6 +598,62 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
 
   String? _required(String? value) =>
       (value ?? '').trim().isEmpty ? 'Required' : null;
+
+  /// Parses a coordinate string pasted from WhatsApp / Google Maps.
+  /// Handles formats:
+  ///   "11.686478, 78.120482"
+  ///   "11°41'11.3\"N 78°07'13.7\"E"
+  ///   "11.686478,78.120482"
+  ///   Google Maps share URL containing @lat,lng
+  static ({double lat, double lng})? _parseCoords(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+
+    // Google Maps URL: contains @lat,lng,zoom or ?q=lat,lng
+    final urlLatLng = RegExp(r'[/@](-?\d+\.?\d*),(-?\d+\.?\d*)').firstMatch(text);
+    if (urlLatLng != null) {
+      final lat = double.tryParse(urlLatLng.group(1)!);
+      final lng = double.tryParse(urlLatLng.group(2)!);
+      if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
+        return (lat: lat, lng: lng);
+      }
+    }
+
+    // Decimal degrees: "11.686478, 78.120482" or "11.686478,78.120482"
+    final decimal = RegExp(r'^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$').firstMatch(text);
+    if (decimal != null) {
+      final lat = double.tryParse(decimal.group(1)!);
+      final lng = double.tryParse(decimal.group(2)!);
+      if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
+        return (lat: lat, lng: lng);
+      }
+    }
+
+    // DMS: 11°41'11.3"N 78°07'13.7"E
+    final dms = RegExp(
+      r'''(\d+)[°]\s*(\d+)[\'′]\s*(\d+\.?\d*)["″]\s*([NS])\s+(\d+)[°]\s*(\d+)[\'′]\s*(\d+\.?\d*)["″]\s*([EW])''',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (dms != null) {
+      double toDecimal(String d, String m, String s) =>
+          double.parse(d) + double.parse(m) / 60 + double.parse(s) / 3600;
+      double lat = toDecimal(dms.group(1)!, dms.group(2)!, dms.group(3)!);
+      double lng = toDecimal(dms.group(5)!, dms.group(6)!, dms.group(7)!);
+      if (dms.group(4)!.toUpperCase() == 'S') lat = -lat;
+      if (dms.group(8)!.toUpperCase() == 'W') lng = -lng;
+      return (lat: lat, lng: lng);
+    }
+
+    return null;
+  }
+
+  String? _validateCoords(String? value) {
+    if ((value ?? '').trim().isEmpty) return null; // optional field
+    if (_parseCoords(value!) == null) {
+      return 'Paste a valid location (e.g. 11.686478, 78.120482)';
+    }
+    return null;
+  }
 
   String? _mobileNumber(String? value) {
     final mobile = (value ?? '').trim();
@@ -610,11 +668,14 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
+      final coords = _parseCoords(_locationCoords.text);
       await widget.service.create(widget.userId, {
         'client_name': _client.text.trim(),
         'contact_person': _contact.text.trim(),
         'contact_phone': _phone.text.trim(),
         'address': _address.text.trim(),
+        if (coords != null) 'latitude': coords.lat,
+        if (coords != null) 'longitude': coords.lng,
         'scheduled_date': _ymd(_date),
         'scheduled_time':
             '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}',
@@ -681,6 +742,27 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Client address',
                   ),
+                ),
+                const SizedBox(height: 4),
+                TextFormField(
+                  controller: _locationCoords,
+                  validator: _validateCoords,
+                  decoration: InputDecoration(
+                    labelText: 'Client location (paste from WhatsApp / Maps)',
+                    hintText: '11.686478, 78.120482',
+                    helperText:
+                        'Paste coordinates or Google Maps link for exact pin',
+                    helperMaxLines: 2,
+                    suffixIcon: _locationCoords.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => setState(
+                              () => _locationCoords.clear(),
+                            ),
+                          )
+                        : const Icon(Icons.my_location_rounded),
+                  ),
+                  onChanged: (_) => setState(() {}),
                 ),
               ],
             ),
