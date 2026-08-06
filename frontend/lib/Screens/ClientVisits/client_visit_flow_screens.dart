@@ -288,6 +288,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   // ETA/distance updated by _LiveMapView via callback.
   String _etaText = '';
   String _distanceText = '';
+  // Route alternatives from _LiveMapView.
+  List<_RouteOption> _routeOptions = [];
+  int _selectedRouteIndex = 0;
   List<String> _attendees = [];
   List<Map<String, dynamic>> _checklist = [];
 
@@ -948,10 +951,17 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 current: current,
                 destination: _destinationLatLng,
                 fullScreen: true,
+                selectedRouteIndex: _selectedRouteIndex,
                 onEtaUpdate: (eta, dist) {
                   if (mounted) setState(() {
                     _etaText = eta;
                     _distanceText = dist;
+                  });
+                },
+                onRoutesReady: (routes, idx) {
+                  if (mounted) setState(() {
+                    _routeOptions = routes;
+                    _selectedRouteIndex = idx;
                   });
                 },
               ),
@@ -1151,6 +1161,154 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // ── Route alternatives (like Google Maps left panel) ──
+                    if (_routeOptions.length > 1) ...[
+                      Row(
+                        children: [
+                          const Icon(Icons.alt_route,
+                              size: 16, color: Color(0xFF5F6368)),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Route options',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF202124),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ...List.generate(_routeOptions.length, (i) {
+                        final route = _routeOptions[i];
+                        final isSelected = i == _selectedRouteIndex;
+                        final isFastest = i == 0;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() => _selectedRouteIndex = i);
+                            // Notify map to switch selected route.
+                            _mapController.move(
+                              _destinationLatLng ??
+                                  const LatLng(20.5937, 78.9629),
+                              13,
+                            );
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(0xFF1A73E8).withAlpha(18)
+                                  : Colors.grey.withAlpha(15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF1A73E8)
+                                    : Colors.grey.withAlpha(60),
+                                width: isSelected ? 1.5 : 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.directions_car,
+                                  color: isSelected
+                                      ? const Color(0xFF1A73E8)
+                                      : Colors.grey,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            route.durationLabel,
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w800,
+                                              color: isSelected
+                                                  ? const Color(0xFF1A73E8)
+                                                  : const Color(0xFF202124),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            route.distanceLabel,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Color(0xFF5F6368),
+                                            ),
+                                          ),
+                                          if (isFastest) ...[
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF34A853)
+                                                    .withAlpha(30),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: const Text(
+                                                'Fastest',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: Color(0xFF34A853),
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                      if (route.via.isNotEmpty)
+                                        Text(
+                                          route.via,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF5F6368),
+                                          ),
+                                        ),
+                                      if (route.hasTolls)
+                                        const Row(
+                                          children: [
+                                            Icon(Icons.warning_amber_rounded,
+                                                size: 12,
+                                                color: Color(0xFFF29900)),
+                                            SizedBox(width: 3),
+                                            Text(
+                                              'This route has tolls',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Color(0xFFF29900),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Icon(Icons.check_circle,
+                                      color: Color(0xFF1A73E8), size: 18),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 4),
+                      const Divider(height: 1),
                       const SizedBox(height: 12),
                     ],
 
@@ -2166,11 +2324,41 @@ class _FlowTimerState extends State<_FlowTimer> {
   }
 }
 
+/// Represents one OSRM route option (there can be up to 3 alternatives).
+class _RouteOption {
+  final List<LatLng> points;
+  final double distanceKm;
+  final int durationMinutes;
+  final String via;        // e.g. "NH 44 and AH45"
+  final bool hasTolls;
+
+  const _RouteOption({
+    required this.points,
+    required this.distanceKm,
+    required this.durationMinutes,
+    required this.via,
+    required this.hasTolls,
+  });
+
+  String get durationLabel {
+    if (durationMinutes < 60) return '$durationMinutes min';
+    final h = durationMinutes ~/ 60;
+    final m = durationMinutes % 60;
+    return m == 0 ? '${h}h' : '${h}h ${m}m';
+  }
+
+  String get distanceLabel {
+    return distanceKm < 1
+        ? '${(distanceKm * 1000).round()} m'
+        : '${distanceKm.toStringAsFixed(0)} km';
+  }
+}
+
 /// Full Google-Maps-style live tracking map.
-/// - Road route fetched from OSRM (free, no API key).
+/// - Fetches up to 3 alternate road routes from OSRM.
+/// - User can tap a route to select it (blue = selected, grey = alternate).
 /// - Animated pulsing dot + navigation arrow for current position.
-/// - Bottom info card with remaining distance and ETA.
-/// - Camera follows position automatically; re-center button snaps back.
+/// - Callback reports ETA/distance to parent for bottom sheet display.
 class _LiveMapView extends StatefulWidget {
   final MapController mapController;
   final List<LatLng> routePoints;   // actual GPS breadcrumb trail
@@ -2179,6 +2367,8 @@ class _LiveMapView extends StatefulWidget {
   final LatLng? destination;
   final bool fullScreen;
   final void Function(String eta, String distance)? onEtaUpdate;
+  final void Function(List<_RouteOption> routes, int selectedIndex)? onRoutesReady;
+  final int selectedRouteIndex;
 
   const _LiveMapView({
     required this.mapController,
@@ -2188,6 +2378,8 @@ class _LiveMapView extends StatefulWidget {
     this.destination,
     this.fullScreen = false,
     this.onEtaUpdate,
+    this.onRoutesReady,
+    this.selectedRouteIndex = 0,
   });
 
   @override
@@ -2200,12 +2392,14 @@ class _LiveMapViewState extends State<_LiveMapView>
   late final AnimationController _pulse;
   late final Animation<double> _pulseAnim;
 
-  // Road route fetched from OSRM.
-  List<LatLng> _roadRoute = [];
-  double _remainingKm = 0;
-  int _etaMinutes = 0;
+  // Multiple route alternatives from OSRM.
+  List<_RouteOption> _routes = [];
+  int _selectedRouteIndex = 0;
   bool _fetchingRoute = false;
-  LatLng? _lastRouteFetch;   // avoid re-fetching for tiny moves
+  LatLng? _lastRouteFetch;
+
+  _RouteOption? get _selected =>
+      _routes.isEmpty ? null : _routes[_selectedRouteIndex];
 
   @override
   void initState() {
@@ -2227,10 +2421,15 @@ class _LiveMapViewState extends State<_LiveMapView>
     super.didUpdateWidget(old);
     final cur = widget.current;
     final dst = widget.destination;
+    // Sync route selection from parent (bottom sheet tap).
+    if (widget.selectedRouteIndex != old.selectedRouteIndex &&
+        widget.selectedRouteIndex < _routes.length) {
+      setState(() => _selectedRouteIndex = widget.selectedRouteIndex);
+    }
     if (cur == null || dst == null) return;
-    // Re-fetch road route every ~100 m of movement.
+    // Re-fetch every ~150 m of movement.
     if (_lastRouteFetch == null ||
-        const Distance().as(LengthUnit.Meter, cur, _lastRouteFetch!) > 100) {
+        const Distance().as(LengthUnit.Meter, cur, _lastRouteFetch!) > 150) {
       _fetchRoute(cur, dst);
     }
   }
@@ -2241,7 +2440,32 @@ class _LiveMapViewState extends State<_LiveMapView>
     super.dispose();
   }
 
-  /// Fetches a driving route from OSRM and calculates remaining distance + ETA.
+  /// Builds a human-readable "via" label from OSRM leg steps.
+  static String _viaLabel(Map<String, dynamic> route) {
+    try {
+      final legs = route['legs'] as List?;
+      if (legs == null || legs.isEmpty) return '';
+      final steps = (legs.first as Map)['steps'] as List? ?? [];
+      // Collect road names that look like highway refs (NH, AH, SH, etc.)
+      final highways = <String>{};
+      for (final step in steps) {
+        final ref = '${(step as Map)['ref'] ?? ''}'.trim();
+        final name = '${step['name'] ?? ''}'.trim();
+        for (final token in [...ref.split(';'), ...name.split(' ')]) {
+          final t = token.trim();
+          if (RegExp(r'^(NH|AH|SH|MDR|ODR)\s*\d+', caseSensitive: false)
+              .hasMatch(t)) {
+            highways.add(t.replaceAll(RegExp(r'\s+'), ' '));
+          }
+        }
+        if (highways.length >= 3) break;
+      }
+      if (highways.isNotEmpty) return 'via ${highways.take(2).join(' and ')}';
+    } catch (_) {}
+    return 'via road';
+  }
+
+  /// Fetches up to 3 driving route alternatives from OSRM.
   Future<void> _fetchRoute(LatLng from, LatLng to) async {
     if (_fetchingRoute) return;
     _fetchingRoute = true;
@@ -2251,36 +2475,73 @@ class _LiveMapViewState extends State<_LiveMapView>
         'https://router.project-osrm.org/route/v1/driving/'
         '${from.longitude},${from.latitude};'
         '${to.longitude},${to.latitude}'
-        '?overview=full&geometries=geojson',
+        '?overview=full&geometries=geojson&alternatives=3&steps=true&annotations=false',
       );
       final response = await http
           .get(url, headers: {'User-Agent': 'HRMS-Bitbyte/1.0'})
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final routes = data['routes'] as List?;
-        if (routes != null && routes.isNotEmpty) {
-          final route = routes.first as Map<String, dynamic>;
-          final distanceM = (route['distance'] as num).toDouble();
-          final durationS = (route['duration'] as num).toDouble();
+        final rawRoutes = data['routes'] as List? ?? [];
+        if (rawRoutes.isEmpty) return;
+
+        final parsed = rawRoutes.take(3).map((r) {
+          final route = r as Map<String, dynamic>;
+          final distM = (route['distance'] as num).toDouble();
+          final durS = (route['duration'] as num).toDouble();
           final coords = (route['geometry']['coordinates'] as List)
-              .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+              .map((c) =>
+                  LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
               .toList();
-          if (mounted) {
-            setState(() {
-              _roadRoute = coords;
-              _remainingKm = distanceM / 1000;
-              _etaMinutes = (durationS / 60).ceil();
-            });
-            widget.onEtaUpdate?.call(_etaLabel(), _distanceLabel());
-          }
+          final via = _viaLabel(route);
+          return _RouteOption(
+            points: coords,
+            distanceKm: distM / 1000,
+            durationMinutes: (durS / 60).ceil(),
+            via: via,
+            hasTolls: via.toLowerCase().contains('nh') ||
+                via.toLowerCase().contains('ah'),
+          );
+        }).toList();
+
+        if (mounted) {
+          setState(() {
+            _routes = parsed;
+            // Keep previous selection if still valid.
+            if (_selectedRouteIndex >= parsed.length) _selectedRouteIndex = 0;
+          });
+          widget.onEtaUpdate?.call(
+            _selected?.durationLabel ?? '',
+            _selected?.distanceLabel ?? '',
+          );
+          widget.onRoutesReady?.call(parsed, _selectedRouteIndex);
         }
       }
     } catch (_) {
-      // Route fetch failed — fall back to straight line between points.
+      // Silently fall back — map still works without road route.
     } finally {
       _fetchingRoute = false;
     }
+  }
+
+  void _selectRoute(int index) {
+    if (index < 0 || index >= _routes.length) return;
+    setState(() => _selectedRouteIndex = index);
+    widget.onEtaUpdate?.call(
+      _routes[index].durationLabel,
+      _routes[index].distanceLabel,
+    );
+    widget.onRoutesReady?.call(_routes, index);
+    // Pan map to fit selected route.
+    try {
+      if (_routes[index].points.isNotEmpty) {
+        final bounds = LatLngBounds.fromPoints(_routes[index].points);
+        widget.mapController.fitCamera(
+          CameraFit.bounds(
+              bounds: bounds, padding: const EdgeInsets.all(60)),
+        );
+      }
+    } catch (_) {}
   }
 
   /// Bearing from [from] to [to] in degrees (0 = north, 90 = east).
@@ -2294,24 +2555,9 @@ class _LiveMapViewState extends State<_LiveMapView>
     return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
   }
 
-  String _distanceLabel() {
-    if (_remainingKm <= 0) return '';
-    return _remainingKm < 1
-        ? '${(_remainingKm * 1000).round()} m'
-        : '${_remainingKm.toStringAsFixed(1)} km';
-  }
-
-  String _etaLabel() {
-    if (_etaMinutes <= 0) return '';
-    if (_etaMinutes < 60) return '$_etaMinutes min';
-    final h = _etaMinutes ~/ 60;
-    final m = _etaMinutes % 60;
-    return m == 0 ? '${h}h' : '${h}h ${m}m';
-  }
-
-  // The road route to draw — prefer OSRM, fall back to breadcrumb trail.
+  // The selected road route to draw — fall back to breadcrumb if no routes yet.
   List<LatLng> get _displayRoute =>
-      _roadRoute.isNotEmpty ? _roadRoute : widget.routePoints;
+      _selected != null ? _selected!.points : widget.routePoints;
 
   LatLng get _center =>
       widget.current ??
@@ -2349,6 +2595,24 @@ class _LiveMapViewState extends State<_LiveMapView>
                 maxNativeZoom: 19,
               ),
 
+              // ── Alternate routes (grey, tappable) ──
+              for (int i = 0; i < _routes.length; i++)
+                if (i != _selectedRouteIndex && _routes[i].points.length >= 2)
+                  GestureDetector(
+                    onTap: () => _selectRoute(i),
+                    child: PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: _routes[i].points,
+                          color: Colors.grey.withAlpha(120),
+                          strokeWidth: 7,
+                          strokeCap: StrokeCap.round,
+                          strokeJoin: StrokeJoin.round,
+                        ),
+                      ],
+                    ),
+                  ),
+
               // ── Travelled breadcrumb (grey) ──
               if (widget.routePoints.length >= 2)
                 PolylineLayer(
@@ -2362,7 +2626,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                   ],
                 ),
 
-              // ── Road route ahead (Google-Maps style blue) ──
+              // ── Selected road route (Google-Maps style blue) ──
               if (_displayRoute.length >= 2)
                 PolylineLayer(
                   polylines: [
@@ -2574,15 +2838,14 @@ class _LiveMapViewState extends State<_LiveMapView>
           ),
 
         // ── Bottom ETA card — only shown in card (non-fullscreen) mode ──
-        if (!widget.fullScreen && _distanceLabel().isNotEmpty)
+        if (!widget.fullScreen && _selected != null)
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
             child: Container(
               color: Colors.white.withAlpha(242),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
                   const Icon(Icons.directions_car,
@@ -2594,9 +2857,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          _etaLabel().isNotEmpty
-                              ? '${_etaLabel()} away'
-                              : 'Calculating…',
+                          '${_selected!.durationLabel} away',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w800,
@@ -2604,7 +2865,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                           ),
                         ),
                         Text(
-                          _distanceLabel(),
+                          _selected!.distanceLabel,
                           style: const TextStyle(
                               fontSize: 11, color: Color(0xFF5F6368)),
                         ),
@@ -2622,15 +2883,14 @@ class _LiveMapViewState extends State<_LiveMapView>
             ),
           ),
 
-        // ── ETA row inside the bottom-sheet (full-screen mode) ───────
-        if (widget.fullScreen && _distanceLabel().isNotEmpty)
+        // ── ETA pill (full-screen mode, above bottom sheet) ──────────
+        if (widget.fullScreen && _selected != null)
           Positioned(
             left: 12,
             right: 60,
-            bottom: widget.fullScreen ? 72 : 10,
+            bottom: 72,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(30),
@@ -2648,9 +2908,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                       color: Color(0xFF1A73E8), size: 18),
                   const SizedBox(width: 8),
                   Text(
-                    _etaLabel().isNotEmpty
-                        ? '${_etaLabel()}  •  ${_distanceLabel()}'
-                        : _distanceLabel(),
+                    '${_selected!.durationLabel}  •  ${_selected!.distanceLabel}',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -2663,6 +2921,17 @@ class _LiveMapViewState extends State<_LiveMapView>
                       width: 12,
                       height: 12,
                       child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
+                  if (_routes.length > 1) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      '${_routes.length} routes',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF1A73E8),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ],
