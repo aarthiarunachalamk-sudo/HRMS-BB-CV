@@ -1075,37 +1075,40 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       ],
                     ]),
                     const SizedBox(height: 14),
-                    // ── Action buttons ──
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(children: [
-                        _placeActionButton(icon: Icons.diamond_outlined, label: 'Directions',
-                          color: const Color(0xFF00897B), filled: true, onTap: () {
+                    // ── Action buttons: Directions + Start only ──
+                    Row(children: [
+                      Expanded(
+                        child: _placeActionButton(
+                          icon: Icons.alt_route,
+                          label: 'Directions',
+                          color: const Color(0xFF00897B),
+                          filled: true,
+                          onTap: () {
                             try {
                               if (_routeOptions.isNotEmpty) {
                                 final pts = _routeOptions[_selectedRouteIndex].points;
-                                if (pts.length >= 2) _mapController.fitCamera(CameraFit.bounds(
-                                  bounds: LatLngBounds.fromPoints(pts),
-                                  padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
+                                if (pts.length >= 2) _mapController.fitCamera(
+                                  CameraFit.bounds(
+                                    bounds: LatLngBounds.fromPoints(pts),
+                                    padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
                               }
                             } catch (_) {}
                           }),
-                        const SizedBox(width: 10),
-                        _placeActionButton(icon: Icons.navigation_rounded, label: 'Start',
-                          color: const Color(0xFF1A73E8), onTap: () {
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _placeActionButton(
+                          icon: Icons.navigation_rounded,
+                          label: 'Start',
+                          color: const Color(0xFF1A73E8),
+                          filled: true,
+                          onTap: () {
                             if (_lastTrackedPosition != null)
-                              _mapController.move(LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude), 16);
+                              _mapController.move(
+                                LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude), 17);
                           }),
-                        const SizedBox(width: 10),
-                        _placeActionButton(icon: Icons.call_outlined, label: 'Call',
-                          color: const Color(0xFF1A73E8), onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Contact: ${visit.contactPhone.isEmpty ? visit.contactPerson : visit.contactPhone}')))),
-                        const SizedBox(width: 10),
-                        _placeActionButton(icon: Icons.share_outlined, label: 'Share',
-                          color: const Color(0xFF1A73E8), onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Visit info copied')))),
-                      ]),
-                    ),
+                      ),
+                    ]),
                     const SizedBox(height: 14),
                     const Divider(height: 1),
                     const SizedBox(height: 12),
@@ -1171,21 +1174,44 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       const Divider(height: 1),
                       const SizedBox(height: 12),
                     ],
-                    // ── GPS status ──
-                    if (_lastTrackedPosition != null)
-                      Row(children: [
-                        const Icon(Icons.gps_fixed, size: 13, color: Color(0xFF34A853)),
-                        const SizedBox(width: 5),
-                        Text(
-                          '${_lastTrackedPosition!.latitude.toStringAsFixed(5)}, ${_lastTrackedPosition!.longitude.toStringAsFixed(5)}  ±${_lastTrackedPosition!.accuracy.toStringAsFixed(0)} m',
-                          style: const TextStyle(fontSize: 11, color: Color(0xFF5F6368))),
-                      ])
-                    else
+                    // ── Live GPS coordinates ──
+                    if (_lastTrackedPosition != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF34A853).withAlpha(15),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF34A853).withAlpha(60)),
+                        ),
+                        child: Row(children: [
+                          const Icon(Icons.gps_fixed, size: 14, color: Color(0xFF34A853)),
+                          const SizedBox(width: 8),
+                          Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${_lastTrackedPosition!.latitude.toStringAsFixed(6)}°N, '
+                                '${_lastTrackedPosition!.longitude.toStringAsFixed(6)}°E',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF202124)),
+                              ),
+                              Text(
+                                'Accuracy: ±${_lastTrackedPosition!.accuracy.toStringAsFixed(0)} m',
+                                style: const TextStyle(fontSize: 11, color: Color(0xFF5F6368)),
+                              ),
+                            ],
+                          )),
+                          const Icon(Icons.circle, size: 8, color: Color(0xFF34A853)),
+                        ]),
+                      ),
+                      const SizedBox(height: 10),
+                    ] else ...[
                       const Row(children: [
                         SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2)),
                         SizedBox(width: 8),
                         Text('Waiting for GPS signal…', style: TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
                       ]),
+                      const SizedBox(height: 10),
+                    ],
                     // ── GPS error ──
                     if (_trackingError != null) ...[
                       const SizedBox(height: 8),
@@ -2719,32 +2745,50 @@ class _LiveMapViewState extends State<_LiveMapView>
           ),
         ),
 
-        // ── Re-center button ─────────────────────────────────────────
-        if (cur != null)
-          Positioned(
-            right: 10,
-            // In full-screen mode push it higher so it's above the
-            // bottom sheet handle.
-            bottom: widget.fullScreen ? 80 : 10,
-            child: Material(
-              color: Colors.white,
-              shape: const CircleBorder(),
-              elevation: 4,
-              child: InkWell(
-                customBorder: const CircleBorder(),
+        // ── Map control buttons (right side, Google Maps style) ─────
+        Positioned(
+          right: 10,
+          bottom: widget.fullScreen ? 260 : 10,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Zoom In
+              _mapControlButton(
+                icon: Icons.add,
                 onTap: () {
-                  try {
-                    widget.mapController.move(cur, 15);
-                  } catch (_) {}
+                  try { widget.mapController.move(widget.mapController.camera.center, widget.mapController.camera.zoom + 1); } catch (_) {}
                 },
-                child: const Padding(
-                  padding: EdgeInsets.all(10),
-                  child: Icon(Icons.my_location,
-                      size: 22, color: Color(0xFF1A73E8)),
-                ),
               ),
-            ),
+              const SizedBox(height: 4),
+              // Zoom Out
+              _mapControlButton(
+                icon: Icons.remove,
+                onTap: () {
+                  try { widget.mapController.move(widget.mapController.camera.center, widget.mapController.camera.zoom - 1); } catch (_) {}
+                },
+              ),
+              const SizedBox(height: 8),
+              // Compass / Rotate North
+              _mapControlButton(
+                icon: Icons.explore,
+                tooltip: 'Reset north',
+                onTap: () {
+                  try { widget.mapController.rotate(0); } catch (_) {}
+                },
+              ),
+              const SizedBox(height: 4),
+              // Re-center on current position
+              if (cur != null)
+                _mapControlButton(
+                  icon: Icons.my_location,
+                  iconColor: const Color(0xFF1A73E8),
+                  onTap: () {
+                    try { widget.mapController.move(cur, 16); } catch (_) {}
+                  },
+                ),
+            ],
           ),
+        ),
 
         // ── Bottom ETA card — only shown in card (non-fullscreen) mode ──
         if (!widget.fullScreen && _selected != null)
@@ -2857,6 +2901,29 @@ class _LiveMapViewState extends State<_LiveMapView>
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(height: 300, child: mapStack),
     );
+  }
+  // Helper: single square map control button (Google Maps style white card).
+  Widget _mapControlButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    Color iconColor = const Color(0xFF5F6368),
+    String? tooltip,
+  }) {
+    final btn = Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(4),
+      elevation: 3,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(4),
+        onTap: onTap,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(icon, size: 20, color: iconColor),
+        ),
+      ),
+    );
+    return tooltip != null ? Tooltip(message: tooltip, child: btn) : btn;
   }
 } // end _LiveMapViewState
 
