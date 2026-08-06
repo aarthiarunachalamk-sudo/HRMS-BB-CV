@@ -1189,12 +1189,22 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                         return GestureDetector(
                           onTap: () {
                             setState(() => _selectedRouteIndex = i);
-                            // Notify map to switch selected route.
-                            _mapController.move(
-                              _destinationLatLng ??
-                                  const LatLng(20.5937, 78.9629),
-                              13,
-                            );
+                            // Fit the map to the selected route bounds.
+                            if (_routeOptions.isNotEmpty && i < _routeOptions.length) {
+                              try {
+                                final pts = _routeOptions[i].points;
+                                if (pts.length >= 2) {
+                                  final bounds = LatLngBounds.fromPoints(pts);
+                                  _mapController.fitCamera(
+                                    CameraFit.bounds(
+                                      bounds: bounds,
+                                      padding: const EdgeInsets.fromLTRB(
+                                          40, 120, 40, 280),
+                                    ),
+                                  );
+                                }
+                              } catch (_) {}
+                            }
                           },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
@@ -2595,23 +2605,91 @@ class _LiveMapViewState extends State<_LiveMapView>
                 maxNativeZoom: 19,
               ),
 
-              // ── Alternate routes (grey, tappable) ──
-              for (int i = 0; i < _routes.length; i++)
-                if (i != _selectedRouteIndex && _routes[i].points.length >= 2)
-                  GestureDetector(
-                    onTap: () => _selectRoute(i),
-                    child: PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: _routes[i].points,
-                          color: Colors.grey.withAlpha(120),
-                          strokeWidth: 7,
-                          strokeCap: StrokeCap.round,
-                          strokeJoin: StrokeJoin.round,
-                        ),
-                      ],
-                    ),
+              // ── All alternate routes drawn on map (Google Maps style) ──
+              // Draw unselected routes first (behind), selected last (on top).
+              ...List.generate(_routes.length, (i) {
+                if (_routes[i].points.length < 2) return const SizedBox.shrink();
+                final isSelected = i == _selectedRouteIndex;
+                if (isSelected) return const SizedBox.shrink(); // drawn separately below
+                final altColor = i == 1
+                    ? const Color(0xFF4FC3F7)
+                    : Colors.grey.shade400;
+                return GestureDetector(
+                  onTap: () => _selectRoute(i),
+                  child: PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: _routes[i].points,
+                        color: Colors.white,
+                        strokeWidth: 9,
+                        strokeCap: StrokeCap.round,
+                        strokeJoin: StrokeJoin.round,
+                      ),
+                      Polyline(
+                        points: _routes[i].points,
+                        color: altColor.withAlpha(180),
+                        strokeWidth: 6,
+                        strokeCap: StrokeCap.round,
+                        strokeJoin: StrokeJoin.round,
+                      ),
+                    ],
                   ),
+                );
+              }),
+
+              // ── Time labels on each route (mid-point bubble) ──
+              MarkerLayer(
+                markers: List.generate(_routes.length, (i) {
+                  if (_routes[i].points.length < 2) {
+                    return Marker(
+                      point: const LatLng(0, 0),
+                      width: 0, height: 0,
+                      child: const SizedBox.shrink(),
+                    );
+                  }
+                  final pts = _routes[i].points;
+                  final mid = pts[pts.length ~/ 2];
+                  final isSelected = i == _selectedRouteIndex;
+                  return Marker(
+                    point: mid,
+                    width: 80,
+                    height: 30,
+                    child: GestureDetector(
+                      onTap: () => _selectRoute(i),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF1A73E8)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: const [
+                            BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 4,
+                                offset: Offset(0, 2)),
+                          ],
+                          border: isSelected
+                              ? null
+                              : Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Text(
+                          _routes[i].durationLabel,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF202124),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
 
               // ── Travelled breadcrumb (grey) ──
               if (widget.routePoints.length >= 2)
@@ -2626,7 +2704,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                   ],
                 ),
 
-              // ── Selected road route (Google-Maps style blue) ──
+              // ── Selected road route (Google-Maps style blue, drawn on top) ──
               if (_displayRoute.length >= 2)
                 PolylineLayer(
                   polylines: [
@@ -2908,8 +2986,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                       color: Color(0xFF1A73E8), size: 18),
                   const SizedBox(width: 8),
                   Text(
-                    '${_selected!.durationLabel}  •  ${_selected!.distanceLabel}',
-                    style: const TextStyle(
+                    '${_selected!.durationLabel}  •  ${_selected!.distanceLabel}',                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF202124),
