@@ -636,7 +636,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         content: TextField(
           controller: comment,
           maxLines: 3,
-          decoration: const InputDecoration(labelText: 'TL comment'),
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'Comment (required)',
+            hintText: action == 'approve'
+                ? 'e.g. Approved — proceed with visit'
+                : action == 'reject'
+                ? 'e.g. Visit purpose not clear'
+                : 'e.g. Please update the client address',
+          ),
         ),
         actions: [
           TextButton(
@@ -644,13 +652,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              if (comment.text.trim().isEmpty) return; // enforce non-empty
+              Navigator.pop(context, true);
+            },
             child: Text(confirmLabel),
           ),
         ],
       ),
     );
     if (accepted != true) return;
+    if (comment.text.trim().isEmpty) {
+      _message('A comment is required to ${action == 'approve' ? 'approve' : action} this visit.');
+      return;
+    }
     await _run(() async {
       await widget.service.action(widget.userId, widget.visitId, 'approval', {
         'action': action,
@@ -661,11 +676,18 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Future<void> _officeCheckout() async {
+    // Step 5 validation: both selfie AND GPS location required.
+    if (_selfiePath == null) {
+      _message('Please capture your selfie before checking out.');
+      return;
+    }
+    if (_capturedPosition == null) {
+      _message('Please capture your GPS location before checking out.');
+      return;
+    }
     await _run(() async {
-      final selfiePath = _selfiePath ?? await _captureSelfie();
-      if (selfiePath == null) return;
-      final position = _capturedPosition ?? await _capturePosition();
-      if (position == null) return;
+      final selfiePath = _selfiePath!;
+      final position = _capturedPosition!;
       await widget.service.uploadFiles(
         widget.userId,
         widget.visitId,
@@ -692,6 +714,23 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Future<void> _reached() async {
+    // Step 6 validation: confirm the employee has physically reached.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reached client?'),
+        content: const Text(
+          'Confirm you have arrived at the client location. '
+          'Your current GPS will be recorded as arrival point.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Not yet')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Yes, arrived')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     await _run(() async {
       await _travelSubscription?.cancel();
       _travelSubscription = null;
@@ -714,11 +753,18 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Future<void> _clientCheckIn() async {
+    // Step 7 validation: both selfie AND GPS required for client check-in.
+    if (_selfiePath == null) {
+      _message('Please capture your selfie at the client location.');
+      return;
+    }
+    if (_capturedPosition == null) {
+      _message('Please capture your GPS location at the client site.');
+      return;
+    }
     await _run(() async {
-      final selfiePath = _selfiePath ?? await _captureSelfie();
-      if (selfiePath == null) return;
-      final position = _capturedPosition ?? await _capturePosition();
-      if (position == null) return;
+      final selfiePath = _selfiePath!;
+      final position = _capturedPosition!;
       await widget.service.uploadFiles(
         widget.userId,
         widget.visitId,
@@ -745,6 +791,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Future<void> _saveWorkUpdate() async {
+    // Step 9 validation: notes required.
+    if (_notes.text.trim().isEmpty) {
+      _message('Please add notes about the work done during this visit.');
+      return;
+    }
     await _run(() async {
       await widget.service.action(widget.userId, widget.visitId, 'progress', {
         'notes': _notes.text.trim(),
@@ -796,15 +847,26 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Future<void> _complete() async {
+    // Step 11 validation: outcome required, selfie + GPS required.
     if (_outcome.text.trim().isEmpty) {
-      _message('Visit outcome is required.');
+      _message('Visit outcome is required to complete duty.');
+      return;
+    }
+    if (_outcome.text.trim().length < 10) {
+      _message('Outcome must be at least 10 characters. Please describe the visit result.');
+      return;
+    }
+    if (_selfiePath == null) {
+      _message('Please capture your selfie for checkout.');
+      return;
+    }
+    if (_capturedPosition == null) {
+      _message('Please capture your GPS location for checkout.');
       return;
     }
     await _run(() async {
-      final selfiePath = _selfiePath ?? await _captureSelfie();
-      if (selfiePath == null) return;
-      final position = _capturedPosition ?? await _capturePosition();
-      if (position == null) return;
+      final selfiePath = _selfiePath!;
+      final position = _capturedPosition!;
       await widget.service.uploadFiles(
         widget.userId,
         widget.visitId,
@@ -975,15 +1037,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               child: Row(
                 children: [
                   Material(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     shape: const CircleBorder(),
                     elevation: 4,
                     child: InkWell(
                       customBorder: const CircleBorder(),
                       onTap: () => Navigator.of(context).maybePop(),
-                      child: const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: Icon(Icons.arrow_back, size: 20),
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Icon(Icons.arrow_back, size: 20,
+                          color: Theme.of(context).colorScheme.onSurface),
                       ),
                     ),
                   ),
@@ -993,7 +1056,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.surface,
                         borderRadius: BorderRadius.circular(30),
                         boxShadow: const [
                           BoxShadow(
@@ -1010,10 +1073,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                           Expanded(
                             child: Text(
                               visit.clientName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF202124),
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -1032,11 +1095,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               initialChildSize: 0.38,
               minChildSize: 0.18,
               maxChildSize: 0.72,
-              builder: (context, scrollController) => Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 14, offset: Offset(0, -3))],
+              builder: (context, scrollController) {
+                final sheetBg = Theme.of(context).colorScheme.surface;
+                final textPrimary = Theme.of(context).colorScheme.onSurface;
+                final textSecondary = Theme.of(context).colorScheme.onSurfaceVariant;
+                return Container(
+                decoration: BoxDecoration(
+                  color: sheetBg,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 14, offset: Offset(0, -3))],
                 ),
                 child: ListView(
                   controller: scrollController,
@@ -1046,32 +1113,34 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     Center(child: Container(
                       margin: const EdgeInsets.symmetric(vertical: 10),
                       width: 40, height: 4,
-                      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).dividerColor,
+                        borderRadius: BorderRadius.circular(2)),
                     )),
                     // ── Place title + close ──
                     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Expanded(child: Text(visit.clientName,
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF202124)))),
-                      IconButton(icon: const Icon(Icons.close, color: Color(0xFF5F6368)),
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: textPrimary))),
+                      IconButton(icon: Icon(Icons.close, color: textSecondary),
                         onPressed: () => Navigator.of(context).maybePop(),
                         padding: EdgeInsets.zero, constraints: const BoxConstraints()),
                     ]),
                     const SizedBox(height: 2),
                     // ── Address ──
                     Text(visit.address,
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF5F6368)),
+                      style: TextStyle(fontSize: 13, color: textSecondary),
                       maxLines: 2, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 4),
                     // ── Category · ETA ──
                     Row(children: [
-                      const Icon(Icons.business_outlined, size: 13, color: Color(0xFF5F6368)),
+                      Icon(Icons.business_outlined, size: 13, color: textSecondary),
                       const SizedBox(width: 4),
-                      const Text('Client visit', style: TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
+                      Text('Client visit', style: TextStyle(fontSize: 12, color: textSecondary)),
                       if (_etaText.isNotEmpty) ...[
-                        const Text('  ·  ', style: TextStyle(color: Color(0xFF5F6368))),
-                        const Icon(Icons.directions_car, size: 13, color: Color(0xFF5F6368)),
+                        Text('  ·  ', style: TextStyle(color: textSecondary)),
+                        Icon(Icons.directions_car, size: 13, color: textSecondary),
                         const SizedBox(width: 3),
-                        Text(_etaText, style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
+                        Text(_etaText, style: TextStyle(fontSize: 12, color: textSecondary)),
                       ],
                     ]),
                     const SizedBox(height: 14),
@@ -1114,7 +1183,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     const SizedBox(height: 12),
                     // ── Route options ──
                     if (_routeOptions.length > 1) ...[
-                      const Text('Route options', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF202124))),
+                      Text('Route options', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: textPrimary)),
                       const SizedBox(height: 8),
                       ...List.generate(_routeOptions.length, (i) {
                         final r = _routeOptions[i];
@@ -1192,11 +1261,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                               Text(
                                 '${_lastTrackedPosition!.latitude.toStringAsFixed(6)}°N, '
                                 '${_lastTrackedPosition!.longitude.toStringAsFixed(6)}°E',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF202124)),
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.onSurface),
                               ),
                               Text(
                                 'Accuracy: ±${_lastTrackedPosition!.accuracy.toStringAsFixed(0)} m',
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF5F6368)),
+                                style: TextStyle(fontSize: 11,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant),
                               ),
                             ],
                           )),
@@ -1248,7 +1319,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     if (_working) const Padding(padding: EdgeInsets.only(top: 10), child: LinearProgressIndicator()),
                   ],  // ListView children
                 ),  // ListView
-              ),  // Container
+              );  // return Container
+              },  // DraggableScrollableSheet builder
             ),  // DraggableScrollableSheet
           ],  // Stack children
         ),  // Stack
@@ -2906,20 +2978,23 @@ class _LiveMapViewState extends State<_LiveMapView>
   Widget _mapControlButton({
     required IconData icon,
     required VoidCallback onTap,
-    Color iconColor = const Color(0xFF5F6368),
+    Color? iconColor,
     String? tooltip,
   }) {
-    final btn = Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(4),
-      elevation: 3,
-      child: InkWell(
+    final btn = Builder(
+      builder: (context) => Material(
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(4),
-        onTap: onTap,
-        child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Icon(icon, size: 20, color: iconColor),
+        elevation: 3,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(4),
+          onTap: onTap,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Icon(icon, size: 20,
+                color: iconColor ?? Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
         ),
       ),
     );
