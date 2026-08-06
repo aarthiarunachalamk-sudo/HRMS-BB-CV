@@ -285,6 +285,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   String? _trackingError;
   bool _sendingLocation = false;
   Timer? _trackingRetryTimer;
+  // ETA/distance updated by _LiveMapView via callback.
+  String _etaText = '';
+  String _distanceText = '';
   List<String> _attendees = [];
   List<Map<String, dynamic>> _checklist = [];
 
@@ -885,6 +888,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   @override
   Widget build(BuildContext context) {
     final visit = _visit;
+
+    // Step 6 (travelling) gets a full-screen Google-Maps-style layout.
+    if (widget.step == 6 && visit != null && _error == null) {
+      return _buildTravelScreen(visit);
+    }
+
     return ClientVisitTheme(
       child: Scaffold(
         appBar: AppBar(title: Text(_title(widget.step))),
@@ -905,6 +914,353 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     ),
                 ],
               ),
+      ),
+    );
+  }
+
+  /// Full-screen Google Maps navigation layout for the travelling step.
+  Widget _buildTravelScreen(ClientVisit visit) {
+    final origin = _visit!.officeCheckOutLatitude != null &&
+            _visit!.officeCheckOutLongitude != null
+        ? LatLng(
+            _visit!.officeCheckOutLatitude!,
+            _visit!.officeCheckOutLongitude!,
+          )
+        : null;
+    final current = _lastTrackedPosition != null
+        ? LatLng(
+            _lastTrackedPosition!.latitude,
+            _lastTrackedPosition!.longitude,
+          )
+        : null;
+
+    return ClientVisitTheme(
+      child: Scaffold(
+        // No AppBar — map fills the entire screen like Google Maps.
+        body: Stack(
+          children: [
+            // ── Full-screen map ──────────────────────────────────────
+            Positioned.fill(
+              child: _LiveMapView(
+                mapController: _mapController,
+                routePoints: _liveRoutePoints,
+                origin: origin,
+                current: current,
+                destination: _destinationLatLng,
+                fullScreen: true,
+                onEtaUpdate: (eta, dist) {
+                  if (mounted) setState(() {
+                    _etaText = eta;
+                    _distanceText = dist;
+                  });
+                },
+              ),
+            ),
+
+            // ── Top bar: back button + visit title ───────────────────
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              left: 12,
+              right: 12,
+              child: Row(
+                children: [
+                  Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(),
+                    elevation: 4,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => Navigator.of(context).maybePop(),
+                      child: const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: Icon(Icons.arrow_back, size: 20),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: const [
+                          BoxShadow(
+                              color: Colors.black26,
+                              blurRadius: 6,
+                              offset: Offset(0, 2)),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.place, color: Color(0xFFEA4335),
+                              size: 18),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              visit.clientName,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF202124),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Bottom sheet ─────────────────────────────────────────
+            DraggableScrollableSheet(
+              initialChildSize: 0.28,
+              minChildSize: 0.15,
+              maxChildSize: 0.55,
+              builder: (context, scrollController) => Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(20)),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 12,
+                        offset: Offset(0, -3)),
+                  ],
+                ),
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  children: [
+                    // Drag handle
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 10),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+
+                    // Client name + status chip
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            visit.clientName,
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF202124),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1A73E8).withAlpha(25),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'Travelling',
+                            style: TextStyle(
+                              color: Color(0xFF1A73E8),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Visit ID + address
+                    Text(
+                      visit.visitId,
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF5F6368)),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_outlined,
+                            size: 14, color: Color(0xFF5F6368)),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            visit.address,
+                            style: const TextStyle(
+                                fontSize: 12, color: Color(0xFF5F6368)),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+
+                    // ETA + distance row (from OSRM road route)
+                    if (_etaText.isNotEmpty || _distanceText.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A73E8).withAlpha(18),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.directions_car,
+                                color: Color(0xFF1A73E8), size: 20),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_etaText.isNotEmpty)
+                                  Text(
+                                    '$_etaText away',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF1A73E8),
+                                    ),
+                                  ),
+                                if (_distanceText.isNotEmpty)
+                                  Text(
+                                    _distanceText,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF5F6368),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // GPS status row
+                    if (_lastTrackedPosition != null) ...[
+                      Row(
+                        children: [
+                          const Icon(Icons.gps_fixed,
+                              size: 14, color: Color(0xFF34A853)),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${_lastTrackedPosition!.latitude.toStringAsFixed(5)}, '
+                            '${_lastTrackedPosition!.longitude.toStringAsFixed(5)}  '
+                            '±${_lastTrackedPosition!.accuracy.toStringAsFixed(0)} m',
+                            style: const TextStyle(
+                                fontSize: 11, color: Color(0xFF5F6368)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                    ] else ...[
+                      const Row(
+                        children: [
+                          SizedBox(
+                            width: 14,
+                            height: 14,
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 8),
+                          Text('Waiting for GPS signal...',
+                              style: TextStyle(
+                                  fontSize: 12, color: Color(0xFF5F6368))),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+
+                    // Error + retry
+                    if (_trackingError != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEA4335).withAlpha(18),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning_amber_rounded,
+                                color: Color(0xFFEA4335), size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _trackingError!.replaceFirst(
+                                    'Exception: ', ''),
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFFEA4335)),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _startTravelTracking,
+                              style: TextButton.styleFrom(
+                                  minimumSize: Size.zero,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8)),
+                              child: const Text('Retry',
+                                  style: TextStyle(fontSize: 11)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+
+                    // Reached client / monitoring notice
+                    if (widget.readOnlyMode)
+                      _monitoringNotice()
+                    else
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF1A73E8),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: _working ? null : _reached,
+                          icon: const Icon(Icons.flag_rounded),
+                          label: const Text(
+                            'Reached client',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+
+                    if (_working)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 10),
+                        child: LinearProgressIndicator(),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1821,6 +2177,8 @@ class _LiveMapView extends StatefulWidget {
   final LatLng? origin;
   final LatLng? current;
   final LatLng? destination;
+  final bool fullScreen;
+  final void Function(String eta, String distance)? onEtaUpdate;
 
   const _LiveMapView({
     required this.mapController,
@@ -1828,6 +2186,8 @@ class _LiveMapView extends StatefulWidget {
     this.origin,
     this.current,
     this.destination,
+    this.fullScreen = false,
+    this.onEtaUpdate,
   });
 
   @override
@@ -1912,6 +2272,7 @@ class _LiveMapViewState extends State<_LiveMapView>
               _remainingKm = distanceM / 1000;
               _etaMinutes = (durationS / 60).ceil();
             });
+            widget.onEtaUpdate?.call(_etaLabel(), _distanceLabel());
           }
         }
       }
@@ -1964,330 +2325,363 @@ class _LiveMapViewState extends State<_LiveMapView>
     final dst = widget.destination;
     final heading = (cur != null && dst != null) ? _bearing(cur, dst) : 0.0;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
-        height: 300,
-        child: Stack(
-          children: [
-            // ── MAP ──────────────────────────────────────────────────────
-            FlutterMap(
-              mapController: widget.mapController,
-              options: MapOptions(
-                initialCenter: _center,
-                initialZoom: 15,
-                interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.pinchZoom |
-                      InteractiveFlag.drag |
-                      InteractiveFlag.doubleTapZoom,
-                ),
+    final mapStack = Stack(
+      children: [
+        // ── MAP ──────────────────────────────────────────────────────
+        Positioned.fill(
+          child: FlutterMap(
+            mapController: widget.mapController,
+            options: MapOptions(
+              initialCenter: _center,
+              initialZoom: 15,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.pinchZoom |
+                    InteractiveFlag.drag |
+                    InteractiveFlag.doubleTapZoom,
               ),
-              children: [
-                // OpenStreetMap tiles.
-                TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.bitbyte.hrms',
-                  maxNativeZoom: 19,
+            ),
+            children: [
+              // OpenStreetMap tiles.
+              TileLayer(
+                urlTemplate:
+                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.bitbyte.hrms',
+                maxNativeZoom: 19,
+              ),
+
+              // ── Travelled breadcrumb (grey) ──
+              if (widget.routePoints.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: widget.routePoints,
+                      color: Colors.grey.withAlpha(180),
+                      strokeWidth: 4,
+                      strokeCap: StrokeCap.round,
+                    ),
+                  ],
                 ),
 
-                // ── Travelled breadcrumb (grey) ──
-                if (widget.routePoints.length >= 2)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: widget.routePoints,
-                        color: Colors.grey.withAlpha(180),
-                        strokeWidth: 4,
-                        strokeCap: StrokeCap.round,
-                      ),
-                    ],
-                  ),
+              // ── Road route ahead (Google-Maps style blue) ──
+              if (_displayRoute.length >= 2)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _displayRoute,
+                      color: Colors.white,
+                      strokeWidth: 9,
+                      strokeCap: StrokeCap.round,
+                      strokeJoin: StrokeJoin.round,
+                    ),
+                    Polyline(
+                      points: _displayRoute,
+                      color: const Color(0xFF1A73E8),
+                      strokeWidth: 6,
+                      strokeCap: StrokeCap.round,
+                      strokeJoin: StrokeJoin.round,
+                    ),
+                  ],
+                ),
 
-                // ── Road route ahead (blue, Google-Maps style) ──
-                if (_displayRoute.length >= 2)
-                  PolylineLayer(
-                    polylines: [
-                      // White border/outline
-                      Polyline(
-                        points: _displayRoute,
-                        color: Colors.white,
-                        strokeWidth: 9,
-                        strokeCap: StrokeCap.round,
-                        strokeJoin: StrokeJoin.round,
-                      ),
-                      // Blue fill
-                      Polyline(
-                        points: _displayRoute,
-                        color: const Color(0xFF1A73E8),
-                        strokeWidth: 6,
-                        strokeCap: StrokeCap.round,
-                        strokeJoin: StrokeJoin.round,
-                      ),
-                    ],
-                  ),
-
-                // ── Markers ──────────────────────────────────────────────
-                MarkerLayer(
-                  markers: [
-                    // Origin — green circle pin.
-                    if (widget.origin != null)
-                      Marker(
-                        point: widget.origin!,
-                        width: 36,
-                        height: 36,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF34A853),
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2.5),
-                            boxShadow: const [
-                              BoxShadow(
+              // ── Markers ──────────────────────────────────────────────
+              MarkerLayer(
+                markers: [
+                  // Origin — green circle pin.
+                  if (widget.origin != null)
+                    Marker(
+                      point: widget.origin!,
+                      width: 36,
+                      height: 36,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF34A853),
+                          shape: BoxShape.circle,
+                          border:
+                              Border.all(color: Colors.white, width: 2.5),
+                          boxShadow: const [
+                            BoxShadow(
                                 color: Colors.black26,
                                 blurRadius: 4,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.circle,
-                            color: Colors.white,
-                            size: 10,
-                          ),
+                                offset: Offset(0, 2)),
+                          ],
                         ),
+                        child: const Icon(Icons.circle,
+                            color: Colors.white, size: 10),
                       ),
+                    ),
 
-                    // Destination — red Google-style pin.
-                    if (dst != null)
-                      Marker(
-                        point: dst,
-                        width: 40,
-                        height: 50,
-                        alignment: const Alignment(0, -1),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEA4335),
-                                borderRadius: BorderRadius.circular(6),
-                                boxShadow: const [
-                                  BoxShadow(
+                  // Destination — red Google-style pin.
+                  if (dst != null)
+                    Marker(
+                      point: dst,
+                      width: 40,
+                      height: 50,
+                      alignment: const Alignment(0, -1),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEA4335),
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: const [
+                                BoxShadow(
                                     color: Colors.black26,
                                     blurRadius: 4,
-                                    offset: Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: const Text(
-                                'CLIENT',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 0.5,
-                                ),
+                                    offset: Offset(0, 2)),
+                              ],
+                            ),
+                            child: const Text(
+                              'CLIENT',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
                               ),
                             ),
-                            const Icon(
-                              Icons.location_on,
-                              color: Color(0xFFEA4335),
-                              size: 32,
+                          ),
+                          const Icon(Icons.location_on,
+                              color: Color(0xFFEA4335), size: 32),
+                        ],
+                      ),
+                    ),
+
+                  // Current position — pulsing blue dot + arrow.
+                  if (cur != null)
+                    Marker(
+                      point: cur,
+                      width: 56,
+                      height: 56,
+                      child: AnimatedBuilder(
+                        animation: _pulseAnim,
+                        builder: (_, __) => Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: 56 * _pulseAnim.value,
+                              height: 56 * _pulseAnim.value,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1A73E8).withAlpha(
+                                    (60 *
+                                            (1.0 -
+                                                _pulseAnim.value +
+                                                0.3))
+                                        .round()),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1A73E8).withAlpha(40),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: const Color(0xFF1A73E8)
+                                        .withAlpha(80),
+                                    width: 1),
+                              ),
+                            ),
+                            Transform.rotate(
+                              angle: heading * math.pi / 180,
+                              child: Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1A73E8),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                      color: Colors.white, width: 2.5),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                        color: Colors.black26,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2)),
+                                  ],
+                                ),
+                                child: const Icon(Icons.navigation,
+                                    color: Colors.white, size: 13),
+                              ),
                             ),
                           ],
                         ),
                       ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
 
-                    // Current position — pulsing blue dot + navigation arrow.
-                    if (cur != null)
-                      Marker(
-                        point: cur,
-                        width: 56,
-                        height: 56,
-                        child: AnimatedBuilder(
-                          animation: _pulseAnim,
-                          builder: (_, __) => Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              // Outer pulse ring.
-                              Container(
-                                width: 56 * _pulseAnim.value,
-                                height: 56 * _pulseAnim.value,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1A73E8).withAlpha(
-                                      (60 * (1.0 - _pulseAnim.value + 0.3))
-                                          .round()),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              // Accuracy ring (semi-transparent).
-                              Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1A73E8).withAlpha(40),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: const Color(0xFF1A73E8)
-                                        .withAlpha(80),
-                                    width: 1,
-                                  ),
-                                ),
-                              ),
-                              // Navigation arrow (rotates toward destination).
-                              Transform.rotate(
-                                angle: heading * math.pi / 180,
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF1A73E8),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                        color: Colors.white, width: 2.5),
-                                    boxShadow: const [
-                                      BoxShadow(
-                                        color: Colors.black26,
-                                        blurRadius: 4,
-                                        offset: Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Icon(
-                                    Icons.navigation,
-                                    color: Colors.white,
-                                    size: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
+        // ── LIVE badge ───────────────────────────────────────────────
+        Positioned(
+          left: 10,
+          top: 10,
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withAlpha(170),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.circle, color: Color(0xFFEA4335), size: 8),
+                SizedBox(width: 4),
+                Text(
+                  'LIVE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1,
+                  ),
                 ),
               ],
             ),
+          ),
+        ),
 
-            // ── LIVE badge ───────────────────────────────────────────────
-            Positioned(
-              left: 10,
-              top: 10,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withAlpha(170),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.circle, color: Color(0xFFEA4335), size: 8),
-                    SizedBox(width: 4),
-                    Text(
-                      'LIVE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ],
+        // ── Re-center button ─────────────────────────────────────────
+        if (cur != null)
+          Positioned(
+            right: 10,
+            // In full-screen mode push it higher so it's above the
+            // bottom sheet handle.
+            bottom: widget.fullScreen ? 80 : 10,
+            child: Material(
+              color: Colors.white,
+              shape: const CircleBorder(),
+              elevation: 4,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () {
+                  try {
+                    widget.mapController.move(cur, 15);
+                  } catch (_) {}
+                },
+                child: const Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Icon(Icons.my_location,
+                      size: 22, color: Color(0xFF1A73E8)),
                 ),
               ),
             ),
+          ),
 
-            // ── Re-center button ─────────────────────────────────────────
-            if (cur != null)
-              Positioned(
-                right: 10,
-                top: 10,
-                child: Material(
-                  color: Colors.white,
-                  shape: const CircleBorder(),
-                  elevation: 4,
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: () {
-                      try {
-                        widget.mapController.move(cur, 15);
-                      } catch (_) {}
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: Icon(
-                        Icons.my_location,
-                        size: 20,
-                        color: Color(0xFF1A73E8),
-                      ),
+        // ── Bottom ETA card — only shown in card (non-fullscreen) mode ──
+        if (!widget.fullScreen && _distanceLabel().isNotEmpty)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              color: Colors.white.withAlpha(242),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  const Icon(Icons.directions_car,
+                      color: Color(0xFF1A73E8), size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _etaLabel().isNotEmpty
+                              ? '${_etaLabel()} away'
+                              : 'Calculating…',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF202124),
+                          ),
+                        ),
+                        Text(
+                          _distanceLabel(),
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF5F6368)),
+                        ),
+                      ],
                     ),
                   ),
-                ),
+                  if (_fetchingRoute)
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
               ),
+            ),
+          ),
 
-            // ── Bottom info card (distance + ETA) ─────────────────────
-            if (_distanceLabel().isNotEmpty)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  color: Colors.white.withAlpha(242),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.directions_car,
-                        color: Color(0xFF1A73E8),
-                        size: 22,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _etaLabel().isNotEmpty
-                                  ? '${_etaLabel()} away'
-                                  : 'Calculating…',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF202124),
-                              ),
-                            ),
-                            Text(
-                              _distanceLabel(),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF5F6368),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (_fetchingRoute)
-                        const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
-                ),
+        // ── ETA row inside the bottom-sheet (full-screen mode) ───────
+        if (widget.fullScreen && _distanceLabel().isNotEmpty)
+          Positioned(
+            left: 12,
+            right: 60,
+            bottom: widget.fullScreen ? 72 : 10,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: const [
+                  BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 6,
+                      offset: Offset(0, 2)),
+                ],
               ),
-          ],
-        ),
-      ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.directions_car,
+                      color: Color(0xFF1A73E8), size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    _etaLabel().isNotEmpty
+                        ? '${_etaLabel()}  •  ${_distanceLabel()}'
+                        : _distanceLabel(),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF202124),
+                    ),
+                  ),
+                  if (_fetchingRoute) ...[
+                    const SizedBox(width: 8),
+                    const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+
+    // Full-screen: just return the stack (fills Positioned.fill from parent).
+    if (widget.fullScreen) return mapStack;
+
+    // Card mode: wrap in rounded clip with fixed height.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(height: 300, child: mapStack),
     );
   }
-}
+} // end _LiveMapViewState
 
 String _title(int step) =>
     const {
