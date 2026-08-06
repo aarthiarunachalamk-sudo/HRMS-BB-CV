@@ -1027,293 +1027,143 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               ),
             ),
 
-            // ── Bottom sheet ─────────────────────────────────────────
+            // ── Bottom sheet — Google Maps place details format ──────
             DraggableScrollableSheet(
-              initialChildSize: 0.28,
-              minChildSize: 0.15,
-              maxChildSize: 0.55,
+              initialChildSize: 0.38,
+              minChildSize: 0.18,
+              maxChildSize: 0.72,
               builder: (context, scrollController) => Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(20)),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 12,
-                        offset: Offset(0, -3)),
-                  ],
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 14, offset: Offset(0, -3))],
                 ),
                 child: ListView(
                   controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
                   children: [
-                    // Drag handle
-                    Center(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 10),
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-
-                    // Client name + status chip
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            visit.clientName,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF202124),
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1A73E8).withAlpha(25),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'Travelling',
-                            style: TextStyle(
-                              color: Color(0xFF1A73E8),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-
-                    // Visit ID + address
-                    Text(
-                      visit.visitId,
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF5F6368)),
-                    ),
+                    // ── Drag handle ──
+                    Center(child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                    )),
+                    // ── Place title + close ──
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Expanded(child: Text(visit.clientName,
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF202124)))),
+                      IconButton(icon: const Icon(Icons.close, color: Color(0xFF5F6368)),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+                    ]),
                     const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        const Icon(Icons.location_on_outlined,
-                            size: 14, color: Color(0xFF5F6368)),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            visit.address,
-                            style: const TextStyle(
-                                fontSize: 12, color: Color(0xFF5F6368)),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                    // ── Address ──
+                    Text(visit.address,
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF5F6368)),
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 4),
+                    // ── Category · ETA ──
+                    Row(children: [
+                      const Icon(Icons.business_outlined, size: 13, color: Color(0xFF5F6368)),
+                      const SizedBox(width: 4),
+                      const Text('Client visit', style: TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
+                      if (_etaText.isNotEmpty) ...[
+                        const Text('  ·  ', style: TextStyle(color: Color(0xFF5F6368))),
+                        const Icon(Icons.directions_car, size: 13, color: Color(0xFF5F6368)),
+                        const SizedBox(width: 3),
+                        Text(_etaText, style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
                       ],
+                    ]),
+                    const SizedBox(height: 14),
+                    // ── Action buttons ──
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(children: [
+                        _placeActionButton(icon: Icons.diamond_outlined, label: 'Directions',
+                          color: const Color(0xFF00897B), filled: true, onTap: () {
+                            try {
+                              if (_routeOptions.isNotEmpty) {
+                                final pts = _routeOptions[_selectedRouteIndex].points;
+                                if (pts.length >= 2) _mapController.fitCamera(CameraFit.bounds(
+                                  bounds: LatLngBounds.fromPoints(pts),
+                                  padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
+                              }
+                            } catch (_) {}
+                          }),
+                        const SizedBox(width: 10),
+                        _placeActionButton(icon: Icons.navigation_rounded, label: 'Start',
+                          color: const Color(0xFF1A73E8), onTap: () {
+                            if (_lastTrackedPosition != null)
+                              _mapController.move(LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude), 16);
+                          }),
+                        const SizedBox(width: 10),
+                        _placeActionButton(icon: Icons.call_outlined, label: 'Call',
+                          color: const Color(0xFF1A73E8), onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Contact: ${visit.contactPhone.isEmpty ? visit.contactPerson : visit.contactPhone}')))),
+                        const SizedBox(width: 10),
+                        _placeActionButton(icon: Icons.share_outlined, label: 'Share',
+                          color: const Color(0xFF1A73E8), onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Visit info copied')))),
+                      ]),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     const Divider(height: 1),
                     const SizedBox(height: 12),
-
-                    // ETA + distance row (from OSRM road route)
-                    if (_etaText.isNotEmpty || _distanceText.isNotEmpty) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1A73E8).withAlpha(18),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.directions_car,
-                                color: Color(0xFF1A73E8), size: 20),
-                            const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_etaText.isNotEmpty)
-                                  Text(
-                                    '$_etaText away',
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF1A73E8),
-                                    ),
-                                  ),
-                                if (_distanceText.isNotEmpty)
-                                  Text(
-                                    _distanceText,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF5F6368),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // ── Route alternatives (like Google Maps left panel) ──
+                    // ── Route options ──
                     if (_routeOptions.length > 1) ...[
-                      Row(
-                        children: [
-                          const Icon(Icons.alt_route,
-                              size: 16, color: Color(0xFF5F6368)),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'Route options',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF202124),
-                            ),
-                          ),
-                        ],
-                      ),
+                      const Text('Route options', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF202124))),
                       const SizedBox(height: 8),
                       ...List.generate(_routeOptions.length, (i) {
-                        final route = _routeOptions[i];
-                        final isSelected = i == _selectedRouteIndex;
-                        final isFastest = i == 0;
+                        final r = _routeOptions[i];
+                        final isSel = i == _selectedRouteIndex;
                         return GestureDetector(
                           onTap: () {
                             setState(() => _selectedRouteIndex = i);
-                            // Fit the map to the selected route bounds.
-                            if (_routeOptions.isNotEmpty && i < _routeOptions.length) {
-                              try {
-                                final pts = _routeOptions[i].points;
-                                if (pts.length >= 2) {
-                                  final bounds = LatLngBounds.fromPoints(pts);
-                                  _mapController.fitCamera(
-                                    CameraFit.bounds(
-                                      bounds: bounds,
-                                      padding: const EdgeInsets.fromLTRB(
-                                          40, 120, 40, 280),
-                                    ),
-                                  );
-                                }
-                              } catch (_) {}
-                            }
+                            try {
+                              if (_routeOptions[i].points.length >= 2)
+                                _mapController.fitCamera(CameraFit.bounds(
+                                  bounds: LatLngBounds.fromPoints(_routeOptions[i].points),
+                                  padding: const EdgeInsets.fromLTRB(40, 120, 40, 280)));
+                            } catch (_) {}
                           },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                             decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(0xFF1A73E8).withAlpha(18)
-                                  : Colors.grey.withAlpha(15),
+                              color: isSel ? const Color(0xFF1A73E8).withAlpha(18) : Colors.grey.withAlpha(12),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: isSelected
-                                    ? const Color(0xFF1A73E8)
-                                    : Colors.grey.withAlpha(60),
-                                width: isSelected ? 1.5 : 1,
-                              ),
+                                color: isSel ? const Color(0xFF1A73E8) : Colors.grey.withAlpha(50),
+                                width: isSel ? 1.5 : 1),
                             ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.directions_car,
-                                  color: isSelected
-                                      ? const Color(0xFF1A73E8)
-                                      : Colors.grey,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Text(
-                                            route.durationLabel,
-                                            style: TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w800,
-                                              color: isSelected
-                                                  ? const Color(0xFF1A73E8)
-                                                  : const Color(0xFF202124),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            route.distanceLabel,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              color: Color(0xFF5F6368),
-                                            ),
-                                          ),
-                                          if (isFastest) ...[
-                                            const SizedBox(width: 8),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 6,
-                                                      vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFF34A853)
-                                                    .withAlpha(30),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                              ),
-                                              child: const Text(
-                                                'Fastest',
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: Color(0xFF34A853),
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                      if (route.via.isNotEmpty)
-                                        Text(
-                                          route.via,
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Color(0xFF5F6368),
-                                          ),
-                                        ),
-                                      if (route.hasTolls)
-                                        const Row(
-                                          children: [
-                                            Icon(Icons.warning_amber_rounded,
-                                                size: 12,
-                                                color: Color(0xFFF29900)),
-                                            SizedBox(width: 3),
-                                            Text(
-                                              'This route has tolls',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: Color(0xFFF29900),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                if (isSelected)
-                                  const Icon(Icons.check_circle,
-                                      color: Color(0xFF1A73E8), size: 18),
-                              ],
-                            ),
+                            child: Row(children: [
+                              Icon(Icons.directions_car,
+                                color: isSel ? const Color(0xFF1A73E8) : Colors.grey, size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Row(children: [
+                                  Text(r.durationLabel, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
+                                    color: isSel ? const Color(0xFF1A73E8) : const Color(0xFF202124))),
+                                  const SizedBox(width: 6),
+                                  Text(r.distanceLabel, style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
+                                  if (i == 0) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                      decoration: BoxDecoration(color: const Color(0xFF34A853).withAlpha(30), borderRadius: BorderRadius.circular(4)),
+                                      child: const Text('Fastest', style: TextStyle(fontSize: 10, color: Color(0xFF34A853), fontWeight: FontWeight.w700))),
+                                  ],
+                                ]),
+                                if (r.via.isNotEmpty) Text(r.via, style: const TextStyle(fontSize: 11, color: Color(0xFF5F6368))),
+                                if (r.hasTolls) const Row(children: [
+                                  Icon(Icons.warning_amber_rounded, size: 11, color: Color(0xFFF29900)),
+                                  SizedBox(width: 3),
+                                  Text('This route has tolls.', style: TextStyle(fontSize: 11, color: Color(0xFFF29900))),
+                                ]),
+                              ])),
+                              if (isSel) const Icon(Icons.check_circle, color: Color(0xFF1A73E8), size: 16),
+                            ]),
                           ),
                         );
                       }),
@@ -1321,115 +1171,96 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       const Divider(height: 1),
                       const SizedBox(height: 12),
                     ],
-
-                    // GPS status row
-                    if (_lastTrackedPosition != null) ...[
-                      Row(
-                        children: [
-                          const Icon(Icons.gps_fixed,
-                              size: 14, color: Color(0xFF34A853)),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${_lastTrackedPosition!.latitude.toStringAsFixed(5)}, '
-                            '${_lastTrackedPosition!.longitude.toStringAsFixed(5)}  '
-                            '±${_lastTrackedPosition!.accuracy.toStringAsFixed(0)} m',
-                            style: const TextStyle(
-                                fontSize: 11, color: Color(0xFF5F6368)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                    ] else ...[
-                      const Row(
-                        children: [
-                          SizedBox(
-                            width: 14,
-                            height: 14,
-                            child:
-                                CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          SizedBox(width: 8),
-                          Text('Waiting for GPS signal...',
-                              style: TextStyle(
-                                  fontSize: 12, color: Color(0xFF5F6368))),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-
-                    // Error + retry
+                    // ── GPS status ──
+                    if (_lastTrackedPosition != null)
+                      Row(children: [
+                        const Icon(Icons.gps_fixed, size: 13, color: Color(0xFF34A853)),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${_lastTrackedPosition!.latitude.toStringAsFixed(5)}, ${_lastTrackedPosition!.longitude.toStringAsFixed(5)}  ±${_lastTrackedPosition!.accuracy.toStringAsFixed(0)} m',
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF5F6368))),
+                      ])
+                    else
+                      const Row(children: [
+                        SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2)),
+                        SizedBox(width: 8),
+                        Text('Waiting for GPS signal…', style: TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
+                      ]),
+                    // ── GPS error ──
                     if (_trackingError != null) ...[
+                      const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEA4335).withAlpha(18),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.warning_amber_rounded,
-                                color: Color(0xFFEA4335), size: 16),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _trackingError!.replaceFirst(
-                                    'Exception: ', ''),
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFFEA4335)),
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: _startTravelTracking,
-                              style: TextButton.styleFrom(
-                                  minimumSize: Size.zero,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8)),
-                              child: const Text('Retry',
-                                  style: TextStyle(fontSize: 11)),
-                            ),
-                          ],
-                        ),
+                        decoration: BoxDecoration(color: const Color(0xFFEA4335).withAlpha(18), borderRadius: BorderRadius.circular(8)),
+                        child: Row(children: [
+                          const Icon(Icons.warning_amber_rounded, color: Color(0xFFEA4335), size: 15),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(_trackingError!.replaceFirst('Exception: ', ''),
+                            style: const TextStyle(fontSize: 11, color: Color(0xFFEA4335)))),
+                          TextButton(onPressed: _startTravelTracking,
+                            style: TextButton.styleFrom(minimumSize: Size.zero, padding: const EdgeInsets.symmetric(horizontal: 8)),
+                            child: const Text('Retry', style: TextStyle(fontSize: 11))),
+                        ]),
                       ),
-                      const SizedBox(height: 10),
                     ],
-
-                    // Reached client / monitoring notice
+                    const SizedBox(height: 16),
+                    // ── Reached client ──
                     if (widget.readOnlyMode)
                       _monitoringNotice()
-                    else
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF1A73E8),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: _working ? null : _reached,
-                          icon: const Icon(Icons.flag_rounded),
-                          label: const Text(
-                            'Reached client',
-                            style: TextStyle(
-                                fontSize: 15, fontWeight: FontWeight.w700),
-                          ),
-                        ),
+                    else SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF1A73E8),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        onPressed: _working ? null : _reached,
+                        icon: const Icon(Icons.flag_rounded),
+                        label: const Text('Reached client', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                       ),
+                    ),
+                    if (_working) const Padding(padding: EdgeInsets.only(top: 10), child: LinearProgressIndicator()),
+                  ],  // ListView children
+                ),  // ListView
+              ),  // Container
+            ),  // DraggableScrollableSheet
+          ],  // Stack children
+        ),  // Stack
+      ),  // Scaffold body
+    );  // ClientVisitTheme / Scaffold
+  }  // _buildTravelScreen
 
-                    if (_working)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 10),
-                        child: LinearProgressIndicator(),
-                      ),
-                  ],
-                ),
-              ),
+  /// Google Maps style circular action button with label.
+  Widget _placeActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+    bool filled = false,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: filled ? color : color.withAlpha(20),
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Icon(icon,
+                  color: filled ? Colors.white : color, size: 22),
             ),
-          ],
+          ),
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(label,
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color)),
+      ],
     );
   }
 
