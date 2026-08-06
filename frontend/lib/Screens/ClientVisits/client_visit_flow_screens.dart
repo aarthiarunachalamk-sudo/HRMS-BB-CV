@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -276,8 +279,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   Position? _lastTrackedPosition;
   final List<LatLng> _liveRoutePoints = [];
   final MapController _mapController = MapController();
+  LatLng? _destinationLatLng;       // geocoded client address
+  bool _geocodingDone = false;
   String? _trackingError;
   bool _sendingLocation = false;
+  Timer? _trackingRetryTimer;
   List<String> _attendees = [];
   List<Map<String, dynamic>> _checklist = [];
 
@@ -302,6 +308,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       controller.dispose();
     }
     _travelSubscription?.cancel();
+    _trackingRetryTimer?.cancel();
     _mapController.dispose();
     super.dispose();
   }
@@ -327,6 +334,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       });
       if (widget.step == 6 && visit.status == 'travelling') {
         unawaited(_startTravelTracking());
+        // Geocode the client address to show destination pin on map.
+        if (!_geocodingDone) {
+          unawaited(_geocodeDestination(visit.address));
+        }
       }
     } catch (error) {
       if (mounted) {
@@ -341,6 +352,65 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     {'label': 'Confirm next action', 'done': false},
     {'label': 'Upload visit proof', 'done': false},
   ];
+
+  /// Geocodes the client address string to a LatLng for the destination pin.
+  /// Uses OpenStreetMap Nominatim — no API key required.
+  Future<void> _geocodeDestination(String address) async {
+    if (_geocodingDone || address.trim().isEmpty) return;
+    _geocodingDone = true;
+    try {
+      final query = Uri.encodeComponent(
+        address.contains('India') ? address : '$address, India',
+      );
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/search'
+        '?q=$query&format=json&limit=1&countrycodes=in',
+      );
+      final response = await http.get(
+        uri,
+        headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final List<dynamic> results = jsonDecode(response.body) as List;
+        if (results.isNotEmpty && mounted) {
+          final first = results.first as Map<String, dynamic>;
+          final lat = double.tryParse('${first['lat']}');
+          final lon = double.tryParse('${first['lon']}');
+          if (lat != null && lon != null) {
+            final dest = LatLng(lat, lon);
+            setState(() => _destinationLatLng = dest);
+            _fitMapBounds();
+          }
+        }
+      }
+    } catch (_) {
+      // Geocoding failed silently — map still works without destination pin.
+    }
+  }
+
+  /// Adjusts the map camera to fit origin, current position and destination.
+  void _fitMapBounds() {
+    final points = <LatLng>[
+      if (_lastTrackedPosition != null)
+        LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude),
+      if (_visit?.officeCheckOutLatitude != null)
+        LatLng(
+          _visit!.officeCheckOutLatitude!,
+          _visit!.officeCheckOutLongitude!,
+        ),
+      if (_destinationLatLng != null) _destinationLatLng!,
+    ];
+    if (points.length < 2) return;
+    try {
+      final bounds = LatLngBounds.fromPoints(points);
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.all(48),
+        ),
+      );
+    } catch (_) {}
+  }
 
   Future<Map<String, double>> _position() async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -438,7 +508,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       if (!mounted || _travelSubscription != null) return;
       const settings = LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 15,
+        distanceFilter: 10,
       );
       _travelSubscription =
           Geolocator.getPositionStream(locationSettings: settings).listen(
@@ -450,14 +520,24 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 _trackingError = null;
                 _liveRoutePoints.add(point);
               });
-              // Pan and zoom the map to follow the current position.
+              // Pan map to follow current position.
               try {
-                _mapController.move(point, _mapController.camera.zoom);
+                _mapController.move(point, _mapController.camera.zoom < 14
+                    ? 15
+                    : _mapController.camera.zoom);
               } catch (_) {}
               unawaited(_sendTravelPosition(position));
             },
             onError: (Object error) {
-              if (mounted) setState(() => _trackingError = '$error');
+              if (!mounted) return;
+              setState(() => _trackingError = '$error');
+              // Auto-retry after 10 seconds if the stream dies.
+              _travelSubscription?.cancel();
+              _travelSubscription = null;
+              _trackingRetryTimer?.cancel();
+              _trackingRetryTimer = Timer(const Duration(seconds: 10), () {
+                if (mounted) unawaited(_startTravelTracking());
+              });
             },
           );
     } catch (error) {
@@ -951,6 +1031,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       _lastTrackedPosition!.longitude,
                     )
                   : null,
+              destination: _destinationLatLng,
             ),
             const SizedBox(height: 8),
             Text(visit.address, textAlign: TextAlign.center),
@@ -1722,32 +1803,33 @@ class _LiveMapView extends StatelessWidget {
   final List<LatLng> routePoints;
   final LatLng? origin;
   final LatLng? current;
+  final LatLng? destination;
 
   const _LiveMapView({
     required this.mapController,
     required this.routePoints,
     this.origin,
     this.current,
+    this.destination,
   });
 
-  // Compute the initial center: prefer current position, then origin,
-  // then fall back to a generic India-center coordinate.
+  // Initial center: current position → destination → origin → India center.
   LatLng get _center =>
-      current ?? origin ?? const LatLng(20.5937, 78.9629);
+      current ?? destination ?? origin ?? const LatLng(20.5937, 78.9629);
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(
-        height: 240,
+        height: 260,
         child: Stack(
           children: [
             FlutterMap(
               mapController: mapController,
               options: MapOptions(
                 initialCenter: _center,
-                initialZoom: 15,
+                initialZoom: 14,
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.pinchZoom |
                       InteractiveFlag.drag |
@@ -1775,9 +1857,20 @@ class _LiveMapView extends StatelessWidget {
                       ),
                     ],
                   ),
+                // Dotted line from current position to destination.
+                if (current != null && destination != null)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: [current!, destination!],
+                        color: ClientVisitColors.red.withAlpha(130),
+                        strokeWidth: 2,
+                      ),
+                    ],
+                  ),
                 MarkerLayer(
                   markers: [
-                    // Origin marker (office departure point) — green pin.
+                    // Origin marker — green pin (office departure).
                     if (origin != null)
                       Marker(
                         point: origin!,
@@ -1789,12 +1882,47 @@ class _LiveMapView extends StatelessWidget {
                           size: 36,
                         ),
                       ),
-                    // Current live position — blue pulsing dot.
+                    // Destination — red pin (client place).
+                    if (destination != null)
+                      Marker(
+                        point: destination!,
+                        width: 44,
+                        height: 44,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: ClientVisitColors.red,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'CLIENT',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 7,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Icons.location_on,
+                              color: ClientVisitColors.red,
+                              size: 30,
+                            ),
+                          ],
+                        ),
+                      ),
+                    // Current live position — blue dot.
                     if (current != null)
                       Marker(
                         point: current!,
-                        width: 22,
-                        height: 22,
+                        width: 24,
+                        height: 24,
                         child: Container(
                           decoration: BoxDecoration(
                             color: ClientVisitColors.blue,
@@ -1802,8 +1930,8 @@ class _LiveMapView extends StatelessWidget {
                             border: Border.all(color: Colors.white, width: 3),
                             boxShadow: [
                               BoxShadow(
-                                color: ClientVisitColors.blue.withAlpha(100),
-                                blurRadius: 8,
+                                color: ClientVisitColors.blue.withAlpha(120),
+                                blurRadius: 10,
                                 spreadRadius: 4,
                               ),
                             ],
@@ -1842,6 +1970,33 @@ class _LiveMapView extends StatelessWidget {
                 ),
               ),
             ),
+            // "Re-center" button — taps back to current position.
+            if (current != null)
+              Positioned(
+                right: 10,
+                bottom: 10,
+                child: Material(
+                  color: Colors.white,
+                  shape: const CircleBorder(),
+                  elevation: 3,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () {
+                      try {
+                        mapController.move(current!, 15);
+                      } catch (_) {}
+                    },
+                    child: const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.my_location,
+                        size: 20,
+                        color: ClientVisitColors.blue,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
