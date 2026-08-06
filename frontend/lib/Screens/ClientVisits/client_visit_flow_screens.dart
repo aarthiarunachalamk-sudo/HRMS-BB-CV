@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'dart:convert';
 
@@ -1809,9 +1810,14 @@ class _FlowTimerState extends State<_FlowTimer> {
   }
 }
 
-class _LiveMapView extends StatelessWidget {
+/// Full Google-Maps-style live tracking map.
+/// - Road route fetched from OSRM (free, no API key).
+/// - Animated pulsing dot + navigation arrow for current position.
+/// - Bottom info card with remaining distance and ETA.
+/// - Camera follows position automatically; re-center button snaps back.
+class _LiveMapView extends StatefulWidget {
   final MapController mapController;
-  final List<LatLng> routePoints;
+  final List<LatLng> routePoints;   // actual GPS breadcrumb trail
   final LatLng? origin;
   final LatLng? current;
   final LatLng? destination;
@@ -1824,23 +1830,152 @@ class _LiveMapView extends StatelessWidget {
     this.destination,
   });
 
-  // Initial center: current position → destination → origin → India center.
+  @override
+  State<_LiveMapView> createState() => _LiveMapViewState();
+}
+
+class _LiveMapViewState extends State<_LiveMapView>
+    with SingleTickerProviderStateMixin {
+  // Animated pulse for the current-position dot.
+  late final AnimationController _pulse;
+  late final Animation<double> _pulseAnim;
+
+  // Road route fetched from OSRM.
+  List<LatLng> _roadRoute = [];
+  double _remainingKm = 0;
+  int _etaMinutes = 0;
+  bool _fetchingRoute = false;
+  LatLng? _lastRouteFetch;   // avoid re-fetching for tiny moves
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+    );
+    if (widget.current != null && widget.destination != null) {
+      _fetchRoute(widget.current!, widget.destination!);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_LiveMapView old) {
+    super.didUpdateWidget(old);
+    final cur = widget.current;
+    final dst = widget.destination;
+    if (cur == null || dst == null) return;
+    // Re-fetch road route every ~100 m of movement.
+    if (_lastRouteFetch == null ||
+        const Distance().as(LengthUnit.Meter, cur, _lastRouteFetch!) > 100) {
+      _fetchRoute(cur, dst);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  /// Fetches a driving route from OSRM and calculates remaining distance + ETA.
+  Future<void> _fetchRoute(LatLng from, LatLng to) async {
+    if (_fetchingRoute) return;
+    _fetchingRoute = true;
+    _lastRouteFetch = from;
+    try {
+      final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/'
+        '${from.longitude},${from.latitude};'
+        '${to.longitude},${to.latitude}'
+        '?overview=full&geometries=geojson',
+      );
+      final response = await http
+          .get(url, headers: {'User-Agent': 'HRMS-Bitbyte/1.0'})
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final routes = data['routes'] as List?;
+        if (routes != null && routes.isNotEmpty) {
+          final route = routes.first as Map<String, dynamic>;
+          final distanceM = (route['distance'] as num).toDouble();
+          final durationS = (route['duration'] as num).toDouble();
+          final coords = (route['geometry']['coordinates'] as List)
+              .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+              .toList();
+          if (mounted) {
+            setState(() {
+              _roadRoute = coords;
+              _remainingKm = distanceM / 1000;
+              _etaMinutes = (durationS / 60).ceil();
+            });
+          }
+        }
+      }
+    } catch (_) {
+      // Route fetch failed — fall back to straight line between points.
+    } finally {
+      _fetchingRoute = false;
+    }
+  }
+
+  /// Bearing from [from] to [to] in degrees (0 = north, 90 = east).
+  double _bearing(LatLng from, LatLng to) {
+    final lat1 = from.latitudeInRad;
+    final lat2 = to.latitudeInRad;
+    final dLng = to.longitudeInRad - from.longitudeInRad;
+    final y = math.sin(dLng) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLng);
+    return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
+  }
+
+  String _distanceLabel() {
+    if (_remainingKm <= 0) return '';
+    return _remainingKm < 1
+        ? '${(_remainingKm * 1000).round()} m'
+        : '${_remainingKm.toStringAsFixed(1)} km';
+  }
+
+  String _etaLabel() {
+    if (_etaMinutes <= 0) return '';
+    if (_etaMinutes < 60) return '$_etaMinutes min';
+    final h = _etaMinutes ~/ 60;
+    final m = _etaMinutes % 60;
+    return m == 0 ? '${h}h' : '${h}h ${m}m';
+  }
+
+  // The road route to draw — prefer OSRM, fall back to breadcrumb trail.
+  List<LatLng> get _displayRoute =>
+      _roadRoute.isNotEmpty ? _roadRoute : widget.routePoints;
+
   LatLng get _center =>
-      current ?? destination ?? origin ?? const LatLng(20.5937, 78.9629);
+      widget.current ??
+      widget.destination ??
+      widget.origin ??
+      const LatLng(20.5937, 78.9629);
 
   @override
   Widget build(BuildContext context) {
+    final cur = widget.current;
+    final dst = widget.destination;
+    final heading = (cur != null && dst != null) ? _bearing(cur, dst) : 0.0;
+
     return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(12),
       child: SizedBox(
-        height: 260,
+        height: 300,
         child: Stack(
           children: [
+            // ── MAP ──────────────────────────────────────────────────────
             FlutterMap(
-              mapController: mapController,
+              mapController: widget.mapController,
               options: MapOptions(
                 initialCenter: _center,
-                initialZoom: 14,
+                initialZoom: 15,
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.pinchZoom |
                       InteractiveFlag.drag |
@@ -1848,102 +1983,184 @@ class _LiveMapView extends StatelessWidget {
                 ),
               ),
               children: [
-                // OpenStreetMap tile layer — no API key required.
+                // OpenStreetMap tiles.
                 TileLayer(
                   urlTemplate:
                       'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.bitbyte.hrms',
                   maxNativeZoom: 19,
                 ),
-                // Live route polyline drawn from tracked GPS points.
-                if (routePoints.length >= 2)
+
+                // ── Travelled breadcrumb (grey) ──
+                if (widget.routePoints.length >= 2)
                   PolylineLayer(
                     polylines: [
                       Polyline(
-                        points: routePoints,
-                        color: ClientVisitColors.blue,
-                        strokeWidth: 5,
+                        points: widget.routePoints,
+                        color: Colors.grey.withAlpha(180),
+                        strokeWidth: 4,
+                        strokeCap: StrokeCap.round,
+                      ),
+                    ],
+                  ),
+
+                // ── Road route ahead (blue, Google-Maps style) ──
+                if (_displayRoute.length >= 2)
+                  PolylineLayer(
+                    polylines: [
+                      // White border/outline
+                      Polyline(
+                        points: _displayRoute,
+                        color: Colors.white,
+                        strokeWidth: 9,
+                        strokeCap: StrokeCap.round,
+                        strokeJoin: StrokeJoin.round,
+                      ),
+                      // Blue fill
+                      Polyline(
+                        points: _displayRoute,
+                        color: const Color(0xFF1A73E8),
+                        strokeWidth: 6,
                         strokeCap: StrokeCap.round,
                         strokeJoin: StrokeJoin.round,
                       ),
                     ],
                   ),
-                // Dotted line from current position to destination.
-                if (current != null && destination != null)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: [current!, destination!],
-                        color: ClientVisitColors.red.withAlpha(130),
-                        strokeWidth: 2,
-                      ),
-                    ],
-                  ),
+
+                // ── Markers ──────────────────────────────────────────────
                 MarkerLayer(
                   markers: [
-                    // Origin marker — green pin (office departure).
-                    if (origin != null)
+                    // Origin — green circle pin.
+                    if (widget.origin != null)
                       Marker(
-                        point: origin!,
+                        point: widget.origin!,
                         width: 36,
                         height: 36,
-                        child: const Icon(
-                          Icons.location_on,
-                          color: ClientVisitColors.green,
-                          size: 36,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF34A853),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2.5),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.circle,
+                            color: Colors.white,
+                            size: 10,
+                          ),
                         ),
                       ),
-                    // Destination — red pin (client place).
-                    if (destination != null)
+
+                    // Destination — red Google-style pin.
+                    if (dst != null)
                       Marker(
-                        point: destination!,
-                        width: 44,
-                        height: 44,
+                        point: dst,
+                        width: 40,
+                        height: 50,
+                        alignment: const Alignment(0, -1),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                                vertical: 2,
-                              ),
+                                  horizontal: 6, vertical: 3),
                               decoration: BoxDecoration(
-                                color: ClientVisitColors.red,
-                                borderRadius: BorderRadius.circular(4),
+                                color: const Color(0xFFEA4335),
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black26,
+                                    blurRadius: 4,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
                               ),
                               child: const Text(
                                 'CLIENT',
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 7,
+                                  fontSize: 8,
                                   fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
                             const Icon(
                               Icons.location_on,
-                              color: ClientVisitColors.red,
-                              size: 30,
+                              color: Color(0xFFEA4335),
+                              size: 32,
                             ),
                           ],
                         ),
                       ),
-                    // Current live position — blue dot.
-                    if (current != null)
+
+                    // Current position — pulsing blue dot + navigation arrow.
+                    if (cur != null)
                       Marker(
-                        point: current!,
-                        width: 24,
-                        height: 24,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: ClientVisitColors.blue,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                color: ClientVisitColors.blue.withAlpha(120),
-                                blurRadius: 10,
-                                spreadRadius: 4,
+                        point: cur,
+                        width: 56,
+                        height: 56,
+                        child: AnimatedBuilder(
+                          animation: _pulseAnim,
+                          builder: (_, __) => Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Outer pulse ring.
+                              Container(
+                                width: 56 * _pulseAnim.value,
+                                height: 56 * _pulseAnim.value,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1A73E8).withAlpha(
+                                      (60 * (1.0 - _pulseAnim.value + 0.3))
+                                          .round()),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              // Accuracy ring (semi-transparent).
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1A73E8).withAlpha(40),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: const Color(0xFF1A73E8)
+                                        .withAlpha(80),
+                                    width: 1,
+                                  ),
+                                ),
+                              ),
+                              // Navigation arrow (rotates toward destination).
+                              Transform.rotate(
+                                angle: heading * math.pi / 180,
+                                child: Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1A73E8),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.white, width: 2.5),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Colors.black26,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.navigation,
+                                    color: Colors.white,
+                                    size: 13,
+                                  ),
+                                ),
                               ),
                             ],
                           ),
@@ -1953,21 +2170,22 @@ class _LiveMapView extends StatelessWidget {
                 ),
               ],
             ),
-            // LIVE badge overlay.
+
+            // ── LIVE badge ───────────────────────────────────────────────
             Positioned(
-              right: 10,
+              left: 10,
               top: 10,
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.black.withAlpha(160),
+                  color: Colors.black.withAlpha(170),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.circle, color: ClientVisitColors.red, size: 8),
+                    Icon(Icons.circle, color: Color(0xFFEA4335), size: 8),
                     SizedBox(width: 4),
                     Text(
                       'LIVE',
@@ -1975,26 +2193,28 @@ class _LiveMapView extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 10,
                         fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-            // "Re-center" button — taps back to current position.
-            if (current != null)
+
+            // ── Re-center button ─────────────────────────────────────────
+            if (cur != null)
               Positioned(
                 right: 10,
-                bottom: 10,
+                top: 10,
                 child: Material(
                   color: Colors.white,
                   shape: const CircleBorder(),
-                  elevation: 3,
+                  elevation: 4,
                   child: InkWell(
                     customBorder: const CircleBorder(),
                     onTap: () {
                       try {
-                        mapController.move(current!, 15);
+                        widget.mapController.move(cur, 15);
                       } catch (_) {}
                     },
                     child: const Padding(
@@ -2002,9 +2222,63 @@ class _LiveMapView extends StatelessWidget {
                       child: Icon(
                         Icons.my_location,
                         size: 20,
-                        color: ClientVisitColors.blue,
+                        color: Color(0xFF1A73E8),
                       ),
                     ),
+                  ),
+                ),
+              ),
+
+            // ── Bottom info card (distance + ETA) ─────────────────────
+            if (_distanceLabel().isNotEmpty)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  color: Colors.white.withAlpha(242),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.directions_car,
+                        color: Color(0xFF1A73E8),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _etaLabel().isNotEmpty
+                                  ? '${_etaLabel()} away'
+                                  : 'Calculating…',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF202124),
+                              ),
+                            ),
+                            Text(
+                              _distanceLabel(),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF5F6368),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_fetchingRoute)
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                    ],
                   ),
                 ),
               ),
