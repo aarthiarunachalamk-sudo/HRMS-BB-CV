@@ -269,10 +269,12 @@ class _LoginScreenState extends State<LoginScreen> {
             userId: data['user_id'] ?? '',
           );
         } else if (role == 'finance') {
-          dashboard = FinanceDashboard(
+          // Finance uses the full Employee dashboard — same attendance, leave,
+          // payslip, tasks, notifications. No separate finance-only backend.
+          dashboard = EmployeeDashboard(
             email: data['email'],
             firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
+            userId: employeeId,
           );
         } else if (role == 'admin' || role == 'administrator') {
           dashboard = AdminDashboard(
@@ -283,10 +285,11 @@ class _LoginScreenState extends State<LoginScreen> {
         } else if (role == 'it' ||
             role == 'it_team' ||
             role == 'it_department') {
-          dashboard = ITTeamDashboard(
+          // IT team uses the full Employee dashboard.
+          dashboard = EmployeeDashboard(
             email: data['email'],
             firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
+            userId: employeeId,
           );
         } else if (role == 'manager') {
           dashboard = ManagerDashboard(
@@ -295,10 +298,11 @@ class _LoginScreenState extends State<LoginScreen> {
             userId: data['user_id'] ?? '',
           );
         } else if (role == 'marketing') {
-          dashboard = MarketingTeamDashboard(
+          // Marketing team uses the full Employee dashboard.
+          dashboard = EmployeeDashboard(
             email: data['email'],
             firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
+            userId: employeeId,
           );
         } else if (role == 'tl' || role == 'teamlead' || role == 'team_lead') {
           dashboard = TLDashboard(
@@ -313,10 +317,11 @@ class _LoginScreenState extends State<LoginScreen> {
             userId: employeeId,
           );
         } else {
-          dashboard = SuperAdminDashboard(
+          // Any unknown/unmapped role gets the Employee dashboard as a safe default.
+          dashboard = EmployeeDashboard(
             email: data['email'],
             firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
+            userId: employeeId,
           );
         }
 

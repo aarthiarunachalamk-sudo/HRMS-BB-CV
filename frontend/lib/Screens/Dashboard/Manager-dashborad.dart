@@ -413,23 +413,15 @@ class _ManagerDashboardState extends State<ManagerDashboard> {
                     },
                   ),
                   ListTile(
-                    leading: const Icon(
-                      Icons.task_rounded,
-                      color: Color(0xFF11998E),
-                    ),
-                    title: Text('Tasks', style: TextStyle(color: textPrimary)),
-                    onTap: () => Navigator.pop(context),
-                  ),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.bar_chart_rounded,
-                      color: Color(0xFF11998E),
-                    ),
-                    title: Text(
-                      'Reports',
-                      style: TextStyle(color: textPrimary),
-                    ),
-                    onTap: () => Navigator.pop(context),
+                    leading: const Icon(Icons.notifications_rounded, color: Color(0xFF11998E)),
+                    title: Text('Notifications', style: TextStyle(color: textPrimary)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) =>
+                            UserPersonalInformationScreen(userId: widget.userId),
+                      ));
+                    },
                   ),
                 ],
               ),
