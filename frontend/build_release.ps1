@@ -44,22 +44,16 @@ try {
         throw "Flutter release build failed with exit code $LASTEXITCODE."
     }
 
-    # ── 4. Rename output APKs to BBT-ERP-version.X.X format ──────────────────
-    $abiMap = @{
-        'app-arm64-v8a-release.apk'  = "BBT-ERP-version.$displayVersion-arm64.apk"
-        'app-armeabi-v7a-release.apk'= "BBT-ERP-version.$displayVersion-armv7.apk"
-        'app-x86_64-release.apk'     = "BBT-ERP-version.$displayVersion-x86_64.apk"
+    # ── 4. Rename arm64 APK to BBT-ERP-version.X.X.apk ───────────────────────
+    $releaseApkName = "BBT-ERP-version.$displayVersion.apk"
+    $src = Join-Path $apkDirectory 'app-arm64-v8a-release.apk'
+
+    if (-not (Test-Path -LiteralPath $src)) {
+        throw "arm64 release APK not found at: $src"
     }
 
-    $produced = @()
-    foreach ($entry in $abiMap.GetEnumerator()) {
-        $src = Join-Path $apkDirectory $entry.Key
-        if (Test-Path -LiteralPath $src) {
-            $dst = Join-Path $apkDirectory $entry.Value
-            Copy-Item -LiteralPath $src -Destination $dst -Force
-            $produced += $entry.Value
-        }
-    }
+    $dst = Join-Path $apkDirectory $releaseApkName
+    Copy-Item -LiteralPath $src -Destination $dst -Force
 
     # ── 5. Summary ────────────────────────────────────────────────────────────
     Write-Host ""
@@ -68,13 +62,8 @@ try {
     Write-Host "  Version code  : $buildNumber"
     Write-Host "  Output folder : $apkDirectory"
     Write-Host ""
-    Write-Host "APKs produced:"
-    foreach ($f in $produced | Sort-Object) {
-        Write-Host "  $f"
-    }
-    Write-Host ""
-    Write-Host "Recommended for most phones:"
-    Write-Host "  BBT-ERP-version.$displayVersion-arm64.apk"
+    Write-Host "Release APK:"
+    Write-Host "  $releaseApkName"
     Write-Host ""
 }
 catch {
