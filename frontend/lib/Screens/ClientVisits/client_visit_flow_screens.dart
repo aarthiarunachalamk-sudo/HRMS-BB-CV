@@ -343,24 +343,24 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       });
       if (widget.step == 6 && visit.status == 'travelling') {
         unawaited(_startTravelTracking());
-        // Use exact stored coordinates if available and valid, else geocode.
-        if (!_geocodingDone) {
-          final lat = visit.clientLatitude;
-          final lng = visit.clientLongitude;
-          // Treat 0,0 as invalid (sentinel from unresolved short URL)
-          final hasValidCoords = lat != null && lng != null &&
-              !(lat == 0.0 && lng == 0.0) &&
-              lat.abs() <= 90 && lng.abs() <= 180 &&
-              lat != 0.0 && lng != 0.0;
-          if (hasValidCoords) {
-            _geocodingDone = true;
-            setState(() {
-              _destinationLatLng = LatLng(lat, lng);
-            });
-            _fitMapBounds();
-          } else {
-            unawaited(_geocodeDestination(visit.address));
-          }
+        // Set destination from stored coords or geocode — allow retry on reload.
+        final lat = visit.clientLatitude;
+        final lng = visit.clientLongitude;
+        final hasValidCoords = lat != null && lng != null &&
+            lat != 0.0 && lng != 0.0 &&
+            lat.abs() <= 90 && lng.abs() <= 180;
+        if (hasValidCoords) {
+          // Valid stored coords — set immediately
+          setState(() {
+            _destinationLatLng = LatLng(lat, lng);
+          });
+          // Fit after a short delay to ensure GPS + map are ready
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (mounted) _fitMapBounds();
+          });
+        } else if (!_geocodingDone) {
+          // No valid coords — geocode from address
+          unawaited(_geocodeDestination(visit.address, visit.clientName));
         }
       }
     } catch (error) {
@@ -379,30 +379,27 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   /// Geocodes the client address string to a LatLng for the destination pin.
   /// Uses OpenStreetMap Nominatim — no API key required.
-  Future<void> _geocodeDestination(String address) async {
+  Future<void> _geocodeDestination(String address, [String clientName = '']) async {
     if (_geocodingDone || address.trim().isEmpty) return;
-    _geocodingDone = true;
+    // Don't set _geocodingDone=true upfront — allow retry if this call fails
     try {
+      LatLng? dest;
+
       // Try 1: client name + address (most specific)
-      final clientName = _visit?.clientName ?? '';
       final combined = clientName.isNotEmpty
           ? '$clientName, $address'
           : address;
       final query1 = Uri.encodeComponent(
         combined.contains('India') ? combined : '$combined, India',
       );
-      final uri1 = Uri.parse(
-        'https://nominatim.openstreetmap.org/search'
-        '?q=$query1&format=json&limit=1&countrycodes=in',
-      );
       final response1 = await http.get(
-        uri1,
+        Uri.parse('https://nominatim.openstreetmap.org/search'
+            '?q=$query1&format=json&limit=1&countrycodes=in'),
         headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
       ).timeout(const Duration(seconds: 10));
 
-      LatLng? dest;
       if (response1.statusCode == 200) {
-        final List<dynamic> results = jsonDecode(response1.body) as List;
+        final results = jsonDecode(response1.body) as List;
         if (results.isNotEmpty) {
           final first = results.first as Map<String, dynamic>;
           final lat = double.tryParse('${first['lat']}');
@@ -412,20 +409,17 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       }
 
       // Try 2: address only (fallback)
-      if (dest == null) {
+      if (dest == null && clientName.isNotEmpty) {
         final query2 = Uri.encodeComponent(
           address.contains('India') ? address : '$address, India',
         );
-        final uri2 = Uri.parse(
-          'https://nominatim.openstreetmap.org/search'
-          '?q=$query2&format=json&limit=1&countrycodes=in',
-        );
         final response2 = await http.get(
-          uri2,
+          Uri.parse('https://nominatim.openstreetmap.org/search'
+              '?q=$query2&format=json&limit=1&countrycodes=in'),
           headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
         ).timeout(const Duration(seconds: 10));
         if (response2.statusCode == 200) {
-          final List<dynamic> results = jsonDecode(response2.body) as List;
+          final results = jsonDecode(response2.body) as List;
           if (results.isNotEmpty) {
             final first = results.first as Map<String, dynamic>;
             final lat = double.tryParse('${first['lat']}');
@@ -436,11 +430,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       }
 
       if (dest != null && mounted) {
+        _geocodingDone = true; // mark success only
         setState(() => _destinationLatLng = dest);
-        _fitMapBounds();
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) _fitMapBounds();
+        });
       }
     } catch (_) {
-      // Geocoding failed silently — map still works without destination pin.
+      // Geocoding failed silently — will retry on next _load()
     }
   }
 
@@ -596,6 +593,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 _trackingError = null;
                 _liveRoutePoints.add(point);
               });
+              // On first GPS fix, fit map to show both current + destination
+              if (_liveRoutePoints.length == 1 && _destinationLatLng != null) {
+                Future.delayed(const Duration(milliseconds: 300), () {
+                  if (mounted) _fitMapBounds();
+                });
+              }
               // Pan map to follow current position.
               try {
                 if (_navMode) {
