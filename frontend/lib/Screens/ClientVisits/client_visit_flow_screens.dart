@@ -1052,19 +1052,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   /// Full-screen Google Maps navigation layout for the travelling step.
   Widget _buildTravelScreen(ClientVisit visit) {
-    // Treat 0,0 as invalid origin (unresolved short URL sentinel)
     final ocLat = _visit!.officeCheckOutLatitude;
     final ocLng = _visit!.officeCheckOutLongitude;
-    final origin = (ocLat != null && ocLng != null &&
-            !(ocLat == 0.0 && ocLng == 0.0))
-        ? LatLng(ocLat, ocLng)
-        : null;
+    final origin = (ocLat != null && ocLng != null && !(ocLat == 0.0 && ocLng == 0.0))
+        ? LatLng(ocLat, ocLng) : null;
     final current = _lastTrackedPosition != null
-        ? LatLng(
-            _lastTrackedPosition!.latitude,
-            _lastTrackedPosition!.longitude,
-          )
-        : null;
+        ? LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude) : null;
+    final safePad = MediaQuery.of(context).padding;
 
     return ClientVisitTheme(
       child: Scaffold(
@@ -1074,8 +1068,6 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             Positioned.fill(
               child: _LiveMapView(
                 mapController: _mapController,
-                // Do NOT pass GPS breadcrumb as routePoints — that causes
-                // spider-web lines. Pass empty list; OSRM handles the route.
                 routePoints: const [],
                 origin: origin,
                 current: current,
@@ -1097,400 +1089,288 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               ),
             ),
 
-            // ── Top bar: back button + visit title ───────────────────
+            // ── Google Maps style top search bar ─────────────────────
             Positioned(
-              top: MediaQuery.of(context).padding.top + 8,
+              top: safePad.top + 8,
               left: 12,
               right: 12,
-              child: Row(
-                children: [
-                  Material(
-                    color: Theme.of(context).colorScheme.surface,
-                    shape: const CircleBorder(),
-                    elevation: 4,
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Your location row
+                    InkWell(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
                       onTap: () => Navigator.of(context).maybePop(),
                       child: Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: Icon(Icons.arrow_back, size: 20,
-                          color: Theme.of(context).colorScheme.onSurface),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                        child: Row(children: [
+                          const Icon(Icons.arrow_back, size: 20, color: Color(0xFF5F6368)),
+                          const SizedBox(width: 12),
+                          const Icon(Icons.circle, size: 11, color: Color(0xFF1A73E8)),
+                          const SizedBox(width: 10),
+                          const Expanded(child: Text('Your location',
+                            style: TextStyle(fontSize: 14, color: Color(0xFF1A73E8), fontWeight: FontWeight.w500))),
+                          const Icon(Icons.more_vert, size: 18, color: Color(0xFF5F6368)),
+                        ]),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _navMode
-                            ? const Color(0xFF1A73E8)
-                            : Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: const [
-                          BoxShadow(
-                              color: Colors.black26,
-                              blurRadius: 6,
-                              offset: Offset(0, 2)),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _navMode ? Icons.navigation_rounded : Icons.place,
-                            color: _navMode ? Colors.white : const Color(0xFFEA4335),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: _navMode
-                                ? Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        visit.clientName,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.white,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (_distanceText.isNotEmpty || _etaText.isNotEmpty)
-                                        Text(
-                                          [if (_distanceText.isNotEmpty) _distanceText,
-                                           if (_etaText.isNotEmpty) _etaText].join(' · '),
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                    ],
-                                  )
-                                : Text(
-                                    visit.clientName,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: Theme.of(context).colorScheme.onSurface,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                          ),
-                          if (_navMode)
-                            GestureDetector(
-                              onTap: () => setState(() => _navMode = false),
-                              child: const Icon(Icons.close, color: Colors.white70, size: 18),
-                            ),
-                        ],
-                      ),
+                    // Dotted separator
+                    Padding(
+                      padding: const EdgeInsets.only(left: 44),
+                      child: Row(children: List.generate(3, (_) =>
+                        Container(width: 3, height: 3, margin: const EdgeInsets.only(right: 3),
+                          decoration: const BoxDecoration(color: Color(0xFFBDBDBD), shape: BoxShape.circle)))),
                     ),
-                  ),
+                    // Destination row
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      child: Row(children: [
+                        const SizedBox(width: 32),
+                        const Icon(Icons.location_on, size: 18, color: Color(0xFFEA4335)),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(visit.clientName,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF202124)),
+                          maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        Icon(Icons.swap_vert, size: 20, color: Colors.grey.shade400),
+                      ]),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Map controls (right side) ─────────────────────────
+            Positioned(
+              right: 10,
+              bottom: 220,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _travelMapButton(icon: Icons.add, onTap: () {
+                    try { _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1); } catch (_) {}
+                  }),
+                  const SizedBox(height: 4),
+                  _travelMapButton(icon: Icons.remove, onTap: () {
+                    try { _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1); } catch (_) {}
+                  }),
+                  const SizedBox(height: 8),
+                  _travelMapButton(icon: Icons.explore_outlined, onTap: _fitMapBounds),
+                  const SizedBox(height: 4),
+                  _travelMapButton(
+                    icon: Icons.my_location,
+                    color: const Color(0xFF1A73E8),
+                    onTap: () {
+                      if (_lastTrackedPosition != null) {
+                        try { _mapController.move(LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude), 15); } catch (_) {}
+                      }
+                    }),
                 ],
               ),
             ),
 
-            // ── Bottom sheet — Google Maps place details format ──────
-            DraggableScrollableSheet(
-              initialChildSize: _navMode ? 0.13 : 0.38,
-              minChildSize: 0.10,
-              maxChildSize: _navMode ? 0.25 : 0.72,
-              builder: (context, scrollController) {
-                final sheetBg = Theme.of(context).colorScheme.surface;
-                final textPrimary = Theme.of(context).colorScheme.onSurface;
-                final textSecondary = Theme.of(context).colorScheme.onSurfaceVariant;
-                return Container(
-                decoration: BoxDecoration(
-                  color: sheetBg,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 14, offset: Offset(0, -3))],
+            // ── Bottom panel — Google Maps "Drive" style ──────────────
+            Positioned(
+              left: 0, right: 0, bottom: 0,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, -2))],
                 ),
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // ── Drag handle ──
                     Center(child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 10),
-                      width: 40, height: 4,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).dividerColor,
-                        borderRadius: BorderRadius.circular(2)),
+                      margin: const EdgeInsets.only(top: 8, bottom: 6),
+                      width: 36, height: 4,
+                      decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
                     )),
-                    // ── Place title + close ──
-                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Expanded(child: Text(visit.clientName,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: textPrimary))),
-                      IconButton(icon: Icon(Icons.close, color: textSecondary),
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        padding: EdgeInsets.zero, constraints: const BoxConstraints()),
-                    ]),
-                    const SizedBox(height: 2),
-                    // ── Address ──
-                    Text(visit.address,
-                      style: TextStyle(fontSize: 13, color: textSecondary),
-                      maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    // ── Category · ETA ──
-                    Row(children: [
-                      Icon(Icons.business_outlined, size: 13, color: textSecondary),
-                      const SizedBox(width: 4),
-                      Text('Client visit', style: TextStyle(fontSize: 12, color: textSecondary)),
-                      if (_etaText.isNotEmpty) ...[
-                        Text('  ·  ', style: TextStyle(color: textSecondary)),
-                        Icon(Icons.directions_car, size: 13, color: textSecondary),
-                        const SizedBox(width: 3),
-                        Text(_etaText, style: TextStyle(fontSize: 12, color: textSecondary)),
-                      ],
-                    ]),
-                    const SizedBox(height: 14),
-                    // ── Action buttons: Directions + Start only ──
-                    Row(children: [
-                      Expanded(
-                        child: _placeActionButton(
-                          icon: Icons.alt_route,
-                          label: 'Directions',
-                          color: const Color(0xFF00897B),
-                          filled: true,
-                          onTap: () {
-                            // Exit nav mode and fit full route on map
-                            setState(() => _navMode = false);
-                            try {
-                              if (_routeOptions.isNotEmpty) {
-                                final pts = _routeOptions[_selectedRouteIndex].points;
-                                if (pts.length >= 2) _mapController.fitCamera(
-                                  CameraFit.bounds(
-                                    bounds: LatLngBounds.fromPoints(pts),
-                                    padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
-                              } else if (_destinationLatLng != null && _lastTrackedPosition != null) {
-                                _mapController.fitCamera(CameraFit.bounds(
-                                  bounds: LatLngBounds.fromPoints([
-                                    LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude),
-                                    _destinationLatLng!,
-                                  ]),
-                                  padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
-                              }
-                            } catch (_) {}
-                          }),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _placeActionButton(
-                          icon: _navMode ? Icons.close_rounded : Icons.navigation_rounded,
-                          label: _navMode ? 'Stop' : 'Start',
-                          color: _navMode ? Colors.grey : const Color(0xFF1A73E8),
-                          filled: true,
-                          onTap: () {
-                            setState(() => _navMode = !_navMode);
-                            if (_navMode && _lastTrackedPosition != null) {
-                              // Zoom into current position for navigation
-                              _mapController.move(
-                                LatLng(_lastTrackedPosition!.latitude,
-                                    _lastTrackedPosition!.longitude),
-                                17,
-                              );
-                            } else if (!_navMode) {
-                              // Zoom out to show full route
-                              try {
-                                if (_routeOptions.isNotEmpty) {
-                                  final pts = _routeOptions[_selectedRouteIndex].points;
-                                  if (pts.length >= 2) _mapController.fitCamera(
-                                    CameraFit.bounds(
-                                      bounds: LatLngBounds.fromPoints(pts),
-                                      padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
-                                }
-                              } catch (_) {}
-                            }
-                          }),
-                      ),
-                    ]),
-                    const SizedBox(height: 14),
-                    const Divider(height: 1),
-                    const SizedBox(height: 12),
-                    // ── Route options ──
-                    if (_routeOptions.length > 1) ...[
-                      Text('Route options', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: textPrimary)),
-                      const SizedBox(height: 8),
-                      ...List.generate(_routeOptions.length, (i) {
-                        final r = _routeOptions[i];
-                        final isSel = i == _selectedRouteIndex;
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() => _selectedRouteIndex = i);
-                            try {
-                              if (_routeOptions[i].points.length >= 2)
-                                _mapController.fitCamera(CameraFit.bounds(
-                                  bounds: LatLngBounds.fromPoints(_routeOptions[i].points),
-                                  padding: const EdgeInsets.fromLTRB(40, 120, 40, 280)));
-                            } catch (_) {}
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: isSel ? const Color(0xFF1A73E8).withAlpha(18) : Colors.grey.withAlpha(12),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isSel ? const Color(0xFF1A73E8) : Colors.grey.withAlpha(50),
-                                width: isSel ? 1.5 : 1),
-                            ),
-                            child: Row(children: [
-                              Icon(Icons.directions_car,
-                                color: isSel ? const Color(0xFF1A73E8) : Colors.grey, size: 18),
-                              const SizedBox(width: 10),
-                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Row(children: [
-                                  Text(r.durationLabel, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
-                                    color: isSel ? const Color(0xFF1A73E8) : const Color(0xFF202124))),
-                                  const SizedBox(width: 6),
-                                  Text(r.distanceLabel, style: const TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
-                                  if (i == 0) ...[
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                      decoration: BoxDecoration(color: const Color(0xFF34A853).withAlpha(30), borderRadius: BorderRadius.circular(4)),
-                                      child: const Text('Fastest', style: TextStyle(fontSize: 10, color: Color(0xFF34A853), fontWeight: FontWeight.w700))),
-                                  ],
+                    // Route options
+                    if (_routeOptions.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                        child: Column(
+                          children: List.generate(_routeOptions.length, (i) {
+                            final r = _routeOptions[i];
+                            final isSel = i == _selectedRouteIndex;
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() => _selectedRouteIndex = i);
+                                try {
+                                  if (r.points.length >= 2) _mapController.fitCamera(CameraFit.bounds(
+                                    bounds: LatLngBounds.fromPoints(r.points),
+                                    padding: const EdgeInsets.fromLTRB(40, 160, 40, 260)));
+                                } catch (_) {}
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isSel ? const Color(0xFF1967D2) : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(children: [
+                                  Icon(Icons.directions_car_rounded,
+                                    color: isSel ? Colors.white : Colors.grey.shade600, size: 18),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(children: [
+                                        Text(r.durationLabel, style: TextStyle(fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                          color: isSel ? Colors.white : const Color(0xFF202124))),
+                                        const SizedBox(width: 8),
+                                        Text(r.distanceLabel, style: TextStyle(fontSize: 12,
+                                          color: isSel ? Colors.white70 : const Color(0xFF5F6368))),
+                                        if (i == 0) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: isSel ? Colors.white24 : const Color(0xFF34A853).withAlpha(30),
+                                              borderRadius: BorderRadius.circular(4)),
+                                            child: Text('Fastest', style: TextStyle(fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              color: isSel ? Colors.white : const Color(0xFF34A853)))),
+                                        ],
+                                      ]),
+                                      if (r.via.isNotEmpty) Text(r.via, style: TextStyle(fontSize: 11,
+                                        color: isSel ? Colors.white70 : const Color(0xFF5F6368))),
+                                      if (r.hasTolls) Row(children: [
+                                        Icon(Icons.toll_rounded, size: 11,
+                                          color: isSel ? Colors.orangeAccent : const Color(0xFFF29900)),
+                                        const SizedBox(width: 3),
+                                        Text('Tolls', style: TextStyle(fontSize: 11,
+                                          color: isSel ? Colors.orangeAccent : const Color(0xFFF29900))),
+                                      ]),
+                                    ],
+                                  )),
+                                  if (isSel) const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
                                 ]),
-                                if (r.via.isNotEmpty) Text(r.via, style: const TextStyle(fontSize: 11, color: Color(0xFF5F6368))),
-                                if (r.hasTolls) const Row(children: [
-                                  Icon(Icons.warning_amber_rounded, size: 11, color: Color(0xFFF29900)),
-                                  SizedBox(width: 3),
-                                  Text('This route has tolls.', style: TextStyle(fontSize: 11, color: Color(0xFFF29900))),
-                                ]),
-                              ])),
-                              if (isSel) const Icon(Icons.check_circle, color: Color(0xFF1A73E8), size: 16),
-                            ]),
-                          ),
-                        );
-                      }),
-                      const SizedBox(height: 4),
-                      const Divider(height: 1),
-                      const SizedBox(height: 12),
-                    ],
-                    // ── Live GPS coordinates ──
-                    if (_lastTrackedPosition != null) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF34A853).withAlpha(15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF34A853).withAlpha(60)),
+                              ),
+                            );
+                          }),
                         ),
-                        child: Row(children: [
-                          const Icon(Icons.gps_fixed, size: 14, color: Color(0xFF34A853)),
-                          const SizedBox(width: 8),
-                          Expanded(child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${_lastTrackedPosition!.latitude.toStringAsFixed(6)}°N, '
-                                '${_lastTrackedPosition!.longitude.toStringAsFixed(6)}°E',
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.onSurface),
-                              ),
-                              Text(
-                                'Accuracy: ±${_lastTrackedPosition!.accuracy.toStringAsFixed(0)} m',
-                                style: TextStyle(fontSize: 11,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant),
-                              ),
-                            ],
-                          )),
-                          const Icon(Icons.circle, size: 8, color: Color(0xFF34A853)),
-                        ]),
                       ),
-                      const SizedBox(height: 10),
-                    ] else ...[
-                      const Row(children: [
-                        SizedBox(width: 13, height: 13, child: CircularProgressIndicator(strokeWidth: 2)),
-                        SizedBox(width: 8),
-                        Text('Waiting for GPS signal…', style: TextStyle(fontSize: 12, color: Color(0xFF5F6368))),
+                    const Divider(height: 1),
+                    // Drive label row
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                      child: Row(children: [
+                        const Icon(Icons.directions_car_rounded, size: 18, color: Color(0xFF202124)),
+                        const SizedBox(width: 8),
+                        const Text('Drive', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF202124))),
+                        const Spacer(),
+                        if (_etaText.isNotEmpty) Text(_etaText,
+                          style: const TextStyle(fontSize: 13, color: Color(0xFF5F6368))),
+                        if (_distanceText.isNotEmpty) ...[
+                          const SizedBox(width: 4),
+                          Text('· $_distanceText',
+                            style: const TextStyle(fontSize: 13, color: Color(0xFF5F6368))),
+                        ],
                       ]),
-                      const SizedBox(height: 10),
-                    ],
-                    // ── GPS error ──
-                    if (_trackingError != null) ...[
-                      const SizedBox(height: 8),
+                    ),
+                    // Action buttons row
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(12, 4, 12, safePad.bottom + 12),
+                      child: Row(children: [
+                        // Start / Stop
+                        Expanded(
+                          flex: 2,
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: _navMode ? Colors.grey.shade600 : const Color(0xFF34A853),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            onPressed: () {
+                              setState(() => _navMode = !_navMode);
+                              if (_navMode && _lastTrackedPosition != null) {
+                                try { _mapController.move(LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude), 17); } catch (_) {}
+                              } else if (!_navMode) {
+                                _fitMapBounds();
+                              }
+                            },
+                            icon: Icon(_navMode ? Icons.stop_rounded : Icons.navigation_rounded, size: 18),
+                            label: Text(_navMode ? 'Stop' : 'Start',
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Reached client
+                        if (!widget.readOnlyMode)
+                          Expanded(
+                            flex: 3,
+                            child: FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF1A73E8),
+                                padding: const EdgeInsets.symmetric(vertical: 13),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: _working ? null : _reached,
+                              icon: const Icon(Icons.flag_rounded, size: 18),
+                              label: const Text('Reached client',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                        if (widget.readOnlyMode) Expanded(flex: 3, child: _monitoringNotice()),
+                      ]),
+                    ),
+                    if (_trackingError != null)
                       Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: const Color(0xFFEA4335).withAlpha(18), borderRadius: BorderRadius.circular(8)),
+                        margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEA4335).withAlpha(15),
+                          borderRadius: BorderRadius.circular(8)),
                         child: Row(children: [
-                          const Icon(Icons.warning_amber_rounded, color: Color(0xFFEA4335), size: 15),
-                          const SizedBox(width: 8),
+                          const Icon(Icons.warning_amber_rounded, color: Color(0xFFEA4335), size: 14),
+                          const SizedBox(width: 6),
                           Expanded(child: Text(_trackingError!.replaceFirst('Exception: ', ''),
                             style: const TextStyle(fontSize: 11, color: Color(0xFFEA4335)))),
                           TextButton(onPressed: _startTravelTracking,
-                            style: TextButton.styleFrom(minimumSize: Size.zero, padding: const EdgeInsets.symmetric(horizontal: 8)),
+                            style: TextButton.styleFrom(minimumSize: Size.zero,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                             child: const Text('Retry', style: TextStyle(fontSize: 11))),
                         ]),
                       ),
-                    ],
-                    const SizedBox(height: 16),
-                    // ── Reached client ──
-                    if (widget.readOnlyMode)
-                      _monitoringNotice()
-                    else SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF1A73E8),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                        onPressed: _working ? null : _reached,
-                        icon: const Icon(Icons.flag_rounded),
-                        label: const Text('Reached client', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                    if (_working) const Padding(padding: EdgeInsets.only(top: 10), child: LinearProgressIndicator()),
-                  ],  // ListView children
-                ),  // ListView
-              );  // return Container
-              },  // DraggableScrollableSheet builder
-            ),  // DraggableScrollableSheet
-          ],  // Stack children
-        ),  // Stack
-      ),  // Scaffold body
-    );  // ClientVisitTheme / Scaffold
-  }  // _buildTravelScreen
-
-  /// Google Maps style circular action button with label.
-  Widget _placeActionButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-    bool filled = false,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Material(
-          color: filled ? color : color.withAlpha(20),
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Icon(icon,
-                  color: filled ? Colors.white : color, size: 22),
+                    if (_working) const LinearProgressIndicator(),
+                  ],
+                ),
+              ),
             ),
-          ),
+          ], // Stack children
+        ), // Stack
+      ), // Scaffold
+    ); // ClientVisitTheme
+  } // _buildTravelScreen
+  /// Google Maps style circular map control button (used in travel screen).
+  Widget _travelMapButton({required IconData icon, required VoidCallback onTap, Color? color}) {
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 2,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: SizedBox(
+          width: 40, height: 40,
+          child: Icon(icon, size: 20, color: color ?? const Color(0xFF5F6368)),
         ),
-        const SizedBox(height: 4),
-        Text(label,
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: color)),
-      ],
+      ),
     );
   }
+
+  /// Google Maps style circular map control button.
 
   List<Widget> _content(ClientVisit visit) => switch (widget.step) {
     3 => [
