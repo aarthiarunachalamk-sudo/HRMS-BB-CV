@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'dart:convert';
 
@@ -2798,124 +2799,118 @@ class _LiveMapViewState extends State<_LiveMapView>
               // ── Markers ──────────────────────────────────────────────
               MarkerLayer(
                 markers: [
-                  // Origin — green circle pin.
+                  // ── Origin — small green dot (office start point) ──
                   if (widget.origin != null)
                     Marker(
                       point: widget.origin!,
-                      width: 36,
-                      height: 36,
+                      width: 20,
+                      height: 20,
                       child: Container(
                         decoration: BoxDecoration(
                           color: const Color(0xFF34A853),
                           shape: BoxShape.circle,
-                          border:
-                              Border.all(color: Colors.white, width: 2.5),
+                          border: Border.all(color: Colors.white, width: 2.5),
                           boxShadow: const [
-                            BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 4,
-                                offset: Offset(0, 2)),
+                            BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2)),
                           ],
                         ),
-                        child: const Icon(Icons.circle,
-                            color: Colors.white, size: 10),
                       ),
                     ),
 
-                  // Destination — red Google-style pin.
+                  // ── Destination — large red Google Maps style teardrop pin ──
                   if (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0))
                     Marker(
                       point: dst,
-                      width: 40,
-                      height: 50,
-                      alignment: const Alignment(0, -1),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                      width: 44,
+                      height: 58,
+                      alignment: Alignment.topCenter,
+                      child: Stack(
+                        alignment: Alignment.topCenter,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEA4335),
-                              borderRadius: BorderRadius.circular(6),
-                              boxShadow: const [
-                                BoxShadow(
-                                    color: Colors.black26,
-                                    blurRadius: 4,
-                                    offset: Offset(0, 2)),
-                              ],
-                            ),
-                            child: const Text(
-                              'CLIENT',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 8,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
+                          // Drop shadow
+                          Positioned(
+                            bottom: 0,
+                            child: Container(
+                              width: 14,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: Colors.black26,
+                                borderRadius: BorderRadius.circular(8),
                               ),
                             ),
                           ),
-                          const Icon(Icons.location_on,
-                              color: Color(0xFFEA4335), size: 32),
+                          // Pin body
+                          CustomPaint(
+                            size: const Size(44, 52),
+                            painter: _RedPinPainter(),
+                          ),
+                          // Inner white dot
+                          const Positioned(
+                            top: 10,
+                            child: Icon(Icons.circle, color: Colors.white, size: 14),
+                          ),
                         ],
                       ),
                     ),
 
-                  // Current position — pulsing blue dot + arrow.
+                  // ── Current position — pulsing green dot + direction arrow ──
                   if (cur != null)
                     Marker(
                       point: cur,
-                      width: 56,
-                      height: 56,
+                      width: 64,
+                      height: 64,
                       child: AnimatedBuilder(
                         animation: _pulseAnim,
                         builder: (_, __) => Stack(
                           alignment: Alignment.center,
                           children: [
+                            // Outer pulse ring
                             Container(
-                              width: 56 * _pulseAnim.value,
-                              height: 56 * _pulseAnim.value,
+                              width: 64 * _pulseAnim.value,
+                              height: 64 * _pulseAnim.value,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1A73E8).withAlpha(
-                                    (60 *
-                                            (1.0 -
-                                                _pulseAnim.value +
-                                                0.3))
-                                        .round()),
+                                color: const Color(0xFF34A853).withAlpha(
+                                  (50 * (1.2 - _pulseAnim.value)).round().clamp(0, 255),
+                                ),
                                 shape: BoxShape.circle,
                               ),
                             ),
+                            // Mid ring
                             Container(
-                              width: 34,
-                              height: 34,
+                              width: 36,
+                              height: 36,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1A73E8).withAlpha(40),
+                                color: const Color(0xFF34A853).withAlpha(50),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                    color: const Color(0xFF1A73E8)
-                                        .withAlpha(80),
-                                    width: 1),
+                                  color: const Color(0xFF34A853).withAlpha(100),
+                                  width: 1.5,
+                                ),
                               ),
                             ),
+                            // Directional arrow (rotates toward destination)
                             Transform.rotate(
                               angle: heading * math.pi / 180,
                               child: Container(
-                                width: 22,
-                                height: 22,
+                                width: 24,
+                                height: 24,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1A73E8),
+                                  color: const Color(0xFF34A853),
                                   shape: BoxShape.circle,
-                                  border: Border.all(
-                                      color: Colors.white, width: 2.5),
+                                  border: Border.all(color: Colors.white, width: 2.5),
                                   boxShadow: const [
                                     BoxShadow(
-                                        color: Colors.black26,
-                                        blurRadius: 4,
-                                        offset: Offset(0, 2)),
+                                      color: Colors.black38,
+                                      blurRadius: 4,
+                                      offset: Offset(0, 2),
+                                    ),
                                   ],
                                 ),
-                                child: const Icon(Icons.navigation,
-                                    color: Colors.white, size: 13),
+                                child: const Icon(
+                                  Icons.navigation,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
                               ),
                             ),
                           ],
@@ -3185,3 +3180,51 @@ String _approvalBadgeLabel(String role) => role.trim().isEmpty
     : '${_approverRoleLabel(role).toUpperCase()} APPROVED';
 String _duration(Duration value) =>
     '${value.inHours.toString().padLeft(2, '0')}:${(value.inMinutes % 60).toString().padLeft(2, '0')}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
+
+/// Paints a Google Maps style teardrop/pin shape in red.
+class _RedPinPainter extends CustomPainter {
+  const _RedPinPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final cx = w / 2;
+    final r = w / 2;
+
+    final shadowPaint = Paint()
+      ..color = Colors.black38
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+    final fillPaint = Paint()
+      ..color = const Color(0xFFEA4335)
+      ..style = PaintingStyle.fill;
+
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    final path = _pinPath(cx, r, r, h);
+    canvas.drawPath(path, shadowPaint);
+    canvas.drawPath(path, fillPaint);
+    canvas.drawPath(path, borderPaint);
+  }
+
+  ui.Path _pinPath(double cx, double r, double radius, double h) {
+    const tipAngle = 0.42;
+    final path = ui.Path();
+    path.moveTo(cx, h - 2);
+    path.arcTo(
+      Rect.fromCircle(center: Offset(cx, r), radius: radius),
+      math.pi / 2 + tipAngle,
+      math.pi * 2 - tipAngle * 2,
+      false,
+    );
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldRepaint(_RedPinPainter oldDelegate) => false;
+}
