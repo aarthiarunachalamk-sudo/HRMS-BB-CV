@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
@@ -605,20 +607,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   ///   "11°41'11.3\"N 78°07'13.7\"E"
   ///   "11.686478,78.120482"
   ///   Google Maps share URL containing @lat,lng
-  ///   Shortened Google Maps URLs: maps.app.goo.gl/... or goo.gl/maps/...
   static ({double lat, double lng})? _parseCoords(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return null;
-
-    // Shortened Google Maps share links — no coords in URL, treat as valid
-    // and store the link as-is (backend can resolve if needed)
-    if (RegExp(
-      r'https?://(maps\.app\.goo\.gl|goo\.gl/maps)/\S+',
-      caseSensitive: false,
-    ).hasMatch(text)) {
-      // Return a sentinel so callers know it's a valid link (not raw coords)
-      return (lat: 0.0, lng: 0.0);
-    }
 
     // Google Maps URL: contains @lat,lng,zoom or ?q=lat,lng
     final urlLatLng = RegExp(r'[/@](-?\d+\.?\d*),(-?\d+\.?\d*)').firstMatch(text);
@@ -660,9 +651,51 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
 
   String? _validateCoords(String? value) {
     if ((value ?? '').trim().isEmpty) return null; // optional field
-    if (_parseCoords(value!) == null) {
+    final text = value!.trim();
+    // Accept shortened Google Maps links as valid input
+    if (RegExp(r'https?://(maps\.app\.goo\.gl|goo\.gl/maps)/\S+', caseSensitive: false).hasMatch(text)) {
+      return null;
+    }
+    if (_parseCoords(text) == null) {
       return 'Paste a Google Maps link or coordinates (e.g. 11.686478, 78.120482)';
     }
+    return null;
+  }
+
+  /// Resolves a shortened Google Maps URL (maps.app.goo.gl/...)
+  /// by following redirects and extracting the lat/lng from the final URL.
+  static Future<({double lat, double lng})?> _resolveShortUrl(String url) async {
+    try {
+      // Follow the redirect chain (up to 5 hops) without downloading the body
+      String current = url;
+      for (int i = 0; i < 5; i++) {
+        final request = http.Request('HEAD', Uri.parse(current))
+          ..followRedirects = false;
+        final response = await request.send().timeout(const Duration(seconds: 8));
+        final location = response.headers['location'];
+        if (location == null) break;
+        current = location;
+        // Try to extract coords from this URL
+        final coords = _parseCoords(current);
+        if (coords != null) return coords;
+      }
+      // Last attempt: GET the final URL and look for coords in the body
+      final resp = await http.get(Uri.parse(current),
+        headers: {'User-Agent': 'HRMS-Bitbyte/1.0'})
+        .timeout(const Duration(seconds: 8));
+      // Look for @lat,lng pattern in the response body or final URL
+      final bodyCoords = _parseCoords(resp.request?.url.toString() ?? '');
+      if (bodyCoords != null) return bodyCoords;
+      // Scan the HTML body for coordinates
+      final match = RegExp(r'[/@](-?\d{1,3}\.\d{4,}),(-?\d{1,3}\.\d{4,})').firstMatch(resp.body);
+      if (match != null) {
+        final lat = double.tryParse(match.group(1)!);
+        final lng = double.tryParse(match.group(2)!);
+        if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
+          return (lat: lat, lng: lng);
+        }
+      }
+    } catch (_) {}
     return null;
   }
 
@@ -679,7 +712,15 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final coords = _parseCoords(_locationCoords.text);
+      final rawLocation = _locationCoords.text.trim();
+      // Resolve coordinates: parse directly, or follow short URL redirect
+      var coords = _parseCoords(rawLocation);
+      if (coords == null && RegExp(
+        r'https?://(maps\.app\.goo\.gl|goo\.gl/maps)/\S+',
+        caseSensitive: false,
+      ).hasMatch(rawLocation)) {
+        coords = await _resolveShortUrl(rawLocation);
+      }
       await widget.service.create(widget.userId, {
         'client_name': _client.text.trim(),
         'contact_person': _contact.text.trim(),

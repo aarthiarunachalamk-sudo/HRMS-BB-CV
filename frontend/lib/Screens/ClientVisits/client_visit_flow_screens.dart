@@ -12,7 +12,6 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
@@ -292,6 +291,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   // Route alternatives from _LiveMapView.
   List<_RouteOption> _routeOptions = [];
   int _selectedRouteIndex = 0;
+  // Navigation mode: true = map tracks user heading, bottom sheet minimized.
+  bool _navMode = false;
   List<String> _attendees = [];
   List<Map<String, dynamic>> _checklist = [];
 
@@ -541,9 +542,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               });
               // Pan map to follow current position.
               try {
-                _mapController.move(point, _mapController.camera.zoom < 14
-                    ? 15
-                    : _mapController.camera.zoom);
+                if (_navMode) {
+                  // Navigation mode: always follow at zoom 17
+                  _mapController.move(point, 17);
+                } else {
+                  _mapController.move(point, _mapController.camera.zoom < 14
+                      ? 15
+                      : _mapController.camera.zoom);
+                }
               } catch (_) {}
               unawaited(_sendTravelPosition(position));
             },
@@ -1057,7 +1063,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
+                        color: _navMode
+                            ? const Color(0xFF1A73E8)
+                            : Theme.of(context).colorScheme.surface,
                         borderRadius: BorderRadius.circular(30),
                         boxShadow: const [
                           BoxShadow(
@@ -1068,21 +1076,55 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.place, color: Color(0xFFEA4335),
-                              size: 18),
+                          Icon(
+                            _navMode ? Icons.navigation_rounded : Icons.place,
+                            color: _navMode ? Colors.white : const Color(0xFFEA4335),
+                            size: 18,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
-                            child: Text(
-                              visit.clientName,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            child: _navMode
+                                ? Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        visit.clientName,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (_distanceText.isNotEmpty || _etaText.isNotEmpty)
+                                        Text(
+                                          [if (_distanceText.isNotEmpty) _distanceText,
+                                           if (_etaText.isNotEmpty) _etaText].join(' · '),
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                                    ],
+                                  )
+                                : Text(
+                                    visit.clientName,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                           ),
+                          if (_navMode)
+                            GestureDetector(
+                              onTap: () => setState(() => _navMode = false),
+                              child: const Icon(Icons.close, color: Colors.white70, size: 18),
+                            ),
                         ],
                       ),
                     ),
@@ -1093,9 +1135,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
             // ── Bottom sheet — Google Maps place details format ──────
             DraggableScrollableSheet(
-              initialChildSize: 0.38,
-              minChildSize: 0.18,
-              maxChildSize: 0.72,
+              initialChildSize: _navMode ? 0.13 : 0.38,
+              minChildSize: 0.10,
+              maxChildSize: _navMode ? 0.25 : 0.72,
               builder: (context, scrollController) {
                 final sheetBg = Theme.of(context).colorScheme.surface;
                 final textPrimary = Theme.of(context).colorScheme.onSurface;
@@ -1153,16 +1195,45 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                           label: 'Directions',
                           color: const Color(0xFF00897B),
                           filled: true,
-                          onTap: () async {
-                            if (_destinationLatLng != null) {
-                              await _openGoogleMaps(
-                                destination: _destinationLatLng!,
-                                origin: _lastTrackedPosition != null
-                                    ? LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude)
-                                    : null,
-                                navigationMode: false,
+                          onTap: () {
+                            // Exit nav mode and fit full route on map
+                            setState(() => _navMode = false);
+                            try {
+                              if (_routeOptions.isNotEmpty) {
+                                final pts = _routeOptions[_selectedRouteIndex].points;
+                                if (pts.length >= 2) _mapController.fitCamera(
+                                  CameraFit.bounds(
+                                    bounds: LatLngBounds.fromPoints(pts),
+                                    padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
+                              } else if (_destinationLatLng != null && _lastTrackedPosition != null) {
+                                _mapController.fitCamera(CameraFit.bounds(
+                                  bounds: LatLngBounds.fromPoints([
+                                    LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude),
+                                    _destinationLatLng!,
+                                  ]),
+                                  padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
+                              }
+                            } catch (_) {}
+                          }),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _placeActionButton(
+                          icon: _navMode ? Icons.close_rounded : Icons.navigation_rounded,
+                          label: _navMode ? 'Stop' : 'Start',
+                          color: _navMode ? Colors.grey : const Color(0xFF1A73E8),
+                          filled: true,
+                          onTap: () {
+                            setState(() => _navMode = !_navMode);
+                            if (_navMode && _lastTrackedPosition != null) {
+                              // Zoom into current position for navigation
+                              _mapController.move(
+                                LatLng(_lastTrackedPosition!.latitude,
+                                    _lastTrackedPosition!.longitude),
+                                17,
                               );
-                            } else {
+                            } else if (!_navMode) {
+                              // Zoom out to show full route
                               try {
                                 if (_routeOptions.isNotEmpty) {
                                   final pts = _routeOptions[_selectedRouteIndex].points;
@@ -1172,29 +1243,6 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                                       padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
                                 }
                               } catch (_) {}
-                            }
-                          }),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _placeActionButton(
-                          icon: Icons.navigation_rounded,
-                          label: 'Start',
-                          color: const Color(0xFF1A73E8),
-                          filled: true,
-                          onTap: () async {
-                            if (_destinationLatLng != null) {
-                              await _openGoogleMaps(
-                                destination: _destinationLatLng!,
-                                origin: _lastTrackedPosition != null
-                                    ? LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude)
-                                    : null,
-                                navigationMode: true,
-                              );
-                            } else {
-                              if (_lastTrackedPosition != null)
-                                _mapController.move(
-                                  LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude), 17);
                             }
                           }),
                       ),
@@ -1447,35 +1495,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       if (widget.readOnlyMode)
         _monitoringNotice()
       else if (visit.status == 'approved')
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Opens Google Maps: "Your location" → client destination
-            if (visit.clientLatitude != null && visit.clientLongitude != null)
-              OutlinedButton.icon(
-                onPressed: () => _openGoogleMaps(
-                  destination: LatLng(
-                    visit.clientLatitude!,
-                    visit.clientLongitude!,
-                  ),
-                  // No origin = Google Maps asks / uses "Your location"
-                ),
-                icon: const Icon(Icons.map_outlined),
-                label: const Text('Directions to client'),
-              ),
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed: () => _replace(
-                ClientVisitOfficeCheckoutScreen(
-                  userId: widget.userId,
-                  visitId: widget.visitId,
-                  service: widget.service,
-                ),
-              ),
-              icon: const Icon(Icons.directions_car),
-              label: const Text('Start from office'),
+        FilledButton.icon(
+          onPressed: () => _replace(
+            ClientVisitOfficeCheckoutScreen(
+              userId: widget.userId,
+              visitId: widget.visitId,
+              service: widget.service,
             ),
-          ],
+          ),
+          icon: const Icon(Icons.directions_car),
+          label: const Text('Start from office'),
         )
       else
         _statusNotice(visit),
@@ -3084,55 +3113,3 @@ String _approvalBadgeLabel(String role) => role.trim().isEmpty
     : '${_approverRoleLabel(role).toUpperCase()} APPROVED';
 String _duration(Duration value) =>
     '${value.inHours.toString().padLeft(2, '0')}:${(value.inMinutes % 60).toString().padLeft(2, '0')}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
-
-/// Opens Google Maps with [destination] pre-filled.
-/// If [origin] is provided it is set as the start point; otherwise Google Maps
-/// uses the device's current location ("Your location").
-/// [navigationMode] = true launches turn-by-turn navigation directly.
-Future<void> _openGoogleMaps({
-  required LatLng destination,
-  LatLng? origin,
-  bool navigationMode = false,
-}) async {
-  final dst = '${destination.latitude},${destination.longitude}';
-  final org = origin != null
-      ? '${origin.latitude},${origin.longitude}'
-      : '';
-
-  // Build the intent URL used to open the Google Maps app.
-  // saddr = start address, daddr = destination address, directionsmode = driving
-  final Uri mapsUri;
-  if (navigationMode) {
-    // Navigation mode: drives straight to destination from current location.
-    mapsUri = Uri.parse(
-      'google.navigation:q=$dst&mode=d',
-    );
-  } else {
-    // Directions mode: shows route with optional origin.
-    mapsUri = org.isNotEmpty
-        ? Uri.parse(
-            'https://www.google.com/maps/dir/?api=1'
-            '&origin=$org'
-            '&destination=$dst'
-            '&travelmode=driving',
-          )
-        : Uri.parse(
-            'https://www.google.com/maps/dir/?api=1'
-            '&destination=$dst'
-            '&travelmode=driving',
-          );
-  }
-
-  if (await canLaunchUrl(mapsUri)) {
-    await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
-  } else {
-    // Fallback: browser-based Google Maps if the app is not installed.
-    final fallback = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1'
-      '${org.isNotEmpty ? '&origin=$org' : ''}'
-      '&destination=$dst'
-      '&travelmode=driving',
-    );
-    await launchUrl(fallback, mode: LaunchMode.externalApplication);
-  }
-}
