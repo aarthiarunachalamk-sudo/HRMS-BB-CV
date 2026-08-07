@@ -343,15 +343,19 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       });
       if (widget.step == 6 && visit.status == 'travelling') {
         unawaited(_startTravelTracking());
-        // Use exact stored coordinates if available, else geocode the address.
+        // Use exact stored coordinates if available and valid, else geocode.
         if (!_geocodingDone) {
-          if (visit.clientLatitude != null && visit.clientLongitude != null) {
+          final lat = visit.clientLatitude;
+          final lng = visit.clientLongitude;
+          // Treat 0,0 as invalid (sentinel from unresolved short URL)
+          final hasValidCoords = lat != null && lng != null &&
+              !(lat == 0.0 && lng == 0.0) &&
+              lat.abs() <= 90 && lng.abs() <= 180 &&
+              lat != 0.0 && lng != 0.0;
+          if (hasValidCoords) {
             _geocodingDone = true;
             setState(() {
-              _destinationLatLng = LatLng(
-                visit.clientLatitude!,
-                visit.clientLongitude!,
-              );
+              _destinationLatLng = LatLng(lat, lng);
             });
             _fitMapBounds();
           } else {
@@ -2435,9 +2439,11 @@ class _LiveMapViewState extends State<_LiveMapView>
       setState(() => _selectedRouteIndex = widget.selectedRouteIndex);
     }
     if (cur == null || dst == null) return;
-    // Re-fetch every ~150 m of movement.
+    // Skip if destination is invalid (0,0 sentinel)
+    if (dst.latitude == 0.0 && dst.longitude == 0.0) return;
+    // Re-fetch every ~500 m of movement.
     if (_lastRouteFetch == null ||
-        const Distance().as(LengthUnit.Meter, cur, _lastRouteFetch!) > 150) {
+        const Distance().as(LengthUnit.Meter, cur, _lastRouteFetch!) > 500) {
       _fetchRoute(cur, dst);
     }
   }
@@ -2476,6 +2482,9 @@ class _LiveMapViewState extends State<_LiveMapView>
   /// Fetches up to 3 driving route alternatives from OSRM.
   Future<void> _fetchRoute(LatLng from, LatLng to) async {
     if (_fetchingRoute) return;
+    // Never route to invalid coordinates
+    if (to.latitude == 0.0 && to.longitude == 0.0) return;
+    if (from.latitude == 0.0 && from.longitude == 0.0) return;
     _fetchingRoute = true;
     _lastRouteFetch = from;
     try {
@@ -2563,21 +2572,28 @@ class _LiveMapViewState extends State<_LiveMapView>
     return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
   }
 
-  // The selected road route to draw — fall back to breadcrumb if no routes yet.
+  // The selected road route to draw — empty list if no OSRM route yet.
+  // Never fall back to raw GPS breadcrumb as route (causes spider-web mess).
   List<LatLng> get _displayRoute =>
-      _selected != null ? _selected!.points : widget.routePoints;
+      _selected != null && _selected!.points.length >= 2
+          ? _selected!.points
+          : [];
 
-  LatLng get _center =>
-      widget.current ??
-      widget.destination ??
-      widget.origin ??
-      const LatLng(20.5937, 78.9629);
+  LatLng get _center {
+    final cur = widget.current;
+    final dst = widget.destination;
+    // Don't center on invalid 0,0 destination
+    final validDst = (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0))
+        ? dst : null;
+    return cur ?? validDst ?? widget.origin ?? const LatLng(20.5937, 78.9629);
+  }
 
   @override
   Widget build(BuildContext context) {
     final cur = widget.current;
     final dst = widget.destination;
-    final heading = (cur != null && dst != null) ? _bearing(cur, dst) : 0.0;
+    final validDst = (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0)) ? dst : null;
+    final heading = (cur != null && validDst != null) ? _bearing(cur, validDst) : 0.0;
 
     final mapStack = Stack(
       children: [
@@ -2751,7 +2767,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                     ),
 
                   // Destination — red Google-style pin.
-                  if (dst != null)
+                  if (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0))
                     Marker(
                       point: dst,
                       width: 40,
