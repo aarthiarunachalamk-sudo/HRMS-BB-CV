@@ -341,7 +341,16 @@ def _visit_payload(item, detailed=True, approver_lookup=None):
 def _assign_fields(visit, data):
     for field in EDITABLE_FIELDS:
         if field in data and data.get(field) not in (None, ''):
-            setattr(visit, field, data.get(field))
+            value = data.get(field)
+            # Reject 0,0 coordinates — sentinel from unresolved short URLs
+            if field in ('latitude', 'longitude'):
+                try:
+                    fval = float(value)
+                    if fval == 0.0:
+                        continue
+                except (TypeError, ValueError):
+                    continue
+            setattr(visit, field, value)
 
 
 @api_view(['GET', 'POST'])

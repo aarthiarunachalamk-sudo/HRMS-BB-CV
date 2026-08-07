@@ -383,29 +383,61 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     if (_geocodingDone || address.trim().isEmpty) return;
     _geocodingDone = true;
     try {
-      final query = Uri.encodeComponent(
-        address.contains('India') ? address : '$address, India',
+      // Try 1: client name + address (most specific)
+      final clientName = _visit?.clientName ?? '';
+      final combined = clientName.isNotEmpty
+          ? '$clientName, $address'
+          : address;
+      final query1 = Uri.encodeComponent(
+        combined.contains('India') ? combined : '$combined, India',
       );
-      final uri = Uri.parse(
+      final uri1 = Uri.parse(
         'https://nominatim.openstreetmap.org/search'
-        '?q=$query&format=json&limit=1&countrycodes=in',
+        '?q=$query1&format=json&limit=1&countrycodes=in',
       );
-      final response = await http.get(
-        uri,
+      final response1 = await http.get(
+        uri1,
         headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
       ).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        final List<dynamic> results = jsonDecode(response.body) as List;
-        if (results.isNotEmpty && mounted) {
+
+      LatLng? dest;
+      if (response1.statusCode == 200) {
+        final List<dynamic> results = jsonDecode(response1.body) as List;
+        if (results.isNotEmpty) {
           final first = results.first as Map<String, dynamic>;
           final lat = double.tryParse('${first['lat']}');
           final lon = double.tryParse('${first['lon']}');
-          if (lat != null && lon != null) {
-            final dest = LatLng(lat, lon);
-            setState(() => _destinationLatLng = dest);
-            _fitMapBounds();
+          if (lat != null && lon != null) dest = LatLng(lat, lon);
+        }
+      }
+
+      // Try 2: address only (fallback)
+      if (dest == null) {
+        final query2 = Uri.encodeComponent(
+          address.contains('India') ? address : '$address, India',
+        );
+        final uri2 = Uri.parse(
+          'https://nominatim.openstreetmap.org/search'
+          '?q=$query2&format=json&limit=1&countrycodes=in',
+        );
+        final response2 = await http.get(
+          uri2,
+          headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
+        ).timeout(const Duration(seconds: 10));
+        if (response2.statusCode == 200) {
+          final List<dynamic> results = jsonDecode(response2.body) as List;
+          if (results.isNotEmpty) {
+            final first = results.first as Map<String, dynamic>;
+            final lat = double.tryParse('${first['lat']}');
+            final lon = double.tryParse('${first['lon']}');
+            if (lat != null && lon != null) dest = LatLng(lat, lon);
           }
         }
+      }
+
+      if (dest != null && mounted) {
+        setState(() => _destinationLatLng = dest);
+        _fitMapBounds();
       }
     } catch (_) {
       // Geocoding failed silently — map still works without destination pin.
@@ -414,23 +446,43 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   /// Adjusts the map camera to fit origin, current position and destination.
   void _fitMapBounds() {
-    final points = <LatLng>[
-      if (_lastTrackedPosition != null)
-        LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude),
-      if (_visit?.officeCheckOutLatitude != null)
-        LatLng(
-          _visit!.officeCheckOutLatitude!,
-          _visit!.officeCheckOutLongitude!,
-        ),
-      if (_destinationLatLng != null) _destinationLatLng!,
-    ];
-    if (points.length < 2) return;
+    final points = <LatLng>[];
+
+    // Current GPS position
+    if (_lastTrackedPosition != null) {
+      points.add(LatLng(
+        _lastTrackedPosition!.latitude,
+        _lastTrackedPosition!.longitude,
+      ));
+    }
+
+    // Office checkout position (valid only)
+    final ocLat = _visit?.officeCheckOutLatitude;
+    final ocLng = _visit?.officeCheckOutLongitude;
+    if (ocLat != null && ocLng != null &&
+        !(ocLat == 0.0 && ocLng == 0.0)) {
+      points.add(LatLng(ocLat, ocLng));
+    }
+
+    // Destination (valid only)
+    final dst = _destinationLatLng;
+    if (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0)) {
+      points.add(dst);
+    }
+
+    if (points.length < 2) {
+      // At least move to the single known point
+      if (points.length == 1) {
+        try { _mapController.move(points.first, 15); } catch (_) {}
+      }
+      return;
+    }
     try {
       final bounds = LatLngBounds.fromPoints(points);
       _mapController.fitCamera(
         CameraFit.bounds(
           bounds: bounds,
-          padding: const EdgeInsets.all(48),
+          padding: const EdgeInsets.fromLTRB(40, 100, 40, 320),
         ),
       );
     } catch (_) {}
@@ -996,12 +1048,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   /// Full-screen Google Maps navigation layout for the travelling step.
   Widget _buildTravelScreen(ClientVisit visit) {
-    final origin = _visit!.officeCheckOutLatitude != null &&
-            _visit!.officeCheckOutLongitude != null
-        ? LatLng(
-            _visit!.officeCheckOutLatitude!,
-            _visit!.officeCheckOutLongitude!,
-          )
+    // Treat 0,0 as invalid origin (unresolved short URL sentinel)
+    final ocLat = _visit!.officeCheckOutLatitude;
+    final ocLng = _visit!.officeCheckOutLongitude;
+    final origin = (ocLat != null && ocLng != null &&
+            !(ocLat == 0.0 && ocLng == 0.0))
+        ? LatLng(ocLat, ocLng)
         : null;
     final current = _lastTrackedPosition != null
         ? LatLng(
@@ -1012,14 +1064,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
     return ClientVisitTheme(
       child: Scaffold(
-        // No AppBar — map fills the entire screen like Google Maps.
         body: Stack(
           children: [
             // ── Full-screen map ──────────────────────────────────────
             Positioned.fill(
               child: _LiveMapView(
                 mapController: _mapController,
-                routePoints: _liveRoutePoints,
+                // Do NOT pass GPS breadcrumb as routePoints — that causes
+                // spider-web lines. Pass empty list; OSRM handles the route.
+                routePoints: const [],
                 origin: origin,
                 current: current,
                 destination: _destinationLatLng,
