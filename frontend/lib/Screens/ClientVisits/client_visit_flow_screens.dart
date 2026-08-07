@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
@@ -1152,16 +1153,26 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                           label: 'Directions',
                           color: const Color(0xFF00897B),
                           filled: true,
-                          onTap: () {
-                            try {
-                              if (_routeOptions.isNotEmpty) {
-                                final pts = _routeOptions[_selectedRouteIndex].points;
-                                if (pts.length >= 2) _mapController.fitCamera(
-                                  CameraFit.bounds(
-                                    bounds: LatLngBounds.fromPoints(pts),
-                                    padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
-                              }
-                            } catch (_) {}
+                          onTap: () async {
+                            if (_destinationLatLng != null) {
+                              await _openGoogleMaps(
+                                destination: _destinationLatLng!,
+                                origin: _lastTrackedPosition != null
+                                    ? LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude)
+                                    : null,
+                                navigationMode: false,
+                              );
+                            } else {
+                              try {
+                                if (_routeOptions.isNotEmpty) {
+                                  final pts = _routeOptions[_selectedRouteIndex].points;
+                                  if (pts.length >= 2) _mapController.fitCamera(
+                                    CameraFit.bounds(
+                                      bounds: LatLngBounds.fromPoints(pts),
+                                      padding: const EdgeInsets.fromLTRB(40, 130, 40, 300)));
+                                }
+                              } catch (_) {}
+                            }
                           }),
                       ),
                       const SizedBox(width: 12),
@@ -1171,10 +1182,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                           label: 'Start',
                           color: const Color(0xFF1A73E8),
                           filled: true,
-                          onTap: () {
-                            if (_lastTrackedPosition != null)
-                              _mapController.move(
-                                LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude), 17);
+                          onTap: () async {
+                            if (_destinationLatLng != null) {
+                              await _openGoogleMaps(
+                                destination: _destinationLatLng!,
+                                origin: _lastTrackedPosition != null
+                                    ? LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude)
+                                    : null,
+                                navigationMode: true,
+                              );
+                            } else {
+                              if (_lastTrackedPosition != null)
+                                _mapController.move(
+                                  LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude), 17);
+                            }
                           }),
                       ),
                     ]),
@@ -1426,16 +1447,35 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       if (widget.readOnlyMode)
         _monitoringNotice()
       else if (visit.status == 'approved')
-        FilledButton.icon(
-          onPressed: () => _replace(
-            ClientVisitOfficeCheckoutScreen(
-              userId: widget.userId,
-              visitId: widget.visitId,
-              service: widget.service,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Opens Google Maps: "Your location" → client destination
+            if (visit.clientLatitude != null && visit.clientLongitude != null)
+              OutlinedButton.icon(
+                onPressed: () => _openGoogleMaps(
+                  destination: LatLng(
+                    visit.clientLatitude!,
+                    visit.clientLongitude!,
+                  ),
+                  // No origin = Google Maps asks / uses "Your location"
+                ),
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Directions to client'),
+              ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => _replace(
+                ClientVisitOfficeCheckoutScreen(
+                  userId: widget.userId,
+                  visitId: widget.visitId,
+                  service: widget.service,
+                ),
+              ),
+              icon: const Icon(Icons.directions_car),
+              label: const Text('Start from office'),
             ),
-          ),
-          icon: const Icon(Icons.directions_car),
-          label: const Text('Start from office'),
+          ],
         )
       else
         _statusNotice(visit),
@@ -3044,3 +3084,55 @@ String _approvalBadgeLabel(String role) => role.trim().isEmpty
     : '${_approverRoleLabel(role).toUpperCase()} APPROVED';
 String _duration(Duration value) =>
     '${value.inHours.toString().padLeft(2, '0')}:${(value.inMinutes % 60).toString().padLeft(2, '0')}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
+
+/// Opens Google Maps with [destination] pre-filled.
+/// If [origin] is provided it is set as the start point; otherwise Google Maps
+/// uses the device's current location ("Your location").
+/// [navigationMode] = true launches turn-by-turn navigation directly.
+Future<void> _openGoogleMaps({
+  required LatLng destination,
+  LatLng? origin,
+  bool navigationMode = false,
+}) async {
+  final dst = '${destination.latitude},${destination.longitude}';
+  final org = origin != null
+      ? '${origin.latitude},${origin.longitude}'
+      : '';
+
+  // Build the intent URL used to open the Google Maps app.
+  // saddr = start address, daddr = destination address, directionsmode = driving
+  final Uri mapsUri;
+  if (navigationMode) {
+    // Navigation mode: drives straight to destination from current location.
+    mapsUri = Uri.parse(
+      'google.navigation:q=$dst&mode=d',
+    );
+  } else {
+    // Directions mode: shows route with optional origin.
+    mapsUri = org.isNotEmpty
+        ? Uri.parse(
+            'https://www.google.com/maps/dir/?api=1'
+            '&origin=$org'
+            '&destination=$dst'
+            '&travelmode=driving',
+          )
+        : Uri.parse(
+            'https://www.google.com/maps/dir/?api=1'
+            '&destination=$dst'
+            '&travelmode=driving',
+          );
+  }
+
+  if (await canLaunchUrl(mapsUri)) {
+    await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
+  } else {
+    // Fallback: browser-based Google Maps if the app is not installed.
+    final fallback = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1'
+      '${org.isNotEmpty ? '&origin=$org' : ''}'
+      '&destination=$dst'
+      '&travelmode=driving',
+    );
+    await launchUrl(fallback, mode: LaunchMode.externalApplication);
+  }
+}
