@@ -697,7 +697,65 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
         'manager_user_id': _selectedManagerId ?? _manager.text.trim(),
         'submit': submit,
       });
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green.shade600,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  submit ? 'Submitted Successfully' : 'Draft Saved',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  submit
+                      ? 'Your visit request has been submitted for approval.'
+                      : 'Your visit request has been saved as a draft.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('OK'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        if (mounted) Navigator.of(context).pop(true);
+      }
     } catch (error) {
       if (mounted) _snack(context, '$error');
     } finally {
@@ -739,7 +797,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                 TextFormField(
                   controller: _phone,
                   validator: _mobileNumber,
-                  keyboardType: TextInputType.phone,
+                  keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.digitsOnly,
                     LengthLimitingTextInputFormatter(10),
@@ -747,7 +805,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   maxLength: 10,
                   decoration: const InputDecoration(
                     labelText: 'Contact number',
-                    hintText: '9876543210',
+                    hintText: 'Enter 10-digit mobile number',
                     counterText: '',
                   ),
                 ),
