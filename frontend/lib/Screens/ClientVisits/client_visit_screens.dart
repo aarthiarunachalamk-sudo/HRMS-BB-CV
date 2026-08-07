@@ -605,9 +605,20 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   ///   "11°41'11.3\"N 78°07'13.7\"E"
   ///   "11.686478,78.120482"
   ///   Google Maps share URL containing @lat,lng
+  ///   Shortened Google Maps URLs: maps.app.goo.gl/... or goo.gl/maps/...
   static ({double lat, double lng})? _parseCoords(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return null;
+
+    // Shortened Google Maps share links — no coords in URL, treat as valid
+    // and store the link as-is (backend can resolve if needed)
+    if (RegExp(
+      r'https?://(maps\.app\.goo\.gl|goo\.gl/maps)/\S+',
+      caseSensitive: false,
+    ).hasMatch(text)) {
+      // Return a sentinel so callers know it's a valid link (not raw coords)
+      return (lat: 0.0, lng: 0.0);
+    }
 
     // Google Maps URL: contains @lat,lng,zoom or ?q=lat,lng
     final urlLatLng = RegExp(r'[/@](-?\d+\.?\d*),(-?\d+\.?\d*)').firstMatch(text);
@@ -650,7 +661,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   String? _validateCoords(String? value) {
     if ((value ?? '').trim().isEmpty) return null; // optional field
     if (_parseCoords(value!) == null) {
-      return 'Paste a valid location (e.g. 11.686478, 78.120482)';
+      return 'Paste a Google Maps link or coordinates (e.g. 11.686478, 78.120482)';
     }
     return null;
   }
@@ -701,7 +712,12 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.of(context).padding.bottom,
+          ),
           children: [
             _Section(
               title: 'Client',
@@ -730,7 +746,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   ],
                   maxLength: 10,
                   decoration: const InputDecoration(
-                    labelText: 'Mobile number',
+                    labelText: 'Contact number',
                     hintText: '9876543210',
                     counterText: '',
                   ),
@@ -749,9 +765,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   validator: _validateCoords,
                   decoration: InputDecoration(
                     labelText: 'Client location (paste from WhatsApp / Maps)',
-                    hintText: '11.686478, 78.120482',
+                    hintText: 'https://maps.app.goo.gl/...',
                     helperText:
-                        'Paste coordinates or Google Maps link for exact pin',
+                        'Paste a Google Maps share link or coordinates',
                     helperMaxLines: 2,
                     suffixIcon: _locationCoords.text.isNotEmpty
                         ? IconButton(
@@ -857,7 +873,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                           (tl) => DropdownMenuItem<String>(
                             value: '${tl['employee_id']}',
                             child: Text(
-                              '${tl['label'] ?? 'Approver'} · ${tl['role_label'] ?? tl['role'] ?? ''} (${tl['employee_id']})',
+                              '${tl['label'] ?? 'Approver'} (${tl['role_label'] ?? tl['role'] ?? ''})',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
