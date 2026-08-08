@@ -281,21 +281,23 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   Position? _lastTrackedPosition;
   final List<LatLng> _liveRoutePoints = [];
   final MapController _mapController = MapController();
-  LatLng? _destinationLatLng;       // geocoded client address
+  LatLng? _destinationLatLng;
   bool _geocodingDone = false;
   String? _trackingError;
   bool _sendingLocation = false;
   Timer? _trackingRetryTimer;
-  // ETA/distance updated by _LiveMapView via callback.
   String _etaText = '';
   String _distanceText = '';
-  // Route alternatives from _LiveMapView.
   List<_RouteOption> _routeOptions = [];
   int _selectedRouteIndex = 0;
-  // Navigation mode: true = map tracks user heading, bottom sheet minimized.
   bool _navMode = false;
   List<String> _attendees = [];
   List<Map<String, dynamic>> _checklist = [];
+  // Local proof images staged for upload (Step 9)
+  final List<String> _stagedProofPaths = [];
+  // Outcome and follow-up for step 9
+  String _outcome9 = '';
+  String _followUp9 = '';
 
   @override
   void initState() {
@@ -855,7 +857,6 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Future<void> _saveWorkUpdate() async {
-    // Step 9 validation: notes required.
     if (_notes.text.trim().isEmpty) {
       _message('Please add notes about the work done during this visit.');
       return;
@@ -865,15 +866,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         'notes': _notes.text.trim(),
         'attendees': _attendees,
         'checklist': _checklist,
+        if (_outcome9.isNotEmpty) 'outcome': _outcome9,
+        if (_followUp9.isNotEmpty) 'follow_up': _followUp9,
+        if (_signature.text.trim().isNotEmpty) 'client_signature_name': _signature.text.trim(),
       });
-      final images = await ImagePicker().pickMultiImage(imageQuality: 82);
-      if (images.isNotEmpty) {
+      if (_stagedProofPaths.isNotEmpty) {
         await widget.service.uploadFiles(
-          widget.userId,
-          widget.visitId,
-          'proof',
-          images.map((item) => item.path).toList(),
-        );
+          widget.userId, widget.visitId, 'proof', _stagedProofPaths);
+        if (mounted) setState(() => _stagedProofPaths.clear());
       }
     });
     if (mounted) Navigator.pop(context, true);
@@ -1783,59 +1783,41 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     9 => [
       EmployeeCard(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _attendee,
-                    readOnly: widget.readOnlyMode,
-                    decoration: const InputDecoration(
-                      labelText: 'Attendee name',
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: widget.readOnlyMode
-                      ? null
-                      : () {
-                          if (_attendee.text.trim().isNotEmpty) {
-                            setState(() {
-                              _attendees.add(_attendee.text.trim());
-                              _attendee.clear();
-                            });
-                          }
-                        },
-                  icon: const Icon(Icons.person_add),
-                ),
-              ],
-            ),
+            // Attendee field
+            Row(children: [
+              Expanded(child: TextField(
+                controller: _attendee,
+                readOnly: widget.readOnlyMode,
+                decoration: const InputDecoration(labelText: 'Attendee name'),
+              )),
+              IconButton(
+                icon: const Icon(Icons.person_add),
+                onPressed: widget.readOnlyMode ? null : () {
+                  if (_attendee.text.trim().isNotEmpty) {
+                    setState(() { _attendees.add(_attendee.text.trim()); _attendee.clear(); });
+                  }
+                },
+              ),
+            ]),
             if (_attendees.isNotEmpty)
-              Wrap(
-                spacing: 6,
-                children: _attendees
-                    .map(
-                      (name) => Chip(
-                        label: Text(name),
-                        onDeleted: widget.readOnlyMode
-                            ? null
-                            : () => setState(() => _attendees.remove(name)),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ..._checklist.asMap().entries.map(
-              (entry) => CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: entry.value['done'] == true,
-                title: Text('${entry.value['label']}'),
-                onChanged: widget.readOnlyMode
-                    ? null
-                    : (value) => setState(
-                        () => _checklist[entry.key]['done'] = value == true,
-                      ),
-              ),
-            ),
+              Wrap(spacing: 6, children: _attendees.map((name) => Chip(
+                label: Text(name),
+                onDeleted: widget.readOnlyMode ? null
+                  : () => setState(() => _attendees.remove(name)),
+              )).toList()),
+            // Checklist
+            ..._checklist.asMap().entries.map((entry) => CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: entry.value['done'] == true,
+              title: Text('${entry.value['label']}'),
+              onChanged: widget.readOnlyMode ? null
+                : (v) => setState(() => _checklist[entry.key]['done'] = v == true),
+            )),
+            const SizedBox(height: 8),
+            // Notes
             TextField(
               controller: _notes,
               readOnly: widget.readOnlyMode,
@@ -1843,6 +1825,81 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               decoration: const InputDecoration(labelText: 'Notes / outcome'),
             ),
             const SizedBox(height: 12),
+            // Photos / Documents grid
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('Photos / Documents (${_stagedProofPaths.length})',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              if (!widget.readOnlyMode)
+                TextButton.icon(
+                  onPressed: () async {
+                    final images = await ImagePicker().pickMultiImage(imageQuality: 82);
+                    if (images.isNotEmpty) {
+                      setState(() => _stagedProofPaths.addAll(images.map((i) => i.path)));
+                    }
+                  },
+                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+                  label: const Text('+ Add', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
+                ),
+            ]),
+            if (_stagedProofPaths.isNotEmpty)
+              SizedBox(
+                height: 80,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _stagedProofPaths.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(File(_stagedProofPaths[i]),
+                          width: 80, height: 80, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 80, height: 80,
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.insert_drive_file)),
+                        ),
+                      ),
+                      Positioned(top: 2, right: 2,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _stagedProofPaths.removeAt(i)),
+                          child: Container(
+                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                            child: const Icon(Icons.close, size: 14, color: Colors.white),
+                          ),
+                        )),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 12),
+            // Outcome dropdown
+            DropdownButtonFormField<String>(
+              value: _outcome9.isEmpty ? null : _outcome9,
+              decoration: const InputDecoration(labelText: 'Outcome'),
+              items: const ['Positive', 'Negative', 'Neutral', 'Follow-up Required']
+                .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+              onChanged: widget.readOnlyMode ? null
+                : (v) => setState(() => _outcome9 = v ?? ''),
+            ),
+            // Follow-up dropdown
+            DropdownButtonFormField<String>(
+              value: _followUp9.isEmpty ? null : _followUp9,
+              decoration: const InputDecoration(labelText: 'Follow-up'),
+              items: const ['None', 'Call tomorrow', 'Send proposal by next week',
+                'Schedule demo', 'Awaiting client feedback']
+                .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+              onChanged: widget.readOnlyMode ? null
+                : (v) => setState(() => _followUp9 = v ?? ''),
+            ),
+            // Client Signature / OTP
+            TextField(
+              controller: _signature,
+              readOnly: widget.readOnlyMode,
+              decoration: const InputDecoration(labelText: 'Client Signature / OTP'),
+            ),
+            const SizedBox(height: 14),
             if (widget.readOnlyMode)
               _monitoringNotice()
             else
@@ -1861,32 +1918,26 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     10 => [
       EmployeeCard(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Category with icons
             DropdownButtonFormField<String>(
-              initialValue: _expenseCategory,
+              value: _expenseCategory,
               decoration: const InputDecoration(labelText: 'Category'),
-              items: const ['travel', 'food', 'parking', 'other']
-                  .map(
-                    (item) => DropdownMenuItem(
-                      value: item,
-                      child: Text(_label(item)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: widget.readOnlyMode
-                  ? null
-                  : (value) => setState(() => _expenseCategory = value!),
+              items: [
+                _expenseItem('travel', Icons.directions_car_rounded, 'Travel'),
+                _expenseItem('food', Icons.restaurant_rounded, 'Food'),
+                _expenseItem('parking', Icons.local_parking_rounded, 'Parking / Toll'),
+                _expenseItem('other', Icons.more_horiz_rounded, 'Other'),
+              ],
+              onChanged: widget.readOnlyMode ? null
+                : (v) => setState(() => _expenseCategory = v!),
             ),
             TextField(
               controller: _amount,
               readOnly: widget.readOnlyMode,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                prefixText: '₹ ',
-              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Amount', prefixText: '₹ '),
             ),
             TextField(
               controller: _expenseNote,
@@ -1894,9 +1945,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               decoration: const InputDecoration(labelText: 'Note'),
             ),
             const SizedBox(height: 12),
-            if (widget.readOnlyMode)
-              _monitoringNotice()
-            else
+            if (!widget.readOnlyMode)
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -1909,22 +1958,57 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ),
       ),
       const SizedBox(height: 12),
-      EmployeeCard(
-        child: Column(
-          children: [
-            for (final expense in visit.expenses)
-              EmployeeInfoRow(
-                _label('${expense['category']}'),
-                '₹${expense['amount']}',
-              ),
-            const Divider(),
-            EmployeeInfoRow(
-              'Total',
-              '₹${visit.expenseTotal.toStringAsFixed(2)}',
-            ),
-          ],
+      // Expense list with icons
+      if (visit.expenses.isNotEmpty)
+        EmployeeCard(
+          child: Column(
+            children: [
+              ...visit.expenses.map((expense) {
+                final cat = '${expense['category']}';
+                final icon = switch (cat) {
+                  'travel'  => Icons.directions_car_rounded,
+                  'food'    => Icons.restaurant_rounded,
+                  'parking' => Icons.local_parking_rounded,
+                  _         => Icons.more_horiz_rounded,
+                };
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(children: [
+                    Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A73E8).withAlpha(15),
+                        borderRadius: BorderRadius.circular(8)),
+                      child: Icon(icon, size: 16, color: const Color(0xFF1A73E8)),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(_label(cat),
+                      style: const TextStyle(fontWeight: FontWeight.w500))),
+                    Text('₹${expense['amount']}',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  ]),
+                );
+              }),
+              const Divider(height: 16),
+              Row(children: [
+                const Text('Total', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                const Spacer(),
+                Text('₹${visit.expenseTotal.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+              ]),
+              const SizedBox(height: 12),
+              if (!widget.readOnlyMode)
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _working ? null : () => _message('Expenses submitted.'),
+                    icon: const Icon(Icons.send_rounded),
+                    label: const Text('Submit Expense'),
+                  ),
+                ),
+            ],
+          ),
         ),
-      ),
     ],
     11 => [
       EmployeeCard(
