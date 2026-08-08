@@ -2097,6 +2097,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       _timeline(visit),
       const SizedBox(height: 12),
       _summary(visit),
+      // Attachments gallery — visible to all including SuperAdmin
+      if (visit.attachments.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        _attachmentsGallery(visit),
+      ],
       const SizedBox(height: 12),
       Row(children: [
         Expanded(

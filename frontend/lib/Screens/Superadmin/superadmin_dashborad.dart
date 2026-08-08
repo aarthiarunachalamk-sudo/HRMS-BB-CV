@@ -12,6 +12,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/Superadmin/sa_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_screens.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_models.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_audit_flow_screen.dart';
 
 class SuperAdminDashboard extends StatefulWidget {
   final String email;
@@ -966,7 +967,7 @@ class _ReportsView extends StatelessWidget {
   }
 }
 
-class _SettingsView extends StatelessWidget {
+class _SettingsView extends StatefulWidget {
   final _SaColors colors;
   final String email;
   final String userId;
@@ -980,22 +981,239 @@ class _SettingsView extends StatelessWidget {
   });
 
   @override
+  State<_SettingsView> createState() => _SettingsViewState();
+}
+
+class _SettingsViewState extends State<_SettingsView> {
+  bool _approvalAlerts = true;
+  bool _visitAlerts = true;
+
+  @override
   Widget build(BuildContext context) {
+    final c = widget.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return _ScreenScroll(
-      colors: colors,
+      colors: c,
       children: [
         _PageHeader(
-          colors: colors,
+          colors: c,
           title: 'Notifications & Settings',
           icon: Icons.settings_outlined,
         ),
         const SizedBox(height: 12),
-        _NotificationsCard(colors: colors, userId: userId),
+
+        // ── Live Notifications ──
+        _NotificationsCard(colors: c, userId: widget.userId),
         const SizedBox(height: 14),
-        _ProfileCard(colors: colors, email: email, onLogout: onLogout),
+
+        // ── Profile Card ──
+        Container(
+          decoration: _box(c),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionHeader(colors: c, title: 'Profile'),
+              const SizedBox(height: 12),
+              Row(children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: c.primarySoft,
+                  child: Icon(Icons.admin_panel_settings_rounded,
+                    color: c.primary, size: 28),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Super Admin',
+                      style: TextStyle(color: c.text,
+                        fontWeight: FontWeight.w900, fontSize: 15)),
+                    Text(widget.email,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: c.muted, fontSize: 12)),
+                    Text(widget.userId.isNotEmpty ? widget.userId : '',
+                      style: TextStyle(color: c.muted, fontSize: 11)),
+                  ],
+                )),
+                IconButton(
+                  icon: Icon(Icons.edit_outlined, color: c.primary, size: 20),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => UserPersonalInformationScreen(
+                      userId: widget.userId),
+                  )),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              _settingsTile(c, Icons.person_outline_rounded,
+                'Personal Information', 'View and edit your profile',
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => UserPersonalInformationScreen(
+                    userId: widget.userId)))),
+              _settingsTile(c, Icons.notifications_none_rounded,
+                'Notification Preferences', 'Configure alert types',
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => UserNotificationSettingsScreen(
+                    userId: widget.userId)))),
+              _settingsTile(c, Icons.receipt_long_rounded,
+                'Audit Logs', 'Review system activity and history',
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => CeoAuditFlowScreen(userId: widget.userId)))),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: widget.onLogout,
+                  icon: const Icon(Icons.logout_rounded, size: 18),
+                  label: const Text('Logout',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.danger,
+                    side: BorderSide(color: c.danger.withAlpha(120)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 14),
-        _SettingsCard(colors: colors),
+
+        // ── Settings Card ──
+        Container(
+          decoration: _box(c),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionHeader(colors: c, title: 'Settings'),
+              const SizedBox(height: 12),
+
+              // Theme toggle
+              Container(
+                decoration: BoxDecoration(
+                  color: c.subtle,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: c.border),
+                ),
+                child: SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 2),
+                  value: isDark,
+                  title: Text('Dark Mode',
+                    style: TextStyle(color: c.text,
+                      fontSize: 13, fontWeight: FontWeight.w600)),
+                  subtitle: Text(isDark ? 'Dark theme active' : 'Light theme active',
+                    style: TextStyle(color: c.muted, fontSize: 11)),
+                  secondary: Icon(isDark
+                    ? Icons.dark_mode_rounded
+                    : Icons.light_mode_rounded,
+                    color: c.primary, size: 20),
+                  onChanged: (_) {
+                    MyApp.themeNotifier.value =
+                      MyApp.themeNotifier.value == ThemeMode.dark
+                        ? ThemeMode.light : ThemeMode.dark;
+                    setState(() {});
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Approval alerts toggle
+              Container(
+                decoration: BoxDecoration(
+                  color: c.subtle,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: c.border),
+                ),
+                child: SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 2),
+                  value: _approvalAlerts,
+                  title: Text('Approval Notifications',
+                    style: TextStyle(color: c.text,
+                      fontSize: 13, fontWeight: FontWeight.w600)),
+                  subtitle: Text('Get notified on pending approvals',
+                    style: TextStyle(color: c.muted, fontSize: 11)),
+                  secondary: Icon(Icons.approval_rounded,
+                    color: c.primary, size: 20),
+                  onChanged: (v) => setState(() => _approvalAlerts = v),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Client visit alerts toggle
+              Container(
+                decoration: BoxDecoration(
+                  color: c.subtle,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: c.border),
+                ),
+                child: SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 2),
+                  value: _visitAlerts,
+                  title: Text('Client Visit Alerts',
+                    style: TextStyle(color: c.text,
+                      fontSize: 13, fontWeight: FontWeight.w600)),
+                  subtitle: Text('Get notified on visit updates',
+                    style: TextStyle(color: c.muted, fontSize: 11)),
+                  secondary: Icon(Icons.directions_car_rounded,
+                    color: c.primary, size: 20),
+                  onChanged: (v) => setState(() => _visitAlerts = v),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // App version
+              Row(children: [
+                Icon(Icons.info_outline_rounded, size: 16, color: c.muted),
+                const SizedBox(width: 8),
+                Text('App Version  1.18.0',
+                  style: TextStyle(color: c.muted, fontSize: 12)),
+              ]),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
       ],
+    );
+  }
+
+  Widget _settingsTile(_SaColors c, IconData icon, String title,
+      String subtitle, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: c.primarySoft,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: c.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                style: TextStyle(color: c.text,
+                  fontSize: 13, fontWeight: FontWeight.w600)),
+              Text(subtitle,
+                style: TextStyle(color: c.muted, fontSize: 11)),
+            ],
+          )),
+          if (onTap != null)
+            Icon(Icons.chevron_right_rounded, color: c.muted, size: 18),
+        ]),
+      ),
     );
   }
 }
@@ -1855,16 +2073,17 @@ class _NotificationsCardState extends State<_NotificationsCard> {
     // Mark read
     final pk = int.tryParse('${n['id'] ?? ''}');
     if (pk != null) SaService().markNotificationRead(pk, userId: widget.userId);
-    // Deep-link to client visit
+    // Deep-link to client visit — full reviewer access for SuperAdmin
     final module = '${n['module'] ?? ''}';
     final refId = int.tryParse('${n['reference_id'] ?? ''}');
     if (module == 'client_visit' && refId != null) {
       Navigator.push(ctx, MaterialPageRoute(
         builder: (_) => ClientVisitDashboardScreen(
           userId: widget.userId,
-          readOnlyMode: true,
+          readOnlyMode: false,
           allowCreate: false,
           allowVerification: true,
+          reviewerMode: true,
           requesterRole: 'superadmin',
           initialVisitId: refId,
         ),
@@ -2025,115 +2244,14 @@ class _ProfileCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return _Panel(
-      colors: colors,
-      title: 'Profile',
-      child: Column(
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: colors.primarySoft,
-                child: Icon(
-                  Icons.admin_panel_settings_rounded,
-                  color: colors.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Super Admin',
-                      style: TextStyle(
-                        color: colors.text,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    Text(
-                      email,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colors.muted, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _SimpleRow(
-            colors: colors,
-            icon: Icons.badge_outlined,
-            title: 'Employee ID',
-            value: 'EMP001',
-          ),
-          _SimpleRow(
-            colors: colors,
-            icon: Icons.work_outline_rounded,
-            title: 'Designation',
-            value: 'Super Administrator',
-          ),
-          _SimpleRow(
-            colors: colors,
-            icon: Icons.apartment_outlined,
-            title: 'Department',
-            value: 'Management',
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout_rounded, size: 18),
-            label: const Text('Logout'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: colors.danger,
-              side: BorderSide(color: colors.danger.withAlpha(120)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _SettingsCard extends StatelessWidget {
   final _SaColors colors;
-
   const _SettingsCard({required this.colors});
-
   @override
-  Widget build(BuildContext context) {
-    final settings = const [
-      'Company Profile',
-      'Theme Settings',
-      'Security Settings',
-      'Backup & Restore',
-      'Notification Settings',
-      'App Version 1.0.0',
-    ];
-    return _Panel(
-      colors: colors,
-      title: 'Settings',
-      child: Column(
-        children: settings
-            .map(
-              (setting) => _SimpleRow(
-                colors: colors,
-                icon: Icons.settings_outlined,
-                title: setting,
-                value: '',
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _Panel extends StatelessWidget {
