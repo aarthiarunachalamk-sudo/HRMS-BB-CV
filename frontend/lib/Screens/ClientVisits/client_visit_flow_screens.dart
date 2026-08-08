@@ -1098,13 +1098,25 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ),
       );
       final bytes = await document.save();
-      final location = await _filesChannel
+      final fileName = '${visit.visitId}-client-visit-report.pdf';
+
+      // Save to device Downloads/HRMS-ERP and get back the saved URI
+      final savedUri = await _filesChannel
           .invokeMethod<String>('saveToDownloads', {
-            'fileName': '${visit.visitId}-client-visit-report.pdf',
+            'fileName': fileName,
             'mimeType': 'application/pdf',
             'bytes': bytes,
           });
-      _message('Report downloaded to ${location ?? 'Downloads/HRMS-ERP'}');
+
+      // Immediately open the PDF so it appears in recent files / gallery
+      if (savedUri != null && savedUri.isNotEmpty) {
+        await _filesChannel.invokeMethod('openUrl', {
+          'url': savedUri,
+          'mimeType': 'application/pdf',
+        });
+      }
+
+      _message('Report saved to Downloads/HRMS-ERP');
     });
   }
 
@@ -2088,18 +2100,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   style: TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 13),
                 ),
-                if (!widget.readOnlyMode &&
-                    _signaturePadController.isNotEmpty)
+                if (!widget.readOnlyMode)
                   TextButton.icon(
-                    onPressed: () =>
-                        setState(() => _signaturePadController.clear()),
+                    onPressed: _signaturePadController.isEmpty
+                        ? null
+                        : () => setState(() => _signaturePadController.clear()),
                     icon: const Icon(Icons.refresh_rounded, size: 14),
                     label: const Text('Clear',
                         style: TextStyle(fontSize: 12)),
                     style: TextButton.styleFrom(
                       padding:
                           const EdgeInsets.symmetric(horizontal: 6),
-                      foregroundColor: Colors.redAccent,
+                      foregroundColor: _signaturePadController.isEmpty
+                          ? Colors.grey
+                          : Colors.redAccent,
                     ),
                   ),
               ],
@@ -2326,18 +2340,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   style: TextStyle(
                       fontWeight: FontWeight.w700, fontSize: 13),
                 ),
-                if (!widget.readOnlyMode &&
-                    _signaturePadController.isNotEmpty)
+                if (!widget.readOnlyMode)
                   TextButton.icon(
-                    onPressed: () =>
-                        setState(() => _signaturePadController.clear()),
+                    onPressed: _signaturePadController.isEmpty
+                        ? null
+                        : () => setState(() => _signaturePadController.clear()),
                     icon: const Icon(Icons.refresh_rounded, size: 14),
                     label: const Text('Clear',
                         style: TextStyle(fontSize: 12)),
                     style: TextButton.styleFrom(
                       padding:
                           const EdgeInsets.symmetric(horizontal: 6),
-                      foregroundColor: Colors.redAccent,
+                      foregroundColor: _signaturePadController.isEmpty
+                          ? Colors.grey
+                          : Colors.redAccent,
                     ),
                   ),
               ],
@@ -2612,22 +2628,6 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     ),
     child: Row(
       children: [
-        Container(
-          width: 40, height: 40,
-          decoration: const BoxDecoration(
-            color: Color(0xFF1A73E8),
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text('${widget.step}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
-              )),
-          ),
-        ),
-        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2697,11 +2697,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   );
 
   // ── SuperAdmin / Reviewer full-detail view ─────────────────────────────────
-  /// Returns all widgets shown when SuperAdmin taps a visit from history.
-  /// Shows employee details, client details, visit status & approval info,
-  /// timeline, expense breakdown, and attachment gallery.
+  /// Returns all widgets shown when SuperAdmin/TL taps any visit from history
+  /// or monitoring. Shows: status, employee, client, approval, timeline,
+  /// LIVE MAP (active) or ROUTE MAP (completed), outcome, expenses, checklist,
+  /// attendees, and all attachments (selfies + signature + proof + docs).
   List<Widget> _superAdminVisitDetail(ClientVisit visit) {
-    // Status color helper
     Color statusColor(String s) => switch (s) {
       'completed'   => ClientVisitColors.green,
       'in_progress' => const Color(0xFF34A853),
@@ -2712,12 +2712,44 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       _             => Colors.grey,
     };
 
+    final isActive = visit.status == 'travelling' ||
+        visit.status == 'in_progress';
+    final hasRoute = visit.travelRoute.isNotEmpty;
+    final hasCompleted = visit.status == 'completed';
+
     return [
-      // ── 1. Status badge ────────────────────────────────────────────────────
+      // ── 1. Status badge ───────────────────────────────────────────
       _stageBadge(_label(visit.status).toUpperCase(), statusColor(visit.status)),
       const SizedBox(height: 14),
 
-      // ── 2. Employee card ───────────────────────────────────────────────────
+      // ── 2. LIVE MAP (travelling/in_progress) ──────────────────────
+      if (isActive) ...[
+        _saSection(
+          icon: Icons.gps_fixed_rounded,
+          color: const Color(0xFF1A73E8),
+          title: 'Live Location',
+          child: _ReviewerLiveMap(
+            visitId: visit.id,
+            userId: widget.userId,
+            service: widget.service,
+            visit: visit,
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+
+      // ── 3. ROUTE MAP (completed visit with stored GPS route) ──────
+      if (hasCompleted && hasRoute) ...[
+        _saSection(
+          icon: Icons.route_rounded,
+          color: const Color(0xFF9333EA),
+          title: 'Travel Route',
+          child: _RouteMapCard(visit: visit),
+        ),
+        const SizedBox(height: 12),
+      ],
+
+      // ── 4. Employee card ──────────────────────────────────────────
       _saSection(
         icon: Icons.badge_outlined,
         color: const Color(0xFF1A73E8),
@@ -2730,235 +2762,273 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  visit.employeeName.isEmpty ? visit.employeeUserId : visit.employeeName,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                  visit.employeeName.isEmpty
+                      ? visit.employeeUserId
+                      : visit.employeeName,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800)),
                 Text(visit.employeeUserId,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.grey.shade500)),
               ],
             )),
           ]),
           const SizedBox(height: 10),
           const Divider(height: 1),
           const SizedBox(height: 6),
-          EmployeeInfoRow('Manager ID', visit.managerUserId.isEmpty ? '—' : visit.managerUserId),
+          EmployeeInfoRow('Manager ID',
+              visit.managerUserId.isEmpty ? '—' : visit.managerUserId),
         ]),
       ),
       const SizedBox(height: 12),
 
-      // ── 3. Client & visit info ─────────────────────────────────────────────
+      // ── 5. Client Details ─────────────────────────────────────────
       _saSection(
         icon: Icons.business_rounded,
         color: const Color(0xFF16A34A),
         title: 'Client Details',
         child: Column(children: [
           EmployeeInfoRow('Client Name', visit.clientName),
-          EmployeeInfoRow('Contact Person', visit.contactPerson.isEmpty ? '—' : visit.contactPerson),
-          EmployeeInfoRow('Phone', visit.contactPhone.isEmpty ? '—' : visit.contactPhone),
-          EmployeeInfoRow('Address', visit.address.isEmpty ? '—' : visit.address),
-          EmployeeInfoRow('Purpose', visit.purpose.isEmpty ? '—' : visit.purpose),
+          EmployeeInfoRow('Contact Person',
+              visit.contactPerson.isEmpty ? '—' : visit.contactPerson),
+          EmployeeInfoRow(
+              'Phone', visit.contactPhone.isEmpty ? '—' : visit.contactPhone),
+          EmployeeInfoRow(
+              'Address', visit.address.isEmpty ? '—' : visit.address),
+          EmployeeInfoRow(
+              'Purpose', visit.purpose.isEmpty ? '—' : visit.purpose),
           EmployeeInfoRow('Scheduled',
-            '${_date(visit.scheduledAt)}  ${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}'),
-          EmployeeInfoRow('Planned Duration',
+              '${_date(visit.scheduledAt)}  ${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}'),
+          EmployeeInfoRow(
+            'Planned Duration',
             visit.durationMinutes < 60
-              ? '${visit.durationMinutes} min'
-              : '${visit.durationMinutes ~/ 60}h ${visit.durationMinutes % 60 > 0 ? '${visit.durationMinutes % 60}m' : ''}'),
+                ? '${visit.durationMinutes} min'
+                : '${visit.durationMinutes ~/ 60}h'
+                    '${visit.durationMinutes % 60 > 0 ? ' ${visit.durationMinutes % 60}m' : ''}',
+          ),
           EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
           if (visit.notes.isNotEmpty) EmployeeInfoRow('Notes', visit.notes),
         ]),
       ),
       const SizedBox(height: 12),
 
-      // ── 4. Approval info ───────────────────────────────────────────────────
+      // ── 6. Approval ───────────────────────────────────────────────
       _saSection(
         icon: Icons.approval_rounded,
         color: const Color(0xFF9333EA),
         title: 'Approval',
         child: Column(children: [
           EmployeeInfoRow('Status', _label(visit.status)),
-          EmployeeInfoRow('Approved By',
-            visit.approvedByName.isEmpty ? '—' : '${visit.approvedByName} (${visit.approvedByRole})'),
-          EmployeeInfoRow('Approved At',
-            visit.approvedAt == null ? '—' : '${_date(visit.approvedAt!)}  ${TimeOfDay.fromDateTime(visit.approvedAt!.toLocal()).format(context)}'),
+          EmployeeInfoRow(
+              'Approved By',
+              visit.approvedByName.isEmpty
+                  ? '—'
+                  : '${visit.approvedByName} (${visit.approvedByRole})'),
+          EmployeeInfoRow(
+              'Approved At',
+              visit.approvedAt == null
+                  ? '—'
+                  : '${_date(visit.approvedAt!)}  '
+                      '${TimeOfDay.fromDateTime(visit.approvedAt!.toLocal()).format(context)}'),
           if (visit.approvalComment.isNotEmpty)
             EmployeeInfoRow('Comment', visit.approvalComment),
-          EmployeeInfoRow('Manager Verification',
-            visit.managerVerifiedBy.isEmpty ? 'Pending' : '✓ Verified by ${visit.managerVerifiedBy}'),
+          EmployeeInfoRow(
+              'Manager Verification',
+              visit.managerVerifiedBy.isEmpty
+                  ? 'Pending'
+                  : '✓ Verified by ${visit.managerVerifiedBy}'),
         ]),
       ),
       const SizedBox(height: 12),
 
-      // ── 5. Timeline ────────────────────────────────────────────────────────
+      // ── 7. Visit Timeline ─────────────────────────────────────────
       _saSection(
         icon: Icons.timeline_rounded,
         color: const Color(0xFF0EA5E9),
         title: 'Visit Timeline',
         child: Column(children: [
           _timeRow('Office Check-Out', visit.officeCheckOutAt),
-          _timeRow('Reached Client',   visit.reachedClientAt),
-          _timeRow('Visit Start',      visit.checkInAt),
+          _timeRow('Reached Client', visit.reachedClientAt),
+          _timeRow('Visit Start', visit.checkInAt),
           _timeRow('Visit End / Checkout', visit.checkOutAt),
-          if (visit.officeCheckOutAt != null || visit.checkOutAt != null) ...[
+          if (visit.officeCheckOutAt != null ||
+              visit.checkOutAt != null) ...[
             const Divider(height: 16),
             Row(children: [
-              _durationBox('Travel',
-                visit.officeCheckOutAt != null && visit.reachedClientAt != null
-                  ? _duration(visit.reachedClientAt!.toLocal().difference(visit.officeCheckOutAt!.toLocal()))
-                  : '—'),
-              _durationBox('Visit',
-                visit.checkInAt != null && visit.checkOutAt != null
-                  ? _duration(visit.checkOutAt!.toLocal().difference(visit.checkInAt!.toLocal()))
-                  : '—'),
-              _durationBox('Total Duty',
-                visit.officeCheckOutAt != null && visit.checkOutAt != null
-                  ? _duration(visit.checkOutAt!.toLocal().difference(visit.officeCheckOutAt!.toLocal()))
-                  : '—'),
+              _durationBox(
+                  'Travel',
+                  visit.officeCheckOutAt != null &&
+                          visit.reachedClientAt != null
+                      ? _duration(visit.reachedClientAt!.toLocal()
+                          .difference(visit.officeCheckOutAt!.toLocal()))
+                      : '—'),
+              _durationBox(
+                  'Visit',
+                  visit.checkInAt != null && visit.checkOutAt != null
+                      ? _duration(visit.checkOutAt!.toLocal()
+                          .difference(visit.checkInAt!.toLocal()))
+                      : '—'),
+              _durationBox(
+                  'Total Duty',
+                  visit.officeCheckOutAt != null && visit.checkOutAt != null
+                      ? _duration(visit.checkOutAt!.toLocal()
+                          .difference(visit.officeCheckOutAt!.toLocal()))
+                      : '—'),
             ]),
           ],
         ]),
       ),
       const SizedBox(height: 12),
 
-      // ── 6. Outcome & follow-up ─────────────────────────────────────────────
-      if (visit.outcome.isNotEmpty || visit.followUp.isNotEmpty || visit.returnMode.isNotEmpty)
-        ...[
-          _saSection(
-            icon: Icons.description_rounded,
-            color: const Color(0xFFF59E0B),
-            title: 'Outcome & Follow-Up',
-            child: Column(children: [
-              EmployeeInfoRow('Outcome', visit.outcome.isEmpty ? '—' : visit.outcome),
-              EmployeeInfoRow('Follow-Up', visit.followUp.isEmpty ? '—' : visit.followUp),
-              EmployeeInfoRow('Return Mode', _label(visit.returnMode)),
-            ]),
-          ),
-          const SizedBox(height: 12),
-        ],
+      // ── 8. Outcome & Follow-Up ────────────────────────────────────
+      if (visit.outcome.isNotEmpty ||
+          visit.followUp.isNotEmpty ||
+          visit.returnMode.isNotEmpty) ...[
+        _saSection(
+          icon: Icons.description_rounded,
+          color: const Color(0xFFF59E0B),
+          title: 'Outcome & Follow-Up',
+          child: Column(children: [
+            EmployeeInfoRow(
+                'Outcome', visit.outcome.isEmpty ? '—' : visit.outcome),
+            EmployeeInfoRow(
+                'Follow-Up', visit.followUp.isEmpty ? '—' : visit.followUp),
+            EmployeeInfoRow('Return Mode', _label(visit.returnMode)),
+          ]),
+        ),
+        const SizedBox(height: 12),
+      ],
 
-      // ── 7. Expenses ────────────────────────────────────────────────────────
-      if (visit.expenses.isNotEmpty || visit.expenseTotal > 0)
-        ...[
-          _saSection(
-            icon: Icons.receipt_long_rounded,
-            color: const Color(0xFFEF4444),
-            title: 'Expenses',
-            child: Column(children: [
-              ...visit.expenses.map((expense) {
-                final cat  = '${expense['category']}';
-                final icon = switch (cat) {
-                  'travel'  => Icons.directions_car_rounded,
-                  'food'    => Icons.restaurant_rounded,
-                  'parking' => Icons.local_parking_rounded,
-                  'expense' => Icons.receipt_rounded,
-                  _         => Icons.more_horiz_rounded,
-                };
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444).withAlpha(15),
-                        borderRadius: BorderRadius.circular(8)),
-                      child: Icon(icon, size: 16, color: const Color(0xFFEF4444)),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(_label(cat),
+      // ── 9. Expenses ───────────────────────────────────────────────
+      if (visit.expenses.isNotEmpty || visit.expenseTotal > 0) ...[
+        _saSection(
+          icon: Icons.receipt_long_rounded,
+          color: const Color(0xFFEF4444),
+          title: 'Expenses',
+          child: Column(children: [
+            ...visit.expenses.map((expense) {
+              final cat = '${expense['category']}';
+              final icon = switch (cat) {
+                'travel'  => Icons.directions_car_rounded,
+                'food'    => Icons.restaurant_rounded,
+                'parking' => Icons.local_parking_rounded,
+                'expense' => Icons.receipt_rounded,
+                _         => Icons.more_horiz_rounded,
+              };
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(children: [
+                  Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withAlpha(15),
+                      borderRadius: BorderRadius.circular(8)),
+                    child: Icon(icon, size: 16, color: const Color(0xFFEF4444)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_label(cat),
                           style: const TextStyle(
                               fontWeight: FontWeight.w600, fontSize: 13)),
-                        if ('${expense['note'] ?? ''}'.isNotEmpty)
-                          Text('${expense['note']}',
+                      if ('${expense['note'] ?? ''}'.isNotEmpty)
+                        Text('${expense['note']}',
                             style: TextStyle(
                                 fontSize: 11, color: Colors.grey.shade500)),
-                      ],
-                    )),
-                    Text('₹${expense['amount']}',
+                    ],
+                  )),
+                  Text('₹${expense['amount']}',
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 14)),
-                  ]),
-                );
-              }),
-              const Divider(height: 16),
-              Row(children: [
-                const Text('Total',
+                ]),
+              );
+            }),
+            const Divider(height: 16),
+            Row(children: [
+              const Text('Total',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-                const Spacer(),
-                Text('₹${visit.expenseTotal.toStringAsFixed(2)}',
+              const Spacer(),
+              Text('₹${visit.expenseTotal.toStringAsFixed(2)}',
                   style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 15,
                       color: Color(0xFFEF4444))),
-              ]),
             ]),
-          ),
-          const SizedBox(height: 12),
-        ],
+          ]),
+        ),
+        const SizedBox(height: 12),
+      ],
 
-      // ── 8. Checklist ───────────────────────────────────────────────────────
-      if (visit.checklist.isNotEmpty)
-        ...[
-          _saSection(
-            icon: Icons.checklist_rounded,
-            color: const Color(0xFF34A853),
-            title: 'Checklist',
-            child: Column(
-              children: visit.checklist.map((item) {
-                final done  = item['done'] == true;
-                final label = '${item['label'] ?? ''}';
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(children: [
-                    Icon(
-                      done ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-                      size: 18,
-                      color: done ? const Color(0xFF34A853) : Colors.grey.shade400,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: done ? null : Colors.grey.shade500,
-                        decoration: done ? null : TextDecoration.none,
-                      ))),
-                  ]),
-                );
-              }).toList(),
-            ),
+      // ── 10. Checklist ─────────────────────────────────────────────
+      if (visit.checklist.isNotEmpty) ...[
+        _saSection(
+          icon: Icons.checklist_rounded,
+          color: const Color(0xFF34A853),
+          title: 'Checklist',
+          child: Column(
+            children: visit.checklist.map((item) {
+              final done = item['done'] == true;
+              final label = '${item['label'] ?? ''}';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(children: [
+                  Icon(
+                    done
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked,
+                    size: 18,
+                    color: done
+                        ? const Color(0xFF34A853)
+                        : Colors.grey.shade400,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: Text(label,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: done ? null : Colors.grey.shade500))),
+                ]),
+              );
+            }).toList(),
           ),
-          const SizedBox(height: 12),
-        ],
+        ),
+        const SizedBox(height: 12),
+      ],
 
-      // ── 9. Attendees ───────────────────────────────────────────────────────
-      if (visit.attendees.isNotEmpty)
-        ...[
-          _saSection(
-            icon: Icons.group_rounded,
-            color: const Color(0xFF1A73E8),
-            title: 'Attendees (${visit.attendees.length})',
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: visit.attendees.map((a) => Chip(
-                avatar: const Icon(Icons.person_rounded, size: 14),
-                label: Text('$a', style: const TextStyle(fontSize: 12)),
-                padding: EdgeInsets.zero,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              )).toList(),
-            ),
+      // ── 11. Attendees ─────────────────────────────────────────────
+      if (visit.attendees.isNotEmpty) ...[
+        _saSection(
+          icon: Icons.group_rounded,
+          color: const Color(0xFF1A73E8),
+          title: 'Attendees (${visit.attendees.length})',
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: visit.attendees
+                .map((a) => Chip(
+                      avatar: const Icon(Icons.person_rounded, size: 14),
+                      label: Text('$a',
+                          style: const TextStyle(fontSize: 12)),
+                      padding: EdgeInsets.zero,
+                      materialTapTargetSize:
+                          MaterialTapTargetSize.shrinkWrap,
+                    ))
+                .toList(),
           ),
-          const SizedBox(height: 12),
-        ],
+        ),
+        const SizedBox(height: 12),
+      ],
 
-      // ── 10. Attachments (selfies + proof) ──────────────────────────────────
+      // ── 12. Attachments — selfies, signature, proof, docs ─────────
       if (visit.attachments.isNotEmpty) ...[
         _attachmentsGallery(visit),
         const SizedBox(height: 12),
       ],
 
-      // ── 11. Verify button (if reviewer and not yet verified) ───────────────
-      if (widget.reviewerMode && visit.managerVerifiedBy.isEmpty &&
+      // ── 13. Verify button ─────────────────────────────────────────
+      if (widget.reviewerMode &&
+          visit.managerVerifiedBy.isEmpty &&
           visit.status == 'completed') ...[
         FilledButton.icon(
           onPressed: _working ? null : _verify,
@@ -2968,7 +3038,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         const SizedBox(height: 8),
       ],
 
-      // ── 12. Download report ────────────────────────────────────────────────
+      // ── 14. Download report ───────────────────────────────────────
       SizedBox(
         width: double.infinity,
         child: OutlinedButton.icon(
@@ -3273,8 +3343,19 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     final selfies = visit.attachments
         .where((a) => selfieCategories.contains('${a['category']}'))
         .toList();
+    // Separate client signatures (proof files with 'signature' in the name)
+    final signatures = visit.attachments
+        .where((a) =>
+            !selfieCategories.contains('${a['category']}') &&
+            '${a['category']}' == 'proof' &&
+            '${a['original_name'] ?? a['public_id'] ?? ''}'
+                .toLowerCase()
+                .contains('signature'))
+        .toList();
     final others = visit.attachments
-        .where((a) => !selfieCategories.contains('${a['category']}'))
+        .where((a) =>
+            !selfieCategories.contains('${a['category']}') &&
+            !signatures.contains(a))
         .toList();
 
     // ── Full-screen viewer ────────────────────────────────────────────────────
@@ -3527,6 +3608,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 const Color(0xFF1A73E8), selfies, tileSize: 120),
           ],
 
+          // ── Client Signatures section ──
+          if (signatures.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            section(ctx, 'Client Signatures', Icons.gesture_rounded,
+                const Color(0xFF9333EA), signatures, tileSize: 110),
+          ],
+
           // ── Proof & documents section ──
           if (others.isNotEmpty) ...[
             const SizedBox(height: 16),
@@ -3612,6 +3700,319 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ),
     ),
   );
+}
+
+// ── Reviewer Live Map ─────────────────────────────────────────────────────────
+/// Shown in _superAdminVisitDetail for travelling/in_progress visits.
+/// Polls fetchVisit every 10 seconds to get the latest GPS route points
+/// and renders them on the existing _LiveMapView widget.
+class _ReviewerLiveMap extends StatefulWidget {
+  final int visitId;
+  final String userId;
+  final ClientVisitService service;
+  final ClientVisit visit;
+  const _ReviewerLiveMap({
+    required this.visitId,
+    required this.userId,
+    required this.service,
+    required this.visit,
+  });
+  @override
+  State<_ReviewerLiveMap> createState() => _ReviewerLiveMapState();
+}
+
+class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
+  final MapController _mapController = MapController();
+  Timer? _pollTimer;
+  List<LatLng> _routePoints = [];
+  LatLng? _currentPosition;
+  LatLng? _destination;
+  String? _error;
+  String _lastUpdated = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _buildRouteFromVisit(widget.visit);
+    _startPolling();
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  void _buildRouteFromVisit(ClientVisit visit) {
+    final points = visit.travelRoute.map((p) {
+      final lat =
+          double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
+      final lng =
+          double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
+      if (lat != null && lng != null) return LatLng(lat, lng);
+      return null;
+    }).whereType<LatLng>().toList();
+
+    LatLng? current;
+    if (points.isNotEmpty) current = points.last;
+
+    final destLat = visit.clientLatitude;
+    final destLng = visit.clientLongitude;
+    final dest =
+        (destLat != null && destLng != null &&
+                destLat != 0.0 && destLng != 0.0)
+            ? LatLng(destLat, destLng)
+            : null;
+
+    if (mounted) {
+      setState(() {
+        _routePoints = points;
+        _currentPosition = current;
+        _destination = dest;
+        _lastUpdated =
+            TimeOfDay.fromDateTime(DateTime.now()).format(context);
+        _error = null;
+      });
+    }
+  }
+
+  void _startPolling() {
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      try {
+        final updated =
+            await widget.service.fetchVisit(widget.userId, widget.visitId);
+        if (mounted) _buildRouteFromVisit(updated);
+      } catch (_) {
+        // Silently ignore poll errors — show stale data
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Status row
+        Row(children: [
+          Container(
+            width: 8, height: 8,
+            decoration: const BoxDecoration(
+              color: Color(0xFFEA4335), shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          const Text('LIVE',
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFFEA4335),
+                  letterSpacing: 1)),
+          const SizedBox(width: 8),
+          Text(
+            _routePoints.isEmpty
+                ? 'Waiting for GPS…'
+                : '${_routePoints.length} points  ·  Updated $_lastUpdated',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+          ),
+          const Spacer(),
+          if (_routePoints.isNotEmpty)
+            GestureDetector(
+              onTap: () {
+                try {
+                  _mapController.move(_currentPosition!,
+                      _mapController.camera.zoom);
+                } catch (_) {}
+              },
+              child: const Icon(Icons.my_location_rounded,
+                  size: 16, color: Color(0xFF1A73E8)),
+            ),
+        ]),
+        const SizedBox(height: 8),
+        // Map
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(
+            height: 260,
+            child: _routePoints.isEmpty && _destination == null
+                ? Container(
+                    color: Colors.grey.shade100,
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 10),
+                          Text('Waiting for employee location…',
+                              style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  )
+                : _LiveMapView(
+                    mapController: _mapController,
+                    routePoints: _routePoints,
+                    origin: _routePoints.isNotEmpty ? _routePoints.first : null,
+                    current: _currentPosition,
+                    destination: _destination,
+                    fullScreen: false,
+                  ),
+          ),
+        ),
+        // Coordinate info
+        if (_currentPosition != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Last known: ${_currentPosition!.latitude.toStringAsFixed(5)}, '
+            '${_currentPosition!.longitude.toStringAsFixed(5)}',
+            style:
+                TextStyle(fontSize: 10, color: Colors.grey.shade500),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Completed Route Map ───────────────────────────────────────────────────────
+/// Shows the stored GPS breadcrumb trail for a completed visit.
+class _RouteMapCard extends StatefulWidget {
+  final ClientVisit visit;
+  const _RouteMapCard({required this.visit});
+  @override
+  State<_RouteMapCard> createState() => _RouteMapCardState();
+}
+
+class _RouteMapCardState extends State<_RouteMapCard> {
+  final MapController _mapController = MapController();
+  List<LatLng> _points = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _points = widget.visit.travelRoute.map((p) {
+      final lat =
+          double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
+      final lng =
+          double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
+      if (lat != null && lng != null) return LatLng(lat, lng);
+      return null;
+    }).whereType<LatLng>().toList();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_points.length >= 2 && mounted) {
+        try {
+          _mapController.fitCamera(CameraFit.bounds(
+            bounds: LatLngBounds.fromPoints(_points),
+            padding: const EdgeInsets.all(40),
+          ));
+        } catch (_) {}
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_points.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+            child: Text('No route data recorded.',
+                style: TextStyle(fontSize: 12))),
+      );
+    }
+
+    final origin = _points.first;
+    final destination = _points.last;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Stats row
+        Row(children: [
+          const Icon(Icons.route_rounded,
+              size: 14, color: Color(0xFF9333EA)),
+          const SizedBox(width: 6),
+          Text('${_points.length} GPS points recorded',
+              style: TextStyle(
+                  fontSize: 11, color: Colors.grey.shade600)),
+        ]),
+        const SizedBox(height: 8),
+        // Map
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(
+            height: 240,
+            child: FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: origin,
+                initialZoom: 13,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.bitbyte.hrms',
+                ),
+                PolylineLayer(polylines: [
+                  Polyline(
+                    points: _points,
+                    color: const Color(0xFF9333EA),
+                    strokeWidth: 4,
+                  ),
+                ]),
+                MarkerLayer(markers: [
+                  // Start marker — green
+                  Marker(
+                    point: origin,
+                    width: 36, height: 36,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF34A853),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.play_arrow_rounded,
+                          color: Colors.white, size: 20),
+                    ),
+                  ),
+                  // End marker — red
+                  Marker(
+                    point: destination,
+                    width: 36, height: 36,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEA4335),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.flag_rounded,
+                          color: Colors.white, size: 20),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(children: [
+          const Icon(Icons.circle, size: 10, color: Color(0xFF34A853)),
+          const SizedBox(width: 4),
+          const Text('Start', style: TextStyle(fontSize: 11)),
+          const SizedBox(width: 12),
+          const Icon(Icons.circle, size: 10, color: Color(0xFFEA4335)),
+          const SizedBox(width: 4),
+          const Text('End', style: TextStyle(fontSize: 11)),
+        ]),
+      ],
+    );
+  }
 }
 
 class _FlowTimer extends StatefulWidget {

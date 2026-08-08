@@ -148,10 +148,12 @@ class _ClientVisitDashboardScreenState
         reviewerMode: canVerify,
       );
     }
+    // For all non-completed visits in reviewer/readOnly mode, use step 0
+    // which hits the _ default case → _superAdminVisitDetail (full overview).
     return ClientVisitReadOnlyFlowScreen(
       userId: widget.userId,
       visitId: visit.id,
-      step: _currentFlowStep(visit),
+      step: 0,
       service: _service,
     );
   }
