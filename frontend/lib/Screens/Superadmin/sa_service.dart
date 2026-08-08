@@ -7,7 +7,23 @@ class SaService {
   static const String _base = '${ApiConfig.baseUrl}/superadmin';
   static const Duration _timeout = Duration(seconds: 12);
 
-  Future<Map<String, dynamic>> fetchDashboard() => _get('/dashboard/');
+  // Cache dashboard data so FutureBuilders don't re-fetch on every rebuild
+  static Map<String, dynamic>? _dashboardCache;
+  static DateTime? _dashboardCacheTime;
+
+  Future<Map<String, dynamic>> fetchDashboard({bool forceRefresh = false}) async {
+    final now = DateTime.now();
+    if (!forceRefresh &&
+        _dashboardCache != null &&
+        _dashboardCacheTime != null &&
+        now.difference(_dashboardCacheTime!).inSeconds < 30) {
+      return _dashboardCache!;
+    }
+    final result = await _get('/dashboard/');
+    _dashboardCache = result;
+    _dashboardCacheTime = now;
+    return result;
+  }
 
   Future<Map<String, dynamic>> fetchNotifications({String userId = ''}) =>
       _get('/notifications/${userId.isNotEmpty ? '?user_id=$userId' : ''}');
