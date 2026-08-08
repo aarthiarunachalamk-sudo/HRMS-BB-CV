@@ -1438,37 +1438,43 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           children: [
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: ClientVisitColors.green,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: ClientVisitColors.green,
+                  side: const BorderSide(color: ClientVisitColors.green, width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 onPressed: _working ? null : () => _review('approve'),
                 icon: const Icon(Icons.check_circle_outline),
-                label: const Text('Approve'),
+                label: const Text('Approve', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: ClientVisitColors.red,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: ClientVisitColors.red,
+                  side: const BorderSide(color: ClientVisitColors.red, width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 onPressed: _working ? null : () => _review('reject'),
                 icon: const Icon(Icons.cancel_outlined),
-                label: const Text('Reject'),
+                label: const Text('Reject', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
             const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: ClientVisitColors.orange,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: ClientVisitColors.orange,
+                  side: const BorderSide(color: ClientVisitColors.orange, width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 onPressed: _working ? null : () => _review('changes'),
                 icon: const Icon(Icons.edit_outlined),
-                label: const Text('Request changes'),
+                label: const Text('Request changes', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
           ],

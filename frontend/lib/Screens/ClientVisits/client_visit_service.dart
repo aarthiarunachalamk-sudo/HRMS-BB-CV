@@ -58,7 +58,7 @@ class ClientVisitService {
             },
           ),
         )
-        .timeout(const Duration(seconds: 20));
+        .timeout(const Duration(seconds: 10));
     final body = _body(response);
     final visits = (body['visits'] as List? ?? const [])
         .whereType<Map>()

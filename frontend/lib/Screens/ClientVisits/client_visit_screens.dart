@@ -222,6 +222,17 @@ class _ClientVisitDashboardScreenState
     final result = _result;
     return ClientVisitTheme(
       child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Visit Dashboard'),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: _load,
+              tooltip: 'Refresh',
+            ),
+          ],
+        ),
         floatingActionButton: (!widget.readOnlyMode && widget.allowCreate)
           ? FloatingActionButton.extended(
               onPressed: _create,
@@ -232,29 +243,9 @@ class _ClientVisitDashboardScreenState
         body: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 16, 16,
+            padding: EdgeInsets.fromLTRB(16, 8, 16,
               (!widget.readOnlyMode && widget.allowCreate) ? 90 : 16),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'VISIT DASHBOARD',
-                          style: TextStyle(
-                            color: ThemeConfig.getTextPrimary(context),
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
               if (result != null)
                 _Summary(
                   summary: result.summary,

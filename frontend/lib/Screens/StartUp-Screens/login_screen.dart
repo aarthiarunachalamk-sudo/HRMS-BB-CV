@@ -353,7 +353,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 (context, animation, secondaryAnimation, child) {
                   return FadeTransition(opacity: animation, child: child);
                 },
-            transitionDuration: const Duration(milliseconds: 550),
+            transitionDuration: const Duration(milliseconds: 250),
           ),
           (route) => false,
         );
@@ -395,7 +395,7 @@ class _LoginScreenState extends State<LoginScreen> {
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode(payload),
             )
-            .timeout(const Duration(seconds: 60));
+            .timeout(const Duration(seconds: 15));
         final decoded = jsonDecode(response.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
         lastError = 'Invalid response from $url';

@@ -582,7 +582,7 @@ class _SuperAdminRoleBasedBar extends StatelessWidget {
   }
 }
 
-class _DashboardView extends StatelessWidget {
+class _DashboardView extends StatefulWidget {
   final _SaColors colors;
   final String email;
   final String name;
@@ -602,28 +602,65 @@ class _DashboardView extends StatelessWidget {
   });
 
   @override
+  State<_DashboardView> createState() => _DashboardViewState();
+}
+
+class _DashboardViewState extends State<_DashboardView> {
+  Map<String, dynamic>? _data;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await SaService().fetchDashboard();
+      if (mounted) setState(() { _data = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() {
+        _error = '$e'.replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: SaService().fetchDashboard(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Unable to load data. Please try again.',
-              style: TextStyle(
-                color: colors.muted,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+    final colors = widget.colors;
+    if (_loading) {
+      return Center(child: CircularProgressIndicator(color: colors.primary));
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 48, color: colors.muted),
+              const SizedBox(height: 12),
+              Text('Unable to load dashboard',
+                style: TextStyle(color: colors.text, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(_error!, style: TextStyle(color: colors.muted, fontSize: 12),
+                textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _load,
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('Retry'),
               ),
-            ),
-          );
-        }
-        if (!snapshot.hasData) {
-          return Center(
-            child: CircularProgressIndicator(color: colors.primary),
-          );
-        }
-        final data = snapshot.data!;
+            ],
+          ),
+        ),
+      );
+    }
+    final data = _data!;
         return _ScreenScroll(
           colors: colors,
           children: [

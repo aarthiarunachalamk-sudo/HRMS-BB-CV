@@ -66,7 +66,37 @@ def login_view(request):
         matching_users = [user for user in candidates if user.check_password(password)]
         if len(matching_users) == 1:
             user = matching_users[0]
-            employee_account = ensure_leadership_employee_account(user)
+
+            # OTC check FIRST — fast path, avoids heavy account provisioning
+            try:
+                from .models import EmployeeAccount
+                emp_account_check = EmployeeAccount.objects.filter(
+                    employee_email=user.email
+                ).values('otc').first()
+                if emp_account_check and emp_account_check['otc'] == password:
+                    return Response({
+                        'success': True,
+                        'requires_password_change': True,
+                        'user_id': user.user_id,
+                        'email': user.email,
+                    })
+            except Exception:
+                pass
+
+            # Defer heavy account provisioning to a background thread
+            # so it doesn't block the login response
+            import threading
+            threading.Thread(
+                target=ensure_leadership_employee_account,
+                args=(user,),
+                daemon=True,
+            ).start()
+
+            # Resolve employee_id without waiting for provisioning
+            from .models import EmployeeAccount as EA
+            ea = EA.objects.filter(user=user).values('employee_id').first()
+            employee_id = ea['employee_id'] if ea else user.user_id
+
             requested_role = str(
                 serializer.validated_data.get('selected_role')
                 or serializer.validated_data.get('login_as')
@@ -74,22 +104,13 @@ def login_view(request):
             ).strip().lower()
             login_role = (
                 'employee'
-                if requested_role == 'employee' and employee_account is not None
+                if requested_role == 'employee' and ea is not None
                 else user.role
             )
-                # Check if employee account exists and OTC is still active
-            try:
-                from .models import EmployeeAccount
-                emp_account = EmployeeAccount.objects.get(employee_email=user.email)
-                if emp_account.otc == password:
-                    return Response({
-                        'success': True,
-                        'requires_password_change': True,
-                        'user_id': user.user_id,
-                        'email': user.email,
-                    })
-            except (EmployeeAccount.DoesNotExist, EmployeeAccount.MultipleObjectsReturned):
-                pass
+
+            # Resolve photo ONCE, reuse result
+            photo_url = _passport_photo_for_email(user.email)
+
             return Response({
                 'success': True,
                 'role': login_role,
@@ -97,9 +118,9 @@ def login_view(request):
                 'email': user.email,
                 'first_name': user.first_name,
                 'user_id': user.user_id,
-                'employee_id': employee_account.employee_id if employee_account else user.user_id,
-                'profile_photo_url': _passport_photo_for_email(user.email),
-                'requires_profile_photo': not bool(_passport_photo_for_email(user.email)),
+                'employee_id': employee_id,
+                'profile_photo_url': photo_url,
+                'requires_profile_photo': not bool(photo_url),
                 'permissions': permissions_for_role(login_role),
             })
         if not candidates:

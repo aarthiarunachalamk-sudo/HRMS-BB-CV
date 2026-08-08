@@ -5,7 +5,7 @@ import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class SaService {
   static const String _base = '${ApiConfig.baseUrl}/superadmin';
-  static const Duration _timeout = Duration(seconds: 60);
+  static const Duration _timeout = Duration(seconds: 12);
 
   Future<Map<String, dynamic>> fetchDashboard() => _get('/dashboard/');
 
