@@ -16,6 +16,7 @@ from PIL import Image, UnidentifiedImageError
 
 from hrms.models import AppNotification, User
 from hrms.push_notifications import send_mobile_push
+from hrms.views import _passport_photo_for_email
 from .models import ClientVisit, VisitAttachment, VisitExpense
 from .storage import upload_client_visit_file
 
@@ -297,9 +298,16 @@ def _visit_payload(item, detailed=True, approver_lookup=None):
     if approver:
         approver_name = f'{approver.first_name} {approver.last_name}'.strip() or approver.email
         approver_role = approver.role
+    # Resolve employee profile photo (best-effort, fails silently)
+    try:
+        emp_user = User.objects.filter(user_id=item.employee_user_id, is_active=True).only('email').first()
+        employee_photo_url = _passport_photo_for_email(emp_user.email) if emp_user else ''
+    except Exception:
+        employee_photo_url = ''
     payload = {
         'id': item.id, 'visit_id': item.visit_id, 'employee_user_id': item.employee_user_id,
-        'employee_name': item.employee_name, 'manager_user_id': item.manager_user_id,
+        'employee_name': item.employee_name, 'employee_photo_url': employee_photo_url,
+        'manager_user_id': item.manager_user_id,
         'client_name': item.client_name, 'contact_person': item.contact_person,
         'contact_phone': item.contact_phone, 'address': item.address,
         'latitude': float(item.latitude) if item.latitude is not None else None,

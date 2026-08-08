@@ -3,6 +3,7 @@ class ClientVisit {
   final String visitId;
   final String employeeUserId;
   final String employeeName;
+  final String employeePhotoUrl;
   final String managerUserId;
   final String clientName;
   final String contactPerson;
@@ -45,6 +46,7 @@ class ClientVisit {
     required this.visitId,
     required this.employeeUserId,
     required this.employeeName,
+    required this.employeePhotoUrl,
     required this.managerUserId,
     required this.clientName,
     required this.contactPerson,
@@ -91,6 +93,7 @@ class ClientVisit {
       visitId: '${json['visit_id'] ?? ''}',
       employeeUserId: '${json['employee_user_id'] ?? ''}',
       employeeName: '${json['employee_name'] ?? ''}',
+      employeePhotoUrl: '${json['employee_photo_url'] ?? ''}',
       managerUserId: '${json['manager_user_id'] ?? ''}',
       clientName: '${json['client_name'] ?? ''}',
       contactPerson: '${json['contact_person'] ?? ''}',

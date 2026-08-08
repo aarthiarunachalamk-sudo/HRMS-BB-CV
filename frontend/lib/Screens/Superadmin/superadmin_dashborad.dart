@@ -9,6 +9,9 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Superadmin/Create_admins.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Superadmin/sa_service.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_screens.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_service.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_models.dart';
 
 class SuperAdminDashboard extends StatefulWidget {
   final String email;
@@ -117,7 +120,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                           onOpenCreateUser: _openCreateAdmins,
                           focus: _usersFocus,
                         ),
-                        _WorkflowView(colors: colors, focus: _workflowFocus),
+                        _WorkflowView(colors: colors, focus: _workflowFocus, userId: widget.userId),
                         _ReportsView(colors: colors),
                         _SettingsView(
                           colors: colors,
@@ -838,8 +841,9 @@ class _UsersView extends StatelessWidget {
 class _WorkflowView extends StatelessWidget {
   final _SaColors colors;
   final String focus;
+  final String userId;
 
-  const _WorkflowView({required this.colors, required this.focus});
+  const _WorkflowView({required this.colors, required this.focus, required this.userId});
 
   @override
   Widget build(BuildContext context) {
@@ -875,6 +879,8 @@ class _WorkflowView extends StatelessWidget {
               _TaskManagementCard(colors: colors, data: data),
               const SizedBox(height: 14),
               _MeetingManagementCard(colors: colors, data: data),
+              const SizedBox(height: 14),
+              _ClientVisitsCard(colors: colors, userId: userId),
             ],
             const SizedBox(height: 20),
           ],
@@ -3191,6 +3197,307 @@ class _SaColors {
           offset: const Offset(0, 8),
         ),
       ],
+    );
+  }
+}
+
+// ── SuperAdmin Client Visits Card ────────────────────────────────────────────
+class _ClientVisitsCard extends StatefulWidget {
+  final _SaColors colors;
+  final String userId;
+  const _ClientVisitsCard({required this.colors, required this.userId});
+  @override
+  State<_ClientVisitsCard> createState() => _ClientVisitsCardState();
+}
+
+class _ClientVisitsCardState extends State<_ClientVisitsCard> {
+  List<ClientVisit> _visits = [];
+  bool _loading = true;
+  String? _error;
+  String _statusFilter = '';
+
+  static const _statusOptions = [
+    ('', 'All'),
+    ('travelling', 'Travelling'),
+    ('in_progress', 'In Progress'),
+    ('pending', 'Pending'),
+    ('approved', 'Approved'),
+    ('completed', 'Completed'),
+    ('rejected', 'Rejected'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final result = await ClientVisitService().fetchVisits(
+        widget.userId,
+        status: _statusFilter,
+      );
+      if (mounted) setState(() { _visits = result.visits; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = '$e'.replaceFirst('Exception: ', ''); _loading = false; });
+    }
+  }
+
+  Color _statusColor(String status) => switch (status) {
+    'travelling'  => const Color(0xFF1A73E8),
+    'in_progress' => const Color(0xFF34A853),
+    'pending'     => const Color(0xFFF59E0B),
+    'approved'    => const Color(0xFF16A34A),
+    'completed'   => const Color(0xFF6B7280),
+    'rejected'    => const Color(0xFFEF4444),
+    _             => const Color(0xFF64748B),
+  };
+
+  String _statusLabel(String status) => switch (status) {
+    'travelling'  => 'Travelling',
+    'in_progress' => 'In Progress',
+    'pending'     => 'Pending',
+    'approved'    => 'Approved',
+    'completed'   => 'Completed',
+    'rejected'    => 'Rejected',
+    'draft'       => 'Draft',
+    _             => status,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.colors;
+    return Container(
+      decoration: _box(c),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+            child: Row(children: [
+              Icon(Icons.directions_car_rounded, size: 18, color: c.primary),
+              const SizedBox(width: 8),
+              Text('Client Visits',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: c.text)),
+              const Spacer(),
+              IconButton(
+                icon: Icon(Icons.refresh_rounded, size: 18, color: c.muted),
+                onPressed: _load,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 8),
+              // View all
+              TextButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => ClientVisitDashboardScreen(
+                    userId: widget.userId,
+                    readOnlyMode: true,
+                    allowCreate: false,
+                    allowVerification: true,
+                    requesterRole: 'superadmin',
+                  ),
+                )),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text('View all', style: TextStyle(fontSize: 12, color: c.primary)),
+              ),
+            ]),
+          ),
+
+          // Status filter chips
+          SizedBox(
+            height: 34,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+              children: _statusOptions.map((opt) {
+                final selected = _statusFilter == opt.$1;
+                return GestureDetector(
+                  onTap: () { setState(() => _statusFilter = opt.$1); _load(); },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: selected ? c.primary : c.subtle,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: selected ? c.primary : c.border),
+                    ),
+                    child: Text(opt.$2,
+                      style: TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w600,
+                        color: selected ? Colors.white : c.muted)),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+          const SizedBox(height: 4),
+
+          // Content
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_error != null)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(_error!, style: TextStyle(color: c.danger, fontSize: 12)),
+            )
+          else if (_visits.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(child: Text('No visits found.',
+                style: TextStyle(color: c.muted, fontSize: 13))),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _visits.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: c.border),
+              itemBuilder: (_, i) => _VisitRow(
+                visit: _visits[i],
+                colors: c,
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => ClientVisitDashboardScreen(
+                    userId: widget.userId,
+                    readOnlyMode: true,
+                    allowCreate: false,
+                    allowVerification: true,
+                    requesterRole: 'superadmin',
+                    initialVisitId: _visits[i].id,
+                  ),
+                )),
+                statusColor: _statusColor(_visits[i].status),
+                statusLabel: _statusLabel(_visits[i].status),
+              ),
+            ),
+
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _VisitRow extends StatelessWidget {
+  final ClientVisit visit;
+  final _SaColors colors;
+  final VoidCallback onTap;
+  final Color statusColor;
+  final String statusLabel;
+
+  const _VisitRow({
+    required this.visit,
+    required this.colors,
+    required this.onTap,
+    required this.statusColor,
+    required this.statusLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+    final hasPhoto = visit.employeePhotoUrl.isNotEmpty;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            // Employee avatar
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: c.primarySoft,
+                border: Border.all(color: c.border, width: 1.5),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: hasPhoto
+                  ? Image.network(
+                      visit.employeePhotoUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _initials(visit.employeeName, c),
+                    )
+                  : _initials(visit.employeeName, c),
+            ),
+            const SizedBox(width: 12),
+
+            // Details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Employee name + status badge
+                  Row(children: [
+                    Expanded(
+                      child: Text(visit.employeeName,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.text),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: statusColor.withAlpha(25),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: statusColor.withAlpha(80)),
+                      ),
+                      child: Text(statusLabel,
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor)),
+                    ),
+                  ]),
+                  const SizedBox(height: 2),
+                  // Client name
+                  Text('→ ${visit.clientName}',
+                    style: TextStyle(fontSize: 12, color: c.primary, fontWeight: FontWeight.w600),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  // Address + date
+                  Row(children: [
+                    Icon(Icons.location_on_outlined, size: 11, color: c.muted),
+                    const SizedBox(width: 2),
+                    Expanded(child: Text(visit.address,
+                      style: TextStyle(fontSize: 11, color: c.muted),
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    Text(
+                      '${visit.scheduledAt.day.toString().padLeft(2, '0')}/'
+                      '${visit.scheduledAt.month.toString().padLeft(2, '0')}/'
+                      '${visit.scheduledAt.year}',
+                      style: TextStyle(fontSize: 10, color: c.muted)),
+                  ]),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, size: 18, color: c.muted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _initials(String name, _SaColors c) {
+    final parts = name.trim().split(' ');
+    final initials = parts.length >= 2
+        ? '${parts.first[0]}${parts.last[0]}'.toUpperCase()
+        : name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Center(
+      child: Text(initials,
+        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: c.primary)),
     );
   }
 }

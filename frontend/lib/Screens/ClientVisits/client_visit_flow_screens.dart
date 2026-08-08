@@ -344,23 +344,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       });
       if (widget.step == 6 && visit.status == 'travelling') {
         unawaited(_startTravelTracking());
-        // Set destination from stored coords or geocode — allow retry on reload.
+        // Set destination — try stored coords first, then geocode.
         final lat = visit.clientLatitude;
         final lng = visit.clientLongitude;
         final hasValidCoords = lat != null && lng != null &&
             lat != 0.0 && lng != 0.0 &&
             lat.abs() <= 90 && lng.abs() <= 180;
         if (hasValidCoords) {
-          // Valid stored coords — set immediately
-          setState(() {
-            _destinationLatLng = LatLng(lat, lng);
-          });
-          // Fit after a short delay to ensure GPS + map are ready
+          setState(() => _destinationLatLng = LatLng(lat, lng));
           Future.delayed(const Duration(milliseconds: 800), () {
             if (mounted) _fitMapBounds();
           });
-        } else if (!_geocodingDone) {
-          // No valid coords — geocode from address
+        } else {
+          // Always retry geocoding if destination still not set
+          _geocodingDone = false;
           unawaited(_geocodeDestination(visit.address, visit.clientName));
         }
       }
@@ -1103,22 +1100,22 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Your location row
-                    InkWell(
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-                      onTap: () => Navigator.of(context).maybePop(),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                        child: Row(children: [
-                          const Icon(Icons.arrow_back, size: 20, color: Color(0xFF5F6368)),
-                          const SizedBox(width: 12),
-                          const Icon(Icons.circle, size: 11, color: Color(0xFF1A73E8)),
-                          const SizedBox(width: 10),
-                          const Expanded(child: Text('Your location',
-                            style: TextStyle(fontSize: 14, color: Color(0xFF1A73E8), fontWeight: FontWeight.w500))),
-                          const Icon(Icons.more_vert, size: 18, color: Color(0xFF5F6368)),
-                        ]),
-                      ),
+                    // Back arrow + Your location row
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      child: Row(children: [
+                        // Only the arrow navigates back
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).maybePop(),
+                          child: const Icon(Icons.arrow_back, size: 20, color: Color(0xFF5F6368)),
+                        ),
+                        const SizedBox(width: 12),
+                        const Icon(Icons.circle, size: 11, color: Color(0xFF1A73E8)),
+                        const SizedBox(width: 10),
+                        const Expanded(child: Text('Your location',
+                          style: TextStyle(fontSize: 14, color: Color(0xFF1A73E8), fontWeight: FontWeight.w500))),
+                        const Icon(Icons.more_vert, size: 18, color: Color(0xFF5F6368)),
+                      ]),
                     ),
                     // Dotted separator
                     Padding(
@@ -1134,10 +1131,24 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                         const SizedBox(width: 32),
                         const Icon(Icons.location_on, size: 18, color: Color(0xFFEA4335)),
                         const SizedBox(width: 10),
-                        Expanded(child: Text(visit.clientName,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF202124)),
-                          maxLines: 1, overflow: TextOverflow.ellipsis)),
-                        Icon(Icons.swap_vert, size: 20, color: Colors.grey.shade400),
+                        Expanded(
+                          child: _destinationLatLng == null
+                              ? Row(children: [
+                                  const SizedBox(width: 12, height: 12,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF5F6368))),
+                                  const SizedBox(width: 8),
+                                  const Text('Finding destination…',
+                                    style: TextStyle(fontSize: 13, color: Color(0xFF5F6368))),
+                                ])
+                              : Text(visit.clientName,
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF202124)),
+                                  maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                        // Fit map to show both points
+                        GestureDetector(
+                          onTap: _fitMapBounds,
+                          child: Icon(Icons.swap_vert, size: 20, color: Colors.grey.shade400),
+                        ),
                       ]),
                     ),
                   ],
@@ -1276,8 +1287,41 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                           Text('· $_distanceText',
                             style: const TextStyle(fontSize: 13, color: Color(0xFF5F6368))),
                         ],
+                        // Speed indicator
+                        if (_lastTrackedPosition != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A73E8).withAlpha(15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${(_lastTrackedPosition!.speed * 3.6).toStringAsFixed(0)} km/h',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A73E8))),
+                          ),
+                        ],
                       ]),
                     ),
+                    // Emergency contact row
+                    if (visit.contactPerson.isNotEmpty || visit.contactPhone.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                        child: Row(children: [
+                          const Icon(Icons.emergency_rounded, size: 14, color: Color(0xFFEA4335)),
+                          const SizedBox(width: 6),
+                          Text('Emergency Contact: ', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                          Expanded(child: Text('${visit.contactPerson} (${visit.contactPhone})',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                            maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          if (visit.contactPhone.isNotEmpty)
+                            GestureDetector(
+                              onTap: () => _message('Calling ${visit.contactPhone}'),
+                              child: const Icon(Icons.call, size: 16, color: Color(0xFF34A853)),
+                            ),
+                        ]),
+                      ),
                     // Action buttons row
                     Padding(
                       padding: EdgeInsets.fromLTRB(12, 4, 12, safePad.bottom + 12),
@@ -1556,18 +1600,60 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ),
     ],
     7 => [
+      // Within Client Location badge
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: ClientVisitColors.green.withAlpha(20),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: ClientVisitColors.green.withAlpha(80)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.location_on, color: ClientVisitColors.green, size: 18),
+            SizedBox(width: 6),
+            Text('Within Client Location',
+              style: TextStyle(color: ClientVisitColors.green,
+                fontWeight: FontWeight.w700, fontSize: 14)),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
       _visitInfo(visit),
+      // Client Contact with call button
+      if (visit.contactPhone.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: EmployeeCard(
+            child: Row(
+              children: [
+                const Icon(Icons.person_outline, size: 18),
+                const SizedBox(width: 8),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(visit.contactPerson,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(visit.contactPhone,
+                      style: const TextStyle(fontSize: 12)),
+                  ],
+                )),
+                IconButton(
+                  icon: const Icon(Icons.call, color: ClientVisitColors.green),
+                  onPressed: () => _message('Calling ${visit.contactPhone}'),
+                ),
+              ],
+            ),
+          ),
+        ),
       const SizedBox(height: 12),
       EmployeeCard(
         child: Column(
           children: [
             _captureTiles(),
             const SizedBox(height: 10),
-            Text(
-              'Within client location',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
             const Text('Capture arrival selfie and GPS to begin the visit.'),
             const SizedBox(height: 14),
             if (widget.readOnlyMode)
@@ -1590,52 +1676,109 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       EmployeeCard(
         child: Column(
           children: [
-            EmployeeInfoRow('Attendees', '${visit.attendees.length}'),
-            EmployeeInfoRow(
-              'Checklist',
-              '${visit.checklist.where((item) => item is Map && item['done'] == true).length}/${visit.checklist.length} completed',
+            // Attendees
+            Row(children: [
+              const Icon(Icons.people_outline, size: 16),
+              const SizedBox(width: 6),
+              Text('Attendees (${_attendees.length})',
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+              const Spacer(),
+              if (!widget.readOnlyMode)
+                TextButton.icon(
+                  onPressed: () async {
+                    final ctrl = TextEditingController();
+                    final name = await showDialog<String>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Add Attendee'),
+                        content: TextField(controller: ctrl,
+                          autofocus: true,
+                          decoration: const InputDecoration(labelText: 'Name')),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Add')),
+                        ],
+                      ),
+                    );
+                    if (name != null && name.isNotEmpty) setState(() => _attendees.add(name));
+                  },
+                  icon: const Icon(Icons.person_add, size: 14),
+                  label: const Text('+ Add', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
+                ),
+            ]),
+            if (_attendees.isNotEmpty)
+              Wrap(spacing: 6, runSpacing: 4,
+                children: _attendees.map((name) => Chip(
+                  label: Text(name, style: const TextStyle(fontSize: 12)),
+                  onDeleted: widget.readOnlyMode ? null
+                    : () => setState(() => _attendees.remove(name)),
+                )).toList(),
+              ),
+            const Divider(height: 20),
+            // Checklist with progress bar
+            Row(children: [
+              const Icon(Icons.checklist_rounded, size: 16),
+              const SizedBox(width: 6),
+              Text('Checklist', style: const TextStyle(fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Text(
+                '${_checklist.where((i) => i['done'] == true).length}/${_checklist.length} Completed',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+            ]),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: _checklist.isEmpty ? 0
+                  : _checklist.where((i) => i['done'] == true).length / _checklist.length,
+                backgroundColor: Colors.grey.shade200,
+                color: ClientVisitColors.green,
+                minHeight: 6,
+              ),
             ),
-            const SizedBox(height: 8),
-            if (widget.readOnlyMode)
-              _monitoringNotice()
-            else ...[
-              _flowButton(
-                Icons.edit_note,
-                'Work update & proof',
-                () => _push(
-                  ClientVisitWorkUpdateScreen(
-                    userId: widget.userId,
-                    visitId: widget.visitId,
-                    service: widget.service,
-                  ),
-                ),
-              ),
-              _flowButton(
-                Icons.receipt_long,
-                'Expense claim',
-                () => _push(
-                  ClientVisitExpenseScreen(
-                    userId: widget.userId,
-                    visitId: widget.visitId,
-                    service: widget.service,
-                  ),
-                ),
-              ),
-              _flowButton(
-                Icons.logout,
-                'Return / direct checkout',
-                () => _push(
-                  ClientVisitReturnCheckoutScreen(
-                    userId: widget.userId,
-                    visitId: widget.visitId,
-                    service: widget.service,
-                  ),
-                ),
-              ),
-            ],
+            const SizedBox(height: 10),
+            ..._checklist.asMap().entries.map((entry) => CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: entry.value['done'] == true,
+              title: Text('${entry.value['label']}', style: const TextStyle(fontSize: 13)),
+              onChanged: widget.readOnlyMode ? null
+                : (value) => setState(() => _checklist[entry.key]['done'] = value == true),
+            )),
           ],
         ),
       ),
+      const SizedBox(height: 12),
+      if (!widget.readOnlyMode) ...[
+        Row(children: [
+          Expanded(child: OutlinedButton.icon(
+            onPressed: () => _push(ClientVisitWorkUpdateScreen(
+              userId: widget.userId, visitId: widget.visitId, service: widget.service)),
+            icon: const Icon(Icons.edit_note, size: 18),
+            label: const Text('Add Update'),
+          )),
+          const SizedBox(width: 10),
+          Expanded(child: OutlinedButton.icon(
+            onPressed: () async {
+              final images = await ImagePicker().pickMultiImage(imageQuality: 82);
+              if (images.isNotEmpty && mounted) {
+                await _run(() => widget.service.uploadFiles(
+                  widget.userId, widget.visitId, 'proof',
+                  images.map((i) => i.path).toList()));
+                _message('Proof uploaded.');
+              }
+            },
+            icon: const Icon(Icons.upload_file, size: 18),
+            label: const Text('Upload Proof'),
+          )),
+        ]),
+        const SizedBox(height: 8),
+        _flowButton(Icons.receipt_long, 'Expense claim', () => _push(
+          ClientVisitExpenseScreen(userId: widget.userId, visitId: widget.visitId, service: widget.service))),
+        _flowButton(Icons.logout, 'Return / direct checkout', () => _push(
+          ClientVisitReturnCheckoutScreen(userId: widget.userId, visitId: widget.visitId, service: widget.service))),
+      ] else _monitoringNotice(),
     ],
     9 => [
       EmployeeCard(
@@ -1787,25 +1930,33 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       EmployeeCard(
         child: Column(
           children: [
+            // Return mode as radio buttons
+            const Align(alignment: Alignment.centerLeft,
+              child: Text('Duty completion', style: TextStyle(fontWeight: FontWeight.w600))),
+            const SizedBox(height: 4),
+            RadioListTile<String>(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: 'return_office',
+              groupValue: _returnMode,
+              title: const Text('Return to Office'),
+              subtitle: const Text('End of Office', style: TextStyle(fontSize: 11)),
+              onChanged: widget.readOnlyMode ? null
+                : (v) => setState(() => _returnMode = v!),
+            ),
+            RadioListTile<String>(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: 'end_duty_client',
+              groupValue: _returnMode,
+              title: const Text('End Duty from Client'),
+              subtitle: const Text('No Return', style: TextStyle(fontSize: 11)),
+              onChanged: widget.readOnlyMode ? null
+                : (v) => setState(() => _returnMode = v!),
+            ),
+            const Divider(height: 16),
             _captureTiles(),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _returnMode,
-              decoration: const InputDecoration(labelText: 'Duty completion'),
-              items: const [
-                DropdownMenuItem(
-                  value: 'return_office',
-                  child: Text('Return to office'),
-                ),
-                DropdownMenuItem(
-                  value: 'end_duty_client',
-                  child: Text('End duty from client'),
-                ),
-              ],
-              onChanged: widget.readOnlyMode
-                  ? null
-                  : (value) => setState(() => _returnMode = value!),
-            ),
             TextField(
               controller: _outcome,
               readOnly: widget.readOnlyMode,
@@ -1821,9 +1972,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             TextField(
               controller: _signature,
               readOnly: widget.readOnlyMode,
-              decoration: const InputDecoration(
-                labelText: 'Client signature / OTP name',
-              ),
+              decoration: const InputDecoration(labelText: 'Client Signature / OTP'),
             ),
             const SizedBox(height: 12),
             if (widget.readOnlyMode)
@@ -1834,7 +1983,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 child: FilledButton.icon(
                   onPressed: _working ? null : _complete,
                   icon: const Icon(Icons.task_alt),
-                  label: const Text('Complete duty'),
+                  label: const Text('Complete Duty'),
                 ),
               ),
           ],
@@ -1848,11 +1997,23 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       const SizedBox(height: 12),
       _summary(visit),
       const SizedBox(height: 12),
-      OutlinedButton.icon(
-        onPressed: _working ? null : () => _downloadReport(visit),
-        icon: const Icon(Icons.download_rounded),
-        label: const Text('Download report'),
-      ),
+      Row(children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _working ? null : () => _downloadReport(visit),
+            icon: const Icon(Icons.download_rounded),
+            label: const Text('Download Report'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: FilledButton.icon(
+            onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+            icon: const Icon(Icons.history_rounded),
+            label: const Text('View History'),
+          ),
+        ),
+      ]),
       if (widget.reviewerMode && visit.managerVerifiedBy.isEmpty) ...[
         const SizedBox(height: 12),
         FilledButton.icon(
@@ -2045,24 +2206,72 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   Widget _visitInfo(ClientVisit visit) => EmployeeCard(
     child: Column(
       children: [
-        EmployeeInfoRow(
-          'Employee',
-          visit.employeeName.isEmpty
-              ? visit.employeeUserId
-              : visit.employeeName,
-        ),
+        // Employee photo + name header
+        if (visit.employeePhotoUrl.isNotEmpty || visit.employeeName.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                _employeeAvatar(visit),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(visit.employeeName.isEmpty ? visit.employeeUserId : visit.employeeName,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                      Text(visit.employeeUserId,
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const Divider(height: 1),
+        const SizedBox(height: 6),
+        EmployeeInfoRow('Client', visit.clientName),
         EmployeeInfoRow('Contact', visit.contactPerson),
-        EmployeeInfoRow(
-          'Phone',
-          visit.contactPhone.isEmpty ? '—' : visit.contactPhone,
-        ),
-        EmployeeInfoRow('Date', _date(visit.scheduledAt)),
+        EmployeeInfoRow('Phone', visit.contactPhone.isEmpty ? '—' : visit.contactPhone),
+        EmployeeInfoRow('Address', visit.address),
+        EmployeeInfoRow('Date & Time',
+          '${_date(visit.scheduledAt)}  ${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}'),
+        EmployeeInfoRow('Duration',
+          visit.durationMinutes < 60
+            ? '${visit.durationMinutes} minutes'
+            : '${visit.durationMinutes ~/ 60} hour${visit.durationMinutes == 60 ? '' : 's'}'),
         EmployeeInfoRow('Purpose', visit.purpose),
         EmployeeInfoRow('Travel mode', _label(visit.travelMode)),
-        Align(alignment: Alignment.centerLeft, child: Text(visit.address)),
+        if (visit.notes.isNotEmpty) EmployeeInfoRow('Notes', visit.notes),
       ],
     ),
   );
+
+  Widget _employeeAvatar(ClientVisit visit) {
+    final hasPhoto = visit.employeePhotoUrl.isNotEmpty;
+    final name = visit.employeeName;
+    final parts = name.trim().split(' ');
+    final initials = parts.length >= 2
+        ? '${parts.first[0]}${parts.last[0]}'.toUpperCase()
+        : name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Container(
+      width: 48, height: 48,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFF1A73E8).withAlpha(20),
+        border: Border.all(color: const Color(0xFF1A73E8).withAlpha(60), width: 1.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: hasPhoto
+          ? Image.network(visit.employeePhotoUrl, fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Center(child: Text(initials,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A73E8)))))
+          : Center(child: Text(initials,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
+                color: Color(0xFF1A73E8)))),
+    );
+  }
   Widget _approvalInfo(ClientVisit visit) => EmployeeCard(
     child: Column(
       children: [
@@ -2109,16 +2318,95 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ],
     ),
   );
-  Widget _timeline(ClientVisit visit) => EmployeeCard(
+  Widget _timeline(ClientVisit visit) {
+    // Calculate durations
+    String travelDuration = '—';
+    String visitDuration = '—';
+    String totalDuty = '—';
+    if (visit.officeCheckOutAt != null && visit.reachedClientAt != null) {
+      travelDuration = _duration(
+        visit.reachedClientAt!.toLocal().difference(visit.officeCheckOutAt!.toLocal()));
+    }
+    if (visit.checkInAt != null && visit.checkOutAt != null) {
+      visitDuration = _duration(
+        visit.checkOutAt!.toLocal().difference(visit.checkInAt!.toLocal()));
+    }
+    if (visit.officeCheckOutAt != null && visit.checkOutAt != null) {
+      totalDuty = _duration(
+        visit.checkOutAt!.toLocal().difference(visit.officeCheckOutAt!.toLocal()));
+    }
+    final proofCount = visit.attachments.where((a) =>
+      a['category'] == 'proof' || a['category'] == 'client_check_in').length;
+
+    return EmployeeCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Visit timeline', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 10),
+          _timeRow('Office Check-Out', visit.officeCheckOutAt),
+          _timeRow('Reached Client', visit.reachedClientAt),
+          _timeRow('Visit Start', visit.checkInAt),
+          _timeRow('Visit End', visit.checkOutAt),
+          _timeRow('Return / Checkout', visit.checkOutAt),
+          const Divider(height: 16),
+          // Duration metrics row
+          Row(children: [
+            _durationBox('Travel\nDuration', travelDuration),
+            _durationBox('Visit\nDuration', visitDuration),
+            _durationBox('Total Duty', totalDuty),
+          ]),
+          const Divider(height: 16),
+          // Expenses + Proof
+          Row(children: [
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Expenses', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                Text('₹${visit.expenseTotal.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              ],
+            )),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Proof Uploaded', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                Text('$proofCount file${proofCount == 1 ? '' : 's'}',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              ],
+            )),
+          ]),
+          const Divider(height: 16),
+          // Manager verification
+          Row(children: [
+            Icon(
+              visit.managerVerifiedBy.isEmpty ? Icons.pending_outlined : Icons.verified_rounded,
+              size: 16,
+              color: visit.managerVerifiedBy.isEmpty ? Colors.orange : ClientVisitColors.green,
+            ),
+            const SizedBox(width: 6),
+            Text('Manager Verification: ',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            Text(
+              visit.managerVerifiedBy.isEmpty ? 'Pending' : '✓ Verified',
+              style: TextStyle(
+                fontSize: 12,
+                color: visit.managerVerifiedBy.isEmpty ? Colors.orange : ClientVisitColors.green,
+                fontWeight: FontWeight.w700)),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _durationBox(String label, String value) => Expanded(
     child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Visit timeline', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 10),
-        _timeRow('Office check-out', visit.officeCheckOutAt),
-        _timeRow('Reached client', visit.reachedClientAt),
-        _timeRow('Client check-in', visit.checkInAt),
-        _timeRow('Visit completed', visit.checkOutAt),
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+          textAlign: TextAlign.center),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+          textAlign: TextAlign.center),
       ],
     ),
   );
