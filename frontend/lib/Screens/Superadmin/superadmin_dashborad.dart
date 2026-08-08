@@ -131,6 +131,11 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                             onLogout: _logout,
                           ),
                         ),
+                        // Tab 5 — Client Visits
+                        _ClientVisitsView(
+                          colors: colors,
+                          userId: widget.userId,
+                        ),
                       ],
                     ),
                   ),
@@ -3192,6 +3197,7 @@ class _BottomNav extends StatelessWidget {
       _NavData(Icons.account_tree_outlined, 'Workflow', 2),
       _NavData(Icons.insert_chart_outlined_rounded, 'Reports', 3),
       _NavData(Icons.settings_outlined, 'Settings', 4),
+      _NavData(Icons.directions_car_rounded, 'Visits', 5),
     ];
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
@@ -3449,6 +3455,25 @@ class _SaColors {
           offset: const Offset(0, 8),
         ),
       ],
+    );
+  }
+}
+
+// ── SuperAdmin Client Visits View ─────────────────────────────────────────────
+class _ClientVisitsView extends StatelessWidget {
+  final _SaColors colors;
+  final String userId;
+  const _ClientVisitsView({required this.colors, required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClientVisitDashboardScreen(
+      userId: userId,
+      readOnlyMode: false,       // Allow SuperAdmin to verify visits
+      allowCreate: false,        // SuperAdmin doesn't create visits
+      allowVerification: true,   // SuperAdmin can verify completed visits
+      reviewerMode: true,        // Show all visits across employees
+      requesterRole: 'superadmin',
     );
   }
 }
