@@ -13,7 +13,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:signature/signature.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
@@ -299,10 +301,17 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   // Outcome and follow-up for step 9
   String _outcome9 = '';
   String _followUp9 = '';
+  // Hand-drawn signature pad controller (Step 9)
+  late final SignatureController _signaturePadController;
 
   @override
   void initState() {
     super.initState();
+    _signaturePadController = SignatureController(
+      penStrokeWidth: 2.5,
+      penColor: Colors.black,
+      exportBackgroundColor: Colors.white,
+    );
     _load();
   }
 
@@ -320,6 +329,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     ]) {
       controller.dispose();
     }
+    _signaturePadController.dispose();
     _travelSubscription?.cancel();
     _trackingRetryTimer?.cancel();
     _mapController.dispose();
@@ -871,10 +881,25 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         if (_followUp9.isNotEmpty) 'follow_up': _followUp9,
         if (_signature.text.trim().isNotEmpty) 'client_signature_name': _signature.text.trim(),
       });
+      // Upload staged proof photos
       if (_stagedProofPaths.isNotEmpty) {
         await widget.service.uploadFiles(
           widget.userId, widget.visitId, 'proof', _stagedProofPaths);
         if (mounted) setState(() => _stagedProofPaths.clear());
+      }
+      // Upload drawn signature as a proof image if the pad was used
+      if (_signaturePadController.isNotEmpty) {
+        final pngBytes = await _signaturePadController.toPngBytes();
+        if (pngBytes != null) {
+          final tmp = await getTemporaryDirectory();
+          final sigFile = File(
+            '${tmp.path}/client_signature_${DateTime.now().millisecondsSinceEpoch}.png',
+          );
+          await sigFile.writeAsBytes(pngBytes);
+          await widget.service.uploadFiles(
+            widget.userId, widget.visitId, 'proof', [sigFile.path]);
+          await sigFile.delete();
+        }
       }
     });
     if (mounted) Navigator.pop(context, true);
@@ -909,6 +934,60 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       _amount.clear();
       _expenseNote.clear();
     });
+  }
+
+  /// Called when the employee taps "Submit Expense" — shows a success dialog
+  /// then navigates to the Return / Checkout screen (step 11).
+  Future<void> _submitExpense() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60, height: 60,
+              decoration: BoxDecoration(
+                color: ClientVisitColors.green.withAlpha(25),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.check_circle_rounded,
+                  color: ClientVisitColors.green, size: 36),
+            ),
+            const SizedBox(height: 16),
+            const Text('Expense Submitted!',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text(
+              'Your expense claim has been recorded successfully.',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Continue to Checkout'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mounted) {
+      Navigator.of(context).pushReplacement(MaterialPageRoute(
+        builder: (_) => ClientVisitReturnCheckoutScreen(
+          userId: widget.userId,
+          visitId: widget.visitId,
+          service: widget.service,
+        ),
+      ));
+    }
   }
 
   Future<void> _complete() async {
@@ -1802,64 +1881,102 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Attendee field
+            // ── Attendees ──────────────────────────────────────────────────
             Row(children: [
               Expanded(child: TextField(
                 controller: _attendee,
                 readOnly: widget.readOnlyMode,
                 decoration: const InputDecoration(labelText: 'Attendee name'),
               )),
+              const SizedBox(width: 8),
               IconButton(
                 icon: const Icon(Icons.person_add),
                 onPressed: widget.readOnlyMode ? null : () {
                   if (_attendee.text.trim().isNotEmpty) {
-                    setState(() { _attendees.add(_attendee.text.trim()); _attendee.clear(); });
+                    setState(() {
+                      _attendees.add(_attendee.text.trim());
+                      _attendee.clear();
+                    });
                   }
                 },
               ),
             ]),
-            if (_attendees.isNotEmpty)
-              Wrap(spacing: 6, children: _attendees.map((name) => Chip(
-                label: Text(name),
-                onDeleted: widget.readOnlyMode ? null
-                  : () => setState(() => _attendees.remove(name)),
-              )).toList()),
-            // Checklist
+            if (_attendees.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: _attendees.map((name) => Chip(
+                  label: Text(name, style: const TextStyle(fontSize: 12)),
+                  onDeleted: widget.readOnlyMode ? null
+                      : () => setState(() => _attendees.remove(name)),
+                )).toList(),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+
+            // ── Checklist ──────────────────────────────────────────────────
             ..._checklist.asMap().entries.map((entry) => CheckboxListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,
               value: entry.value['done'] == true,
-              title: Text('${entry.value['label']}'),
+              title: Text('${entry.value['label']}',
+                  style: const TextStyle(fontSize: 13)),
               onChanged: widget.readOnlyMode ? null
-                : (v) => setState(() => _checklist[entry.key]['done'] = v == true),
+                  : (v) => setState(
+                      () => _checklist[entry.key]['done'] = v == true),
             )),
-            const SizedBox(height: 8),
-            // Notes
+
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+
+            // ── Notes ──────────────────────────────────────────────────────
             TextField(
               controller: _notes,
               readOnly: widget.readOnlyMode,
               maxLines: 3,
               decoration: const InputDecoration(labelText: 'Notes / outcome'),
             ),
+
+            const SizedBox(height: 16),
+            const Divider(height: 1),
             const SizedBox(height: 12),
-            // Photos / Documents grid
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('Photos / Documents (${_stagedProofPaths.length})',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              if (!widget.readOnlyMode)
-                TextButton.icon(
-                  onPressed: () async {
-                    final images = await ImagePicker().pickMultiImage(imageQuality: 82);
-                    if (images.isNotEmpty) {
-                      setState(() => _stagedProofPaths.addAll(images.map((i) => i.path)));
-                    }
-                  },
-                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
-                  label: const Text('+ Add', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
+
+            // ── Photos / Documents ─────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Photos / Documents (${_stagedProofPaths.length})',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13),
                 ),
-            ]),
-            if (_stagedProofPaths.isNotEmpty)
+                if (!widget.readOnlyMode)
+                  TextButton.icon(
+                    onPressed: () async {
+                      final images =
+                          await ImagePicker().pickMultiImage(imageQuality: 82);
+                      if (images.isNotEmpty) {
+                        setState(() => _stagedProofPaths
+                            .addAll(images.map((i) => i.path)));
+                      }
+                    },
+                    icon: const Icon(Icons.add_photo_alternate_outlined,
+                        size: 16),
+                    label: const Text('+ Add',
+                        style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 6)),
+                  ),
+              ],
+            ),
+            if (_stagedProofPaths.isNotEmpty) ...[
+              const SizedBox(height: 8),
               SizedBox(
                 height: 80,
                 child: ListView.separated(
@@ -1870,53 +1987,164 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.file(File(_stagedProofPaths[i]),
+                        child: Image.file(
+                          File(_stagedProofPaths[i]),
                           width: 80, height: 80, fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             width: 80, height: 80,
                             color: Colors.grey.shade200,
-                            child: const Icon(Icons.insert_drive_file)),
+                            child: const Icon(Icons.insert_drive_file),
+                          ),
                         ),
                       ),
-                      Positioned(top: 2, right: 2,
+                      Positioned(
+                        top: 2, right: 2,
                         child: GestureDetector(
-                          onTap: () => setState(() => _stagedProofPaths.removeAt(i)),
+                          onTap: () => setState(
+                              () => _stagedProofPaths.removeAt(i)),
                           child: Container(
-                            decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                            child: const Icon(Icons.close, size: 14, color: Colors.white),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close,
+                                size: 14, color: Colors.white),
                           ),
-                        )),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
+            ],
+
+            const SizedBox(height: 16),
+            const Divider(height: 1),
             const SizedBox(height: 12),
-            // Outcome dropdown
+
+            // ── Outcome ────────────────────────────────────────────────────
             DropdownButtonFormField<String>(
               value: _outcome9.isEmpty ? null : _outcome9,
               decoration: const InputDecoration(labelText: 'Outcome'),
-              items: const ['Positive', 'Negative', 'Neutral', 'Follow-up Required']
-                .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-              onChanged: widget.readOnlyMode ? null
-                : (v) => setState(() => _outcome9 = v ?? ''),
+              items: const [
+                'Positive',
+                'Negative',
+                'Neutral',
+                'Follow-up Required',
+              ]
+                  .map((v) =>
+                      DropdownMenuItem(value: v, child: Text(v)))
+                  .toList(),
+              onChanged: widget.readOnlyMode
+                  ? null
+                  : (v) => setState(() => _outcome9 = v ?? ''),
             ),
-            // Follow-up dropdown
+
+            const SizedBox(height: 12),
+
+            // ── Follow-up ──────────────────────────────────────────────────
             DropdownButtonFormField<String>(
               value: _followUp9.isEmpty ? null : _followUp9,
               decoration: const InputDecoration(labelText: 'Follow-up'),
-              items: const ['None', 'Call tomorrow', 'Send proposal by next week',
-                'Schedule demo', 'Awaiting client feedback']
-                .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-              onChanged: widget.readOnlyMode ? null
-                : (v) => setState(() => _followUp9 = v ?? ''),
+              items: const [
+                'None',
+                'Call tomorrow',
+                'Send proposal by next week',
+                'Schedule demo',
+                'Awaiting client feedback',
+              ]
+                  .map((v) =>
+                      DropdownMenuItem(value: v, child: Text(v)))
+                  .toList(),
+              onChanged: widget.readOnlyMode
+                  ? null
+                  : (v) => setState(() => _followUp9 = v ?? ''),
             ),
-            // Client Signature / OTP
-            TextField(
-              controller: _signature,
-              readOnly: widget.readOnlyMode,
-              decoration: const InputDecoration(labelText: 'Client Signature / OTP'),
+
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+
+            // ── Client Signature (hand-drawn pad) ──────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Client Signature',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                if (!widget.readOnlyMode &&
+                    _signaturePadController.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () =>
+                        setState(() => _signaturePadController.clear()),
+                    icon: const Icon(Icons.refresh_rounded, size: 14),
+                    label: const Text('Clear',
+                        style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 6),
+                      foregroundColor: Colors.redAccent,
+                    ),
+                  ),
+              ],
             ),
+            const SizedBox(height: 6),
+            // Instruction hint
+            Text(
+              widget.readOnlyMode
+                  ? 'Signature captured'
+                  : 'Ask the client to sign in the box below',
+              style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade500,
+                  fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 8),
+            // Signature canvas
+            Container(
+              height: 140,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.grey.shade400, width: 1.5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: widget.readOnlyMode
+                  ? Center(
+                      child: Text('—',
+                          style: TextStyle(color: Colors.grey.shade400)),
+                    )
+                  : Signature(
+                      controller: _signaturePadController,
+                      backgroundColor: Colors.white,
+                      width: double.infinity,
+                      height: 140,
+                    ),
+            ),
+            // "Sign here" watermark hint
+            if (!widget.readOnlyMode &&
+                _signaturePadController.isEmpty) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.gesture_rounded,
+                      size: 13, color: Colors.grey.shade400),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Draw signature above',
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.grey.shade400),
+                  ),
+                ],
+              ),
+            ],
+
             const SizedBox(height: 14),
+
+            // ── Save button ────────────────────────────────────────────────
             if (widget.readOnlyMode)
               _monitoringNotice()
             else
@@ -2018,7 +2246,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: _working ? null : () => _message('Expenses submitted.'),
+                    onPressed: _working ? null : _submitExpense,
                     icon: const Icon(Icons.send_rounded),
                     label: const Text('Submit Expense'),
                   ),
@@ -2129,7 +2357,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ),
       ],
     ],
-    _ => [_visitInfo(visit)],
+    _ => (widget.reviewerMode || widget.readOnlyMode)
+        ? _superAdminVisitDetail(visit)
+        : [_visitInfo(visit)],
   };
 
   Future<void> _push(Widget screen) async {
@@ -2375,6 +2605,327 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     ),
   );
 
+  // ── SuperAdmin / Reviewer full-detail view ─────────────────────────────────
+  /// Returns all widgets shown when SuperAdmin taps a visit from history.
+  /// Shows employee details, client details, visit status & approval info,
+  /// timeline, expense breakdown, and attachment gallery.
+  List<Widget> _superAdminVisitDetail(ClientVisit visit) {
+    // Status color helper
+    Color statusColor(String s) => switch (s) {
+      'completed'   => ClientVisitColors.green,
+      'in_progress' => const Color(0xFF34A853),
+      'travelling'  => const Color(0xFF1A73E8),
+      'approved'    => const Color(0xFF16A34A),
+      'pending'     => const Color(0xFFF59E0B),
+      'rejected'    => const Color(0xFFEF4444),
+      _             => Colors.grey,
+    };
+
+    return [
+      // ── 1. Status badge ────────────────────────────────────────────────────
+      _stageBadge(_label(visit.status).toUpperCase(), statusColor(visit.status)),
+      const SizedBox(height: 14),
+
+      // ── 2. Employee card ───────────────────────────────────────────────────
+      _saSection(
+        icon: Icons.badge_outlined,
+        color: const Color(0xFF1A73E8),
+        title: 'Employee',
+        child: Column(children: [
+          Row(children: [
+            _employeeAvatar(visit),
+            const SizedBox(width: 12),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  visit.employeeName.isEmpty ? visit.employeeUserId : visit.employeeName,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                Text(visit.employeeUserId,
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              ],
+            )),
+          ]),
+          const SizedBox(height: 10),
+          const Divider(height: 1),
+          const SizedBox(height: 6),
+          EmployeeInfoRow('Manager ID', visit.managerUserId.isEmpty ? '—' : visit.managerUserId),
+        ]),
+      ),
+      const SizedBox(height: 12),
+
+      // ── 3. Client & visit info ─────────────────────────────────────────────
+      _saSection(
+        icon: Icons.business_rounded,
+        color: const Color(0xFF16A34A),
+        title: 'Client Details',
+        child: Column(children: [
+          EmployeeInfoRow('Client Name', visit.clientName),
+          EmployeeInfoRow('Contact Person', visit.contactPerson.isEmpty ? '—' : visit.contactPerson),
+          EmployeeInfoRow('Phone', visit.contactPhone.isEmpty ? '—' : visit.contactPhone),
+          EmployeeInfoRow('Address', visit.address.isEmpty ? '—' : visit.address),
+          EmployeeInfoRow('Purpose', visit.purpose.isEmpty ? '—' : visit.purpose),
+          EmployeeInfoRow('Scheduled',
+            '${_date(visit.scheduledAt)}  ${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}'),
+          EmployeeInfoRow('Planned Duration',
+            visit.durationMinutes < 60
+              ? '${visit.durationMinutes} min'
+              : '${visit.durationMinutes ~/ 60}h ${visit.durationMinutes % 60 > 0 ? '${visit.durationMinutes % 60}m' : ''}'),
+          EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
+          if (visit.notes.isNotEmpty) EmployeeInfoRow('Notes', visit.notes),
+        ]),
+      ),
+      const SizedBox(height: 12),
+
+      // ── 4. Approval info ───────────────────────────────────────────────────
+      _saSection(
+        icon: Icons.approval_rounded,
+        color: const Color(0xFF9333EA),
+        title: 'Approval',
+        child: Column(children: [
+          EmployeeInfoRow('Status', _label(visit.status)),
+          EmployeeInfoRow('Approved By',
+            visit.approvedByName.isEmpty ? '—' : '${visit.approvedByName} (${visit.approvedByRole})'),
+          EmployeeInfoRow('Approved At',
+            visit.approvedAt == null ? '—' : '${_date(visit.approvedAt!)}  ${TimeOfDay.fromDateTime(visit.approvedAt!.toLocal()).format(context)}'),
+          if (visit.approvalComment.isNotEmpty)
+            EmployeeInfoRow('Comment', visit.approvalComment),
+          EmployeeInfoRow('Manager Verification',
+            visit.managerVerifiedBy.isEmpty ? 'Pending' : '✓ Verified by ${visit.managerVerifiedBy}'),
+        ]),
+      ),
+      const SizedBox(height: 12),
+
+      // ── 5. Timeline ────────────────────────────────────────────────────────
+      _saSection(
+        icon: Icons.timeline_rounded,
+        color: const Color(0xFF0EA5E9),
+        title: 'Visit Timeline',
+        child: Column(children: [
+          _timeRow('Office Check-Out', visit.officeCheckOutAt),
+          _timeRow('Reached Client',   visit.reachedClientAt),
+          _timeRow('Visit Start',      visit.checkInAt),
+          _timeRow('Visit End / Checkout', visit.checkOutAt),
+          if (visit.officeCheckOutAt != null || visit.checkOutAt != null) ...[
+            const Divider(height: 16),
+            Row(children: [
+              _durationBox('Travel',
+                visit.officeCheckOutAt != null && visit.reachedClientAt != null
+                  ? _duration(visit.reachedClientAt!.toLocal().difference(visit.officeCheckOutAt!.toLocal()))
+                  : '—'),
+              _durationBox('Visit',
+                visit.checkInAt != null && visit.checkOutAt != null
+                  ? _duration(visit.checkOutAt!.toLocal().difference(visit.checkInAt!.toLocal()))
+                  : '—'),
+              _durationBox('Total Duty',
+                visit.officeCheckOutAt != null && visit.checkOutAt != null
+                  ? _duration(visit.checkOutAt!.toLocal().difference(visit.officeCheckOutAt!.toLocal()))
+                  : '—'),
+            ]),
+          ],
+        ]),
+      ),
+      const SizedBox(height: 12),
+
+      // ── 6. Outcome & follow-up ─────────────────────────────────────────────
+      if (visit.outcome.isNotEmpty || visit.followUp.isNotEmpty || visit.returnMode.isNotEmpty)
+        ...[
+          _saSection(
+            icon: Icons.description_rounded,
+            color: const Color(0xFFF59E0B),
+            title: 'Outcome & Follow-Up',
+            child: Column(children: [
+              EmployeeInfoRow('Outcome', visit.outcome.isEmpty ? '—' : visit.outcome),
+              EmployeeInfoRow('Follow-Up', visit.followUp.isEmpty ? '—' : visit.followUp),
+              EmployeeInfoRow('Return Mode', _label(visit.returnMode)),
+            ]),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+      // ── 7. Expenses ────────────────────────────────────────────────────────
+      if (visit.expenses.isNotEmpty || visit.expenseTotal > 0)
+        ...[
+          _saSection(
+            icon: Icons.receipt_long_rounded,
+            color: const Color(0xFFEF4444),
+            title: 'Expenses',
+            child: Column(children: [
+              ...visit.expenses.map((expense) {
+                final cat  = '${expense['category']}';
+                final icon = switch (cat) {
+                  'travel'  => Icons.directions_car_rounded,
+                  'food'    => Icons.restaurant_rounded,
+                  'parking' => Icons.local_parking_rounded,
+                  'expense' => Icons.receipt_rounded,
+                  _         => Icons.more_horiz_rounded,
+                };
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(children: [
+                    Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withAlpha(15),
+                        borderRadius: BorderRadius.circular(8)),
+                      child: Icon(icon, size: 16, color: const Color(0xFFEF4444)),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_label(cat),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13)),
+                        if ('${expense['note'] ?? ''}'.isNotEmpty)
+                          Text('${expense['note']}',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey.shade500)),
+                      ],
+                    )),
+                    Text('₹${expense['amount']}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 14)),
+                  ]),
+                );
+              }),
+              const Divider(height: 16),
+              Row(children: [
+                const Text('Total',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                const Spacer(),
+                Text('₹${visit.expenseTotal.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      color: Color(0xFFEF4444))),
+              ]),
+            ]),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+      // ── 8. Checklist ───────────────────────────────────────────────────────
+      if (visit.checklist.isNotEmpty)
+        ...[
+          _saSection(
+            icon: Icons.checklist_rounded,
+            color: const Color(0xFF34A853),
+            title: 'Checklist',
+            child: Column(
+              children: visit.checklist.map((item) {
+                final done  = item['done'] == true;
+                final label = '${item['label'] ?? ''}';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(children: [
+                    Icon(
+                      done ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                      size: 18,
+                      color: done ? const Color(0xFF34A853) : Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: done ? null : Colors.grey.shade500,
+                        decoration: done ? null : TextDecoration.none,
+                      ))),
+                  ]),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+      // ── 9. Attendees ───────────────────────────────────────────────────────
+      if (visit.attendees.isNotEmpty)
+        ...[
+          _saSection(
+            icon: Icons.group_rounded,
+            color: const Color(0xFF1A73E8),
+            title: 'Attendees (${visit.attendees.length})',
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: visit.attendees.map((a) => Chip(
+                avatar: const Icon(Icons.person_rounded, size: 14),
+                label: Text('$a', style: const TextStyle(fontSize: 12)),
+                padding: EdgeInsets.zero,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              )).toList(),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+      // ── 10. Attachments (selfies + proof) ──────────────────────────────────
+      if (visit.attachments.isNotEmpty) ...[
+        _attachmentsGallery(visit),
+        const SizedBox(height: 12),
+      ],
+
+      // ── 11. Verify button (if reviewer and not yet verified) ───────────────
+      if (widget.reviewerMode && visit.managerVerifiedBy.isEmpty &&
+          visit.status == 'completed') ...[
+        FilledButton.icon(
+          onPressed: _working ? null : _verify,
+          icon: const Icon(Icons.verified),
+          label: const Text('Verify completed visit'),
+        ),
+        const SizedBox(height: 8),
+      ],
+
+      // ── 12. Download report ────────────────────────────────────────────────
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _working ? null : () => _downloadReport(visit),
+          icon: const Icon(Icons.download_rounded),
+          label: const Text('Download Report'),
+        ),
+      ),
+    ];
+  }
+
+  /// Card wrapper for each SuperAdmin detail section.
+  Widget _saSection({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required Widget child,
+  }) {
+    return EmployeeCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: color.withAlpha(22),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 15, color: color),
+            ),
+            const SizedBox(width: 8),
+            Text(title,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: color,
+              )),
+          ]),
+          const SizedBox(height: 10),
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+
   Widget _employeeAvatar(ClientVisit visit) {
     final hasPhoto = visit.employeePhotoUrl.isNotEmpty;
     final name = visit.employeeName;
@@ -2581,113 +3132,331 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     ),
   );
   /// Gallery of all uploaded attachments — shown on the completed stage (12)
-  /// for every role including SuperAdmin and reviewers.
+  /// Grouped photos gallery — shown on the completed stage (12) for every
+  /// role including SuperAdmin and reviewers.
+  ///
+  /// Selfie categories (office_checkout, client_check_in, checkout, check_in)
+  /// are displayed prominently in a dedicated "Selfies" section so SuperAdmin
+  /// can clearly see the employee at each stage of the visit.
+  /// Proof / expense / other files are shown in a separate "Proof & Documents"
+  /// section below.
   Widget _attachmentsGallery(ClientVisit visit) {
-    final attachments = visit.attachments;
-    return EmployeeCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Attachments (${attachments.length})',
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 90,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: attachments.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (ctx, i) {
-                final item = attachments[i];
-                final url = '${item['url'] ?? ''}';
-                final category = '${item['category'] ?? ''}';
-                final isImage = item['resource_type'] != 'raw';
-                return GestureDetector(
-                  onTap: () {
-                    if (url.isEmpty) return;
-                    showDialog(
-                      context: ctx,
-                      builder: (_) => Dialog(
-                        backgroundColor: Colors.black,
-                        insetPadding: const EdgeInsets.all(12),
-                        child: Stack(
-                          children: [
-                            InteractiveViewer(
-                              child: isImage
-                                  ? Image.network(url, fit: BoxFit.contain,
-                                      errorBuilder: (_, __, ___) =>
-                                          const Center(child: Icon(
-                                            Icons.broken_image_rounded,
-                                            color: Colors.white, size: 48)))
-                                  : const Center(child: Icon(
-                                      Icons.insert_drive_file_rounded,
-                                      color: Colors.white, size: 64)),
-                            ),
-                            Positioned(
-                              top: 6, right: 6,
-                              child: IconButton(
-                                icon: const Icon(Icons.close_rounded,
-                                    color: Colors.white),
-                                onPressed: () => Navigator.of(ctx).pop(),
-                              ),
-                            ),
-                          ],
+    const selfieCategories = {
+      'office_checkout',
+      'client_check_in',
+      'checkout',
+      'check_in',
+    };
+
+    // Category display meta
+    String _catLabel(String cat) => switch (cat) {
+      'office_checkout'  => 'Office Checkout',
+      'client_check_in'  => 'Client Check-In',
+      'checkout'         => 'Return Checkout',
+      'check_in'         => 'Check-In',
+      'proof'            => 'Visit Proof',
+      'expense'          => 'Expense Receipt',
+      _                  => cat.replaceAll('_', ' '),
+    };
+
+    IconData _catIcon(String cat) => switch (cat) {
+      'office_checkout'  => Icons.login_rounded,
+      'client_check_in'  => Icons.location_on_rounded,
+      'checkout'         => Icons.logout_rounded,
+      'check_in'         => Icons.camera_front_rounded,
+      'proof'            => Icons.photo_library_rounded,
+      'expense'          => Icons.receipt_rounded,
+      _                  => Icons.attach_file_rounded,
+    };
+
+    Color _catColor(String cat) => switch (cat) {
+      'office_checkout'  => const Color(0xFF1A73E8),
+      'client_check_in'  => const Color(0xFF16A34A),
+      'checkout'         => const Color(0xFF9333EA),
+      'check_in'         => const Color(0xFF0EA5E9),
+      'proof'            => const Color(0xFFF59E0B),
+      'expense'          => const Color(0xFFEF4444),
+      _                  => const Color(0xFF64748B),
+    };
+
+    final selfies = visit.attachments
+        .where((a) => selfieCategories.contains('${a['category']}'))
+        .toList();
+    final others = visit.attachments
+        .where((a) => !selfieCategories.contains('${a['category']}'))
+        .toList();
+
+    // ── Full-screen viewer ────────────────────────────────────────────────────
+    void openViewer(BuildContext ctx, List<Map<String, dynamic>> items, int start) {
+      final pageCtrl = PageController(initialPage: start);
+      showDialog(
+        context: ctx,
+        builder: (_) => Dialog(
+          backgroundColor: Colors.black,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              PageView.builder(
+                controller: pageCtrl,
+                itemCount: items.length,
+                itemBuilder: (_, i) {
+                  final item  = items[i];
+                  final url   = '${item['url'] ?? ''}';
+                  final isImg = item['resource_type'] != 'raw';
+                  final cat   = '${item['category'] ?? ''}';
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: InteractiveViewer(
+                          child: isImg && url.isNotEmpty
+                              ? Image.network(url, fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Center(child: Icon(
+                                        Icons.broken_image_rounded,
+                                        color: Colors.white, size: 64)))
+                              : const Center(child: Icon(
+                                  Icons.insert_drive_file_rounded,
+                                  color: Colors.white, size: 64)),
                         ),
                       ),
-                    );
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Stack(
-                      children: [
-                        if (isImage && url.isNotEmpty)
-                          Image.network(
-                            url,
-                            width: 90, height: 90, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 90, height: 90,
-                              color: Colors.grey.shade200,
-                              child: const Icon(Icons.broken_image_rounded,
-                                  color: Colors.grey),
-                            ),
-                          )
-                        else
-                          Container(
-                            width: 90, height: 90,
-                            color: Colors.grey.shade200,
-                            child: const Icon(Icons.insert_drive_file_rounded,
-                                color: Colors.grey, size: 36),
-                          ),
-                        if (category.isNotEmpty)
-                          Positioned(
-                            bottom: 0, left: 0, right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 2, horizontal: 4),
-                              color: Colors.black54,
-                              child: Text(
-                                category.replaceAll('_', ' '),
-                                style: const TextStyle(
-                                    color: Colors.white, fontSize: 9),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                      ],
+                      // caption
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+                        child: Text(
+                          _catLabel(cat),
+                          style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              // Close
+              Positioned(
+                top: 8, right: 8,
+                child: Material(
+                  color: Colors.black45,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ),
+              ),
+              // Page indicator
+              if (items.length > 1)
+                Positioned(
+                  top: 14, left: 0, right: 0,
+                  child: Center(
+                    child: AnimatedBuilder(
+                      animation: pageCtrl,
+                      builder: (_, __) {
+                        final page = pageCtrl.hasClients
+                            ? (pageCtrl.page?.round() ?? start)
+                            : start;
+                        return Text(
+                          '${page + 1} / ${items.length}',
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
+                        );
+                      },
                     ),
                   ),
-                );
-              },
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ── Single photo tile ─────────────────────────────────────────────────────
+    Widget photoTile(
+      BuildContext ctx,
+      Map<String, dynamic> item,
+      List<Map<String, dynamic>> group,
+      int indexInGroup, {
+      double size = 110,
+    }) {
+      final url    = '${item['url'] ?? ''}';
+      final cat    = '${item['category'] ?? ''}';
+      final isImg  = item['resource_type'] != 'raw';
+      final color  = _catColor(cat);
+      final icon   = _catIcon(cat);
+
+      return GestureDetector(
+        onTap: () => openViewer(ctx, group, indexInGroup),
+        child: Container(
+          width: size,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withAlpha(80), width: 1.5),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              // Image / placeholder
+              if (isImg && url.isNotEmpty)
+                Image.network(
+                  url,
+                  width: size, height: size, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _attachPlaceholder(size, icon, color),
+                )
+              else
+                _attachPlaceholder(size, icon, color),
+
+              // Category label strip at bottom
+              Positioned(
+                bottom: 0, left: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [Colors.black.withAlpha(200), Colors.transparent],
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(icon, color: Colors.white, size: 10),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          _catLabel(cat),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Zoom hint icon (top-right corner)
+              Positioned(
+                top: 4, right: 4,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: Colors.black38,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Icon(Icons.zoom_in_rounded,
+                      color: Colors.white, size: 11),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ── Section builder ───────────────────────────────────────────────────────
+    Widget section(
+      BuildContext ctx,
+      String title,
+      IconData headerIcon,
+      Color headerColor,
+      List<Map<String, dynamic>> items, {
+      double tileSize = 110,
+    }) {
+      if (items.isEmpty) return const SizedBox.shrink();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section header
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: headerColor.withAlpha(25),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(headerIcon, size: 14, color: headerColor),
+            ),
+            const SizedBox(width: 8),
+            Text(title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: headerColor,
+              )),
+            const SizedBox(width: 6),
+            Text('(${items.length})',
+              style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          ]),
+          const SizedBox(height: 10),
+          // Horizontal scroll row of tiles
+          SizedBox(
+            height: tileSize + 4,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (ctx2, i) =>
+                  photoTile(ctx2, items[i], items, i, size: tileSize),
             ),
           ),
         ],
+      );
+    }
+
+    return Builder(builder: (ctx) => EmployeeCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Card header
+          Row(children: [
+            const Icon(Icons.photo_library_outlined, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              'Visit Photos & Documents',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+            ),
+            const Spacer(),
+            Text(
+              '${visit.attachments.length} file${visit.attachments.length == 1 ? '' : 's'}',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+            ),
+          ]),
+
+          // ── Selfies section ──
+          if (selfies.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            section(ctx, 'Selfies', Icons.camera_front_rounded,
+                const Color(0xFF1A73E8), selfies, tileSize: 120),
+          ],
+
+          // ── Proof & documents section ──
+          if (others.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            section(ctx, 'Proof & Documents', Icons.photo_library_rounded,
+                const Color(0xFFF59E0B), others, tileSize: 100),
+          ],
+        ],
       ),
-    );
+    ));
   }
+
+  /// Placeholder shown when an image fails or the file is not an image.
+  Widget _attachPlaceholder(double size, IconData icon, Color color) =>
+      Container(
+        width: size,
+        height: size,
+        color: color.withAlpha(18),
+        child: Center(
+          child: Icon(icon, size: size * 0.35, color: color.withAlpha(160)),
+        ),
+      );
 
   Widget _statusChip(String status) {
     final color = employeeStatusColor(status);
