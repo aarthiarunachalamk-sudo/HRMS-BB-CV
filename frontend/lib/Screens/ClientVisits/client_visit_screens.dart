@@ -221,109 +221,108 @@ class _ClientVisitDashboardScreenState
   Widget build(BuildContext context) {
     final result = _result;
     return ClientVisitTheme(
-      child: RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'VISIT DASHBOARD',
-                        style: TextStyle(
-                          color: ThemeConfig.getTextPrimary(context),
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
+      child: Scaffold(
+        floatingActionButton: (!widget.readOnlyMode && widget.allowCreate)
+          ? FloatingActionButton.extended(
+              onPressed: _create,
+              icon: const Icon(Icons.add_location_alt_rounded),
+              label: const Text('New Visit'),
+            )
+          : null,
+        body: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(16, 16, 16,
+              (!widget.readOnlyMode && widget.allowCreate) ? 90 : 16),
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'VISIT DASHBOARD',
+                          style: TextStyle(
+                            color: ThemeConfig.getTextPrimary(context),
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (result != null)
-              _Summary(
-                summary: result.summary,
-                onInProgress: () => _openStatusList(
-                  'In Progress Visits',
-                  const {'travelling', 'in_progress'},
-                ),
-                onPendingCheckIn: () =>
-                    _openStatusList('Pending Check-In', const {'approved'}),
-                onUpcoming: () =>
-                    _openStatusList('Upcoming Visits', const {'approved'}),
-                onPendingApproval: () =>
-                    _openStatusList('Pending Approval', const {'pending'}),
-                onHistory: () => _openStatusList('Visit History', const {
-                  'completed',
-                  'rejected',
-                }, historyMode: true),
-              ),
-            if (!widget.readOnlyMode && widget.allowCreate) ...[
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _create,
-                  icon: const Icon(Icons.add_location_alt_rounded),
-                  label: const Text('+ New Visit'),
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _statuses.map((status) {
-                  final selected = status == _filter;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      selected: selected,
-                      label: Text(_label(status)),
-                      onSelected: (_) {
-                        setState(() => _filter = status);
-                        _load();
-                      },
+                      ],
                     ),
-                  );
-                }).toList(),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 14),
-            if (_error != null)
-              _Message(
-                icon: Icons.cloud_off_rounded,
-                text: _error!,
-                onRetry: _load,
-              )
-            else if (result == null)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              if (result != null)
+                _Summary(
+                  summary: result.summary,
+                  onInProgress: () => _openStatusList(
+                    'In Progress Visits',
+                    const {'travelling', 'in_progress'},
+                  ),
+                  onPendingCheckIn: () =>
+                      _openStatusList('Pending Check-In', const {'approved'}),
+                  onUpcoming: () =>
+                      _openStatusList('Upcoming Visits', const {'approved'}),
+                  onPendingApproval: () =>
+                      _openStatusList('Pending Approval', const {'pending'}),
+                  onHistory: () => _openStatusList('Visit History', const {
+                    'completed',
+                    'rejected',
+                  }, historyMode: true),
                 ),
-              )
-            else if (result.visits.isEmpty)
-              _Message(
-                icon: Icons.location_off_outlined,
-                text:
-                    'No ${_filter == 'all' ? '' : '${_label(_filter)} '}visits yet.',
-                onRetry: widget.readOnlyMode || !widget.allowCreate
-                    ? _load
-                    : _create,
-              )
-            else
-              ...result.visits.map(
-                (visit) =>
-                    _VisitCard(visit: visit, onTap: () => _openVisit(visit)),
+              const SizedBox(height: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _statuses.map((status) {
+                    final selected = status == _filter;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        selected: selected,
+                        label: Text(_label(status)),
+                        onSelected: (_) {
+                          setState(() => _filter = status);
+                          _load();
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
               ),
-          ],
+              const SizedBox(height: 14),
+              if (_error != null)
+                _Message(
+                  icon: Icons.cloud_off_rounded,
+                  text: _error!,
+                  onRetry: _load,
+                )
+              else if (result == null)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(40),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (result.visits.isEmpty)
+                _Message(
+                  icon: Icons.location_off_outlined,
+                  text:
+                      'No ${_filter == 'all' ? '' : '${_label(_filter)} '}visits yet.',
+                  onRetry: widget.readOnlyMode || !widget.allowCreate
+                      ? _load
+                      : _create,
+                )
+              else
+                ...result.visits.map(
+                  (visit) =>
+                      _VisitCard(visit: visit, onTap: () => _openVisit(visit)),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -808,15 +807,44 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   Widget build(BuildContext context) => ClientVisitTheme(
     child: Scaffold(
       appBar: AppBar(title: const Text('Create Visit Request')),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _saving ? null : () => _submit(false),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                  child: const Text('Save draft'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: _saving ? null : () => _submit(true),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                  child: _saving
+                    ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        SizedBox(width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                        SizedBox(width: 8),
+                        Text('Saving…'),
+                      ])
+                    : const Text('Submit request'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            16,
-            16,
-            16 + MediaQuery.of(context).padding.bottom,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           children: [
             _Section(
               title: 'Client',
@@ -1017,24 +1045,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _saving ? null : () => _submit(false),
-                    child: const Text('Save draft'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _saving ? null : () => _submit(true),
-                    child: Text(_saving ? 'Saving…' : 'Submit request'),
-                  ),
-                ),
-              ],
-            ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -1948,6 +1959,10 @@ class _VisitCard extends StatelessWidget {
     this.historyViewerUserId = '',
   });
 
+  Color get _statusColor => employeeStatusColor(visit.status);
+
+  String get _statusLabel => _label(visit.status);
+
   String get _historyDetails {
     if (historyViewerUserId.isEmpty) return '';
     final ownVisit = visit.employeeUserId == historyViewerUserId;
@@ -1960,38 +1975,134 @@ class _VisitCard extends StatelessWidget {
         : visit.approvedBy;
     final role = visit.approvedByRole.isEmpty
         ? ''
-        : '${visit.approvedByRole.toUpperCase()} - ';
+        : '${visit.approvedByRole.toUpperCase()} · ';
     final action = visit.status == 'rejected' ? 'Returned by' : 'Approved by';
-    return '$relation • $action $role$approver';
+    return '$relation · $action $role$approver';
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: EmployeeCard(
-      padding: EdgeInsets.zero,
-      child: ListTile(
-        onTap: onTap,
-        leading: CircleAvatar(
-          backgroundColor: employeeStatusColor(visit.status).withAlpha(35),
-          child: Icon(
-            Icons.business_rounded,
-            color: employeeStatusColor(visit.status),
+  Widget build(BuildContext context) {
+    final isDark = ThemeConfig.isDark(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: isDark ? const Color(0xFF0D1E2E) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        elevation: isDark ? 0 : 1,
+        shadowColor: Colors.black12,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top row: client name + status chip
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Visit icon circle
+                    Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(
+                        color: _statusColor.withAlpha(20),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.business_rounded,
+                        color: _statusColor, size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(visit.clientName,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: ThemeConfig.getTextPrimary(context),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis),
+                          const SizedBox(height: 2),
+                          Text(visit.visitId,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: ThemeConfig.getTextMuted(context),
+                            )),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Status badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _statusColor.withAlpha(20),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _statusColor.withAlpha(60)),
+                      ),
+                      child: Text(_statusLabel,
+                        style: TextStyle(
+                          color: _statusColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        )),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+                // Details row
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 6,
+                  children: [
+                    _detailChip(context, Icons.person_outline, visit.contactPerson),
+                    _detailChip(context, Icons.calendar_today_outlined,
+                      '${visit.scheduledAt.day.toString().padLeft(2,'0')}/'
+                      '${visit.scheduledAt.month.toString().padLeft(2,'0')}/'
+                      '${visit.scheduledAt.year}  '
+                      '${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}'),
+                    _detailChip(context, Icons.directions_car_outlined,
+                      _label(visit.travelMode)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Purpose
+                Text(visit.purpose,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: ThemeConfig.getTextMuted(context),
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+                if (_historyDetails.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(_historyDetails,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: ThemeConfig.getTextMuted(context),
+                      fontStyle: FontStyle.italic,
+                    )),
+                ],
+              ],
+            ),
           ),
         ),
-        title: Text(visit.clientName),
-        subtitle: Text(
-          '${_ymd(visit.scheduledAt)} • ${visit.contactPerson}\n'
-          '${visit.purpose}'
-          '${_historyDetails.isEmpty ? '' : '\n$_historyDetails'}',
-          maxLines: historyViewerUserId.isEmpty ? 2 : 3,
-          overflow: TextOverflow.ellipsis,
-        ),
-        isThreeLine: true,
-        trailing: _StatusChip(visit.status),
       ),
-    ),
-  );
+    );
+  }
+
+  Widget _detailChip(BuildContext context, IconData icon, String label) =>
+    Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 12, color: ThemeConfig.getTextMuted(context)),
+      const SizedBox(width: 4),
+      Text(label, style: TextStyle(fontSize: 12,
+        color: ThemeConfig.getTextMuted(context))),
+    ]);
 }
 
 class _StatusChip extends StatelessWidget {

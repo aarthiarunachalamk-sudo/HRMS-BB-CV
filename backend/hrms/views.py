@@ -7210,8 +7210,18 @@ def superadmin_dashboard_view(request):
 
 @api_view(['GET'])
 def superadmin_notifications_view(request):
-    notifications = _notifications_for_role('superadmin')
-    return Response({'success': True, 'notifications': notifications})
+    user_id = (request.query_params.get('user_id') or '').strip()
+    # Superadmin receives both 'superadmin' role and 'admin' role notifications
+    from django.db.models import Q
+    target = Q(recipient_role='superadmin') | Q(recipient_role='admin')
+    if user_id:
+        target |= Q(recipient_user_id=user_id)
+    notifications = [
+        _notification_payload(item)
+        for item in AppNotification.objects.filter(target).order_by('-created_at')[:50]
+    ]
+    unread_count = AppNotification.objects.filter(target, is_read=False).count()
+    return Response({'success': True, 'notifications': notifications, 'unread_count': unread_count})
 
 
 def _admin_employee_payload_from_account(account):

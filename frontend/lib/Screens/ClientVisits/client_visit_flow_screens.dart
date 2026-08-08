@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+import 'package:flutter/painting.dart' show FontFeature;
 
 import 'dart:convert';
 
@@ -1397,6 +1398,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ), // Scaffold
     ); // ClientVisitTheme
   } // _buildTravelScreen
+  DropdownMenuItem<String> _expenseItem(String value, IconData icon, String label) =>
+      DropdownMenuItem<String>(
+        value: value,
+        child: Row(children: [
+          Icon(icon, size: 18, color: const Color(0xFF1A73E8)),
+          const SizedBox(width: 8),
+          Text(label),
+        ]),
+      );
+
   /// Google Maps style circular map control button (used in travel screen).
   Widget _travelMapButton({required IconData icon, required VoidCallback onTap, Color? color}) {
     return Material(
@@ -2259,33 +2270,55 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     ),
   );
 
-  Widget _stepHeader(ClientVisit visit) => Row(
-    children: [
-      CircleAvatar(
-        backgroundColor: EmployeeColors.blue,
-        child: Text(
-          '${widget.step}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
+  Widget _stepHeader(ClientVisit visit) => Container(
+    margin: const EdgeInsets.only(bottom: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    decoration: BoxDecoration(
+      color: const Color(0xFF1A73E8).withAlpha(15),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: const Color(0xFF1A73E8).withAlpha(30)),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 40, height: 40,
+          decoration: const BoxDecoration(
+            color: Color(0xFF1A73E8),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text('${widget.step}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+              )),
           ),
         ),
-      ),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              visit.clientName,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            Text(visit.visitId),
-          ],
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(visit.clientName,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: ThemeConfig.getTextPrimary(context),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+              Text(visit.visitId,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: ThemeConfig.getTextMuted(context),
+                )),
+            ],
+          ),
         ),
-      ),
-      _statusChip(visit.status),
-    ],
+        _statusChip(visit.status),
+      ],
+    ),
   );
   Widget _visitInfo(ClientVisit visit) => EmployeeCard(
     child: Column(
@@ -2627,18 +2660,37 @@ class _FlowTimerState extends State<_FlowTimer> {
   @override
   Widget build(BuildContext context) {
     final value = DateTime.now().difference(widget.startedAt.toLocal());
-    return EmployeeCard(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+    final h = value.inHours.toString().padLeft(2, '0');
+    final m = (value.inMinutes % 60).toString().padLeft(2, '0');
+    final s = (value.inSeconds % 60).toString().padLeft(2, '0');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A73E8).withAlpha(15),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF1A73E8).withAlpha(40)),
+      ),
+      child: Column(
         children: [
-          const Icon(Icons.timer, color: EmployeeColors.blue),
-          const SizedBox(width: 8),
-          Text(
-            _duration(value),
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(color: EmployeeColors.blue),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.timer_rounded, color: Color(0xFF1A73E8), size: 20),
+              const SizedBox(width: 8),
+              Text('$h:$m:$s',
+                style: const TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A73E8),
+                  letterSpacing: 2,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                )),
+            ],
           ),
+          const SizedBox(height: 4),
+          Text('Visit Timer',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
         ],
       ),
     );

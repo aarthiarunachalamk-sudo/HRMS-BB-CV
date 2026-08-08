@@ -122,7 +122,7 @@ def _notify_visit_submitted(visit):
 
     # Leadership dashboards monitor every raised request. The assigned CEO is
     # excluded from the CEO broadcast to avoid showing the same request twice.
-    for dashboard_role in ('ceo', 'md', 'director', 'admin'):
+    for dashboard_role in ('ceo', 'md', 'director', 'admin', 'superadmin'):
         if dashboard_role == assigned_role:
             continue
         _notify(
@@ -257,7 +257,7 @@ def _notify_visit_progress(visit, *, title, message, notification_type='info', i
             notification_type=notification_type,
             visit=visit,
         )
-    for dashboard_role in ('ceo', 'md', 'director', 'admin'):
+    for dashboard_role in ('ceo', 'md', 'director', 'admin', 'superadmin'):
         if dashboard_role == assigned_role:
             continue
         _notify(

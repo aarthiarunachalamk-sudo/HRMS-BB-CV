@@ -9,8 +9,18 @@ class SaService {
 
   Future<Map<String, dynamic>> fetchDashboard() => _get('/dashboard/');
 
-  Future<Map<String, dynamic>> fetchNotifications() =>
-      _get('/notifications/');
+  Future<Map<String, dynamic>> fetchNotifications({String userId = ''}) =>
+      _get('/notifications/${userId.isNotEmpty ? '?user_id=$userId' : ''}');
+
+  Future<void> markNotificationRead(int pk, {String userId = ''}) async {
+    try {
+      await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/notifications/$pk/read/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': userId, 'role': 'superadmin'}),
+      ).timeout(_timeout);
+    } catch (_) {}
+  }
 
   Future<Map<String, dynamic>> _get(String path) async {
     try {

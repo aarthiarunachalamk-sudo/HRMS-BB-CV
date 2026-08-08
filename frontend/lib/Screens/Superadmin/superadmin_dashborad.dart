@@ -125,6 +125,7 @@ class _SuperAdminDashboardState extends State<SuperAdminDashboard> {
                         _SettingsView(
                           colors: colors,
                           email: widget.email,
+                          userId: widget.userId,
                           onLogout: () => showLogoutConfirmation(
                             context: context,
                             onLogout: _logout,
@@ -928,11 +929,13 @@ class _ReportsView extends StatelessWidget {
 class _SettingsView extends StatelessWidget {
   final _SaColors colors;
   final String email;
+  final String userId;
   final VoidCallback onLogout;
 
   const _SettingsView({
     required this.colors,
     required this.email,
+    required this.userId,
     required this.onLogout,
   });
 
@@ -947,7 +950,7 @@ class _SettingsView extends StatelessWidget {
           icon: Icons.settings_outlined,
         ),
         const SizedBox(height: 12),
-        _NotificationsCard(colors: colors),
+        _NotificationsCard(colors: colors, userId: userId),
         const SizedBox(height: 14),
         _ProfileCard(colors: colors, email: email, onLogout: onLogout),
         const SizedBox(height: 14),
@@ -1741,17 +1744,231 @@ class _ReportListCard extends StatelessWidget {
   }
 }
 
-class _NotificationsCard extends StatelessWidget {
+class _NotificationsCard extends StatefulWidget {
   final _SaColors colors;
+  final String userId;
+  const _NotificationsCard({required this.colors, required this.userId});
+  @override
+  State<_NotificationsCard> createState() => _NotificationsCardState();
+}
 
-  const _NotificationsCard({required this.colors});
+class _NotificationsCardState extends State<_NotificationsCard> {
+  List<Map<String, dynamic>> _notifications = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await SaService().fetchNotifications(userId: widget.userId);
+      final raw = (data['notifications'] as List? ?? []);
+      if (mounted) {
+        setState(() {
+          _notifications = raw.whereType<Map>()
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList();
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() {
+        _error = '$e'.replaceFirst('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  Color _typeColor(String type) => switch (type) {
+    'success'  => const Color(0xFF34A853),
+    'warning'  => const Color(0xFFF59E0B),
+    'error'    => const Color(0xFFEA4335),
+    _          => const Color(0xFF1A73E8),
+  };
+
+  IconData _typeIcon(String? module) => switch (module) {
+    'client_visit' => Icons.directions_car_rounded,
+    'leave'        => Icons.event_busy_rounded,
+    'attendance'   => Icons.access_time_rounded,
+    'payroll'      => Icons.payments_rounded,
+    'recruitment'  => Icons.person_add_rounded,
+    _              => Icons.notifications_rounded,
+  };
+
+  String _timeAgo(String? iso) {
+    if (iso == null || iso.isEmpty) return '';
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt.toLocal());
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  void _onTap(Map<String, dynamic> n, BuildContext ctx) {
+    // Mark read
+    final pk = int.tryParse('${n['id'] ?? ''}');
+    if (pk != null) SaService().markNotificationRead(pk, userId: widget.userId);
+    // Deep-link to client visit
+    final module = '${n['module'] ?? ''}';
+    final refId = int.tryParse('${n['reference_id'] ?? ''}');
+    if (module == 'client_visit' && refId != null) {
+      Navigator.push(ctx, MaterialPageRoute(
+        builder: (_) => ClientVisitDashboardScreen(
+          userId: widget.userId,
+          readOnlyMode: true,
+          allowCreate: false,
+          allowVerification: true,
+          requesterRole: 'superadmin',
+          initialVisitId: refId,
+        ),
+      ));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return _Panel(
-      colors: colors,
-      title: 'Notifications & Announcements',
-      child: _EmptyPanelText(colors: colors, text: 'No notifications found'),
+    final c = widget.colors;
+    final unread = _notifications.where((n) => n['is_read'] != true).length;
+
+    return Container(
+      decoration: _box(c),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+            child: Row(children: [
+              Icon(Icons.notifications_rounded, size: 18, color: c.primary),
+              const SizedBox(width: 8),
+              Text('Notifications',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: c.text)),
+              if (unread > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: c.danger,
+                    borderRadius: BorderRadius.circular(20)),
+                  child: Text('$unread',
+                    style: const TextStyle(color: Colors.white,
+                      fontSize: 10, fontWeight: FontWeight.w800)),
+                ),
+              ],
+              const Spacer(),
+              IconButton(
+                icon: Icon(Icons.refresh_rounded, size: 18, color: c.muted),
+                onPressed: _load,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ]),
+          ),
+
+          // Body
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_error != null)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(_error!, style: TextStyle(color: c.danger, fontSize: 12)),
+            )
+          else if (_notifications.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(child: Text('No notifications yet.',
+                style: TextStyle(color: c.muted, fontSize: 13))),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _notifications.length > 20 ? 20 : _notifications.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: c.border),
+              itemBuilder: (ctx, i) {
+                final n = _notifications[i];
+                final isRead = n['is_read'] == true;
+                final module = '${n['module'] ?? ''}';
+                final typeColor = _typeColor('${n['notification_type'] ?? 'info'}');
+                final isVisit = module == 'client_visit';
+
+                return InkWell(
+                  onTap: isVisit ? () => _onTap(n, ctx) : null,
+                  child: Container(
+                    color: isRead ? null : c.primary.withAlpha(8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Icon
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            color: typeColor.withAlpha(20),
+                            shape: BoxShape.circle),
+                          child: Icon(_typeIcon(module), size: 18, color: typeColor),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                Expanded(
+                                  child: Text('${n['title'] ?? ''}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: isRead ? FontWeight.w500 : FontWeight.w700,
+                                      color: c.text),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis)),
+                                Text(_timeAgo('${n['created_at'] ?? ''}'),
+                                  style: TextStyle(fontSize: 10, color: c.muted)),
+                              ]),
+                              const SizedBox(height: 2),
+                              Text('${n['message'] ?? ''}',
+                                style: TextStyle(fontSize: 12, color: c.muted),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
+                              if (isVisit) ...[
+                                const SizedBox(height: 4),
+                                Row(children: [
+                                  Icon(Icons.open_in_new, size: 11, color: c.primary),
+                                  const SizedBox(width: 3),
+                                  Text('View visit',
+                                    style: TextStyle(fontSize: 11, color: c.primary,
+                                      fontWeight: FontWeight.w600)),
+                                ]),
+                              ],
+                            ],
+                          ),
+                        ),
+                        if (!isRead)
+                          Container(
+                            width: 7, height: 7,
+                            margin: const EdgeInsets.only(left: 6, top: 4),
+                            decoration: BoxDecoration(
+                              color: c.primary, shape: BoxShape.circle),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
     );
   }
 }
