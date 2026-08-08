@@ -1974,6 +1974,15 @@ class _VisitCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = ThemeConfig.isDark(context);
+    final hasPhoto = visit.employeePhotoUrl.isNotEmpty;
+    final empName = visit.employeeName.trim();
+    final parts = empName.split(' ');
+    final initials = parts.length >= 2
+        ? '${parts.first[0]}${parts.last[0]}'.toUpperCase()
+        : empName.isNotEmpty
+            ? empName[0].toUpperCase()
+            : '?';
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -1989,25 +1998,57 @@ class _VisitCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top row: client name + status chip
+                // Top row: employee avatar + client name + status chip
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Visit icon circle
+                    // Employee profile photo / initials avatar
                     Container(
-                      width: 42, height: 42,
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
                         color: _statusColor.withAlpha(20),
                         shape: BoxShape.circle,
+                        border: Border.all(
+                            color: _statusColor.withAlpha(60), width: 1.5),
                       ),
-                      child: Icon(Icons.business_rounded,
-                        color: _statusColor, size: 20),
+                      clipBehavior: Clip.antiAlias,
+                      child: hasPhoto
+                          ? Image.network(
+                              visit.employeePhotoUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Center(
+                                child: Text(initials,
+                                    style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
+                                        color: _statusColor)),
+                              ),
+                            )
+                          : Center(
+                              child: Text(initials,
+                                  style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: _statusColor)),
+                            ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Employee name (shown if reviewer/different user)
+                          if (empName.isNotEmpty &&
+                              visit.employeeUserId != historyViewerUserId)
+                            Text(empName,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: ThemeConfig.getTextMuted(context),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
                           Text(visit.clientName,
                             style: TextStyle(
                               fontSize: 15,

@@ -1018,6 +1018,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         [selfiePath],
         fallbackCategory: 'proof',
       );
+      // Upload drawn signature as a proof image if the pad was used
+      if (_signaturePadController.isNotEmpty) {
+        final pngBytes = await _signaturePadController.toPngBytes();
+        if (pngBytes != null) {
+          final tmp = await getTemporaryDirectory();
+          final sigFile = File(
+            '${tmp.path}/client_signature_${DateTime.now().millisecondsSinceEpoch}.png',
+          );
+          await sigFile.writeAsBytes(pngBytes);
+          await widget.service.uploadFiles(
+            widget.userId, widget.visitId, 'proof', [sigFile.path]);
+          await sigFile.delete();
+        }
+      }
       await widget.service.action(widget.userId, widget.visitId, 'complete', {
         ...position,
         'outcome': _outcome.text.trim(),
@@ -2292,17 +2306,94 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               maxLines: 3,
               decoration: const InputDecoration(labelText: 'Outcome *'),
             ),
+            const SizedBox(height: 12),
             TextField(
               controller: _followUp,
               readOnly: widget.readOnlyMode,
               maxLines: 2,
               decoration: const InputDecoration(labelText: 'Follow-up'),
             ),
-            TextField(
-              controller: _signature,
-              readOnly: widget.readOnlyMode,
-              decoration: const InputDecoration(labelText: 'Client Signature / OTP'),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+
+            // ── Client Signature (hand-drawn pad) ──────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Client Signature',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                if (!widget.readOnlyMode &&
+                    _signaturePadController.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: () =>
+                        setState(() => _signaturePadController.clear()),
+                    icon: const Icon(Icons.refresh_rounded, size: 14),
+                    label: const Text('Clear',
+                        style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 6),
+                      foregroundColor: Colors.redAccent,
+                    ),
+                  ),
+              ],
             ),
+            const SizedBox(height: 4),
+            Text(
+              widget.readOnlyMode
+                  ? 'Signature captured'
+                  : 'Ask the client to sign in the box below',
+              style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey.shade500,
+                  fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 8),
+            // Signature canvas
+            Container(
+              height: 140,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(
+                    color: Colors.grey.shade400, width: 1.5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: widget.readOnlyMode
+                  ? Center(
+                      child: Text('—',
+                          style:
+                              TextStyle(color: Colors.grey.shade400)),
+                    )
+                  : Signature(
+                      controller: _signaturePadController,
+                      backgroundColor: Colors.white,
+                      width: double.infinity,
+                      height: 140,
+                    ),
+            ),
+            if (!widget.readOnlyMode &&
+                _signaturePadController.isEmpty) ...[
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.gesture_rounded,
+                      size: 13, color: Colors.grey.shade400),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Draw signature above',
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.grey.shade400),
+                  ),
+                ],
+              ),
+            ],
+
             const SizedBox(height: 12),
             if (widget.readOnlyMode)
               _monitoringNotice()
