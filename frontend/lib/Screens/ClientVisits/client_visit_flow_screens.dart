@@ -2580,6 +2580,115 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ],
     ),
   );
+  /// Gallery of all uploaded attachments — shown on the completed stage (12)
+  /// for every role including SuperAdmin and reviewers.
+  Widget _attachmentsGallery(ClientVisit visit) {
+    final attachments = visit.attachments;
+    return EmployeeCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Attachments (${attachments.length})',
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 90,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: attachments.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (ctx, i) {
+                final item = attachments[i];
+                final url = '${item['url'] ?? ''}';
+                final category = '${item['category'] ?? ''}';
+                final isImage = item['resource_type'] != 'raw';
+                return GestureDetector(
+                  onTap: () {
+                    if (url.isEmpty) return;
+                    showDialog(
+                      context: ctx,
+                      builder: (_) => Dialog(
+                        backgroundColor: Colors.black,
+                        insetPadding: const EdgeInsets.all(12),
+                        child: Stack(
+                          children: [
+                            InteractiveViewer(
+                              child: isImage
+                                  ? Image.network(url, fit: BoxFit.contain,
+                                      errorBuilder: (_, __, ___) =>
+                                          const Center(child: Icon(
+                                            Icons.broken_image_rounded,
+                                            color: Colors.white, size: 48)))
+                                  : const Center(child: Icon(
+                                      Icons.insert_drive_file_rounded,
+                                      color: Colors.white, size: 64)),
+                            ),
+                            Positioned(
+                              top: 6, right: 6,
+                              child: IconButton(
+                                icon: const Icon(Icons.close_rounded,
+                                    color: Colors.white),
+                                onPressed: () => Navigator.of(ctx).pop(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Stack(
+                      children: [
+                        if (isImage && url.isNotEmpty)
+                          Image.network(
+                            url,
+                            width: 90, height: 90, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 90, height: 90,
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.broken_image_rounded,
+                                  color: Colors.grey),
+                            ),
+                          )
+                        else
+                          Container(
+                            width: 90, height: 90,
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.insert_drive_file_rounded,
+                                color: Colors.grey, size: 36),
+                          ),
+                        if (category.isNotEmpty)
+                          Positioned(
+                            bottom: 0, left: 0, right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 2, horizontal: 4),
+                              color: Colors.black54,
+                              child: Text(
+                                category.replaceAll('_', ' '),
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 9),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _statusChip(String status) {
     final color = employeeStatusColor(status);
     return Container(
