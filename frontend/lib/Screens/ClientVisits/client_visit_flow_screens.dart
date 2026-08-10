@@ -1174,23 +1174,29 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             Positioned.fill(
               child: _LiveMapView(
                 mapController: _mapController,
-                routePoints: const [],
+                routePoints: _liveRoutePoints,
                 origin: origin,
                 current: current,
                 destination: _destinationLatLng,
                 fullScreen: true,
+                navigationMode: _navMode,
+                showEtaOverlay: false,
                 selectedRouteIndex: _selectedRouteIndex,
                 onEtaUpdate: (eta, dist) {
-                  if (mounted) setState(() {
-                    _etaText = eta;
-                    _distanceText = dist;
-                  });
+                  if (mounted) {
+                    setState(() {
+                      _etaText = eta;
+                      _distanceText = dist;
+                    });
+                  }
                 },
                 onRoutesReady: (routes, idx) {
-                  if (mounted) setState(() {
-                    _routeOptions = routes;
-                    _selectedRouteIndex = idx;
-                  });
+                  if (mounted) {
+                    setState(() {
+                      _routeOptions = routes;
+                      _selectedRouteIndex = idx;
+                    });
+                  }
                 },
               ),
             ),
@@ -1198,12 +1204,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             // ── Google Maps style top search bar ─────────────────────
             Positioned(
               top: safePad.top + 8,
-              left: 12,
-              right: 12,
+              left: 30,
+              right: 30,
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(26),
                   boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))],
                 ),
                 child: Column(
@@ -1213,31 +1219,46 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                       child: Row(children: [
-                        // Only the arrow navigates back
-                        GestureDetector(
-                          onTap: () => Navigator.of(context).maybePop(),
-                          child: const Icon(Icons.arrow_back, size: 20, color: Color(0xFF5F6368)),
-                        ),
-                        const SizedBox(width: 12),
                         const Icon(Icons.circle, size: 11, color: Color(0xFF1A73E8)),
                         const SizedBox(width: 10),
                         const Expanded(child: Text('Your location',
                           style: TextStyle(fontSize: 14, color: Color(0xFF1A73E8), fontWeight: FontWeight.w500))),
-                        const Icon(Icons.more_vert, size: 18, color: Color(0xFF5F6368)),
+                        PopupMenuButton<String>(
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF5F6368)),
+                          onSelected: (value) {
+                            if (value == 'routes') _showRouteOptions();
+                            if (value == 'overview') _fitMapBounds();
+                            if (value == 'close') Navigator.of(context).maybePop();
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: 'routes', child: Text('Route options')),
+                            PopupMenuItem(value: 'overview', child: Text('Route overview')),
+                            PopupMenuItem(value: 'close', child: Text('Close directions')),
+                          ],
+                        ),
                       ]),
                     ),
                     // Dotted separator
                     Padding(
-                      padding: const EdgeInsets.only(left: 44),
-                      child: Row(children: List.generate(3, (_) =>
-                        Container(width: 3, height: 3, margin: const EdgeInsets.only(right: 3),
-                          decoration: const BoxDecoration(color: Color(0xFFBDBDBD), shape: BoxShape.circle)))),
+                      padding: const EdgeInsets.only(left: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: List.generate(3, (_) => Container(
+                          width: 3,
+                          height: 3,
+                          margin: const EdgeInsets.only(bottom: 2),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFBDBDBD),
+                            shape: BoxShape.circle,
+                          ),
+                        )),
+                      ),
                     ),
                     // Destination row
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                       child: Row(children: [
-                        const SizedBox(width: 32),
                         const Icon(Icons.location_on, size: 18, color: Color(0xFFEA4335)),
                         const SizedBox(width: 10),
                         Expanded(
@@ -1268,26 +1289,32 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             // ── Map controls (right side) ─────────────────────────
             Positioned(
               right: 10,
-              bottom: 220,
+              bottom: _navMode ? 190 : 330,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _travelMapButton(icon: Icons.add, onTap: () {
-                    try { _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1); } catch (_) {}
-                  }),
-                  const SizedBox(height: 4),
-                  _travelMapButton(icon: Icons.remove, onTap: () {
-                    try { _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1); } catch (_) {}
-                  }),
-                  const SizedBox(height: 8),
-                  _travelMapButton(icon: Icons.explore_outlined, onTap: _fitMapBounds),
-                  const SizedBox(height: 4),
+                  if (!_navMode) ...[
+                    _travelMapButton(
+                      icon: Icons.layers_rounded,
+                      color: const Color(0xFF006A72),
+                      onTap: _showMapOptions,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   _travelMapButton(
                     icon: Icons.my_location,
                     color: const Color(0xFF1A73E8),
                     onTap: () {
                       if (_lastTrackedPosition != null) {
-                        try { _mapController.move(LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude), 15); } catch (_) {}
+                        try {
+                          _mapController.move(
+                            LatLng(
+                              _lastTrackedPosition!.latitude,
+                              _lastTrackedPosition!.longitude,
+                            ),
+                            _navMode ? 17 : 15,
+                          );
+                        } catch (_) {}
                       }
                     }),
                 ],
@@ -1311,146 +1338,66 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       width: 36, height: 4,
                       decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
                     )),
-                    // Route options
-                    if (_routeOptions.isNotEmpty)
+                    if (!_navMode) ...[
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                        child: Column(
-                          children: List.generate(_routeOptions.length, (i) {
-                            final r = _routeOptions[i];
-                            final isSel = i == _selectedRouteIndex;
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() => _selectedRouteIndex = i);
-                                try {
-                                  if (r.points.length >= 2)
-                                    _mapController.fitCamera(CameraFit.bounds(
-                                      bounds: LatLngBounds.fromPoints(r.points),
-                                      padding: const EdgeInsets.fromLTRB(
-                                          40, 160, 40, 300)));
-                                } catch (_) {}
-                              },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: isSel
-                                      ? const Color(0xFF1967D2)
-                                      : Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: isSel
-                                      ? null
-                                      : Border.all(
-                                          color: Colors.grey.shade300),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Drive',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF202124),
                                 ),
-                                child: Row(children: [
-                                  // Car icon
-                                  Icon(Icons.directions_car_rounded,
-                                    color: isSel
-                                        ? Colors.white
-                                        : Colors.grey.shade600,
-                                    size: 22),
-                                  const SizedBox(width: 12),
-                                  // Time + distance + via
-                                  Expanded(child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.baseline,
-                                        textBaseline:
-                                            TextBaseline.alphabetic,
-                                        children: [
-                                          Text(r.durationLabel,
-                                            style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w900,
-                                              color: isSel
-                                                  ? Colors.white
-                                                  : const Color(0xFF202124),
-                                            )),
-                                          const SizedBox(width: 6),
-                                          Text(r.distanceLabel,
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
-                                              color: isSel
-                                                  ? Colors.white70
-                                                  : const Color(0xFF5F6368),
-                                            )),
-                                          const SizedBox(width: 6),
-                                          // Fastest badge
-                                          if (i == 0)
-                                            Container(
-                                              padding: const EdgeInsets
-                                                  .symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: isSel
-                                                    ? Colors.white24
-                                                    : const Color(0xFF34A853)
-                                                        .withAlpha(25),
-                                                borderRadius:
-                                                    BorderRadius.circular(4)),
-                                              child: Text('Fastest',
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: isSel
-                                                      ? Colors.white
-                                                      : const Color(
-                                                          0xFF34A853),
-                                                ))),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 2),
-                                      // Via label
-                                      if (r.via.isNotEmpty)
-                                        Text('via ${r.via}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: isSel
-                                                ? Colors.white70
-                                                : const Color(0xFF5F6368),
-                                          )),
-                                      // Toll row
-                                      if (r.hasTolls)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                              top: 3),
-                                          child: Row(children: [
-                                            Icon(Icons.toll_rounded,
-                                              size: 12,
-                                              color: isSel
-                                                  ? Colors.orangeAccent
-                                                  : const Color(0xFFF29900)),
-                                            const SizedBox(width: 3),
-                                            Text('Tolls',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: isSel
-                                                    ? Colors.orangeAccent
-                                                    : const Color(
-                                                        0xFFF29900))),
-                                          ]),
-                                        ),
-                                    ],
-                                  )),
-                                  // Selected checkmark
-                                  if (isSel)
-                                    const Icon(Icons.check_circle_rounded,
-                                        color: Colors.white, size: 22),
-                                ]),
                               ),
-                            );
-                          }),
+                            ),
+                            _travelSheetAction(
+                              icon: Icons.tune_rounded,
+                              tooltip: 'Route options',
+                              onTap: _showRouteOptions,
+                            ),
+                            _travelSheetAction(
+                              icon: Icons.share_rounded,
+                              tooltip: 'Share directions',
+                              onTap: () => _shareDirections(visit),
+                            ),
+                            _travelSheetAction(
+                              icon: Icons.close_rounded,
+                              tooltip: 'Close directions',
+                              onTap: () => Navigator.of(context).maybePop(),
+                            ),
+                          ],
                         ),
                       ),
+                      SizedBox(
+                        height: 58,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _travelMode(
+                              icon: Icons.directions_car_rounded,
+                              label: _etaText.isEmpty ? 'Drive' : _etaText,
+                              selected: true,
+                            ),
+                            _travelMode(
+                              icon: Icons.pedal_bike_rounded,
+                              label: _estimatedModeEta(15),
+                            ),
+                            _travelMode(
+                              icon: Icons.directions_transit_rounded,
+                              label: '—',
+                            ),
+                            _travelMode(
+                              icon: Icons.directions_walk_rounded,
+                              label: _estimatedModeEta(4.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    // Route options
                     const Divider(height: 1),
                     // ── Google Maps style Drive header ──────────────────
                     Padding(
@@ -1481,7 +1428,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                                     if (_distanceText.isNotEmpty) ...[
                                       const SizedBox(width: 8),
                                       Text(
-                                        '(${_distanceText})',
+                                        '($_distanceText)',
                                         style: const TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w500,
@@ -1553,7 +1500,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                               child: Column(
                                 children: [
                                   Text(
-                                    '${(_lastTrackedPosition!.speed * 3.6).toStringAsFixed(0)}',
+                                    (_lastTrackedPosition!.speed * 3.6)
+                                        .toStringAsFixed(0),
                                     style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w900,
@@ -1623,7 +1571,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                             style: FilledButton.styleFrom(
                               backgroundColor: _navMode
                                   ? Colors.grey.shade700
-                                  : const Color(0xFF34A853),
+                                  : const Color(0xFF008C95),
                               padding: const EdgeInsets.symmetric(
                                   vertical: 14),
                               shape: RoundedRectangleBorder(
@@ -1659,8 +1607,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        // Reached client
-                        if (!widget.readOnlyMode)
+                        // Arrival is only valid after turn-by-turn mode starts.
+                        if (!widget.readOnlyMode && _navMode)
                           Expanded(
                             flex: 3,
                             child: FilledButton.icon(
@@ -1682,6 +1630,42 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                                       fontWeight: FontWeight.w700)),
                             ),
                           ),
+                        if (!widget.readOnlyMode && !_navMode) ...[
+                          Expanded(
+                            flex: 2,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF006A72),
+                                backgroundColor: const Color(0xFFDDF7FA),
+                                side: BorderSide.none,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                              ),
+                              onPressed: () => _message(
+                                'The assigned client is the required visit stop.',
+                              ),
+                              icon: const Icon(Icons.add_location_alt_outlined, size: 19),
+                              label: const Text(
+                                'Add stops',
+                                maxLines: 1,
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton.filled(
+                            tooltip: 'Share directions',
+                            style: IconButton.styleFrom(
+                              backgroundColor: const Color(0xFFDDF7FA),
+                              foregroundColor: const Color(0xFF006A72),
+                              minimumSize: const Size(48, 48),
+                            ),
+                            onPressed: () => _shareDirections(visit),
+                            icon: const Icon(Icons.share_rounded),
+                          ),
+                        ],
                         if (widget.readOnlyMode)
                           Expanded(
                               flex: 3, child: _monitoringNotice()),
@@ -1741,6 +1725,204 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ),
       ),
     );
+  }
+
+  void _showMapOptions() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Map details',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  width: 56,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F0FE),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF1A73E8), width: 2),
+                  ),
+                  child: const Icon(Icons.map_rounded, color: Color(0xFF1A73E8)),
+                ),
+                title: const Text('Default'),
+                subtitle: const Text('Road map'),
+                trailing: const Icon(Icons.check_circle, color: Color(0xFF1A73E8)),
+                onTap: () => Navigator.pop(sheetContext),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _travelSheetAction({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Material(
+        color: const Color(0xFFF1F3F4),
+        shape: const CircleBorder(),
+        child: IconButton(
+          tooltip: tooltip,
+          onPressed: onTap,
+          icon: Icon(icon, size: 21, color: const Color(0xFF202124)),
+        ),
+      ),
+    );
+  }
+
+  Widget _travelMode({
+    required IconData icon,
+    required String label,
+    bool selected = false,
+  }) {
+    final color = selected ? const Color(0xFF007B83) : const Color(0xFF5F6368);
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: selected
+          ? _fitMapBounds
+          : () => _message('This client visit currently supports driving routes.'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFE0F7FA) : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _estimatedModeEta(double speedKmh) {
+    if (_routeOptions.isEmpty ||
+        _selectedRouteIndex >= _routeOptions.length) {
+      return '—';
+    }
+    final minutes =
+        (_routeOptions[_selectedRouteIndex].distanceKm / speedKmh * 60).ceil();
+    if (minutes < 60) return '$minutes min';
+    final hours = minutes ~/ 60;
+    final remainder = minutes % 60;
+    return remainder == 0 ? '$hours hr' : '$hours hr $remainder';
+  }
+
+  void _chooseRoute(int index) {
+    if (index < 0 || index >= _routeOptions.length) return;
+    final route = _routeOptions[index];
+    setState(() {
+      _selectedRouteIndex = index;
+      _etaText = route.durationLabel;
+      _distanceText = route.distanceLabel;
+    });
+    try {
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(route.points),
+          padding: const EdgeInsets.fromLTRB(40, 150, 40, 330),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  void _showRouteOptions() {
+    if (_routeOptions.isEmpty) {
+      _message('Route options are still loading.');
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Route options',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              ...List.generate(_routeOptions.length, (index) {
+                final route = _routeOptions[index];
+                final selected = index == _selectedRouteIndex;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.directions_car_rounded,
+                    color: selected
+                        ? const Color(0xFF1A73E8)
+                        : const Color(0xFF5F6368),
+                  ),
+                  title: Text(
+                    '${route.durationLabel} (${route.distanceLabel})',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    index == 0
+                        ? 'Fastest route${route.via.isEmpty ? '' : ', via ${route.via}'}'
+                        : (route.via.isEmpty
+                              ? 'Alternate route'
+                              : 'via ${route.via}'),
+                  ),
+                  trailing: selected
+                      ? const Icon(Icons.check, color: Color(0xFF1A73E8))
+                      : null,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _chooseRoute(index);
+                  },
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareDirections(ClientVisit visit) async {
+    final route = _routeOptions.isNotEmpty &&
+            _selectedRouteIndex < _routeOptions.length
+        ? _routeOptions[_selectedRouteIndex]
+        : null;
+    final summary = StringBuffer('Directions to ${visit.clientName}');
+    if (visit.address.trim().isNotEmpty) summary.write('\n${visit.address.trim()}');
+    if (route != null) {
+      summary.write('\n${route.durationLabel}, ${route.distanceLabel}');
+    }
+    await Clipboard.setData(ClipboardData(text: summary.toString()));
+    if (mounted) _message('Directions copied. You can paste them into any app.');
   }
 
   /// Google Maps style circular map control button.
@@ -4491,6 +4673,8 @@ class _LiveMapView extends StatefulWidget {
   final LatLng? current;
   final LatLng? destination;
   final bool fullScreen;
+  final bool navigationMode;
+  final bool showEtaOverlay;
   final void Function(String eta, String distance)? onEtaUpdate;
   final void Function(List<_RouteOption> routes, int selectedIndex)? onRoutesReady;
   final int selectedRouteIndex;
@@ -4502,6 +4686,8 @@ class _LiveMapView extends StatefulWidget {
     this.current,
     this.destination,
     this.fullScreen = false,
+    this.navigationMode = false,
+    this.showEtaOverlay = false,
     this.onEtaUpdate,
     this.onRoutesReady,
     this.selectedRouteIndex = 0,
@@ -4587,9 +4773,9 @@ class _LiveMapViewState extends State<_LiveMapView>
         }
         if (highways.length >= 3) break;
       }
-      if (highways.isNotEmpty) return 'via ${highways.take(2).join(' and ')}';
+      if (highways.isNotEmpty) return highways.take(2).join(' and ');
     } catch (_) {}
-    return 'via road';
+    return 'road';
   }
 
   /// Fetches up to 3 driving route alternatives from OSRM.
@@ -4707,6 +4893,9 @@ class _LiveMapViewState extends State<_LiveMapView>
     final dst = widget.destination;
     final validDst = (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0)) ? dst : null;
     final heading = (cur != null && validDst != null) ? _bearing(cur, validDst) : 0.0;
+    final currentColor = widget.navigationMode
+        ? const Color(0xFF34A853)
+        : const Color(0xFF1A73E8);
 
     final mapStack = Stack(
       children: [
@@ -4849,10 +5038,10 @@ class _LiveMapViewState extends State<_LiveMapView>
                       strokeCap: StrokeCap.round,
                       strokeJoin: StrokeJoin.round,
                     ),
-                    // Bold blue fill — matches Google Maps
+                    // Deep indigo route fill used by the reference preview.
                     Polyline(
                       points: _displayRoute,
-                      color: const Color(0xFF1A73E8),
+                      color: const Color(0xFF3F00D7),
                       strokeWidth: 10,
                       strokeCap: StrokeCap.round,
                       strokeJoin: StrokeJoin.round,
@@ -4887,7 +5076,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                       point: dst,
                       width: 44,
                       height: 58,
-                      alignment: Alignment.topCenter,
+                      alignment: Alignment.bottomCenter,
                       child: Stack(
                         alignment: Alignment.topCenter,
                         children: [
@@ -4933,7 +5122,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                               width: 64 * _pulseAnim.value,
                               height: 64 * _pulseAnim.value,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF34A853).withAlpha(
+                                color: currentColor.withAlpha(
                                   (50 * (1.2 - _pulseAnim.value)).round().clamp(0, 255),
                                 ),
                                 shape: BoxShape.circle,
@@ -4944,10 +5133,10 @@ class _LiveMapViewState extends State<_LiveMapView>
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF34A853).withAlpha(50),
+                                color: currentColor.withAlpha(50),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: const Color(0xFF34A853).withAlpha(100),
+                                  color: currentColor.withAlpha(100),
                                   width: 1.5,
                                 ),
                               ),
@@ -4959,7 +5148,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                                 width: 24,
                                 height: 24,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF34A853),
+                                  color: currentColor,
                                   shape: BoxShape.circle,
                                   border: Border.all(color: Colors.white, width: 2.5),
                                   boxShadow: const [
@@ -4970,8 +5159,10 @@ class _LiveMapViewState extends State<_LiveMapView>
                                     ),
                                   ],
                                 ),
-                                child: const Icon(
-                                  Icons.navigation,
+                                child: Icon(
+                                  widget.navigationMode
+                                      ? Icons.navigation
+                                      : Icons.circle,
                                   color: Colors.white,
                                   size: 14,
                                 ),
@@ -4988,7 +5179,8 @@ class _LiveMapViewState extends State<_LiveMapView>
         ),
 
         // ── LIVE badge ───────────────────────────────────────────────
-        Positioned(
+        if (!widget.fullScreen)
+          Positioned(
           left: 10,
           top: 10,
           child: Container(
@@ -5018,7 +5210,8 @@ class _LiveMapViewState extends State<_LiveMapView>
         ),
 
         // ── Map control buttons (right side, Google Maps style) ─────
-        Positioned(
+        if (!widget.fullScreen)
+          Positioned(
           right: 10,
           bottom: widget.fullScreen ? 260 : 10,
           child: Column(
@@ -5109,7 +5302,7 @@ class _LiveMapViewState extends State<_LiveMapView>
           ),
 
         // ── ETA pill (full-screen mode, above bottom sheet) ──────────
-        if (widget.fullScreen && _selected != null)
+        if (widget.showEtaOverlay && _selected != null)
           Positioned(
             left: 12,
             right: 60,
