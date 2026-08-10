@@ -114,6 +114,24 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            "hrms/maps"
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "isConfigured") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val applicationInfo = packageManager.getApplicationInfo(
+                packageName,
+                android.content.pm.PackageManager.GET_META_DATA
+            )
+            val apiKey = applicationInfo.metaData
+                ?.getString("com.google.android.geo.API_KEY")
+                ?.trim()
+            result.success(!apiKey.isNullOrEmpty())
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             "hrms/files"
         ).setMethodCallHandler { call, result ->
             if (call.method == "openUrl") {

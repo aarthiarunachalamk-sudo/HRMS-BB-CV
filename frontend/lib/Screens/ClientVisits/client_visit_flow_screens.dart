@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -289,6 +290,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   Position? _lastTrackedPosition;
   final List<LatLng> _liveRoutePoints = [];
   final MapController _mapController = MapController();
+  final _GoogleMapBridge _liveGoogleMapBridge = _GoogleMapBridge();
   LatLng? _destinationLatLng;
   bool _geocodingDone = false;
   String? _trackingError;
@@ -579,6 +581,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     }
     points.addAll(_additionalStops);
 
+    unawaited(_liveGoogleMapBridge.fit(points, padding: 100));
+
     if (points.length < 2) {
       // At least move to the single known point
       if (points.length == 1) {
@@ -721,6 +725,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 });
               }
               // Pan map to follow current position.
+              unawaited(_liveGoogleMapBridge.move(point, _navMode ? 17 : 15));
               try {
                 if (_navMode) {
                   // Navigation mode: always follow at zoom 17
@@ -1776,6 +1781,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   'travel-map-$_routeReversed-${_additionalStops.length}',
                 ),
                 mapController: _mapController,
+                googleMapBridge: _liveGoogleMapBridge,
                 routePoints: _liveRoutePoints,
                 waypoints: _routeReversed
                     ? _additionalStops.reversed.toList()
@@ -1840,9 +1846,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   icon: Icons.explore_rounded,
                   rotationDegrees: -_mapRotation,
                   onTap: () {
-                    try {
-                      _mapController.rotate(0);
-                    } catch (_) {}
+                    unawaited(_liveGoogleMapBridge.rotateNorth());
                     setState(() => _mapRotation = 0);
                   },
                 ),
@@ -1855,15 +1859,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 color: const Color(0xFF1A73E8),
                 onTap: () {
                   if (_lastTrackedPosition != null) {
-                    try {
-                      _mapController.move(
+                    unawaited(
+                      _liveGoogleMapBridge.move(
                         LatLng(
                           _lastTrackedPosition!.latitude,
                           _lastTrackedPosition!.longitude,
                         ),
                         _navMode ? 17 : 15,
-                      );
-                    } catch (_) {}
+                      ),
+                    );
                   }
                 },
               ),
@@ -2206,15 +2210,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                                   _navMode = !_navMode;
                                 });
                                 if (_navMode && _lastTrackedPosition != null) {
-                                  try {
-                                    _mapController.move(
+                                  unawaited(
+                                    _liveGoogleMapBridge.move(
                                       LatLng(
                                         _lastTrackedPosition!.latitude,
                                         _lastTrackedPosition!.longitude,
                                       ),
                                       17,
-                                    );
-                                  } catch (_) {}
+                                    ),
+                                  );
                                 } else if (!_navMode) {
                                   _fitMapBounds();
                                 }
@@ -2793,6 +2797,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       _etaText = route.durationLabel;
       _distanceText = route.distanceLabel;
     });
+    unawaited(_liveGoogleMapBridge.fit(route.points, padding: 100));
     try {
       _mapController.fitCamera(
         CameraFit.bounds(
@@ -3035,6 +3040,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           children: [
             _LiveMapView(
               mapController: _mapController,
+              googleMapBridge: _liveGoogleMapBridge,
               routePoints: _liveRoutePoints,
               origin:
                   _visit != null &&
@@ -5757,6 +5763,7 @@ class _ReviewerLiveMap extends StatefulWidget {
 
 class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
   final MapController _mapController = MapController();
+  final _GoogleMapBridge _googleMapBridge = _GoogleMapBridge();
   Timer? _pollTimer;
   List<LatLng> _routePoints = [];
   LatLng? _currentPosition;
@@ -5839,6 +5846,7 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
       if (_currentPosition != null) _currentPosition!,
       if (_destination != null) _destination!,
     ];
+    unawaited(_googleMapBridge.fit(points, padding: 50));
     try {
       _mapController.rotate(0);
       if (points.length >= 2) {
@@ -5956,6 +5964,7 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
                   )
                 : _LiveMapView(
                     mapController: _mapController,
+                    googleMapBridge: _googleMapBridge,
                     routePoints: _routePoints,
                     origin: _routePoints.isNotEmpty ? _routePoints.first : null,
                     current: _currentPosition,
@@ -6427,6 +6436,82 @@ class _RouteOption {
   }
 }
 
+class _GoogleMapBridge {
+  gmaps.GoogleMapController? _controller;
+  gmaps.CameraPosition? _camera;
+
+  void attach(gmaps.GoogleMapController controller) {
+    _controller = controller;
+  }
+
+  void updateCamera(gmaps.CameraPosition camera) {
+    _camera = camera;
+  }
+
+  Future<void> move(LatLng point, double zoom) async {
+    await _controller?.animateCamera(
+      gmaps.CameraUpdate.newCameraPosition(
+        gmaps.CameraPosition(
+          target: gmaps.LatLng(point.latitude, point.longitude),
+          zoom: zoom,
+          bearing: _camera?.bearing ?? 0,
+          tilt: _camera?.tilt ?? 0,
+        ),
+      ),
+    );
+  }
+
+  Future<void> zoomBy(double amount) async {
+    await _controller?.animateCamera(gmaps.CameraUpdate.zoomBy(amount));
+  }
+
+  Future<void> rotateNorth() async {
+    final camera = _camera;
+    if (camera == null) return;
+    await _controller?.animateCamera(
+      gmaps.CameraUpdate.newCameraPosition(
+        gmaps.CameraPosition(
+          target: camera.target,
+          zoom: camera.zoom,
+          tilt: camera.tilt,
+        ),
+      ),
+    );
+  }
+
+  Future<void> fit(List<LatLng> points, {double padding = 60}) async {
+    if (points.isEmpty || _controller == null) return;
+    if (points.length == 1) {
+      await move(points.first, 16);
+      return;
+    }
+    var minLat = points.first.latitude;
+    var maxLat = points.first.latitude;
+    var minLng = points.first.longitude;
+    var maxLng = points.first.longitude;
+    for (final point in points.skip(1)) {
+      minLat = math.min(minLat, point.latitude);
+      maxLat = math.max(maxLat, point.latitude);
+      minLng = math.min(minLng, point.longitude);
+      maxLng = math.max(maxLng, point.longitude);
+    }
+    if ((maxLat - minLat).abs() < 0.00001 &&
+        (maxLng - minLng).abs() < 0.00001) {
+      await move(points.first, 16);
+      return;
+    }
+    await _controller!.animateCamera(
+      gmaps.CameraUpdate.newLatLngBounds(
+        gmaps.LatLngBounds(
+          southwest: gmaps.LatLng(minLat, minLng),
+          northeast: gmaps.LatLng(maxLat, maxLng),
+        ),
+        padding,
+      ),
+    );
+  }
+}
+
 /// Full Google-Maps-style live tracking map.
 /// - Fetches up to 3 alternate road routes from OSRM.
 /// - User can tap a route to select it (blue = selected, grey = alternate).
@@ -6434,6 +6519,7 @@ class _RouteOption {
 /// - Callback reports ETA/distance to parent for bottom sheet display.
 class _LiveMapView extends StatefulWidget {
   final MapController mapController;
+  final _GoogleMapBridge? googleMapBridge;
   final List<LatLng> routePoints; // actual GPS breadcrumb trail
   final List<LatLng> waypoints;
   final LatLng? origin;
@@ -6456,6 +6542,7 @@ class _LiveMapView extends StatefulWidget {
   const _LiveMapView({
     super.key,
     required this.mapController,
+    this.googleMapBridge,
     required this.routePoints,
     this.waypoints = const [],
     this.origin,
@@ -6481,6 +6568,7 @@ class _LiveMapView extends StatefulWidget {
 
 class _LiveMapViewState extends State<_LiveMapView>
     with SingleTickerProviderStateMixin {
+  static const _mapsChannel = MethodChannel('hrms/maps');
   // Animated pulse for the current-position dot.
   late final AnimationController _pulse;
   late final Animation<double> _pulseAnim;
@@ -6490,6 +6578,8 @@ class _LiveMapViewState extends State<_LiveMapView>
   int _selectedRouteIndex = 0;
   bool _fetchingRoute = false;
   LatLng? _lastRouteFetch;
+  late final _GoogleMapBridge _googleBridge;
+  bool _googleMapsConfigured = false;
 
   _RouteOption? get _selected =>
       _routes.isEmpty ? null : _routes[_selectedRouteIndex];
@@ -6497,6 +6587,8 @@ class _LiveMapViewState extends State<_LiveMapView>
   @override
   void initState() {
     super.initState();
+    _googleBridge = widget.googleMapBridge ?? _GoogleMapBridge();
+    unawaited(_loadGoogleMapsConfiguration());
     _pulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -6507,6 +6599,16 @@ class _LiveMapViewState extends State<_LiveMapView>
     ).animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
     if (widget.current != null && widget.destination != null) {
       _fetchRoute(widget.current!, widget.destination!);
+    }
+  }
+
+  Future<void> _loadGoogleMapsConfiguration() async {
+    try {
+      final configured =
+          await _mapsChannel.invokeMethod<bool>('isConfigured') ?? false;
+      if (mounted) setState(() => _googleMapsConfigured = configured);
+    } catch (_) {
+      // Keep the existing embedded map as a safe fallback.
     }
   }
 
@@ -6643,6 +6745,7 @@ class _LiveMapViewState extends State<_LiveMapView>
     // Pan map to fit selected route.
     try {
       if (_routes[index].points.isNotEmpty) {
+        unawaited(_googleBridge.fit(_routes[index].points, padding: 60));
         final bounds = LatLngBounds.fromPoints(_routes[index].points);
         widget.mapController.fitCamera(
           CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60)),
@@ -6698,6 +6801,95 @@ class _LiveMapViewState extends State<_LiveMapView>
             ? const Color(0xFF34A853)
             : const Color(0xFF1A73E8));
     final hasCustomPositionIcon = widget.currentPositionIcon != null;
+
+    gmaps.LatLng googlePoint(LatLng point) =>
+        gmaps.LatLng(point.latitude, point.longitude);
+    final googlePolylines = <gmaps.Polyline>{};
+    for (var index = 0; index < _routes.length; index++) {
+      final route = _routes[index];
+      if (route.points.length < 2) continue;
+      final selected = index == _selectedRouteIndex;
+      final googleRoute = route.points.map(googlePoint).toList();
+      googlePolylines.add(
+        gmaps.Polyline(
+          polylineId: gmaps.PolylineId('route-casing-$index'),
+          points: googleRoute,
+          color: Colors.white,
+          width: selected ? 10 : 8,
+          zIndex: selected ? 20 : 5,
+        ),
+      );
+      googlePolylines.add(
+        gmaps.Polyline(
+          polylineId: gmaps.PolylineId('route-$index'),
+          points: googleRoute,
+          color: selected
+              ? const Color(0xFF3F00D7)
+              : (index == 1 ? const Color(0xFF4FC3F7) : Colors.grey.shade400),
+          width: selected ? 7 : 5,
+          zIndex: selected ? 21 : 6,
+          consumeTapEvents: true,
+          onTap: () => _selectRoute(index),
+        ),
+      );
+    }
+    if (widget.showBreadcrumb && widget.routePoints.length >= 2) {
+      googlePolylines.add(
+        gmaps.Polyline(
+          polylineId: const gmaps.PolylineId('travelled'),
+          points: widget.routePoints.map(googlePoint).toList(),
+          color: Colors.grey.withAlpha(180),
+          width: 5,
+          zIndex: 3,
+        ),
+      );
+    }
+
+    final googleMarkers = <gmaps.Marker>{
+      if (widget.origin != null)
+        gmaps.Marker(
+          markerId: const gmaps.MarkerId('office-origin'),
+          position: googlePoint(widget.origin!),
+          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
+            gmaps.BitmapDescriptor.hueGreen,
+          ),
+          infoWindow: const gmaps.InfoWindow(title: 'Office checkout'),
+        ),
+      ...widget.waypoints.indexed.map(
+        (entry) => gmaps.Marker(
+          markerId: gmaps.MarkerId('stop-${entry.$1}'),
+          position: googlePoint(entry.$2),
+          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
+            gmaps.BitmapDescriptor.hueOrange,
+          ),
+          infoWindow: gmaps.InfoWindow(title: 'Stop ${entry.$1 + 1}'),
+        ),
+      ),
+      if (validDst != null)
+        gmaps.Marker(
+          markerId: const gmaps.MarkerId('client-destination'),
+          position: googlePoint(validDst),
+          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
+            gmaps.BitmapDescriptor.hueRed,
+          ),
+          infoWindow: const gmaps.InfoWindow(title: 'Client destination'),
+        ),
+      if (cur != null)
+        gmaps.Marker(
+          markerId: const gmaps.MarkerId('employee-live-position'),
+          position: googlePoint(cur),
+          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
+            widget.currentPositionColor == const Color(0xFF34A853)
+                ? gmaps.BitmapDescriptor.hueGreen
+                : gmaps.BitmapDescriptor.hueAzure,
+          ),
+          rotation: heading,
+          flat: widget.navigationMode,
+          anchor: const Offset(0.5, 0.5),
+          zIndexInt: 50,
+          infoWindow: const gmaps.InfoWindow(title: 'Employee live location'),
+        ),
+    };
 
     final mapStack = Stack(
       children: [
@@ -7071,6 +7263,49 @@ class _LiveMapViewState extends State<_LiveMapView>
           ),
         ),
 
+        if (_googleMapsConfigured)
+          Positioned.fill(
+            child: gmaps.GoogleMap(
+              initialCameraPosition: gmaps.CameraPosition(
+                target: googlePoint(_center),
+                zoom: widget.navigationMode ? 17 : 15,
+                tilt: widget.navigationMode ? 35 : 0,
+              ),
+              onMapCreated: (controller) {
+                _googleBridge.attach(controller);
+                final fitPoints = <LatLng>[
+                  if (cur != null) cur,
+                  if (validDst != null) validDst,
+                ];
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _googleBridge.fit(
+                    fitPoints,
+                    padding: widget.fullScreen ? 110 : 50,
+                  );
+                });
+              },
+              onCameraMove: (camera) {
+                _googleBridge.updateCamera(camera);
+                widget.onRotationChanged?.call(camera.bearing);
+              },
+              mapType: gmaps.MapType.normal,
+              trafficEnabled: true,
+              buildingsEnabled: true,
+              compassEnabled: false,
+              zoomControlsEnabled: false,
+              mapToolbarEnabled: false,
+              myLocationButtonEnabled: false,
+              myLocationEnabled: false,
+              rotateGesturesEnabled: true,
+              scrollGesturesEnabled: true,
+              zoomGesturesEnabled: true,
+              tiltGesturesEnabled: true,
+              padding: EdgeInsets.only(bottom: widget.fullScreen ? 250 : 0),
+              markers: googleMarkers,
+              polylines: googlePolylines,
+            ),
+          ),
+
         // ── LIVE badge ───────────────────────────────────────────────
         if (!widget.fullScreen && widget.showLiveBadge)
           Positioned(
@@ -7112,38 +7347,20 @@ class _LiveMapViewState extends State<_LiveMapView>
                 // Zoom In
                 _mapControlButton(
                   icon: Icons.add,
-                  onTap: () {
-                    try {
-                      widget.mapController.move(
-                        widget.mapController.camera.center,
-                        widget.mapController.camera.zoom + 1,
-                      );
-                    } catch (_) {}
-                  },
+                  onTap: () => _googleBridge.zoomBy(1),
                 ),
                 const SizedBox(height: 4),
                 // Zoom Out
                 _mapControlButton(
                   icon: Icons.remove,
-                  onTap: () {
-                    try {
-                      widget.mapController.move(
-                        widget.mapController.camera.center,
-                        widget.mapController.camera.zoom - 1,
-                      );
-                    } catch (_) {}
-                  },
+                  onTap: () => _googleBridge.zoomBy(-1),
                 ),
                 const SizedBox(height: 8),
                 // Compass / Rotate North
                 _mapControlButton(
                   icon: Icons.explore,
                   tooltip: 'Reset north',
-                  onTap: () {
-                    try {
-                      widget.mapController.rotate(0);
-                    } catch (_) {}
-                  },
+                  onTap: _googleBridge.rotateNorth,
                 ),
                 const SizedBox(height: 4),
                 // Re-center on current position
@@ -7151,11 +7368,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                   _mapControlButton(
                     icon: Icons.my_location,
                     iconColor: const Color(0xFF1A73E8),
-                    onTap: () {
-                      try {
-                        widget.mapController.move(cur, 16);
-                      } catch (_) {}
-                    },
+                    onTap: () => _googleBridge.move(cur, 16),
                   ),
               ],
             ),
