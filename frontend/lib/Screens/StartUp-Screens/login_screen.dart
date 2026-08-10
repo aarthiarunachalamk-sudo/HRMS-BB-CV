@@ -205,6 +205,35 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoggingIn = true);
 
+    // Show a waking-up banner if the first attempt takes > 4 seconds
+    // (Render free plan cold-start can take 30–50 s).
+    Timer? wakeUpTimer;
+    ScaffoldMessengerState? messenger;
+    if (mounted) {
+      messenger = ScaffoldMessenger.of(context);
+      wakeUpTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) {
+          messenger?.showSnackBar(SnackBar(
+            content: const Row(children: [
+              SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white),
+              ),
+              SizedBox(width: 12),
+              Expanded(child: Text(
+                'Server is waking up… please wait (up to 60 s).',
+                style: TextStyle(fontSize: 13),
+              )),
+            ]),
+            backgroundColor: const Color(0xFF1A73E8),
+            duration: const Duration(seconds: 60),
+            behavior: SnackBarBehavior.floating,
+          ));
+        }
+      });
+    }
+
     try {
       final data = await _loginRequest();
       if (!mounted) return;
@@ -372,6 +401,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       _showServerUnavailable();
     } finally {
+      wakeUpTimer?.cancel();
+      messenger?.hideCurrentSnackBar();
       if (mounted) setState(() => _isLoggingIn = false);
     }
   }
@@ -395,7 +426,7 @@ class _LoginScreenState extends State<LoginScreen> {
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode(payload),
             )
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 65)); // allow Render cold-start
         final decoded = jsonDecode(response.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
         lastError = 'Invalid response from $url';
@@ -409,12 +440,18 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showServerUnavailable() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          'Unable to reach the HRMS server.\nConfigured API: ${ApiConfig.baseUrl}',
+        content: const Text(
+          'Could not connect to the server. '
+          'Check your internet or try again in a moment.',
         ),
         behavior: SnackBarBehavior.floating,
         backgroundColor: const Color(0xFFB42318),
-        duration: const Duration(seconds: 6),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: _submitLogin,
+        ),
       ),
     );
   }

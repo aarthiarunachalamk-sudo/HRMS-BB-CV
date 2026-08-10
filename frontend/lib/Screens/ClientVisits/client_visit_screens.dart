@@ -140,21 +140,15 @@ class _ClientVisitDashboardScreenState
   };
 
   Widget _monitoringScreen(ClientVisit visit, {bool canVerify = false}) {
-    if (visit.status == 'completed') {
-      return ClientVisitSummaryScreen(
-        userId: widget.userId,
-        visitId: visit.id,
-        service: _service,
-        reviewerMode: canVerify,
-      );
-    }
-    // For all non-completed visits in reviewer/readOnly mode, use step 0
-    // which hits the _ default case → _superAdminVisitDetail (full overview).
+    // All visits — completed or not — use step 0 → _superAdminVisitDetail
+    // so TL/SuperAdmin always see the full detail view with route map,
+    // attachments, signatures, expenses, checklist, and verify button.
     return ClientVisitReadOnlyFlowScreen(
       userId: widget.userId,
       visitId: visit.id,
       step: 0,
       service: _service,
+      reviewerMode: canVerify,
     );
   }
 

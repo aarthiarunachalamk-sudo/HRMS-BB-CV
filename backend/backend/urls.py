@@ -4,6 +4,7 @@ from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
+import time
 
 
 def home(request):
@@ -15,8 +16,14 @@ def home(request):
     })
 
 
+def health(request):
+    """Lightweight health-check endpoint used by the keep-alive ping."""
+    return JsonResponse({"status": "ok", "ts": int(time.time())})
+
+
 urlpatterns = [
     path("", home, name="home"),
+    path("api/health/", health, name="health"),
     path("admin/", admin.site.urls),
     path("api/", include("hrms.urls")),
     path("api/client-visits/", include("client_visits.urls")),

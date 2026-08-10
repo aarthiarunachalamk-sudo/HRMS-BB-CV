@@ -223,6 +223,7 @@ class ClientVisitReadOnlyFlowScreen extends StatelessWidget {
   final int visitId;
   final int step;
   final ClientVisitService service;
+  final bool reviewerMode;
 
   const ClientVisitReadOnlyFlowScreen({
     super.key,
@@ -230,6 +231,7 @@ class ClientVisitReadOnlyFlowScreen extends StatelessWidget {
     required this.visitId,
     required this.step,
     required this.service,
+    this.reviewerMode = false,
   });
 
   @override
@@ -239,6 +241,7 @@ class ClientVisitReadOnlyFlowScreen extends StatelessWidget {
     visitId: visitId,
     service: service,
     readOnlyMode: true,
+    reviewerMode: reviewerMode,
   );
 }
 
@@ -2429,15 +2432,169 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     12 => [
       _stageBadge('COMPLETED', ClientVisitColors.green),
       const SizedBox(height: 12),
+
+      // ── Travel route map (if GPS route was recorded) ──────────────
+      if (visit.travelRoute.isNotEmpty) ...[
+        _saSection(
+          icon: Icons.route_rounded,
+          color: const Color(0xFF9333EA),
+          title: 'Travel Route',
+          child: _RouteMapCard(visit: visit),
+        ),
+        const SizedBox(height: 12),
+      ],
+
+      // ── Visit timeline ────────────────────────────────────────────
       _timeline(visit),
       const SizedBox(height: 12),
-      _summary(visit),
-      // Attachments gallery — visible to all including SuperAdmin
-      if (visit.attachments.isNotEmpty) ...[
-        const SizedBox(height: 12),
-        _attachmentsGallery(visit),
-      ],
+
+      // ── Client & visit details ────────────────────────────────────
+      _saSection(
+        icon: Icons.business_rounded,
+        color: const Color(0xFF16A34A),
+        title: 'Client Details',
+        child: Column(children: [
+          EmployeeInfoRow('Client', visit.clientName),
+          EmployeeInfoRow('Contact',
+              visit.contactPerson.isEmpty ? '—' : visit.contactPerson),
+          EmployeeInfoRow('Phone',
+              visit.contactPhone.isEmpty ? '—' : visit.contactPhone),
+          EmployeeInfoRow('Address',
+              visit.address.isEmpty ? '—' : visit.address),
+          EmployeeInfoRow('Purpose',
+              visit.purpose.isEmpty ? '—' : visit.purpose),
+          EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
+        ]),
+      ),
       const SizedBox(height: 12),
+
+      // ── Summary (outcome, follow-up, return mode) ─────────────────
+      _summary(visit),
+      const SizedBox(height: 12),
+
+      // ── Expenses ──────────────────────────────────────────────────
+      if (visit.expenses.isNotEmpty) ...[
+        _saSection(
+          icon: Icons.receipt_long_rounded,
+          color: const Color(0xFFEF4444),
+          title: 'Expenses',
+          child: Column(children: [
+            ...visit.expenses.map((expense) {
+              final cat = '${expense['category']}';
+              final icon = switch (cat) {
+                'travel'  => Icons.directions_car_rounded,
+                'food'    => Icons.restaurant_rounded,
+                'parking' => Icons.local_parking_rounded,
+                _         => Icons.receipt_rounded,
+              };
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(children: [
+                  Container(
+                    width: 30, height: 30,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withAlpha(15),
+                      borderRadius: BorderRadius.circular(8)),
+                    child: Icon(icon, size: 15,
+                        color: const Color(0xFFEF4444)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_label(cat),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 13)),
+                      if ('${expense['note'] ?? ''}'.isNotEmpty)
+                        Text('${expense['note']}',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade500)),
+                    ],
+                  )),
+                  Text('₹${expense['amount']}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 14)),
+                ]),
+              );
+            }),
+            const Divider(height: 16),
+            Row(children: [
+              const Text('Total',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 15)),
+              const Spacer(),
+              Text('₹${visit.expenseTotal.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      color: Color(0xFFEF4444))),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 12),
+      ],
+
+      // ── Checklist ─────────────────────────────────────────────────
+      if (visit.checklist.isNotEmpty) ...[
+        _saSection(
+          icon: Icons.checklist_rounded,
+          color: const Color(0xFF34A853),
+          title: 'Checklist',
+          child: Column(children: visit.checklist.map((item) {
+            final done = item['done'] == true;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(children: [
+                Icon(
+                  done
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked,
+                  size: 18,
+                  color: done
+                      ? const Color(0xFF34A853)
+                      : Colors.grey.shade400,
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text('${item['label'] ?? ''}',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: done ? null : Colors.grey.shade500))),
+              ]),
+            );
+          }).toList()),
+        ),
+        const SizedBox(height: 12),
+      ],
+
+      // ── Attendees ─────────────────────────────────────────────────
+      if (visit.attendees.isNotEmpty) ...[
+        _saSection(
+          icon: Icons.group_rounded,
+          color: const Color(0xFF1A73E8),
+          title: 'Attendees (${visit.attendees.length})',
+          child: Wrap(
+            spacing: 8, runSpacing: 6,
+            children: visit.attendees.map((a) => Chip(
+              avatar: const Icon(Icons.person_rounded, size: 14),
+              label: Text('$a',
+                  style: const TextStyle(fontSize: 12)),
+              padding: EdgeInsets.zero,
+              materialTapTargetSize:
+                  MaterialTapTargetSize.shrinkWrap,
+            )).toList(),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+
+      // ── Attachments: selfies + signatures + proof + docs ──────────
+      if (visit.attachments.isNotEmpty) ...[
+        _attachmentsGallery(visit),
+        const SizedBox(height: 12),
+      ],
+
+      // ── Action buttons ────────────────────────────────────────────
       Row(children: [
         Expanded(
           child: OutlinedButton.icon(
@@ -2449,7 +2606,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         const SizedBox(width: 10),
         Expanded(
           child: FilledButton.icon(
-            onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+            onPressed: () =>
+                Navigator.of(context).popUntil((r) => r.isFirst),
             icon: const Icon(Icons.history_rounded),
             label: const Text('View History'),
           ),
@@ -2457,10 +2615,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ]),
       if (widget.reviewerMode && visit.managerVerifiedBy.isEmpty) ...[
         const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: _working ? null : _verify,
-          icon: const Icon(Icons.verified),
-          label: const Text('Verify completed visit'),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _working ? null : _verify,
+            icon: const Icon(Icons.verified),
+            label: const Text('Verify completed visit'),
+          ),
         ),
       ],
     ],
