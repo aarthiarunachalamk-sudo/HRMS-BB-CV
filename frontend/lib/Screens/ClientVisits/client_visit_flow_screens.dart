@@ -3958,7 +3958,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       const SizedBox(height: 12),
 
       // ── Travel route map (if GPS route was recorded) ──────────────
-      if (visit.travelRoute.isNotEmpty) ...[
+      if (visit.travelRoute.isNotEmpty ||
+          (visit.officeCheckOutLatitude != null &&
+              visit.officeCheckOutLongitude != null &&
+              (visit.reachedClientLatitude != null ||
+                  visit.clientLatitude != null))) ...[
         _saSection(
           icon: Icons.route_rounded,
           color: const Color(0xFF9333EA),
@@ -4474,7 +4478,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
     final isActive =
         visit.status == 'travelling' || visit.status == 'in_progress';
-    final hasRoute = visit.travelRoute.isNotEmpty;
+    final hasRoute =
+        visit.travelRoute.isNotEmpty ||
+        (visit.officeCheckOutLatitude != null &&
+            visit.officeCheckOutLongitude != null &&
+            (visit.reachedClientLatitude != null ||
+                visit.clientLatitude != null));
     final hasCompleted = visit.status == 'completed';
 
     return [
@@ -6004,33 +6013,154 @@ class _RouteMapCard extends StatefulWidget {
 
 class _RouteMapCardState extends State<_RouteMapCard> {
   final MapController _mapController = MapController();
-  List<LatLng> _points = [];
+  final List<LatLng> _rawPoints = [];
+  List<LatLng> _roadPoints = [];
+  LatLng? _origin;
+  LatLng? _destination;
+  bool _loadingRoute = true;
+  String _routeSummary = '';
 
   @override
   void initState() {
     super.initState();
-    _points = widget.visit.travelRoute
-        .map((p) {
-          final lat = double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
-          final lng = double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
-          if (lat != null && lng != null) return LatLng(lat, lng);
-          return null;
-        })
-        .whereType<LatLng>()
-        .toList();
+    _rawPoints.addAll(
+      widget.visit.travelRoute
+          .map((p) {
+            final lat = double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
+            final lng = double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
+            return _validPoint(lat, lng);
+          })
+          .whereType<LatLng>()
+          .toList(),
+    );
+
+    _origin =
+        _validPoint(
+          widget.visit.officeCheckOutLatitude,
+          widget.visit.officeCheckOutLongitude,
+        ) ??
+        (_rawPoints.isNotEmpty ? _rawPoints.first : null);
+    _destination =
+        _validPoint(
+          widget.visit.reachedClientLatitude,
+          widget.visit.reachedClientLongitude,
+        ) ??
+        _validPoint(
+          widget.visit.clientLatitude,
+          widget.visit.clientLongitude,
+        ) ??
+        (_rawPoints.isNotEmpty ? _rawPoints.last : null);
+
+    if (_origin != null && _destination != null) {
+      _roadPoints = [_origin!, _destination!];
+      unawaited(_loadRoadRoute());
+    } else {
+      _loadingRoute = false;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_points.length >= 2 && mounted) {
-        try {
-          _mapController.fitCamera(
-            CameraFit.bounds(
-              bounds: LatLngBounds.fromPoints(_points),
-              padding: const EdgeInsets.all(40),
-            ),
-          );
-        } catch (_) {}
-      }
+      if (mounted) _fitRoute();
     });
+  }
+
+  LatLng? _validPoint(double? lat, double? lng) {
+    if (lat == null || lng == null || !lat.isFinite || !lng.isFinite) {
+      return null;
+    }
+    if (lat.abs() > 90 || lng.abs() > 180 || (lat == 0 && lng == 0)) {
+      return null;
+    }
+    return LatLng(lat, lng);
+  }
+
+  Future<void> _loadRoadRoute() async {
+    final origin = _origin;
+    final destination = _destination;
+    if (origin == null || destination == null) return;
+
+    final straightMetres = const Distance().as(
+      LengthUnit.Meter,
+      origin,
+      destination,
+    );
+    if (straightMetres < 30) {
+      if (!mounted) return;
+      setState(() {
+        _loadingRoute = false;
+        _routeSummary = 'Arrival confirmed at the client location';
+      });
+      return;
+    }
+
+    try {
+      final uri = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/'
+        '${origin.longitude},${origin.latitude};'
+        '${destination.longitude},${destination.latitude}'
+        '?overview=full&geometries=geojson&steps=false',
+      );
+      final response = await http
+          .get(uri, headers: const {'User-Agent': 'BBT-HRMS-Mobile/1.0'})
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) throw Exception('Route unavailable');
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final routes = body['routes'] as List<dynamic>?;
+      if (routes == null || routes.isEmpty) throw Exception('No route found');
+      final route = routes.first as Map<String, dynamic>;
+      final geometry = route['geometry'] as Map<String, dynamic>?;
+      final coordinates = geometry?['coordinates'] as List<dynamic>?;
+      if (coordinates == null || coordinates.length < 2) {
+        throw Exception('Invalid route geometry');
+      }
+
+      final roadPoints = coordinates.map((coordinate) {
+        final values = coordinate as List<dynamic>;
+        return LatLng(
+          (values[1] as num).toDouble(),
+          (values[0] as num).toDouble(),
+        );
+      }).toList();
+      final distanceKm = ((route['distance'] as num?)?.toDouble() ?? 0) / 1000;
+      final durationMinutes =
+          (((route['duration'] as num?)?.toDouble() ?? 0) / 60).round();
+
+      if (!mounted) return;
+      setState(() {
+        _roadPoints = roadPoints;
+        _loadingRoute = false;
+        _routeSummary = distanceKm > 0
+            ? '${distanceKm.toStringAsFixed(1)} km road route'
+                  '${durationMinutes > 0 ? ' · about $durationMinutes min' : ''}'
+            : 'Office checkout to client arrival';
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _fitRoute());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingRoute = false;
+        _routeSummary = 'Office checkout to client arrival';
+      });
+    }
+  }
+
+  void _fitRoute() {
+    final origin = _origin;
+    final destination = _destination;
+    if (!mounted || origin == null || destination == null) return;
+    try {
+      if (const Distance().as(LengthUnit.Meter, origin, destination) < 30) {
+        _mapController.move(destination, 16);
+      } else {
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: LatLngBounds.fromPoints([origin, destination]),
+            padding: const EdgeInsets.all(38),
+            maxZoom: 16,
+          ),
+        );
+      }
+    } catch (_) {}
   }
 
   @override
@@ -6041,7 +6171,9 @@ class _RouteMapCardState extends State<_RouteMapCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (_points.isEmpty) {
+    final origin = _origin;
+    final destination = _destination;
+    if (origin == null || destination == null) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
         child: Center(
@@ -6053,29 +6185,48 @@ class _RouteMapCardState extends State<_RouteMapCard> {
       );
     }
 
-    final origin = _points.first;
-    final destination = _points.last;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Stats row
         Row(
           children: [
-            const Icon(Icons.route_rounded, size: 14, color: Color(0xFF9333EA)),
+            if (_loadingRoute)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              const Icon(
+                Icons.route_rounded,
+                size: 14,
+                color: Color(0xFF1A73E8),
+              ),
             const SizedBox(width: 6),
-            Text(
-              '${_points.length} GPS points recorded',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            Expanded(
+              child: Text(
+                _routeSummary.isEmpty
+                    ? 'Preparing road route...'
+                    : _routeSummary,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
             ),
           ],
         ),
+        if (_rawPoints.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            '${_rawPoints.length} GPS samples retained for audit',
+            style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+          ),
+        ],
         const SizedBox(height: 8),
         // Map
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: SizedBox(
-            height: 240,
+            height: 270,
             child: FlutterMap(
               mapController: _mapController,
               options: MapOptions(initialCenter: origin, initialZoom: 13),
@@ -6087,13 +6238,19 @@ class _RouteMapCardState extends State<_RouteMapCard> {
                 PolylineLayer(
                   polylines: [
                     Polyline(
-                      points: _points,
-                      color: const Color(0xFF9333EA),
-                      strokeWidth: 4,
+                      points: _roadPoints,
+                      color: Colors.white,
+                      strokeWidth: 10,
+                    ),
+                    Polyline(
+                      points: _roadPoints,
+                      color: const Color(0xFF1A73E8),
+                      strokeWidth: 6,
                     ),
                   ],
                 ),
                 MarkerLayer(
+                  rotate: true,
                   markers: [
                     // Start marker — green
                     Marker(
@@ -6106,7 +6263,7 @@ class _RouteMapCardState extends State<_RouteMapCard> {
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          Icons.play_arrow_rounded,
+                          Icons.business_rounded,
                           color: Colors.white,
                           size: 20,
                         ),
@@ -6140,11 +6297,11 @@ class _RouteMapCardState extends State<_RouteMapCard> {
           children: [
             const Icon(Icons.circle, size: 10, color: Color(0xFF34A853)),
             const SizedBox(width: 4),
-            const Text('Start', style: TextStyle(fontSize: 11)),
+            const Text('Office checkout', style: TextStyle(fontSize: 11)),
             const SizedBox(width: 12),
             const Icon(Icons.circle, size: 10, color: Color(0xFFEA4335)),
             const SizedBox(width: 4),
-            const Text('End', style: TextStyle(fontSize: 11)),
+            const Text('Client arrival', style: TextStyle(fontSize: 11)),
           ],
         ),
       ],
