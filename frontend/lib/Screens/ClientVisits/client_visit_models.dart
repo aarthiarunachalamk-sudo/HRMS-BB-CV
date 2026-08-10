@@ -28,8 +28,9 @@ class ClientVisit {
   final double? officeCheckOutLongitude;
   final double? reachedClientLatitude;
   final double? reachedClientLongitude;
-  final double? clientLatitude;   // planned destination set at visit creation
+  final double? clientLatitude; // planned destination set at visit creation
   final double? clientLongitude;
+  final double? startOdometer;
   final List<Map<String, dynamic>> travelRoute;
   final DateTime? checkInAt;
   final DateTime? checkOutAt;
@@ -37,6 +38,9 @@ class ClientVisit {
   final List<dynamic> checklist;
   final String returnMode;
   final String managerVerifiedBy;
+  final DateTime? managerVerifiedAt;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
   final double expenseTotal;
   final List<Map<String, dynamic>> attachments;
   final List<Map<String, dynamic>> expenses;
@@ -73,6 +77,7 @@ class ClientVisit {
     required this.reachedClientLongitude,
     required this.clientLatitude,
     required this.clientLongitude,
+    required this.startOdometer,
     required this.travelRoute,
     required this.checkInAt,
     required this.checkOutAt,
@@ -80,6 +85,9 @@ class ClientVisit {
     required this.checklist,
     required this.returnMode,
     required this.managerVerifiedBy,
+    required this.managerVerifiedAt,
+    required this.createdAt,
+    required this.updatedAt,
     required this.expenseTotal,
     required this.attachments,
     required this.expenses,
@@ -130,6 +138,7 @@ class ClientVisit {
       ),
       clientLatitude: double.tryParse('${json['latitude'] ?? ''}'),
       clientLongitude: double.tryParse('${json['longitude'] ?? ''}'),
+      startOdometer: double.tryParse('${json['start_odometer'] ?? ''}'),
       travelRoute: _maps(json['travel_route']),
       checkInAt: DateTime.tryParse('${json['check_in_at'] ?? ''}'),
       checkOutAt: DateTime.tryParse('${json['check_out_at'] ?? ''}'),
@@ -141,6 +150,11 @@ class ClientVisit {
           : const [],
       returnMode: '${json['return_mode'] ?? ''}',
       managerVerifiedBy: '${json['manager_verified_by'] ?? ''}',
+      managerVerifiedAt: DateTime.tryParse(
+        '${json['manager_verified_at'] ?? ''}',
+      ),
+      createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
+      updatedAt: DateTime.tryParse('${json['updated_at'] ?? ''}'),
       expenseTotal: double.tryParse('${json['expense_total']}') ?? 0,
       attachments: _maps(json['attachments']),
       expenses: _maps(json['expenses']),

@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:signature/signature.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
@@ -1203,41 +1204,480 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   Future<void> _downloadReport(ClientVisit visit) async {
     await _run(() async {
+      ClientVisit reportVisit;
+      try {
+        reportVisit = await widget.service.fetchVisit(widget.userId, visit.id);
+      } catch (_) {
+        reportVisit = visit;
+      }
+
+      String value(Object? source) {
+        final text = '${source ?? ''}'.trim();
+        return text.isEmpty ? '—' : text;
+      }
+
+      String dateTime(DateTime? source) {
+        if (source == null) return '—';
+        final local = source.toLocal();
+        String two(int number) => number.toString().padLeft(2, '0');
+        return '${two(local.day)}/${two(local.month)}/${local.year} '
+            '${two(local.hour)}:${two(local.minute)}';
+      }
+
+      String elapsed(DateTime? start, DateTime? end) {
+        if (start == null || end == null) return '—';
+        final duration = end.toLocal().difference(start.toLocal());
+        if (duration.isNegative) return '—';
+        final hours = duration.inHours;
+        final minutes = duration.inMinutes.remainder(60);
+        return hours == 0 ? '$minutes min' : '${hours}h ${minutes}m';
+      }
+
+      String coordinates(double? latitude, double? longitude) {
+        if (latitude == null || longitude == null) return '—';
+        return '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
+      }
+
+      final routePoints = reportVisit.travelRoute
+          .map((point) {
+            final latitude = double.tryParse(
+              '${point['latitude'] ?? point['lat'] ?? ''}',
+            );
+            final longitude = double.tryParse(
+              '${point['longitude'] ?? point['lng'] ?? ''}',
+            );
+            return latitude == null || longitude == null
+                ? null
+                : LatLng(latitude, longitude);
+          })
+          .whereType<LatLng>()
+          .toList();
+      var recordedDistanceKm = 0.0;
+      const distanceCalculator = Distance();
+      for (var index = 1; index < routePoints.length; index++) {
+        recordedDistanceKm += distanceCalculator.as(
+          LengthUnit.Kilometer,
+          routePoints[index - 1],
+          routePoints[index],
+        );
+      }
+
+      pw.Widget sectionTitle(String title) => pw.Container(
+        width: double.infinity,
+        margin: const pw.EdgeInsets.only(top: 12, bottom: 6),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFE8F0FE)),
+        child: pw.Text(
+          title,
+          style: pw.TextStyle(
+            color: const PdfColor.fromInt(0xFF174EA6),
+            fontSize: 11,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+      );
+
+      pw.Widget detailsTable(List<List<String>> rows) =>
+          pw.TableHelper.fromTextArray(
+            headers: const ['Field', 'Details'],
+            data: rows,
+            headerDecoration: const pw.BoxDecoration(
+              color: PdfColor.fromInt(0xFFF1F3F4),
+            ),
+            headerStyle: pw.TextStyle(
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: const pw.TextStyle(fontSize: 8.5),
+            cellPadding: const pw.EdgeInsets.all(5),
+            border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+            columnWidths: const {
+              0: pw.FlexColumnWidth(1.25),
+              1: pw.FlexColumnWidth(3),
+            },
+          );
+
+      pw.MemoryImage? logo;
+      try {
+        final logoData = await rootBundle.load('assets/logo.png');
+        logo = pw.MemoryImage(logoData.buffer.asUint8List());
+      } catch (_) {}
+
       final document = pw.Document();
       document.addPage(
         pw.MultiPage(
-          build: (_) => [
-            pw.Text(
-              'HRMS-ERP Client Visit Report',
-              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+          pageTheme: const pw.PageTheme(
+            pageFormat: PdfPageFormat.a4,
+            margin: pw.EdgeInsets.fromLTRB(28, 30, 28, 30),
+          ),
+          footer: (context) => pw.Container(
+            margin: const pw.EdgeInsets.only(top: 10),
+            padding: const pw.EdgeInsets.only(top: 6),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                top: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+              ),
             ),
-            pw.SizedBox(height: 14),
-            pw.TableHelper.fromTextArray(
-              headers: const ['Field', 'Details'],
-              data: [
-                ['Visit ID', visit.visitId],
-                ['Employee', visit.employeeName],
-                ['Client', visit.clientName],
-                ['Contact', visit.contactPerson],
-                ['Address', visit.address],
-                ['Purpose', visit.purpose],
-                ['Status', _label(visit.status)],
-                ['Attendees', visit.attendees.join(', ')],
-                ['Expenses', 'INR ${visit.expenseTotal.toStringAsFixed(2)}'],
-                ['Outcome', visit.outcome],
-                ['Follow-up', visit.followUp],
-                ['Return mode', _label(visit.returnMode)],
-                [
-                  'Manager verification',
-                  visit.managerVerifiedBy.isEmpty ? 'Pending' : 'Verified',
-                ],
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Confidential · HRMS-ERP Client Visit Report',
+                  style: const pw.TextStyle(
+                    fontSize: 7,
+                    color: PdfColors.grey600,
+                  ),
+                ),
+                pw.Text(
+                  'Page ${context.pageNumber} of ${context.pagesCount}',
+                  style: const pw.TextStyle(
+                    fontSize: 7,
+                    color: PdfColors.grey600,
+                  ),
+                ),
               ],
+            ),
+          ),
+          build: (_) => [
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(14),
+              decoration: pw.BoxDecoration(
+                color: const PdfColor.fromInt(0xFF0B1B35),
+                borderRadius: pw.BorderRadius.circular(6),
+              ),
+              child: pw.Row(
+                children: [
+                  if (logo != null) ...[
+                    pw.Container(
+                      width: 46,
+                      height: 46,
+                      padding: const pw.EdgeInsets.all(4),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColors.white,
+                        borderRadius: pw.BorderRadius.circular(5),
+                      ),
+                      child: pw.Image(logo, fit: pw.BoxFit.contain),
+                    ),
+                    pw.SizedBox(width: 12),
+                  ],
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'CLIENT VISIT REPORT',
+                          style: pw.TextStyle(
+                            color: PdfColors.white,
+                            fontSize: 18,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                        pw.SizedBox(height: 3),
+                        pw.Text(
+                          '${reportVisit.visitId}  ·  ${_label(reportVisit.status).toUpperCase()}',
+                          style: const pw.TextStyle(
+                            color: PdfColor.fromInt(0xFF9CC7FF),
+                            fontSize: 9,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Text(
+              'Generated ${dateTime(DateTime.now())}',
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+            ),
+
+            sectionTitle('VISIT INFORMATION'),
+            detailsTable([
+              ['Visit ID', reportVisit.visitId],
+              ['Status', _label(reportVisit.status)],
+              ['Scheduled', dateTime(reportVisit.scheduledAt)],
+              ['Planned duration', '${reportVisit.durationMinutes} minutes'],
+              ['Travel mode', _label(reportVisit.travelMode)],
+              ['Purpose', value(reportVisit.purpose)],
+              ['Notes', value(reportVisit.notes)],
+              ['Created', dateTime(reportVisit.createdAt)],
+              ['Last updated', dateTime(reportVisit.updatedAt)],
+            ]),
+
+            sectionTitle('EMPLOYEE AND REPORTING DETAILS'),
+            detailsTable([
+              ['Employee name', value(reportVisit.employeeName)],
+              ['Employee ID', value(reportVisit.employeeUserId)],
+              ['Reporting manager / TL ID', value(reportVisit.managerUserId)],
+            ]),
+
+            sectionTitle('CLIENT DETAILS'),
+            detailsTable([
+              ['Client name', value(reportVisit.clientName)],
+              ['Contact person', value(reportVisit.contactPerson)],
+              ['Phone', value(reportVisit.contactPhone)],
+              ['Address', value(reportVisit.address)],
+              [
+                'Client coordinates',
+                coordinates(
+                  reportVisit.clientLatitude,
+                  reportVisit.clientLongitude,
+                ),
+              ],
+            ]),
+
+            sectionTitle('APPROVAL AND VERIFICATION'),
+            detailsTable([
+              [
+                'Approved by',
+                reportVisit.approvedByName.isEmpty
+                    ? value(reportVisit.approvedBy)
+                    : '${reportVisit.approvedByName} (${value(reportVisit.approvedByRole)})',
+              ],
+              ['Approved at', dateTime(reportVisit.approvedAt)],
+              ['Approval comment', value(reportVisit.approvalComment)],
+              [
+                'Manager verification',
+                reportVisit.managerVerifiedBy.isEmpty
+                    ? 'Pending'
+                    : 'Verified by ${reportVisit.managerVerifiedBy}',
+              ],
+              ['Verified at', dateTime(reportVisit.managerVerifiedAt)],
+            ]),
+
+            sectionTitle('VISIT TIMELINE'),
+            detailsTable([
+              ['Office check-out', dateTime(reportVisit.officeCheckOutAt)],
+              ['Reached client', dateTime(reportVisit.reachedClientAt)],
+              ['Client check-in', dateTime(reportVisit.checkInAt)],
+              ['Visit checkout', dateTime(reportVisit.checkOutAt)],
+              [
+                'Travel duration',
+                elapsed(
+                  reportVisit.officeCheckOutAt,
+                  reportVisit.reachedClientAt,
+                ),
+              ],
+              [
+                'Client visit duration',
+                elapsed(reportVisit.checkInAt, reportVisit.checkOutAt),
+              ],
+              [
+                'Total duty duration',
+                elapsed(reportVisit.officeCheckOutAt, reportVisit.checkOutAt),
+              ],
+              [
+                'Office check-out GPS',
+                coordinates(
+                  reportVisit.officeCheckOutLatitude,
+                  reportVisit.officeCheckOutLongitude,
+                ),
+              ],
+              [
+                'Arrival GPS',
+                coordinates(
+                  reportVisit.reachedClientLatitude,
+                  reportVisit.reachedClientLongitude,
+                ),
+              ],
+              [
+                'Starting odometer',
+                reportVisit.startOdometer == null
+                    ? '—'
+                    : reportVisit.startOdometer!.toStringAsFixed(1),
+              ],
+            ]),
+
+            sectionTitle('LIVE TRACKING / TRAVEL ROUTE'),
+            detailsTable([
+              ['GPS points recorded', '${routePoints.length}'],
+              [
+                'Recorded route distance',
+                '${recordedDistanceKm.toStringAsFixed(2)} km',
+              ],
+              [
+                'First recorded point',
+                routePoints.isEmpty
+                    ? '—'
+                    : coordinates(
+                        routePoints.first.latitude,
+                        routePoints.first.longitude,
+                      ),
+              ],
+              [
+                'Last recorded point',
+                routePoints.isEmpty
+                    ? '—'
+                    : coordinates(
+                        routePoints.last.latitude,
+                        routePoints.last.longitude,
+                      ),
+              ],
+            ]),
+
+            sectionTitle('EXPENSE DETAILS'),
+            if (reportVisit.expenses.isEmpty)
+              pw.Text(
+                'No expenses recorded.',
+                style: const pw.TextStyle(fontSize: 9),
+              )
+            else
+              pw.TableHelper.fromTextArray(
+                headers: const ['#', 'Category', 'Amount (INR)', 'Note'],
+                data: List.generate(reportVisit.expenses.length, (index) {
+                  final expense = reportVisit.expenses[index];
+                  final amount =
+                      double.tryParse('${expense['amount'] ?? 0}') ?? 0;
+                  return [
+                    '${index + 1}',
+                    _label('${expense['category'] ?? ''}'),
+                    amount.toStringAsFixed(2),
+                    value(expense['note']),
+                  ];
+                }),
+                headerDecoration: const pw.BoxDecoration(
+                  color: PdfColor.fromInt(0xFFFFF4E5),
+                ),
+                headerStyle: pw.TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                cellStyle: const pw.TextStyle(fontSize: 8),
+                cellPadding: const pw.EdgeInsets.all(5),
+                border: pw.TableBorder.all(
+                  color: PdfColors.grey300,
+                  width: 0.5,
+                ),
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(0.35),
+                  1: pw.FlexColumnWidth(1.1),
+                  2: pw.FlexColumnWidth(0.9),
+                  3: pw.FlexColumnWidth(2.3),
+                },
+              ),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(8),
+              color: const PdfColor.fromInt(0xFFF8F9FA),
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text(
+                'TOTAL EXPENSE: INR ${reportVisit.expenseTotal.toStringAsFixed(2)}',
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+
+            sectionTitle('ATTENDEES'),
+            pw.Text(
+              reportVisit.attendees.isEmpty
+                  ? 'No attendees recorded.'
+                  : reportVisit.attendees.map(value).join(', '),
+              style: const pw.TextStyle(fontSize: 9),
+            ),
+
+            sectionTitle('CHECKLIST'),
+            if (reportVisit.checklist.isEmpty)
+              pw.Text(
+                'No checklist entries recorded.',
+                style: const pw.TextStyle(fontSize: 9),
+              )
+            else
+              pw.TableHelper.fromTextArray(
+                headers: const ['#', 'Checklist item', 'Status'],
+                data: List.generate(reportVisit.checklist.length, (index) {
+                  final raw = reportVisit.checklist[index];
+                  final item = raw is Map
+                      ? Map<String, dynamic>.from(raw)
+                      : <String, dynamic>{'label': '$raw', 'done': false};
+                  return [
+                    '${index + 1}',
+                    value(item['label']),
+                    item['done'] == true ? 'Completed' : 'Pending',
+                  ];
+                }),
+                headerDecoration: const pw.BoxDecoration(
+                  color: PdfColor.fromInt(0xFFE6F4EA),
+                ),
+                headerStyle: pw.TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                cellStyle: const pw.TextStyle(fontSize: 8),
+                cellPadding: const pw.EdgeInsets.all(5),
+                border: pw.TableBorder.all(
+                  color: PdfColors.grey300,
+                  width: 0.5,
+                ),
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(0.35),
+                  1: pw.FlexColumnWidth(3),
+                  2: pw.FlexColumnWidth(0.9),
+                },
+              ),
+
+            sectionTitle('OUTCOME AND FOLLOW-UP'),
+            detailsTable([
+              ['Outcome', value(reportVisit.outcome)],
+              ['Follow-up', value(reportVisit.followUp)],
+              ['Return mode', value(_label(reportVisit.returnMode))],
+            ]),
+
+            sectionTitle('ATTACHMENTS / VISIT PROOF'),
+            if (reportVisit.attachments.isEmpty)
+              pw.Text(
+                'No attachments recorded.',
+                style: const pw.TextStyle(fontSize: 9),
+              )
+            else
+              pw.TableHelper.fromTextArray(
+                headers: const ['#', 'Category', 'File', 'Uploaded'],
+                data: List.generate(reportVisit.attachments.length, (index) {
+                  final attachment = reportVisit.attachments[index];
+                  final uploadedAt = DateTime.tryParse(
+                    '${attachment['created_at'] ?? ''}',
+                  );
+                  return [
+                    '${index + 1}',
+                    _label('${attachment['category'] ?? ''}'),
+                    value(attachment['original_name'] ?? attachment['url']),
+                    dateTime(uploadedAt),
+                  ];
+                }),
+                headerDecoration: const pw.BoxDecoration(
+                  color: PdfColor.fromInt(0xFFF3E8FD),
+                ),
+                headerStyle: pw.TextStyle(
+                  fontSize: 8.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                cellStyle: const pw.TextStyle(fontSize: 7.5),
+                cellPadding: const pw.EdgeInsets.all(5),
+                border: pw.TableBorder.all(
+                  color: PdfColors.grey300,
+                  width: 0.5,
+                ),
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(0.3),
+                  1: pw.FlexColumnWidth(1),
+                  2: pw.FlexColumnWidth(2.3),
+                  3: pw.FlexColumnWidth(1),
+                },
+              ),
+
+            pw.SizedBox(height: 18),
+            pw.Text(
+              'This report was generated electronically from HRMS-ERP records.',
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
             ),
           ],
         ),
       );
       final bytes = await document.save();
-      final fileName = '${visit.visitId}-client-visit-report.pdf';
+      final fileName = '${reportVisit.visitId}-client-visit-report.pdf';
 
       // Save to device Downloads/HRMS-ERP and get back the saved URI
       final savedUri = await _filesChannel.invokeMethod<String>(
@@ -5327,6 +5767,16 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
     LatLng? current;
     if (points.isNotEmpty) current = points.last;
 
+    final reachedLat = visit.reachedClientLatitude;
+    final reachedLng = visit.reachedClientLongitude;
+    if (visit.reachedClientAt != null &&
+        reachedLat != null &&
+        reachedLng != null &&
+        reachedLat != 0.0 &&
+        reachedLng != 0.0) {
+      current = LatLng(reachedLat, reachedLng);
+    }
+
     final destLat = visit.clientLatitude;
     final destLng = visit.clientLongitude;
     final dest =
@@ -5358,7 +5808,7 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
   void _fitRouteOverview() {
     if (!mounted) return;
     final points = <LatLng>[
-      ..._routePoints,
+      if (_currentPosition != null) _currentPosition!,
       if (_destination != null) _destination!,
     ];
     try {
@@ -5433,7 +5883,9 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
               child: Text(
                 _routePoints.isEmpty
                     ? 'Waiting for GPS…'
-                    : '${_routePoints.length} points  ·  Updated $lastUpdated',
+                    : _reachedClient
+                    ? 'Arrival confirmed · Updated $lastUpdated'
+                    : 'Employee location · Updated $lastUpdated',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
@@ -5481,21 +5933,57 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
                     current: _currentPosition,
                     destination: _destination,
                     fullScreen: false,
-                    fetchRoadRoute: false,
-                    routeTrailColor: const Color(0xFF1A73E8),
+                    showBreadcrumb: false,
+                    showMapControls: false,
+                    showLiveBadge: false,
+                    currentPositionIcon: _reachedClient
+                        ? Icons.check_rounded
+                        : Icons.delivery_dining_rounded,
                     currentPositionColor: _reachedClient
                         ? const Color(0xFF34A853)
                         : const Color(0xFF1A73E8),
                   ),
           ),
         ),
-        // Coordinate info
+        // Zomato-style employee status instead of technical coordinates.
         if (_currentPosition != null) ...[
-          const SizedBox(height: 6),
-          Text(
-            'Last known: ${_currentPosition!.latitude.toStringAsFixed(5)}, '
-            '${_currentPosition!.longitude.toStringAsFixed(5)}',
-            style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              color:
+                  (_reachedClient
+                          ? const Color(0xFF34A853)
+                          : const Color(0xFF1A73E8))
+                      .withAlpha(18),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _reachedClient
+                      ? Icons.check_circle_rounded
+                      : Icons.delivery_dining_rounded,
+                  size: 18,
+                  color: _reachedClient
+                      ? const Color(0xFF34A853)
+                      : const Color(0xFF1A73E8),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _reachedClient
+                        ? '${widget.visit.employeeName} reached ${widget.visit.clientName}'
+                        : '${widget.visit.employeeName} is on the way to ${widget.visit.clientName}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ],
@@ -5778,9 +6266,11 @@ class _LiveMapView extends StatefulWidget {
   final bool fullScreen;
   final bool navigationMode;
   final bool showEtaOverlay;
-  final bool fetchRoadRoute;
-  final Color routeTrailColor;
   final Color? currentPositionColor;
+  final IconData? currentPositionIcon;
+  final bool showBreadcrumb;
+  final bool showMapControls;
+  final bool showLiveBadge;
   final void Function(String eta, String distance)? onEtaUpdate;
   final void Function(List<_RouteOption> routes, int selectedIndex)?
   onRoutesReady;
@@ -5798,9 +6288,11 @@ class _LiveMapView extends StatefulWidget {
     this.fullScreen = false,
     this.navigationMode = false,
     this.showEtaOverlay = false,
-    this.fetchRoadRoute = true,
-    this.routeTrailColor = const Color(0xFF777777),
     this.currentPositionColor,
+    this.currentPositionIcon,
+    this.showBreadcrumb = true,
+    this.showMapControls = true,
+    this.showLiveBadge = true,
     this.onEtaUpdate,
     this.onRoutesReady,
     this.onRotationChanged,
@@ -5837,9 +6329,7 @@ class _LiveMapViewState extends State<_LiveMapView>
       begin: 0.5,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
-    if (widget.fetchRoadRoute &&
-        widget.current != null &&
-        widget.destination != null) {
+    if (widget.current != null && widget.destination != null) {
       _fetchRoute(widget.current!, widget.destination!);
     }
   }
@@ -5854,7 +6344,7 @@ class _LiveMapViewState extends State<_LiveMapView>
         widget.selectedRouteIndex < _routes.length) {
       setState(() => _selectedRouteIndex = widget.selectedRouteIndex);
     }
-    if (!widget.fetchRoadRoute || cur == null || dst == null) return;
+    if (cur == null || dst == null) return;
     // Skip if destination is invalid (0,0 sentinel)
     if (dst.latitude == 0.0 && dst.longitude == 0.0) return;
     // Re-fetch every ~500 m of movement.
@@ -6031,6 +6521,7 @@ class _LiveMapViewState extends State<_LiveMapView>
         (widget.navigationMode
             ? const Color(0xFF34A853)
             : const Color(0xFF1A73E8));
+    final hasCustomPositionIcon = widget.currentPositionIcon != null;
 
     final mapStack = Stack(
       children: [
@@ -6171,7 +6662,7 @@ class _LiveMapViewState extends State<_LiveMapView>
               ),
 
               // ── Travelled breadcrumb (grey) ──
-              if (widget.routePoints.length >= 2)
+              if (widget.showBreadcrumb && widget.routePoints.length >= 2)
                 PolylineLayer(
                   polylines: [
                     Polyline(
@@ -6182,7 +6673,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                     ),
                     Polyline(
                       points: widget.routePoints,
-                      color: widget.routeTrailColor,
+                      color: Colors.grey.withAlpha(180),
                       strokeWidth: 6,
                       strokeCap: StrokeCap.round,
                     ),
@@ -6355,8 +6846,16 @@ class _LiveMapViewState extends State<_LiveMapView>
                             Transform.rotate(
                               angle: heading * math.pi / 180,
                               child: Container(
-                                width: widget.navigationMode ? 23 : 16,
-                                height: widget.navigationMode ? 23 : 16,
+                                width: widget.navigationMode
+                                    ? 23
+                                    : hasCustomPositionIcon
+                                    ? 24
+                                    : 16,
+                                height: widget.navigationMode
+                                    ? 23
+                                    : hasCustomPositionIcon
+                                    ? 24
+                                    : 16,
                                 decoration: BoxDecoration(
                                   color: currentColor,
                                   shape: BoxShape.circle,
@@ -6373,11 +6872,16 @@ class _LiveMapViewState extends State<_LiveMapView>
                                   ],
                                 ),
                                 child: Icon(
-                                  widget.navigationMode
-                                      ? Icons.navigation
-                                      : Icons.circle,
+                                  widget.currentPositionIcon ??
+                                      (widget.navigationMode
+                                          ? Icons.navigation
+                                          : Icons.circle),
                                   color: Colors.white,
-                                  size: widget.navigationMode ? 13 : 8,
+                                  size: widget.navigationMode
+                                      ? 13
+                                      : hasCustomPositionIcon
+                                      ? 15
+                                      : 8,
                                 ),
                               ),
                             ),
@@ -6392,7 +6896,7 @@ class _LiveMapViewState extends State<_LiveMapView>
         ),
 
         // ── LIVE badge ───────────────────────────────────────────────
-        if (!widget.fullScreen)
+        if (!widget.fullScreen && widget.showLiveBadge)
           Positioned(
             left: 10,
             top: 10,
@@ -6422,7 +6926,7 @@ class _LiveMapViewState extends State<_LiveMapView>
           ),
 
         // ── Map control buttons (right side, Google Maps style) ─────
-        if (!widget.fullScreen)
+        if (!widget.fullScreen && widget.showMapControls)
           Positioned(
             right: 10,
             bottom: widget.fullScreen ? 260 : 10,
