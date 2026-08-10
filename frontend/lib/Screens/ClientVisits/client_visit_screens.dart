@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +12,7 @@ import 'client_visit_models.dart';
 import 'client_visit_service.dart';
 import 'client_visit_flow_screens.dart';
 import 'client_visit_theme.dart';
+import 'client_visit_downloads.dart';
 
 const _statuses = [
   'all',
@@ -58,11 +58,27 @@ class _ClientVisitDashboardScreenState
   String _filter = 'all';
   String? _error;
   bool _initialVisitOpened = false;
+  int _downloadCount = 0;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadDownloads();
+  }
+
+  Future<void> _loadDownloads() async {
+    final files = await ClientVisitDownloads.load(widget.userId);
+    if (mounted) setState(() => _downloadCount = files.length);
+  }
+
+  Future<void> _openDownloads() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ClientVisitDownloadedFilesScreen(userId: widget.userId),
+      ),
+    );
+    await _loadDownloads();
   }
 
   Future<void> _load() async {
@@ -211,6 +227,7 @@ class _ClientVisitDashboardScreenState
     }
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
     await _load();
+    await _loadDownloads();
   }
 
   @override
@@ -230,17 +247,21 @@ class _ClientVisitDashboardScreenState
           ],
         ),
         floatingActionButton: (!widget.readOnlyMode && widget.allowCreate)
-          ? FloatingActionButton.extended(
-              onPressed: _create,
-              icon: const Icon(Icons.add_location_alt_rounded),
-              label: const Text('New Visit'),
-            )
-          : null,
+            ? FloatingActionButton.extended(
+                onPressed: _create,
+                icon: const Icon(Icons.add_location_alt_rounded),
+                label: const Text('New Visit'),
+              )
+            : null,
         body: RefreshIndicator(
           onRefresh: _load,
           child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 8, 16,
-              (!widget.readOnlyMode && widget.allowCreate) ? 90 : 16),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              (!widget.readOnlyMode && widget.allowCreate) ? 90 : 16,
+            ),
             children: [
               if (result != null)
                 _Summary(
@@ -259,6 +280,8 @@ class _ClientVisitDashboardScreenState
                     'completed',
                     'rejected',
                   }, historyMode: true),
+                  downloadCount: _downloadCount,
+                  onDownloads: _openDownloads,
                 ),
               const SizedBox(height: 12),
               SingleChildScrollView(
@@ -598,7 +621,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     if (text.isEmpty) return null;
 
     // Google Maps URL: contains @lat,lng,zoom or ?q=lat,lng
-    final urlLatLng = RegExp(r'[/@](-?\d+\.?\d*),(-?\d+\.?\d*)').firstMatch(text);
+    final urlLatLng = RegExp(
+      r'[/@](-?\d+\.?\d*),(-?\d+\.?\d*)',
+    ).firstMatch(text);
     if (urlLatLng != null) {
       final lat = double.tryParse(urlLatLng.group(1)!);
       final lng = double.tryParse(urlLatLng.group(2)!);
@@ -608,7 +633,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     }
 
     // Decimal degrees: "11.686478, 78.120482" or "11.686478,78.120482"
-    final decimal = RegExp(r'^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$').firstMatch(text);
+    final decimal = RegExp(
+      r'^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$',
+    ).firstMatch(text);
     if (decimal != null) {
       final lat = double.tryParse(decimal.group(1)!);
       final lng = double.tryParse(decimal.group(2)!);
@@ -639,7 +666,10 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     if ((value ?? '').trim().isEmpty) return null; // optional field
     final text = value!.trim();
     // Accept shortened Google Maps links as valid input
-    if (RegExp(r'https?://(maps\.app\.goo\.gl|goo\.gl/maps)/\S+', caseSensitive: false).hasMatch(text)) {
+    if (RegExp(
+      r'https?://(maps\.app\.goo\.gl|goo\.gl/maps)/\S+',
+      caseSensitive: false,
+    ).hasMatch(text)) {
       return null;
     }
     if (_parseCoords(text) == null) {
@@ -650,14 +680,18 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
 
   /// Resolves a shortened Google Maps URL (maps.app.goo.gl/...)
   /// by following redirects and extracting the lat/lng from the final URL.
-  static Future<({double lat, double lng})?> _resolveShortUrl(String url) async {
+  static Future<({double lat, double lng})?> _resolveShortUrl(
+    String url,
+  ) async {
     try {
       // Follow the redirect chain (up to 5 hops) without downloading the body
       String current = url;
       for (int i = 0; i < 5; i++) {
         final request = http.Request('HEAD', Uri.parse(current))
           ..followRedirects = false;
-        final response = await request.send().timeout(const Duration(seconds: 8));
+        final response = await request.send().timeout(
+          const Duration(seconds: 8),
+        );
         final location = response.headers['location'];
         if (location == null) break;
         current = location;
@@ -666,14 +700,16 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
         if (coords != null) return coords;
       }
       // Last attempt: GET the final URL and look for coords in the body
-      final resp = await http.get(Uri.parse(current),
-        headers: {'User-Agent': 'HRMS-Bitbyte/1.0'})
-        .timeout(const Duration(seconds: 8));
+      final resp = await http
+          .get(Uri.parse(current), headers: {'User-Agent': 'HRMS-Bitbyte/1.0'})
+          .timeout(const Duration(seconds: 8));
       // Look for @lat,lng pattern in the response body or final URL
       final bodyCoords = _parseCoords(resp.request?.url.toString() ?? '');
       if (bodyCoords != null) return bodyCoords;
       // Scan the HTML body for coordinates
-      final match = RegExp(r'[/@](-?\d{1,3}\.\d{4,}),(-?\d{1,3}\.\d{4,})').firstMatch(resp.body);
+      final match = RegExp(
+        r'[/@](-?\d{1,3}\.\d{4,}),(-?\d{1,3}\.\d{4,})',
+      ).firstMatch(resp.body);
       if (match != null) {
         final lat = double.tryParse(match.group(1)!);
         final lng = double.tryParse(match.group(2)!);
@@ -701,10 +737,11 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       final rawLocation = _locationCoords.text.trim();
       // Resolve coordinates: parse directly, or follow short URL redirect
       var coords = _parseCoords(rawLocation);
-      if (coords == null && RegExp(
-        r'https?://(maps\.app\.goo\.gl|goo\.gl/maps)/\S+',
-        caseSensitive: false,
-      ).hasMatch(rawLocation)) {
+      if (coords == null &&
+          RegExp(
+            r'https?://(maps\.app\.goo\.gl|goo\.gl/maps)/\S+',
+            caseSensitive: false,
+          ).hasMatch(rawLocation)) {
         coords = await _resolveShortUrl(rawLocation);
       }
       await widget.service.create(widget.userId, {
@@ -763,10 +800,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   submit
                       ? 'Your visit request has been submitted for approval.'
                       : 'Your visit request has been saved as a draft.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
@@ -803,7 +837,8 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                 child: OutlinedButton(
                   onPressed: _saving ? null : () => _submit(false),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                   child: const Text('Save draft'),
                 ),
               ),
@@ -813,15 +848,25 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                 child: FilledButton(
                   onPressed: _saving ? null : () => _submit(true),
                   style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
                   child: _saving
-                    ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        SizedBox(width: 16, height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                        SizedBox(width: 8),
-                        Text('Saving…'),
-                      ])
-                    : const Text('Submit request'),
+                      ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Text('Saving…'),
+                          ],
+                        )
+                      : const Text('Submit request'),
                 ),
               ),
             ],
@@ -880,15 +925,13 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   decoration: InputDecoration(
                     labelText: 'Client location (paste from WhatsApp / Maps)',
                     hintText: 'https://maps.app.goo.gl/...',
-                    helperText:
-                        'Paste a Google Maps share link or coordinates',
+                    helperText: 'Paste a Google Maps share link or coordinates',
                     helperMaxLines: 2,
                     suffixIcon: _locationCoords.text.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear),
-                            onPressed: () => setState(
-                              () => _locationCoords.clear(),
-                            ),
+                            onPressed: () =>
+                                setState(() => _locationCoords.clear()),
                           )
                         : const Icon(Icons.my_location_rounded),
                   ),
@@ -1710,6 +1753,8 @@ class _Summary extends StatelessWidget {
   final VoidCallback onUpcoming;
   final VoidCallback onPendingApproval;
   final VoidCallback onHistory;
+  final int downloadCount;
+  final VoidCallback onDownloads;
   const _Summary({
     required this.summary,
     required this.onInProgress,
@@ -1717,6 +1762,8 @@ class _Summary extends StatelessWidget {
     required this.onUpcoming,
     required this.onPendingApproval,
     required this.onHistory,
+    required this.downloadCount,
+    required this.onDownloads,
   });
   @override
   Widget build(BuildContext context) => Column(
@@ -1772,6 +1819,14 @@ class _Summary extends StatelessWidget {
         (summary['completed'] ?? 0) + (summary['rejected'] ?? 0),
         ClientVisitColors.green,
         onHistory,
+      ),
+      const SizedBox(height: 8),
+      _wideBox(
+        context,
+        'Downloaded Files',
+        downloadCount,
+        ClientVisitColors.blue,
+        onDownloads,
       ),
     ],
   );
@@ -1976,8 +2031,8 @@ class _VisitCard extends StatelessWidget {
     final initials = parts.length >= 2
         ? '${parts.first[0]}${parts.last[0]}'.toUpperCase()
         : empName.isNotEmpty
-            ? empName[0].toUpperCase()
-            : '?';
+        ? empName[0].toUpperCase()
+        : '?';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -2006,7 +2061,9 @@ class _VisitCard extends StatelessWidget {
                         color: _statusColor.withAlpha(20),
                         shape: BoxShape.circle,
                         border: Border.all(
-                            color: _statusColor.withAlpha(60), width: 1.5),
+                          color: _statusColor.withAlpha(60),
+                          width: 1.5,
+                        ),
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: hasPhoto
@@ -2014,19 +2071,25 @@ class _VisitCard extends StatelessWidget {
                               visit.employeePhotoUrl,
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Center(
-                                child: Text(initials,
-                                    style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800,
-                                        color: _statusColor)),
+                                child: Text(
+                                  initials,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: _statusColor,
+                                  ),
+                                ),
                               ),
                             )
                           : Center(
-                              child: Text(initials,
-                                  style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w800,
-                                      color: _statusColor)),
+                              child: Text(
+                                initials,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: _statusColor,
+                                ),
+                              ),
                             ),
                     ),
                     const SizedBox(width: 10),
@@ -2037,46 +2100,57 @@ class _VisitCard extends StatelessWidget {
                           // Employee name (shown if reviewer/different user)
                           if (empName.isNotEmpty &&
                               visit.employeeUserId != historyViewerUserId)
-                            Text(empName,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: ThemeConfig.getTextMuted(context),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                          Text(visit.clientName,
+                            Text(
+                              empName,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: ThemeConfig.getTextMuted(context),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          Text(
+                            visit.clientName,
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
                               color: ThemeConfig.getTextPrimary(context),
                             ),
                             maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           const SizedBox(height: 2),
-                          Text(visit.visitId,
+                          Text(
+                            visit.visitId,
                             style: TextStyle(
                               fontSize: 11,
                               color: ThemeConfig.getTextMuted(context),
-                            )),
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
                     // Status badge
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: _statusColor.withAlpha(20),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: _statusColor.withAlpha(60)),
                       ),
-                      child: Text(_statusLabel,
+                      child: Text(
+                        _statusLabel,
                         style: TextStyle(
                           color: _statusColor,
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                        )),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -2088,33 +2162,47 @@ class _VisitCard extends StatelessWidget {
                   spacing: 16,
                   runSpacing: 6,
                   children: [
-                    _detailChip(context, Icons.person_outline, visit.contactPerson),
-                    _detailChip(context, Icons.calendar_today_outlined,
-                      '${visit.scheduledAt.day.toString().padLeft(2,'0')}/'
-                      '${visit.scheduledAt.month.toString().padLeft(2,'0')}/'
+                    _detailChip(
+                      context,
+                      Icons.person_outline,
+                      visit.contactPerson,
+                    ),
+                    _detailChip(
+                      context,
+                      Icons.calendar_today_outlined,
+                      '${visit.scheduledAt.day.toString().padLeft(2, '0')}/'
+                      '${visit.scheduledAt.month.toString().padLeft(2, '0')}/'
                       '${visit.scheduledAt.year}  '
-                      '${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}'),
-                    _detailChip(context, Icons.directions_car_outlined,
-                      _label(visit.travelMode)),
+                      '${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}',
+                    ),
+                    _detailChip(
+                      context,
+                      Icons.directions_car_outlined,
+                      _label(visit.travelMode),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 // Purpose
-                Text(visit.purpose,
+                Text(
+                  visit.purpose,
                   style: TextStyle(
                     fontSize: 12,
                     color: ThemeConfig.getTextMuted(context),
                   ),
                   maxLines: 2,
-                  overflow: TextOverflow.ellipsis),
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (_historyDetails.isNotEmpty) ...[
                   const SizedBox(height: 6),
-                  Text(_historyDetails,
+                  Text(
+                    _historyDetails,
                     style: TextStyle(
                       fontSize: 11,
                       color: ThemeConfig.getTextMuted(context),
                       fontStyle: FontStyle.italic,
-                    )),
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -2124,13 +2212,20 @@ class _VisitCard extends StatelessWidget {
     );
   }
 
-  Widget _detailChip(BuildContext context, IconData icon, String label) =>
-    Row(mainAxisSize: MainAxisSize.min, children: [
+  Widget _detailChip(BuildContext context, IconData icon, String label) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
       Icon(icon, size: 12, color: ThemeConfig.getTextMuted(context)),
       const SizedBox(width: 4),
-      Text(label, style: TextStyle(fontSize: 12,
-        color: ThemeConfig.getTextMuted(context))),
-    ]);
+      Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: ThemeConfig.getTextMuted(context),
+        ),
+      ),
+    ],
+  );
 }
 
 class _StatusChip extends StatelessWidget {

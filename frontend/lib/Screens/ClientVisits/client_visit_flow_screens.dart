@@ -22,6 +22,7 @@ import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
 import 'client_visit_service.dart';
 import 'client_visit_theme.dart';
+import 'client_visit_downloads.dart';
 
 class ClientVisitManagerApprovalScreen extends StatelessWidget {
   final String userId;
@@ -1685,7 +1686,19 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         {'fileName': fileName, 'mimeType': 'application/pdf', 'bytes': bytes},
       );
 
-      // Immediately open the PDF so it appears in recent files / gallery
+      final reportUri = (savedUri != null && savedUri.isNotEmpty)
+          ? savedUri
+          : 'Downloads/HRMS-ERP/$fileName';
+      await ClientVisitDownloads.save(
+        userId: widget.userId,
+        visitId: reportVisit.id,
+        visitReference: reportVisit.visitId,
+        clientName: reportVisit.clientName,
+        fileName: fileName,
+        uri: reportUri,
+      );
+
+      // Open the saved PDF while retaining it in Downloads and app history.
       if (savedUri != null && savedUri.isNotEmpty) {
         await _filesChannel.invokeMethod('openUrl', {
           'url': savedUri,
@@ -1693,7 +1706,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         });
       }
 
-      _message('Report saved to Downloads/HRMS-ERP');
+      _message('PDF saved to Downloads/HRMS-ERP and Downloaded Files');
     });
   }
 
@@ -1713,18 +1726,22 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             ? _stateMessage(Icons.error_outline, _error!, _load)
             : visit == null
             ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _stepHeader(visit),
-                  const SizedBox(height: 12),
-                  ..._content(visit),
-                  if (_working)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 12),
-                      child: LinearProgressIndicator(),
-                    ),
-                ],
+            : SafeArea(
+                top: false,
+                minimum: const EdgeInsets.only(bottom: 16),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  children: [
+                    _stepHeader(visit),
+                    const SizedBox(height: 12),
+                    ..._content(visit),
+                    if (_working)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: LinearProgressIndicator(),
+                      ),
+                  ],
+                ),
               ),
       ),
     );
