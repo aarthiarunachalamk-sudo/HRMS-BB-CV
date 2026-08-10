@@ -4,6 +4,7 @@ from django.urls import include, path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
+from client_visits import views as client_visit_views
 import time
 
 
@@ -27,6 +28,11 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("hrms.urls")),
     path("api/client-visits/", include("client_visits.urls")),
+    path(
+        "track/client-visit/<str:token>/",
+        client_visit_views.public_tracking_page,
+        name="client_visit_public_tracking_page",
+    ),
 ]
 
 

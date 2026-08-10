@@ -111,3 +111,21 @@ class VisitExpense(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     note = models.CharField(max_length=240, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ClientVisitTrackingLink(models.Model):
+    """Revocable, time-limited public access to one visit's live position."""
+
+    visit = models.ForeignKey(
+        ClientVisit,
+        on_delete=models.CASCADE,
+        related_name='tracking_links',
+    )
+    token_hash = models.CharField(max_length=64, unique=True, db_index=True)
+    created_by = models.CharField(max_length=20, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']

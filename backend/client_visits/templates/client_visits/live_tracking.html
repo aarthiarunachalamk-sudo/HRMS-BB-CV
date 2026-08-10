@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Live visit tracking</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; font-family: Arial, sans-serif; color: #202124; }
+    body { background: #eef2f4; }
+    #map { position: fixed; inset: 0; }
+    .top-card, .bottom-card {
+      position: fixed; z-index: 500; left: 16px; right: 16px; background: #fff;
+      box-shadow: 0 3px 16px rgba(0,0,0,.22);
+    }
+    .top-card { top: max(16px, env(safe-area-inset-top)); border-radius: 20px; padding: 15px 18px; }
+    .brand { display: flex; align-items: center; gap: 9px; color: #0b57d0; font-weight: 700; }
+    .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #ea4335; box-shadow: 0 0 0 5px #fce8e6; }
+    .destination { margin-top: 11px; font-size: 17px; font-weight: 700; }
+    .bottom-card {
+      bottom: max(16px, env(safe-area-inset-bottom)); border-radius: 20px; padding: 17px 18px;
+    }
+    .status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .status { color: #188038; font-size: 22px; font-weight: 800; }
+    .status.arrived { color: #0b57d0; }
+    .updated { color: #5f6368; font-size: 12px; margin-top: 4px; }
+    .route-info { display: flex; gap: 18px; margin-top: 13px; padding-top: 13px; border-top: 1px solid #e0e0e0; }
+    .metric { font-size: 13px; color: #5f6368; }
+    .metric strong { display: block; color: #202124; font-size: 17px; margin-bottom: 2px; }
+    .employee { color: #5f6368; font-size: 13px; white-space: nowrap; }
+    .error { color: #b3261e; font-weight: 600; }
+    .employee-pin {
+      width: 28px; height: 28px; border-radius: 50%; background: #1a73e8;
+      border: 4px solid #fff; box-shadow: 0 1px 6px rgba(0,0,0,.45);
+    }
+    @media (min-width: 700px) {
+      .top-card, .bottom-card { left: 50%; right: auto; width: 440px; transform: translateX(-50%); }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <section class="top-card">
+    <div class="brand"><span class="live-dot"></span><span>LIVE TRACKING</span></div>
+    <div id="destination" class="destination">Loading visit…</div>
+  </section>
+  <section class="bottom-card">
+    <div class="status-row">
+      <div>
+        <div id="status" class="status">Locating…</div>
+        <div id="updated" class="updated">Waiting for the latest GPS position</div>
+      </div>
+      <div id="employee" class="employee"></div>
+    </div>
+    <div id="route-info" class="route-info" hidden>
+      <div class="metric"><strong id="eta">—</strong>Estimated arrival</div>
+      <div class="metric"><strong id="distance">—</strong>Distance remaining</div>
+    </div>
+  </section>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const trackingApiUrl = '{{ tracking_api_url|escapejs }}';
+    const map = L.map('map', { zoomControl: false }).setView([20.5937, 78.9629], 5);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let employeeMarker;
+    let destinationMarker;
+    let routeLine;
+    let fitted = false;
+    let lastRouteAt = 0;
+    let lastRoutePosition = null;
+
+    function metresBetween(a, b) {
+      if (!a || !b) return Infinity;
+      return map.distance(L.latLng(a[0], a[1]), L.latLng(b[0], b[1]));
+    }
+
+    async function updateRoadRoute(current, destination, force) {
+      const now = Date.now();
+      if (!force && now - lastRouteAt < 30000 && metresBetween(current, lastRoutePosition) < 50) return;
+      lastRouteAt = now;
+      lastRoutePosition = current;
+      const url = `https://router.project-osrm.org/route/v1/driving/${current[1]},${current[0]};${destination[1]},${destination[0]}?overview=full&geometries=geojson`;
+      try {
+        const response = await fetch(url);
+        const body = await response.json();
+        const route = body.routes && body.routes[0];
+        if (!route) return;
+        const points = route.geometry.coordinates.map(point => [point[1], point[0]]);
+        if (routeLine) routeLine.remove();
+        routeLine = L.polyline(points, { color: '#3f00d7', weight: 7, opacity: .95 }).addTo(map);
+        document.getElementById('eta').textContent = `${Math.max(1, Math.ceil(route.duration / 60))} min`;
+        document.getElementById('distance').textContent = route.distance < 1000
+          ? `${Math.round(route.distance)} m`
+          : `${(route.distance / 1000).toFixed(1)} km`;
+        document.getElementById('route-info').hidden = false;
+        if (!fitted) {
+          map.fitBounds(routeLine.getBounds(), { padding: [55, 115] });
+          fitted = true;
+        }
+      } catch (_) {
+        // GPS status remains available even if the road-routing service is unavailable.
+      }
+    }
+
+    function formatUpdated(value) {
+      if (!value) return 'Waiting for the latest GPS position';
+      return `Updated ${new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch(trackingApiUrl, { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Live tracking is unavailable.');
+
+        document.getElementById('destination').textContent = data.client_name;
+        const status = document.getElementById('status');
+        status.textContent = data.status_label;
+        status.classList.toggle('arrived', Boolean(data.arrived));
+        document.getElementById('employee').textContent = `${data.employee_name} • ${data.visit_id}`;
+        document.getElementById('updated').textContent = formatUpdated(data.last_updated_at);
+
+        const currentData = data.current_location;
+        const destinationData = data.destination;
+        if (currentData && destinationData.latitude != null && destinationData.longitude != null) {
+          const current = [Number(currentData.latitude), Number(currentData.longitude)];
+          const destination = [Number(destinationData.latitude), Number(destinationData.longitude)];
+          const employeeIcon = L.divIcon({ className: '', html: '<div class="employee-pin"></div>', iconSize: [28, 28], iconAnchor: [14, 14] });
+          if (!employeeMarker) employeeMarker = L.marker(current, { icon: employeeIcon }).addTo(map);
+          else employeeMarker.setLatLng(current);
+          if (!destinationMarker) destinationMarker = L.marker(destination).addTo(map);
+          else destinationMarker.setLatLng(destination);
+          await updateRoadRoute(current, destination, false);
+        }
+
+        if (!data.arrived) setTimeout(refresh, Math.max(5, data.poll_after_seconds || 8) * 1000);
+      } catch (error) {
+        const status = document.getElementById('status');
+        status.textContent = error.message;
+        status.classList.add('error');
+      }
+    }
+
+    refresh();
+  </script>
+</body>
+</html>

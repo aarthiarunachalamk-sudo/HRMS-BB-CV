@@ -62,6 +62,7 @@ SECRET_KEY = 'django-insecure-rp^&)&+jteiea(7!zy4iy3p5bn^772pe3qpic#qxhcatya6o*6
 DEBUG = True
  
 ALLOWED_HOSTS = ['*']
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
  
  
 # Application definition

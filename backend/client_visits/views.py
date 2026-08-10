@@ -1,14 +1,20 @@
 from decimal import Decimal, InvalidOperation
+from datetime import timedelta
+import hashlib
 import json
 import logging
 import re
+import secrets
 
 from cloudinary.exceptions import Error as CloudinaryError
 from django.db import transaction
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q, Sum
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_GET
 from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
@@ -17,7 +23,12 @@ from PIL import Image, UnidentifiedImageError
 from hrms.models import AppNotification, User
 from hrms.push_notifications import send_mobile_push
 from hrms.views import _passport_photo_for_email
-from .models import ClientVisit, VisitAttachment, VisitExpense
+from .models import (
+    ClientVisit,
+    ClientVisitTrackingLink,
+    VisitAttachment,
+    VisitExpense,
+)
 from .storage import upload_client_visit_file
 
 
@@ -656,6 +667,128 @@ def visit_location(request, pk):
         'point': point,
         'route_points': len(visit.travel_route),
     })
+
+
+def _tracking_link_for_token(token):
+    """Resolve an opaque public token without ever storing its raw value."""
+    if not isinstance(token, str) or not (32 <= len(token) <= 128):
+        return None
+    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    return (
+        ClientVisitTrackingLink.objects.select_related('visit')
+        .filter(token_hash=token_hash, revoked_at__isnull=True)
+        .first()
+    )
+
+
+def _public_tracking_payload(link):
+    visit = link.visit
+    route = list(visit.travel_route or [])
+    latest = route[-1] if route else None
+    if (
+        latest is None
+        and visit.office_check_out_latitude is not None
+        and visit.office_check_out_longitude is not None
+    ):
+        latest = {
+            'latitude': float(visit.office_check_out_latitude),
+            'longitude': float(visit.office_check_out_longitude),
+            'recorded_at': (
+                visit.office_check_out_at.isoformat()
+                if visit.office_check_out_at else None
+            ),
+        }
+    arrived = visit.status in {'in_progress', 'completed'} or bool(visit.reached_client_at)
+    status_label = 'Arrived' if arrived else (
+        'On the way' if visit.status == 'travelling' else visit.get_status_display()
+    )
+    public_location = None
+    if latest:
+        public_location = {
+            'latitude': latest.get('latitude'),
+            'longitude': latest.get('longitude'),
+            'recorded_at': latest.get('recorded_at'),
+        }
+    return {
+        'success': True,
+        'visit_id': visit.visit_id,
+        'client_name': visit.client_name,
+        'employee_name': (visit.employee_name.strip().split() or ['Employee'])[0],
+        'status': visit.status,
+        'status_label': status_label,
+        'is_live': visit.status == 'travelling',
+        'arrived': arrived,
+        'current_location': public_location,
+        'destination': {
+            'latitude': float(visit.latitude) if visit.latitude is not None else None,
+            'longitude': float(visit.longitude) if visit.longitude is not None else None,
+        },
+        'last_updated_at': (
+            public_location.get('recorded_at') if public_location else None
+        ),
+        'expires_at': link.expires_at.isoformat(),
+        'poll_after_seconds': 8,
+    }
+
+
+@api_view(['POST'])
+def visit_tracking_link(request, pk):
+    """Create a new time-limited link suitable for sharing with a client."""
+    user_id, user = _actor(request)
+    visit = get_object_or_404(ClientVisit, pk=pk)
+    if not user or not _can_view(visit, user_id, user):
+        return _error('You cannot share tracking for this visit.', 403)
+    if visit.status not in {'travelling', 'in_progress'}:
+        return _error('Live tracking can only be shared during an active visit.', 409)
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+    link = ClientVisitTrackingLink.objects.create(
+        visit=visit,
+        token_hash=token_hash,
+        created_by=user_id,
+        expires_at=timezone.now() + timedelta(hours=12),
+    )
+    page_path = reverse(
+        'client_visit_public_tracking_page',
+        kwargs={'token': raw_token},
+    )
+    return Response({
+        'success': True,
+        'tracking_url': request.build_absolute_uri(page_path),
+        'expires_at': link.expires_at.isoformat(),
+    }, status=201)
+
+
+@api_view(['GET'])
+@never_cache
+def public_tracking_data(request, token):
+    link = _tracking_link_for_token(token)
+    if link is None:
+        return _error('This tracking link is invalid or has been revoked.', 404)
+    if link.expires_at <= timezone.now():
+        return _error('This tracking link has expired.', 410)
+    response = Response(_public_tracking_payload(link))
+    response['Cache-Control'] = 'no-store, private, max-age=0'
+    response['Pragma'] = 'no-cache'
+    return response
+
+
+@require_GET
+@never_cache
+def public_tracking_page(request, token):
+    api_path = reverse(
+        'client_visit_public_tracking_data',
+        kwargs={'token': token},
+    )
+    response = render(
+        request,
+        'client_visits/live_tracking.html',
+        {'tracking_api_url': api_path},
+    )
+    response['Cache-Control'] = 'no-store, private, max-age=0'
+    response['Pragma'] = 'no-cache'
+    return response
 
 
 @api_view(['POST'])

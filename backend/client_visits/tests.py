@@ -1,15 +1,18 @@
 from io import BytesIO
+from datetime import timedelta
+from urllib.parse import urlparse
 from unittest.mock import patch
 
 from cloudinary.exceptions import Error as CloudinaryError
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APITestCase
 from PIL import Image
 
 from hrms.models import AppNotification, User
-from .models import ClientVisit, VisitAttachment
+from .models import ClientVisit, ClientVisitTrackingLink, VisitAttachment
 from .storage import client_visit_storage_config
 
 
@@ -600,6 +603,66 @@ class ClientVisitApiTests(APITestCase):
             }, format='json')
             self.assertEqual(response.status_code, 403, role)
             self.assertEqual(ClientVisit.objects.get(pk=visit_id).status, 'pending')
+
+    def test_active_visit_can_create_a_public_live_tracking_link(self):
+        visit_id = self._create().data['visit']['id']
+        visit = ClientVisit.objects.get(pk=visit_id)
+        visit.status = 'travelling'
+        visit.latitude = 13.0844
+        visit.longitude = 80.2710
+        visit.travel_route = [{
+            'latitude': 13.0831,
+            'longitude': 80.2709,
+            'recorded_at': timezone.now().isoformat(),
+        }]
+        visit.save(update_fields=['status', 'latitude', 'longitude', 'travel_route'])
+
+        created = self.client.post(
+            f'/api/client-visits/{visit_id}/tracking-link/',
+            {'user_id': self.employee.user_id},
+            format='json',
+        )
+        self.assertEqual(created.status_code, 201)
+        tracking_url = created.data['tracking_url']
+        self.assertIn('/track/client-visit/', tracking_url)
+        token = urlparse(tracking_url).path.rstrip('/').split('/')[-1]
+
+        page = self.client.get(f'/track/client-visit/{token}/')
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'LIVE TRACKING')
+
+        public_data = self.client.get(
+            f'/api/client-visits/public-track/{token}/',
+        )
+        self.assertEqual(public_data.status_code, 200)
+        self.assertEqual(public_data.data['status_label'], 'On the way')
+        self.assertEqual(
+            public_data.data['current_location']['latitude'],
+            13.0831,
+        )
+        self.assertNotIn('contact_phone', public_data.data)
+        self.assertNotIn('address', public_data.data)
+        self.assertNotIn('travel_route', public_data.data)
+
+    def test_expired_tracking_link_stops_returning_location(self):
+        visit_id = self._create().data['visit']['id']
+        visit = ClientVisit.objects.get(pk=visit_id)
+        visit.status = 'travelling'
+        visit.save(update_fields=['status'])
+        created = self.client.post(
+            f'/api/client-visits/{visit_id}/tracking-link/',
+            {'user_id': self.employee.user_id},
+            format='json',
+        )
+        token = urlparse(created.data['tracking_url']).path.rstrip('/').split('/')[-1]
+        ClientVisitTrackingLink.objects.update(
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+
+        response = self.client.get(
+            f'/api/client-visits/public-track/{token}/',
+        )
+        self.assertEqual(response.status_code, 410)
 
     def test_tl_and_hr_can_approve_client_visits(self):
         for role in ('tl', 'hr'):

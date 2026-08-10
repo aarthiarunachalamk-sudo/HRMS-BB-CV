@@ -297,6 +297,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   List<_RouteOption> _routeOptions = [];
   int _selectedRouteIndex = 0;
   bool _navMode = false;
+  bool _routeReversed = false;
   List<String> _attendees = [];
   List<Map<String, dynamic>> _checklist = [];
   // Local proof images staged for upload (Step 9)
@@ -1164,6 +1165,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ? LatLng(ocLat, ocLng) : null;
     final current = _lastTrackedPosition != null
         ? LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude) : null;
+    final routeCurrent = _routeReversed ? _destinationLatLng : current;
+    final routeDestination = _routeReversed ? current : _destinationLatLng;
     final safePad = MediaQuery.of(context).padding;
 
     return ClientVisitTheme(
@@ -1173,11 +1176,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             // ── Full-screen map ──────────────────────────────────────
             Positioned.fill(
               child: _LiveMapView(
+                key: ValueKey('travel-map-$_routeReversed'),
                 mapController: _mapController,
                 routePoints: _liveRoutePoints,
-                origin: origin,
-                current: current,
-                destination: _destinationLatLng,
+                origin: _routeReversed ? _destinationLatLng : origin,
+                current: routeCurrent,
+                destination: routeDestination,
                 fullScreen: true,
                 navigationMode: _navMode,
                 showEtaOverlay: false,
@@ -1224,6 +1228,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     ),
                     const SizedBox(height: 12),
                   ],
+                  _travelMapButton(
+                    icon: Icons.explore_rounded,
+                    onTap: () {
+                      try {
+                        _mapController.rotate(0);
+                      } catch (_) {}
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   _travelMapButton(
                     icon: Icons.my_location,
                     color: const Color(0xFF1A73E8),
@@ -1502,7 +1515,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                                       BorderRadius.circular(30)),
                             ),
                             onPressed: () {
-                              setState(() => _navMode = !_navMode);
+                              setState(() {
+                                // Client visits always navigate employee → client.
+                                // A reversed route is useful for preview only.
+                                if (!_navMode && _routeReversed) {
+                                  _routeReversed = false;
+                                  _routeOptions = [];
+                                  _selectedRouteIndex = 0;
+                                }
+                                _navMode = !_navMode;
+                              });
                               if (_navMode &&
                                   _lastTrackedPosition != null) {
                                 try {
@@ -1648,23 +1670,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               children: [
                 Positioned(
                   top: 14,
-                  child: Container(
-                    width: 18,
-                    height: 18,
-                    alignment: Alignment.center,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFD2E3FC),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF1A73E8),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
+                  child: _directionPointIcon(currentLocation: !_routeReversed),
                 ),
                 Positioned(
                   top: 36,
@@ -1683,13 +1689,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     ),
                   ),
                 ),
-                const Positioned(
+                Positioned(
                   bottom: 10,
-                  child: Icon(
-                    Icons.location_on_outlined,
-                    size: 23,
-                    color: Color(0xFFEA4335),
-                  ),
+                  child: _directionPointIcon(currentLocation: _routeReversed),
                 ),
               ],
             ),
@@ -1701,14 +1703,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   height: 43.5,
                   child: Row(
                     children: [
-                      const Expanded(
-                        child: Text(
-                          'Your location',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF1A73E8),
-                            fontWeight: FontWeight.w500,
-                          ),
+                      Expanded(
+                        child: _directionLabel(
+                          visit,
+                          destination: _routeReversed,
                         ),
                       ),
                       PopupMenuButton<String>(
@@ -1760,43 +1758,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: _destinationLatLng == null
-                            ? const Row(
-                                children: [
-                                  SizedBox(
-                                    width: 12,
-                                    height: 12,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Color(0xFF5F6368),
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Finding destination…',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Color(0xFF5F6368),
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : Text(
-                                visit.clientName.toUpperCase(),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF202124),
-                                ),
-                              ),
+                        child: _directionLabel(
+                          visit,
+                          destination: !_routeReversed,
+                        ),
                       ),
                       Tooltip(
-                        message: 'Show route overview',
+                        message: 'Swap start and destination',
                         child: InkWell(
                           borderRadius: BorderRadius.circular(20),
-                          onTap: _fitMapBounds,
+                          onTap: _swapRouteEndpoints,
                           child: const SizedBox(
                             width: 42,
                             height: 40,
@@ -1818,6 +1789,95 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ],
       ),
     );
+  }
+
+  Widget _directionPointIcon({required bool currentLocation}) {
+    if (!currentLocation) {
+      return const Icon(
+        Icons.location_on_outlined,
+        size: 23,
+        color: Color(0xFFEA4335),
+      );
+    }
+    return Container(
+      width: 18,
+      height: 18,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: Color(0xFFD2E3FC),
+        shape: BoxShape.circle,
+      ),
+      child: Container(
+        width: 10,
+        height: 10,
+        decoration: const BoxDecoration(
+          color: Color(0xFF1A73E8),
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
+
+  Widget _directionLabel(
+    ClientVisit visit, {
+    required bool destination,
+  }) {
+    if (!destination) {
+      return const Text(
+        'Your location',
+        style: TextStyle(
+          fontSize: 14,
+          color: Color(0xFF1A73E8),
+          fontWeight: FontWeight.w500,
+        ),
+      );
+    }
+    if (_destinationLatLng == null) {
+      return const Row(
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(0xFF5F6368),
+            ),
+          ),
+          SizedBox(width: 8),
+          Text(
+            'Finding destination…',
+            style: TextStyle(fontSize: 13, color: Color(0xFF5F6368)),
+          ),
+        ],
+      );
+    }
+    return Text(
+      visit.clientName.toUpperCase(),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: Color(0xFF202124),
+      ),
+    );
+  }
+
+  void _swapRouteEndpoints() {
+    if (_destinationLatLng == null || _lastTrackedPosition == null) {
+      _message('Waiting for both locations before swapping the route.');
+      return;
+    }
+    setState(() {
+      _routeReversed = !_routeReversed;
+      _routeOptions = [];
+      _selectedRouteIndex = 0;
+      _etaText = '';
+      _distanceText = '';
+    });
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (mounted) _fitMapBounds();
+    });
   }
 
   DropdownMenuItem<String> _expenseItem(String value, IconData icon, String label) =>
@@ -2032,17 +2092,23 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Future<void> _shareDirections(ClientVisit visit) async {
-    final route = _routeOptions.isNotEmpty &&
-            _selectedRouteIndex < _routeOptions.length
-        ? _routeOptions[_selectedRouteIndex]
-        : null;
-    final summary = StringBuffer('Directions to ${visit.clientName}');
-    if (visit.address.trim().isNotEmpty) summary.write('\n${visit.address.trim()}');
-    if (route != null) {
-      summary.write('\n${route.durationLabel}, ${route.distanceLabel}');
+    try {
+      final trackingUrl = await widget.service.createTrackingLink(
+        widget.userId,
+        widget.visitId,
+      );
+      final message = 'Track the live journey to ${visit.clientName}:\n'
+          '$trackingUrl\n\n'
+          'This secure link expires automatically.';
+      await Clipboard.setData(ClipboardData(text: message));
+      if (mounted) {
+        _message('Live tracking link copied. Paste it into WhatsApp or SMS.');
+      }
+    } catch (error) {
+      if (mounted) {
+        _message('$error');
+      }
     }
-    await Clipboard.setData(ClipboardData(text: summary.toString()));
-    if (mounted) _message('Directions copied. You can paste them into any app.');
   }
 
   /// Google Maps style circular map control button.
@@ -4800,6 +4866,7 @@ class _LiveMapView extends StatefulWidget {
   final int selectedRouteIndex;
 
   const _LiveMapView({
+    super.key,
     required this.mapController,
     required this.routePoints,
     this.origin,
@@ -5029,7 +5096,8 @@ class _LiveMapViewState extends State<_LiveMapView>
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.pinchZoom |
                     InteractiveFlag.drag |
-                    InteractiveFlag.doubleTapZoom,
+                    InteractiveFlag.doubleTapZoom |
+                    InteractiveFlag.rotate,
               ),
             ),
             children: [

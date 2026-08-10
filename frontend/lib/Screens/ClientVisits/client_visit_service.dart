@@ -149,6 +149,21 @@ class ClientVisitService {
     _body(response);
   }
 
+  Future<String> createTrackingLink(String userId, int id) async {
+    final response = await http
+        .post(
+          Uri.parse('$_base$id/tracking-link/'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'user_id': userId}),
+        )
+        .timeout(const Duration(seconds: 15));
+    final url = '${_body(response)['tracking_url'] ?? ''}'.trim();
+    if (url.isEmpty) {
+      throw Exception('The server did not return a live tracking link.');
+    }
+    return url;
+  }
+
   Future<void> uploadFiles(
     String userId,
     int id,
