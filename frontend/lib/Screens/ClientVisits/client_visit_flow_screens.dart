@@ -298,6 +298,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   int _selectedRouteIndex = 0;
   bool _navMode = false;
   bool _routeReversed = false;
+  String _selectedTravelMode = 'drive';
+  double _mapRotation = 0;
+  final List<LatLng> _additionalStops = [];
   List<String> _attendees = [];
   List<Map<String, dynamic>> _checklist = [];
   // Local proof images staged for upload (Step 9)
@@ -364,9 +367,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         // Set destination — try stored coords first, then geocode.
         final lat = visit.clientLatitude;
         final lng = visit.clientLongitude;
-        final hasValidCoords = lat != null && lng != null &&
-            lat != 0.0 && lng != 0.0 &&
-            lat.abs() <= 90 && lng.abs() <= 180;
+        final hasValidCoords =
+            lat != null &&
+            lng != null &&
+            lat != 0.0 &&
+            lng != 0.0 &&
+            lat.abs() <= 90 &&
+            lng.abs() <= 180;
         if (hasValidCoords) {
           setState(() => _destinationLatLng = LatLng(lat, lng));
           Future.delayed(const Duration(milliseconds: 800), () {
@@ -394,7 +401,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
   /// Geocodes the client address string to a LatLng for the destination pin.
   /// Uses OpenStreetMap Nominatim — no API key required.
-  Future<void> _geocodeDestination(String address, [String clientName = '']) async {
+  Future<void> _geocodeDestination(
+    String address, [
+    String clientName = '',
+  ]) async {
     if (_geocodingDone || address.trim().isEmpty) return;
     // Don't set _geocodingDone=true upfront — allow retry if this call fails
     try {
@@ -407,11 +417,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       final query1 = Uri.encodeComponent(
         combined.contains('India') ? combined : '$combined, India',
       );
-      final response1 = await http.get(
-        Uri.parse('https://nominatim.openstreetmap.org/search'
-            '?q=$query1&format=json&limit=1&countrycodes=in'),
-        headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
-      ).timeout(const Duration(seconds: 10));
+      final response1 = await http
+          .get(
+            Uri.parse(
+              'https://nominatim.openstreetmap.org/search'
+              '?q=$query1&format=json&limit=1&countrycodes=in',
+            ),
+            headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response1.statusCode == 200) {
         final results = jsonDecode(response1.body) as List;
@@ -428,11 +442,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         final query2 = Uri.encodeComponent(
           address.contains('India') ? address : '$address, India',
         );
-        final response2 = await http.get(
-          Uri.parse('https://nominatim.openstreetmap.org/search'
-              '?q=$query2&format=json&limit=1&countrycodes=in'),
-          headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
-        ).timeout(const Duration(seconds: 10));
+        final response2 = await http
+            .get(
+              Uri.parse(
+                'https://nominatim.openstreetmap.org/search'
+                '?q=$query2&format=json&limit=1&countrycodes=in',
+              ),
+              headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
+            )
+            .timeout(const Duration(seconds: 10));
         if (response2.statusCode == 200) {
           final results = jsonDecode(response2.body) as List;
           if (results.isNotEmpty) {
@@ -456,23 +474,99 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     }
   }
 
+  Future<void> _addRouteStop() async {
+    final address = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text('Add a stop'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            decoration: const InputDecoration(
+              labelText: 'Place or address',
+              prefixIcon: Icon(Icons.add_location_alt_outlined),
+            ),
+            onSubmitted: (value) {
+              if (value.trim().isNotEmpty) {
+                Navigator.of(dialogContext).pop(value.trim());
+              }
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (controller.text.trim().isNotEmpty) {
+                  Navigator.of(dialogContext).pop(controller.text.trim());
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+    if (address == null || address.isEmpty || !mounted) return;
+
+    try {
+      final query = Uri.encodeComponent(
+        address.toLowerCase().contains('india') ? address : '$address, India',
+      );
+      final response = await http
+          .get(
+            Uri.parse(
+              'https://nominatim.openstreetmap.org/search'
+              '?q=$query&format=json&limit=1&countrycodes=in',
+            ),
+            headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
+          )
+          .timeout(const Duration(seconds: 10));
+      final results = response.statusCode == 200
+          ? jsonDecode(response.body) as List
+          : const [];
+      if (results.isEmpty) {
+        _message('Stop not found. Enter a more complete address.');
+        return;
+      }
+      final item = results.first as Map<String, dynamic>;
+      final lat = double.tryParse('${item['lat']}');
+      final lng = double.tryParse('${item['lon']}');
+      if (lat == null || lng == null || !mounted) return;
+      setState(() {
+        _additionalStops.add(LatLng(lat, lng));
+        _routeOptions = [];
+        _selectedRouteIndex = 0;
+        _etaText = '';
+        _distanceText = '';
+      });
+      _message('Stop added to this route.');
+      Future.delayed(const Duration(milliseconds: 250), _fitMapBounds);
+    } catch (_) {
+      _message('Could not find that stop. Check the network and try again.');
+    }
+  }
+
   /// Adjusts the map camera to fit origin, current position and destination.
   void _fitMapBounds() {
     final points = <LatLng>[];
 
     // Current GPS position
     if (_lastTrackedPosition != null) {
-      points.add(LatLng(
-        _lastTrackedPosition!.latitude,
-        _lastTrackedPosition!.longitude,
-      ));
+      points.add(
+        LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude),
+      );
     }
 
     // Office checkout position (valid only)
     final ocLat = _visit?.officeCheckOutLatitude;
     final ocLng = _visit?.officeCheckOutLongitude;
-    if (ocLat != null && ocLng != null &&
-        !(ocLat == 0.0 && ocLng == 0.0)) {
+    if (ocLat != null && ocLng != null && !(ocLat == 0.0 && ocLng == 0.0)) {
       points.add(LatLng(ocLat, ocLng));
     }
 
@@ -481,15 +575,22 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     if (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0)) {
       points.add(dst);
     }
+    points.addAll(_additionalStops);
 
     if (points.length < 2) {
       // At least move to the single known point
       if (points.length == 1) {
-        try { _mapController.move(points.first, 15); } catch (_) {}
+        try {
+          _mapController.move(points.first, 15);
+        } catch (_) {}
       }
       return;
     }
     try {
+      _mapController.rotate(0);
+      if (_mapRotation != 0 && mounted) {
+        setState(() => _mapRotation = 0);
+      }
       final bounds = LatLngBounds.fromPoints(points);
       _mapController.fitCamera(
         CameraFit.bounds(
@@ -581,12 +682,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     if (_travelSubscription != null) return;
     // Pre-seed the polyline with any waypoints already stored on the backend.
     if (_visit != null && _visit!.travelRoute.isNotEmpty) {
-      final seeded = _visit!.travelRoute.map((p) {
-        final lat = double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
-        final lng = double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
-        if (lat != null && lng != null) return LatLng(lat, lng);
-        return null;
-      }).whereType<LatLng>().toList();
+      final seeded = _visit!.travelRoute
+          .map((p) {
+            final lat = double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
+            final lng = double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
+            if (lat != null && lng != null) return LatLng(lat, lng);
+            return null;
+          })
+          .whereType<LatLng>()
+          .toList();
       if (seeded.isNotEmpty && mounted) {
         setState(() => _liveRoutePoints.addAll(seeded));
       }
@@ -620,9 +724,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   // Navigation mode: always follow at zoom 17
                   _mapController.move(point, 17);
                 } else {
-                  _mapController.move(point, _mapController.camera.zoom < 14
-                      ? 15
-                      : _mapController.camera.zoom);
+                  _mapController.move(
+                    point,
+                    _mapController.camera.zoom < 14
+                        ? 15
+                        : _mapController.camera.zoom,
+                  );
                 }
               } catch (_) {}
               unawaited(_sendTravelPosition(position));
@@ -744,7 +851,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     );
     if (accepted != true) return;
     if (comment.text.trim().isEmpty) {
-      _message('A comment is required to ${action == 'approve' ? 'approve' : action} this visit.');
+      _message(
+        'A comment is required to ${action == 'approve' ? 'approve' : action} this visit.',
+      );
       return;
     }
     await _run(() async {
@@ -802,12 +911,17 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         title: const Text('Reached client?'),
         content: const Text(
           'Confirm you have arrived at the client location. '
-          'Your current GPS will be recorded as arrival point.'),
+          'Your current GPS will be recorded as arrival point.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Not yet')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Yes, arrived')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, arrived'),
+          ),
         ],
       ),
     );
@@ -881,12 +995,17 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         'checklist': _checklist,
         if (_outcome9.isNotEmpty) 'outcome': _outcome9,
         if (_followUp9.isNotEmpty) 'follow_up': _followUp9,
-        if (_signature.text.trim().isNotEmpty) 'client_signature_name': _signature.text.trim(),
+        if (_signature.text.trim().isNotEmpty)
+          'client_signature_name': _signature.text.trim(),
       });
       // Upload staged proof photos
       if (_stagedProofPaths.isNotEmpty) {
         await widget.service.uploadFiles(
-          widget.userId, widget.visitId, 'proof', _stagedProofPaths);
+          widget.userId,
+          widget.visitId,
+          'proof',
+          _stagedProofPaths,
+        );
         if (mounted) setState(() => _stagedProofPaths.clear());
       }
       // Upload drawn signature as a proof image if the pad was used
@@ -899,7 +1018,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           );
           await sigFile.writeAsBytes(pngBytes);
           await widget.service.uploadFiles(
-            widget.userId, widget.visitId, 'proof', [sigFile.path]);
+            widget.userId,
+            widget.visitId,
+            'proof',
+            [sigFile.path],
+          );
           await sigFile.delete();
         }
       }
@@ -952,17 +1075,23 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 60, height: 60,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 color: ClientVisitColors.green.withAlpha(25),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.check_circle_rounded,
-                  color: ClientVisitColors.green, size: 36),
+              child: Icon(
+                Icons.check_circle_rounded,
+                color: ClientVisitColors.green,
+                size: 36,
+              ),
             ),
             const SizedBox(height: 16),
-            const Text('Expense Submitted!',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+            const Text(
+              'Expense Submitted!',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 8),
             Text(
               'Your expense claim has been recorded successfully.',
@@ -982,13 +1111,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ),
     );
     if (mounted) {
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => ClientVisitReturnCheckoutScreen(
-          userId: widget.userId,
-          visitId: widget.visitId,
-          service: widget.service,
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => ClientVisitReturnCheckoutScreen(
+            userId: widget.userId,
+            visitId: widget.visitId,
+            service: widget.service,
+          ),
         ),
-      ));
+      );
     }
   }
 
@@ -999,7 +1130,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       return;
     }
     if (_outcome.text.trim().length < 10) {
-      _message('Outcome must be at least 10 characters. Please describe the visit result.');
+      _message(
+        'Outcome must be at least 10 characters. Please describe the visit result.',
+      );
       return;
     }
     if (_selfiePath == null) {
@@ -1030,7 +1163,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           );
           await sigFile.writeAsBytes(pngBytes);
           await widget.service.uploadFiles(
-            widget.userId, widget.visitId, 'proof', [sigFile.path]);
+            widget.userId,
+            widget.visitId,
+            'proof',
+            [sigFile.path],
+          );
           await sigFile.delete();
         }
       }
@@ -1103,12 +1240,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       final fileName = '${visit.visitId}-client-visit-report.pdf';
 
       // Save to device Downloads/HRMS-ERP and get back the saved URI
-      final savedUri = await _filesChannel
-          .invokeMethod<String>('saveToDownloads', {
-            'fileName': fileName,
-            'mimeType': 'application/pdf',
-            'bytes': bytes,
-          });
+      final savedUri = await _filesChannel.invokeMethod<String>(
+        'saveToDownloads',
+        {'fileName': fileName, 'mimeType': 'application/pdf', 'bytes': bytes},
+      );
 
       // Immediately open the PDF so it appears in recent files / gallery
       if (savedUri != null && savedUri.isNotEmpty) {
@@ -1159,10 +1294,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   Widget _buildTravelScreen(ClientVisit visit) {
     final ocLat = _visit!.officeCheckOutLatitude;
     final ocLng = _visit!.officeCheckOutLongitude;
-    final origin = (ocLat != null && ocLng != null && !(ocLat == 0.0 && ocLng == 0.0))
-        ? LatLng(ocLat, ocLng) : null;
+    final origin =
+        (ocLat != null && ocLng != null && !(ocLat == 0.0 && ocLng == 0.0))
+        ? LatLng(ocLat, ocLng)
+        : null;
     final current = _lastTrackedPosition != null
-        ? LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude) : null;
+        ? LatLng(
+            _lastTrackedPosition!.latitude,
+            _lastTrackedPosition!.longitude,
+          )
+        : null;
     final routeCurrent = _routeReversed ? _destinationLatLng : current;
     final routeDestination = _routeReversed ? current : _destinationLatLng;
     final safePad = MediaQuery.of(context).padding;
@@ -1174,9 +1315,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             // ── Full-screen map ──────────────────────────────────────
             Positioned.fill(
               child: _LiveMapView(
-                key: ValueKey('travel-map-$_routeReversed'),
+                key: ValueKey(
+                  'travel-map-$_routeReversed-${_additionalStops.length}',
+                ),
                 mapController: _mapController,
                 routePoints: _liveRoutePoints,
+                waypoints: _routeReversed
+                    ? _additionalStops.reversed.toList()
+                    : List<LatLng>.from(_additionalStops),
                 origin: _routeReversed ? _destinationLatLng : origin,
                 current: routeCurrent,
                 destination: routeDestination,
@@ -1184,6 +1330,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 navigationMode: _navMode,
                 showEtaOverlay: false,
                 selectedRouteIndex: _selectedRouteIndex,
+                onRotationChanged: (rotation) {
+                  final normalized = ((rotation + 180) % 360) - 180;
+                  if (!mounted || (normalized - _mapRotation).abs() < 0.5) {
+                    return;
+                  }
+                  setState(() => _mapRotation = normalized);
+                },
                 onEtaUpdate: (eta, dist) {
                   if (mounted) {
                     setState(() {
@@ -1212,76 +1365,94 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             ),
 
             // ── Map controls (right side) ─────────────────────────
+            if (!_navMode)
+              Positioned(
+                right: 12,
+                top: safePad.top + 108,
+                child: _travelMapButton(
+                  icon: Icons.layers_rounded,
+                  color: const Color(0xFF006A72),
+                  onTap: _showMapOptions,
+                ),
+              ),
+            if (_mapRotation.abs() > 1)
+              Positioned(
+                right: 12,
+                top: safePad.top + 164,
+                child: _travelMapButton(
+                  icon: Icons.explore_rounded,
+                  rotationDegrees: -_mapRotation,
+                  onTap: () {
+                    try {
+                      _mapController.rotate(0);
+                    } catch (_) {}
+                    setState(() => _mapRotation = 0);
+                  },
+                ),
+              ),
             Positioned(
-              right: 10,
-              bottom: _navMode ? 190 : 330,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!_navMode) ...[
-                    _travelMapButton(
-                      icon: Icons.layers_rounded,
-                      color: const Color(0xFF006A72),
-                      onTap: _showMapOptions,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  _travelMapButton(
-                    icon: Icons.explore_rounded,
-                    onTap: () {
-                      try {
-                        _mapController.rotate(0);
-                      } catch (_) {}
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _travelMapButton(
-                    icon: Icons.my_location,
-                    color: const Color(0xFF1A73E8),
-                    onTap: () {
-                      if (_lastTrackedPosition != null) {
-                        try {
-                          _mapController.move(
-                            LatLng(
-                              _lastTrackedPosition!.latitude,
-                              _lastTrackedPosition!.longitude,
-                            ),
-                            _navMode ? 17 : 15,
-                          );
-                        } catch (_) {}
-                      }
-                    }),
-                ],
+              right: 12,
+              bottom: _navMode ? 190 : 292,
+              child: _travelMapButton(
+                icon: Icons.my_location,
+                color: const Color(0xFF1A73E8),
+                onTap: () {
+                  if (_lastTrackedPosition != null) {
+                    try {
+                      _mapController.move(
+                        LatLng(
+                          _lastTrackedPosition!.latitude,
+                          _lastTrackedPosition!.longitude,
+                        ),
+                        _navMode ? 17 : 15,
+                      );
+                    } catch (_) {}
+                  }
+                },
               ),
             ),
 
             // ── Bottom panel — Google Maps "Drive" style ──────────────
             Positioned(
-              left: 0, right: 0, bottom: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               child: Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, -2))],
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 16,
+                      offset: Offset(0, -2),
+                    ),
+                  ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Center(child: Container(
-                      margin: const EdgeInsets.only(top: 8, bottom: 6),
-                      width: 36, height: 4,
-                      decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
-                    )),
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 8, bottom: 6),
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
                     if (!_navMode) ...[
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 8, 4),
                         child: Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Text(
-                                'Drive',
-                                style: TextStyle(
-                                  fontSize: 24,
+                                _selectedModeTitle,
+                                style: const TextStyle(
+                                  fontSize: 21,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF202124),
                                 ),
@@ -1311,19 +1482,23 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
                             _travelMode(
+                              mode: 'drive',
                               icon: Icons.directions_car_rounded,
                               label: _etaText.isEmpty ? 'Drive' : _etaText,
-                              selected: true,
                             ),
                             _travelMode(
+                              mode: 'bike',
                               icon: Icons.pedal_bike_rounded,
                               label: _estimatedModeEta(15),
                             ),
                             _travelMode(
+                              mode: 'transit',
                               icon: Icons.directions_transit_rounded,
                               label: '—',
+                              enabled: false,
                             ),
                             _travelMode(
+                              mode: 'walk',
                               icon: Icons.directions_walk_rounded,
                               label: _estimatedModeEta(4.5),
                             ),
@@ -1339,8 +1514,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.directions_car_rounded,
-                              size: 22, color: Color(0xFF202124)),
+                          Icon(
+                            _selectedModeIcon,
+                            size: 22,
+                            color: const Color(0xFF202124),
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
@@ -1348,13 +1526,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                               children: [
                                 // Big bold ETA + distance — matches Google Maps
                                 Row(
-                                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.baseline,
                                   textBaseline: TextBaseline.alphabetic,
                                   children: [
                                     Text(
-                                      _etaText.isNotEmpty ? _etaText : '—',
+                                      _selectedModeEta,
                                       style: const TextStyle(
-                                        fontSize: 22,
+                                        fontSize: 20,
                                         fontWeight: FontWeight.w800,
                                         color: Color(0xFF202124),
                                       ),
@@ -1364,7 +1543,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                                       Text(
                                         '($_distanceText)',
                                         style: const TextStyle(
-                                          fontSize: 15,
+                                          fontSize: 14,
                                           fontWeight: FontWeight.w500,
                                           color: Color(0xFF5F6368),
                                         ),
@@ -1378,9 +1557,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                                     _selectedRouteIndex <
                                         _routeOptions.length) ...[
                                   Text(
-                                    _selectedRouteIndex == 0
-                                        ? 'Fastest route, via ${_routeOptions[0].via.isNotEmpty ? _routeOptions[0].via : 'main road'}'
-                                        : 'Via ${_routeOptions[_selectedRouteIndex].via.isNotEmpty ? _routeOptions[_selectedRouteIndex].via : 'alternate road'}',
+                                    _selectedTravelMode == 'drive'
+                                        ? (_selectedRouteIndex == 0
+                                              ? 'Fastest route, via ${_routeOptions[0].via.isNotEmpty ? _routeOptions[0].via : 'main road'}'
+                                              : 'Via ${_routeOptions[_selectedRouteIndex].via.isNotEmpty ? _routeOptions[_selectedRouteIndex].via : 'alternate road'}')
+                                        : _selectedTravelMode == 'bike'
+                                        ? 'Estimated cycling time'
+                                        : 'Estimated walking time',
                                     style: const TextStyle(
                                       fontSize: 12,
                                       color: Color(0xFF5F6368),
@@ -1388,33 +1571,49 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   // Toll + fuel info row
-                                  Row(children: [
-                                    if (_routeOptions[_selectedRouteIndex]
-                                        .hasTolls) ...[
-                                      const Icon(Icons.toll_rounded,
-                                          size: 13,
-                                          color: Color(0xFFF29900)),
-                                      const SizedBox(width: 3),
-                                      const Text('Tolls  ',
-                                          style: TextStyle(
+                                  if (_selectedTravelMode == 'drive')
+                                    Row(
+                                      children: [
+                                        if (_routeOptions[_selectedRouteIndex]
+                                            .hasTolls) ...[
+                                          const Icon(
+                                            Icons.toll_rounded,
+                                            size: 13,
+                                            color: Color(0xFFF29900),
+                                          ),
+                                          const SizedBox(width: 3),
+                                          const Text(
+                                            'Tolls  ',
+                                            style: TextStyle(
                                               fontSize: 12,
                                               color: Color(0xFFF29900),
-                                              fontWeight: FontWeight.w600)),
-                                      const Text('·  ',
-                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const Text(
+                                            '·  ',
+                                            style: TextStyle(
                                               fontSize: 12,
-                                              color: Color(0xFF9AA0A6))),
-                                    ],
-                                    const Icon(Icons.local_gas_station_rounded,
-                                        size: 13,
-                                        color: Color(0xFF34A853)),
-                                    const SizedBox(width: 3),
-                                    const Text('Saves fuel',
-                                        style: TextStyle(
+                                              color: Color(0xFF9AA0A6),
+                                            ),
+                                          ),
+                                        ],
+                                        const Icon(
+                                          Icons.local_gas_station_rounded,
+                                          size: 13,
+                                          color: Color(0xFF34A853),
+                                        ),
+                                        const SizedBox(width: 3),
+                                        const Text(
+                                          'Saves fuel',
+                                          style: TextStyle(
                                             fontSize: 12,
                                             color: Color(0xFF34A853),
-                                            fontWeight: FontWeight.w600)),
-                                  ]),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                 ],
                               ],
                             ),
@@ -1423,13 +1622,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                           if (_lastTrackedPosition != null)
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 5),
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF1A73E8).withAlpha(15),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                    color: const Color(0xFF1A73E8)
-                                        .withAlpha(50)),
+                                  color: const Color(0xFF1A73E8).withAlpha(50),
+                                ),
                               ),
                               child: Column(
                                 children: [
@@ -1437,15 +1638,19 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                                     (_lastTrackedPosition!.speed * 3.6)
                                         .toStringAsFixed(0),
                                     style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w900,
-                                        color: Color(0xFF1A73E8)),
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF1A73E8),
+                                    ),
                                   ),
-                                  const Text('km/h',
-                                      style: TextStyle(
-                                          fontSize: 9,
-                                          color: Color(0xFF1A73E8),
-                                          fontWeight: FontWeight.w600)),
+                                  const Text(
+                                    'km/h',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: Color(0xFF1A73E8),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -1453,166 +1658,196 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       ),
                     ),
                     // Emergency contact row
-                    if (visit.contactPerson.isNotEmpty ||
-                        visit.contactPhone.isNotEmpty)
+                    if (_navMode &&
+                        (visit.contactPerson.isNotEmpty ||
+                            visit.contactPhone.isNotEmpty))
                       Padding(
-                        padding:
-                            const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                        child: Row(children: [
-                          const Icon(Icons.emergency_rounded,
-                              size: 14, color: Color(0xFFEA4335)),
-                          const SizedBox(width: 6),
-                          Text('Emergency: ',
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.emergency_rounded,
+                              size: 14,
+                              color: Color(0xFFEA4335),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Emergency: ',
                               style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade600,
-                                  fontWeight: FontWeight.w600)),
-                          Expanded(
-                              child: Text(
-                                  '${visit.contactPerson} (${visit.contactPhone})',
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis)),
-                          if (visit.contactPhone.isNotEmpty)
-                            GestureDetector(
-                              onTap: () =>
-                                  _message('Calling ${visit.contactPhone}'),
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF34A853)
-                                      .withAlpha(15),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.call,
-                                    size: 16,
-                                    color: Color(0xFF34A853)),
+                                fontSize: 11,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                        ]),
+                            Expanded(
+                              child: Text(
+                                '${visit.contactPerson} (${visit.contactPhone})',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (visit.contactPhone.isNotEmpty)
+                              GestureDetector(
+                                onTap: () =>
+                                    _message('Calling ${visit.contactPhone}'),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF34A853,
+                                    ).withAlpha(15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.call,
+                                    size: 16,
+                                    color: Color(0xFF34A853),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     // ── Action buttons — Google Maps style ───────────────
                     Padding(
                       padding: EdgeInsets.fromLTRB(
-                          12, 12, 12, safePad.bottom + 12),
-                      child: Row(children: [
-                        // Start / Stop navigation
-                        Expanded(
-                          flex: 2,
-                          child: FilledButton.icon(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: _navMode
-                                  ? Colors.grey.shade700
-                                  : const Color(0xFF008C95),
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(30)),
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                // Client visits always navigate employee → client.
-                                // A reversed route is useful for preview only.
-                                if (!_navMode && _routeReversed) {
-                                  _routeReversed = false;
-                                  _routeOptions = [];
-                                  _selectedRouteIndex = 0;
-                                }
-                                _navMode = !_navMode;
-                              });
-                              if (_navMode &&
-                                  _lastTrackedPosition != null) {
-                                try {
-                                  _mapController.move(
-                                      LatLng(
-                                          _lastTrackedPosition!
-                                              .latitude,
-                                          _lastTrackedPosition!
-                                              .longitude),
-                                      17);
-                                } catch (_) {}
-                              } else if (!_navMode) {
-                                _fitMapBounds();
-                              }
-                            },
-                            icon: Icon(
-                                _navMode
-                                    ? Icons.stop_rounded
-                                    : Icons.navigation_rounded,
-                                size: 20),
-                            label: Text(_navMode ? 'Stop' : 'Start',
-                                style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700)),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Arrival is only valid after turn-by-turn mode starts.
-                        if (!widget.readOnlyMode && _navMode)
-                          Expanded(
-                            flex: 3,
-                            child: FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                backgroundColor:
-                                    const Color(0xFF1A73E8),
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(30)),
-                              ),
-                              onPressed: _working ? null : _reached,
-                              icon: const Icon(Icons.flag_rounded,
-                                  size: 20),
-                              label: const Text('Reached client',
-                                  style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700)),
-                            ),
-                          ),
-                        if (!widget.readOnlyMode && !_navMode) ...[
+                        12,
+                        12,
+                        12,
+                        safePad.bottom + 12,
+                      ),
+                      child: Row(
+                        children: [
+                          // Start / Stop navigation
                           Expanded(
                             flex: 2,
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF006A72),
-                                backgroundColor: const Color(0xFFDDF7FA),
-                                side: BorderSide.none,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                            child: FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: _navMode
+                                    ? Colors.grey.shade700
+                                    : const Color(0xFF008C95),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(30),
                                 ),
                               ),
-                              onPressed: () => _message(
-                                'The assigned client is the required visit stop.',
+                              onPressed: () {
+                                setState(() {
+                                  // Client visits always navigate employee → client.
+                                  // A reversed route is useful for preview only.
+                                  if (!_navMode && _routeReversed) {
+                                    _routeReversed = false;
+                                    _routeOptions = [];
+                                    _selectedRouteIndex = 0;
+                                  }
+                                  _navMode = !_navMode;
+                                });
+                                if (_navMode && _lastTrackedPosition != null) {
+                                  try {
+                                    _mapController.move(
+                                      LatLng(
+                                        _lastTrackedPosition!.latitude,
+                                        _lastTrackedPosition!.longitude,
+                                      ),
+                                      17,
+                                    );
+                                  } catch (_) {}
+                                } else if (!_navMode) {
+                                  _fitMapBounds();
+                                }
+                              },
+                              icon: Icon(
+                                _navMode
+                                    ? Icons.stop_rounded
+                                    : Icons.navigation_rounded,
+                                size: 20,
                               ),
-                              icon: const Icon(Icons.add_location_alt_outlined, size: 19),
-                              label: const Text(
-                                'Add stops',
-                                maxLines: 1,
-                                style: TextStyle(fontWeight: FontWeight.w700),
+                              label: Text(
+                                _navMode ? 'Stop' : 'Start',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          IconButton.filled(
-                            tooltip: 'Share directions',
-                            style: IconButton.styleFrom(
-                              backgroundColor: const Color(0xFFDDF7FA),
-                              foregroundColor: const Color(0xFF006A72),
-                              minimumSize: const Size(48, 48),
+                          const SizedBox(width: 10),
+                          // Arrival is only valid after turn-by-turn mode starts.
+                          if (!widget.readOnlyMode && _navMode)
+                            Expanded(
+                              flex: 3,
+                              child: FilledButton.icon(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1A73E8),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                ),
+                                onPressed: _working ? null : _reached,
+                                icon: const Icon(Icons.flag_rounded, size: 20),
+                                label: const Text(
+                                  'Reached client',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
                             ),
-                            onPressed: () => _shareDirections(visit),
-                            icon: const Icon(Icons.share_rounded),
-                          ),
+                          if (!widget.readOnlyMode && !_navMode) ...[
+                            Expanded(
+                              flex: 2,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF006A72),
+                                  backgroundColor: const Color(0xFFDDF7FA),
+                                  side: BorderSide.none,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                ),
+                                onPressed: _addRouteStop,
+                                icon: const Icon(
+                                  Icons.add_location_alt_outlined,
+                                  size: 19,
+                                ),
+                                label: Text(
+                                  _additionalStops.isEmpty
+                                      ? 'Add stops'
+                                      : '${_additionalStops.length} stop${_additionalStops.length == 1 ? '' : 's'}',
+                                  maxLines: 1,
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton.filled(
+                              tooltip: 'Share directions',
+                              style: IconButton.styleFrom(
+                                backgroundColor: const Color(0xFFDDF7FA),
+                                foregroundColor: const Color(0xFF006A72),
+                                minimumSize: const Size(48, 48),
+                              ),
+                              onPressed: () => _shareDirections(visit),
+                              icon: const Icon(Icons.share_rounded),
+                            ),
+                          ],
+                          if (widget.readOnlyMode)
+                            Expanded(flex: 3, child: _monitoringNotice()),
                         ],
-                        if (widget.readOnlyMode)
-                          Expanded(
-                              flex: 3, child: _monitoringNotice()),
-                      ]),
+                      ),
                     ),
                     if (_trackingError != null)
                       Container(
@@ -1620,18 +1855,41 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: const Color(0xFFEA4335).withAlpha(15),
-                          borderRadius: BorderRadius.circular(8)),
-                        child: Row(children: [
-                          const Icon(Icons.warning_amber_rounded, color: Color(0xFFEA4335), size: 14),
-                          const SizedBox(width: 6),
-                          Expanded(child: Text(_trackingError!.replaceFirst('Exception: ', ''),
-                            style: const TextStyle(fontSize: 11, color: Color(0xFFEA4335)))),
-                          TextButton(onPressed: _startTravelTracking,
-                            style: TextButton.styleFrom(minimumSize: Size.zero,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                            child: const Text('Retry', style: TextStyle(fontSize: 11))),
-                        ]),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.warning_amber_rounded,
+                              color: Color(0xFFEA4335),
+                              size: 14,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _trackingError!.replaceFirst('Exception: ', ''),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFFEA4335),
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _startTravelTracking,
+                              style: TextButton.styleFrom(
+                                minimumSize: Size.zero,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text(
+                                'Retry',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     if (_working) const LinearProgressIndicator(),
                   ],
@@ -1651,11 +1909,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
         ],
       ),
       clipBehavior: Clip.antiAlias,
@@ -1816,10 +2070,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     );
   }
 
-  Widget _directionLabel(
-    ClientVisit visit, {
-    required bool destination,
-  }) {
+  Widget _directionLabel(ClientVisit visit, {required bool destination}) {
     if (!destination) {
       return const Text(
         'Your location',
@@ -1878,18 +2129,28 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     });
   }
 
-  DropdownMenuItem<String> _expenseItem(String value, IconData icon, String label) =>
-      DropdownMenuItem<String>(
-        value: value,
-        child: Row(children: [
-          Icon(icon, size: 18, color: const Color(0xFF1A73E8)),
-          const SizedBox(width: 8),
-          Text(label),
-        ]),
-      );
+  DropdownMenuItem<String> _expenseItem(
+    String value,
+    IconData icon,
+    String label,
+  ) => DropdownMenuItem<String>(
+    value: value,
+    child: Row(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF1A73E8)),
+        const SizedBox(width: 8),
+        Text(label),
+      ],
+    ),
+  );
 
   /// Google Maps style circular map control button (used in travel screen).
-  Widget _travelMapButton({required IconData icon, required VoidCallback onTap, Color? color}) {
+  Widget _travelMapButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    Color? color,
+    double rotationDegrees = 0,
+  }) {
     return Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1898,8 +2159,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: SizedBox(
-          width: 40, height: 40,
-          child: Icon(icon, size: 20, color: color ?? const Color(0xFF5F6368)),
+          width: 40,
+          height: 40,
+          child: Transform.rotate(
+            angle: rotationDegrees * math.pi / 180,
+            child: Icon(
+              icon,
+              size: 20,
+              color: color ?? const Color(0xFF5F6368),
+            ),
+          ),
         ),
       ),
     );
@@ -1929,13 +2198,22 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   decoration: BoxDecoration(
                     color: const Color(0xFFE8F0FE),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFF1A73E8), width: 2),
+                    border: Border.all(
+                      color: const Color(0xFF1A73E8),
+                      width: 2,
+                    ),
                   ),
-                  child: const Icon(Icons.map_rounded, color: Color(0xFF1A73E8)),
+                  child: const Icon(
+                    Icons.map_rounded,
+                    color: Color(0xFF1A73E8),
+                  ),
                 ),
                 title: const Text('Default'),
                 subtitle: const Text('Road map'),
-                trailing: const Icon(Icons.check_circle, color: Color(0xFF1A73E8)),
+                trailing: const Icon(
+                  Icons.check_circle,
+                  color: Color(0xFF1A73E8),
+                ),
                 onTap: () => Navigator.pop(sheetContext),
               ),
             ],
@@ -1965,16 +2243,21 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Widget _travelMode({
+    required String mode,
     required IconData icon,
     required String label,
-    bool selected = false,
+    bool enabled = true,
   }) {
+    final selected = _selectedTravelMode == mode;
     final color = selected ? const Color(0xFF007B83) : const Color(0xFF5F6368);
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: selected
-          ? _fitMapBounds
-          : () => _message('This client visit currently supports driving routes.'),
+      onTap: !enabled
+          ? null
+          : () {
+              setState(() => _selectedTravelMode = mode);
+              _fitMapBounds();
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -1984,14 +2267,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20, color: color),
+            Icon(icon, size: 20, color: enabled ? color : Colors.grey.shade400),
             const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: color,
+                color: enabled ? color : Colors.grey.shade400,
               ),
             ),
           ],
@@ -2000,9 +2283,41 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     );
   }
 
+  String get _selectedModeEta {
+    switch (_selectedTravelMode) {
+      case 'bike':
+        return _estimatedModeEta(15);
+      case 'walk':
+        return _estimatedModeEta(4.5);
+      default:
+        return _etaText.isNotEmpty ? _etaText : '—';
+    }
+  }
+
+  String get _selectedModeTitle {
+    switch (_selectedTravelMode) {
+      case 'bike':
+        return 'Bicycle';
+      case 'walk':
+        return 'Walk';
+      default:
+        return 'Drive';
+    }
+  }
+
+  IconData get _selectedModeIcon {
+    switch (_selectedTravelMode) {
+      case 'bike':
+        return Icons.pedal_bike_rounded;
+      case 'walk':
+        return Icons.directions_walk_rounded;
+      default:
+        return Icons.directions_car_rounded;
+    }
+  }
+
   String _estimatedModeEta(double speedKmh) {
-    if (_routeOptions.isEmpty ||
-        _selectedRouteIndex >= _routeOptions.length) {
+    if (_routeOptions.isEmpty || _selectedRouteIndex >= _routeOptions.length) {
       return '—';
     }
     final minutes =
@@ -2103,7 +2418,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         destinationLatitude: _destinationLatLng?.latitude,
         destinationLongitude: _destinationLatLng?.longitude,
       );
-      final message = 'Track the live journey to ${visit.clientName}:\n'
+      final message =
+          'Track the live journey to ${visit.clientName}:\n'
           '$trackingUrl\n\n'
           'This secure link expires automatically.';
       await Clipboard.setData(ClipboardData(text: message));
@@ -2133,12 +2449,18 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: ClientVisitColors.green,
-                  side: const BorderSide(color: ClientVisitColors.green, width: 1.5),
+                  side: const BorderSide(
+                    color: ClientVisitColors.green,
+                    width: 1.5,
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 onPressed: _working ? null : () => _review('approve'),
                 icon: const Icon(Icons.check_circle_outline),
-                label: const Text('Approve', style: TextStyle(fontWeight: FontWeight.w700)),
+                label: const Text(
+                  'Approve',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -2147,12 +2469,18 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: ClientVisitColors.red,
-                  side: const BorderSide(color: ClientVisitColors.red, width: 1.5),
+                  side: const BorderSide(
+                    color: ClientVisitColors.red,
+                    width: 1.5,
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 onPressed: _working ? null : () => _review('reject'),
                 icon: const Icon(Icons.cancel_outlined),
-                label: const Text('Reject', style: TextStyle(fontWeight: FontWeight.w700)),
+                label: const Text(
+                  'Reject',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -2161,12 +2489,18 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: ClientVisitColors.orange,
-                  side: const BorderSide(color: ClientVisitColors.orange, width: 1.5),
+                  side: const BorderSide(
+                    color: ClientVisitColors.orange,
+                    width: 1.5,
+                  ),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 onPressed: _working ? null : () => _review('changes'),
                 icon: const Icon(Icons.edit_outlined),
-                label: const Text('Request changes', style: TextStyle(fontWeight: FontWeight.w700)),
+                label: const Text(
+                  'Request changes',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
             ),
           ],
@@ -2245,7 +2579,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             _LiveMapView(
               mapController: _mapController,
               routePoints: _liveRoutePoints,
-              origin: _visit != null &&
+              origin:
+                  _visit != null &&
                       _visit!.officeCheckOutLatitude != null &&
                       _visit!.officeCheckOutLongitude != null
                   ? LatLng(
@@ -2323,9 +2658,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           children: [
             Icon(Icons.location_on, color: ClientVisitColors.green, size: 18),
             SizedBox(width: 6),
-            Text('Within Client Location',
-              style: TextStyle(color: ClientVisitColors.green,
-                fontWeight: FontWeight.w700, fontSize: 14)),
+            Text(
+              'Within Client Location',
+              style: TextStyle(
+                color: ClientVisitColors.green,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
           ],
         ),
       ),
@@ -2340,15 +2680,21 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               children: [
                 const Icon(Icons.person_outline, size: 18),
                 const SizedBox(width: 8),
-                Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(visit.contactPerson,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                    Text(visit.contactPhone,
-                      style: const TextStyle(fontSize: 12)),
-                  ],
-                )),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        visit.contactPerson,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        visit.contactPhone,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.call, color: ClientVisitColors.green),
                   onPressed: () => _message('Calling ${visit.contactPhone}'),
@@ -2389,108 +2735,186 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         child: Column(
           children: [
             // Attendees
-            Row(children: [
-              const Icon(Icons.people_outline, size: 16),
-              const SizedBox(width: 6),
-              Text('Attendees (${_attendees.length})',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-              const Spacer(),
-              if (!widget.readOnlyMode)
-                TextButton.icon(
-                  onPressed: () async {
-                    final ctrl = TextEditingController();
-                    final name = await showDialog<String>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Add Attendee'),
-                        content: TextField(controller: ctrl,
-                          autofocus: true,
-                          decoration: const InputDecoration(labelText: 'Name')),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Add')),
-                        ],
-                      ),
-                    );
-                    if (name != null && name.isNotEmpty) setState(() => _attendees.add(name));
-                  },
-                  icon: const Icon(Icons.person_add, size: 14),
-                  label: const Text('+ Add', style: TextStyle(fontSize: 12)),
-                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
+            Row(
+              children: [
+                const Icon(Icons.people_outline, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  'Attendees (${_attendees.length})',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-            ]),
+                const Spacer(),
+                if (!widget.readOnlyMode)
+                  TextButton.icon(
+                    onPressed: () async {
+                      final ctrl = TextEditingController();
+                      final name = await showDialog<String>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Add Attendee'),
+                          content: TextField(
+                            controller: ctrl,
+                            autofocus: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Name',
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              onPressed: () =>
+                                  Navigator.pop(ctx, ctrl.text.trim()),
+                              child: const Text('Add'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (name != null && name.isNotEmpty)
+                        setState(() => _attendees.add(name));
+                    },
+                    icon: const Icon(Icons.person_add, size: 14),
+                    label: const Text('+ Add', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                    ),
+                  ),
+              ],
+            ),
             if (_attendees.isNotEmpty)
-              Wrap(spacing: 6, runSpacing: 4,
-                children: _attendees.map((name) => Chip(
-                  label: Text(name, style: const TextStyle(fontSize: 12)),
-                  onDeleted: widget.readOnlyMode ? null
-                    : () => setState(() => _attendees.remove(name)),
-                )).toList(),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: _attendees
+                    .map(
+                      (name) => Chip(
+                        label: Text(name, style: const TextStyle(fontSize: 12)),
+                        onDeleted: widget.readOnlyMode
+                            ? null
+                            : () => setState(() => _attendees.remove(name)),
+                      ),
+                    )
+                    .toList(),
               ),
             const Divider(height: 20),
             // Checklist with progress bar
-            Row(children: [
-              const Icon(Icons.checklist_rounded, size: 16),
-              const SizedBox(width: 6),
-              Text('Checklist', style: const TextStyle(fontWeight: FontWeight.w600)),
-              const Spacer(),
-              Text(
-                '${_checklist.where((i) => i['done'] == true).length}/${_checklist.length} Completed',
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-            ]),
+            Row(
+              children: [
+                const Icon(Icons.checklist_rounded, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  'Checklist',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const Spacer(),
+                Text(
+                  '${_checklist.where((i) => i['done'] == true).length}/${_checklist.length} Completed',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: _checklist.isEmpty ? 0
-                  : _checklist.where((i) => i['done'] == true).length / _checklist.length,
+                value: _checklist.isEmpty
+                    ? 0
+                    : _checklist.where((i) => i['done'] == true).length /
+                          _checklist.length,
                 backgroundColor: Colors.grey.shade200,
                 color: ClientVisitColors.green,
                 minHeight: 6,
               ),
             ),
             const SizedBox(height: 10),
-            ..._checklist.asMap().entries.map((entry) => CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              value: entry.value['done'] == true,
-              title: Text('${entry.value['label']}', style: const TextStyle(fontSize: 13)),
-              onChanged: widget.readOnlyMode ? null
-                : (value) => setState(() => _checklist[entry.key]['done'] = value == true),
-            )),
+            ..._checklist.asMap().entries.map(
+              (entry) => CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                value: entry.value['done'] == true,
+                title: Text(
+                  '${entry.value['label']}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                onChanged: widget.readOnlyMode
+                    ? null
+                    : (value) => setState(
+                        () => _checklist[entry.key]['done'] = value == true,
+                      ),
+              ),
+            ),
           ],
         ),
       ),
       const SizedBox(height: 12),
       if (!widget.readOnlyMode) ...[
-        Row(children: [
-          Expanded(child: OutlinedButton.icon(
-            onPressed: () => _push(ClientVisitWorkUpdateScreen(
-              userId: widget.userId, visitId: widget.visitId, service: widget.service)),
-            icon: const Icon(Icons.edit_note, size: 18),
-            label: const Text('Add Update'),
-          )),
-          const SizedBox(width: 10),
-          Expanded(child: OutlinedButton.icon(
-            onPressed: () async {
-              final images = await ImagePicker().pickMultiImage(imageQuality: 82);
-              if (images.isNotEmpty && mounted) {
-                await _run(() => widget.service.uploadFiles(
-                  widget.userId, widget.visitId, 'proof',
-                  images.map((i) => i.path).toList()));
-                _message('Proof uploaded.');
-              }
-            },
-            icon: const Icon(Icons.upload_file, size: 18),
-            label: const Text('Upload Proof'),
-          )),
-        ]),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _push(
+                  ClientVisitWorkUpdateScreen(
+                    userId: widget.userId,
+                    visitId: widget.visitId,
+                    service: widget.service,
+                  ),
+                ),
+                icon: const Icon(Icons.edit_note, size: 18),
+                label: const Text('Add Update'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final images = await ImagePicker().pickMultiImage(
+                    imageQuality: 82,
+                  );
+                  if (images.isNotEmpty && mounted) {
+                    await _run(
+                      () => widget.service.uploadFiles(
+                        widget.userId,
+                        widget.visitId,
+                        'proof',
+                        images.map((i) => i.path).toList(),
+                      ),
+                    );
+                    _message('Proof uploaded.');
+                  }
+                },
+                icon: const Icon(Icons.upload_file, size: 18),
+                label: const Text('Upload Proof'),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
-        _flowButton(Icons.receipt_long, 'Expense claim', () => _push(
-          ClientVisitExpenseScreen(userId: widget.userId, visitId: widget.visitId, service: widget.service))),
-        _flowButton(Icons.logout, 'Return / direct checkout', () => _push(
-          ClientVisitReturnCheckoutScreen(userId: widget.userId, visitId: widget.visitId, service: widget.service))),
-      ] else _monitoringNotice(),
+        _flowButton(
+          Icons.receipt_long,
+          'Expense claim',
+          () => _push(
+            ClientVisitExpenseScreen(
+              userId: widget.userId,
+              visitId: widget.visitId,
+              service: widget.service,
+            ),
+          ),
+        ),
+        _flowButton(
+          Icons.logout,
+          'Return / direct checkout',
+          () => _push(
+            ClientVisitReturnCheckoutScreen(
+              userId: widget.userId,
+              visitId: widget.visitId,
+              service: widget.service,
+            ),
+          ),
+        ),
+      ] else
+        _monitoringNotice(),
     ],
     9 => [
       EmployeeCard(
@@ -2498,35 +2922,48 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Attendees ──────────────────────────────────────────────────
-            Row(children: [
-              Expanded(child: TextField(
-                controller: _attendee,
-                readOnly: widget.readOnlyMode,
-                decoration: const InputDecoration(labelText: 'Attendee name'),
-              )),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.person_add),
-                onPressed: widget.readOnlyMode ? null : () {
-                  if (_attendee.text.trim().isNotEmpty) {
-                    setState(() {
-                      _attendees.add(_attendee.text.trim());
-                      _attendee.clear();
-                    });
-                  }
-                },
-              ),
-            ]),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _attendee,
+                    readOnly: widget.readOnlyMode,
+                    decoration: const InputDecoration(
+                      labelText: 'Attendee name',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.person_add),
+                  onPressed: widget.readOnlyMode
+                      ? null
+                      : () {
+                          if (_attendee.text.trim().isNotEmpty) {
+                            setState(() {
+                              _attendees.add(_attendee.text.trim());
+                              _attendee.clear();
+                            });
+                          }
+                        },
+                ),
+              ],
+            ),
             if (_attendees.isNotEmpty) ...[
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
                 runSpacing: 4,
-                children: _attendees.map((name) => Chip(
-                  label: Text(name, style: const TextStyle(fontSize: 12)),
-                  onDeleted: widget.readOnlyMode ? null
-                      : () => setState(() => _attendees.remove(name)),
-                )).toList(),
+                children: _attendees
+                    .map(
+                      (name) => Chip(
+                        label: Text(name, style: const TextStyle(fontSize: 12)),
+                        onDeleted: widget.readOnlyMode
+                            ? null
+                            : () => setState(() => _attendees.remove(name)),
+                      ),
+                    )
+                    .toList(),
               ),
             ],
 
@@ -2535,16 +2972,22 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             const SizedBox(height: 12),
 
             // ── Checklist ──────────────────────────────────────────────────
-            ..._checklist.asMap().entries.map((entry) => CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              value: entry.value['done'] == true,
-              title: Text('${entry.value['label']}',
-                  style: const TextStyle(fontSize: 13)),
-              onChanged: widget.readOnlyMode ? null
-                  : (v) => setState(
-                      () => _checklist[entry.key]['done'] = v == true),
-            )),
+            ..._checklist.asMap().entries.map(
+              (entry) => CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                value: entry.value['done'] == true,
+                title: Text(
+                  '${entry.value['label']}',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                onChanged: widget.readOnlyMode
+                    ? null
+                    : (v) => setState(
+                        () => _checklist[entry.key]['done'] = v == true,
+                      ),
+              ),
+            ),
 
             const SizedBox(height: 12),
             const Divider(height: 1),
@@ -2569,25 +3012,32 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 Text(
                   'Photos / Documents (${_stagedProofPaths.length})',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 13),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
                 if (!widget.readOnlyMode)
                   TextButton.icon(
                     onPressed: () async {
-                      final images =
-                          await ImagePicker().pickMultiImage(imageQuality: 82);
+                      final images = await ImagePicker().pickMultiImage(
+                        imageQuality: 82,
+                      );
                       if (images.isNotEmpty) {
-                        setState(() => _stagedProofPaths
-                            .addAll(images.map((i) => i.path)));
+                        setState(
+                          () => _stagedProofPaths.addAll(
+                            images.map((i) => i.path),
+                          ),
+                        );
                       }
                     },
-                    icon: const Icon(Icons.add_photo_alternate_outlined,
-                        size: 16),
-                    label: const Text('+ Add',
-                        style: TextStyle(fontSize: 12)),
+                    icon: const Icon(
+                      Icons.add_photo_alternate_outlined,
+                      size: 16,
+                    ),
+                    label: const Text('+ Add', style: TextStyle(fontSize: 12)),
                     style: TextButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 6)),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                    ),
                   ),
               ],
             ),
@@ -2605,26 +3055,33 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                         borderRadius: BorderRadius.circular(8),
                         child: Image.file(
                           File(_stagedProofPaths[i]),
-                          width: 80, height: 80, fit: BoxFit.cover,
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
-                            width: 80, height: 80,
+                            width: 80,
+                            height: 80,
                             color: Colors.grey.shade200,
                             child: const Icon(Icons.insert_drive_file),
                           ),
                         ),
                       ),
                       Positioned(
-                        top: 2, right: 2,
+                        top: 2,
+                        right: 2,
                         child: GestureDetector(
-                          onTap: () => setState(
-                              () => _stagedProofPaths.removeAt(i)),
+                          onTap: () =>
+                              setState(() => _stagedProofPaths.removeAt(i)),
                           child: Container(
                             decoration: const BoxDecoration(
                               color: Colors.black54,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.close,
-                                size: 14, color: Colors.white),
+                            child: const Icon(
+                              Icons.close,
+                              size: 14,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -2647,10 +3104,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 'Negative',
                 'Neutral',
                 'Follow-up Required',
-              ]
-                  .map((v) =>
-                      DropdownMenuItem(value: v, child: Text(v)))
-                  .toList(),
+              ].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
               onChanged: widget.readOnlyMode
                   ? null
                   : (v) => setState(() => _outcome9 = v ?? ''),
@@ -2668,10 +3122,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 'Send proposal by next week',
                 'Schedule demo',
                 'Awaiting client feedback',
-              ]
-                  .map((v) =>
-                      DropdownMenuItem(value: v, child: Text(v)))
-                  .toList(),
+              ].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
               onChanged: widget.readOnlyMode
                   ? null
                   : (v) => setState(() => _followUp9 = v ?? ''),
@@ -2687,8 +3138,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               children: [
                 const Text(
                   'Client Signature',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 13),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 if (!widget.readOnlyMode)
                   TextButton.icon(
@@ -2696,11 +3146,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                         ? null
                         : () => setState(() => _signaturePadController.clear()),
                     icon: const Icon(Icons.refresh_rounded, size: 14),
-                    label: const Text('Clear',
-                        style: TextStyle(fontSize: 12)),
+                    label: const Text('Clear', style: TextStyle(fontSize: 12)),
                     style: TextButton.styleFrom(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
                       foregroundColor: _signaturePadController.isEmpty
                           ? Colors.grey
                           : Colors.redAccent,
@@ -2715,9 +3163,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   ? 'Signature captured'
                   : 'Ask the client to sign in the box below',
               style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade500,
-                  fontStyle: FontStyle.italic),
+                fontSize: 11,
+                color: Colors.grey.shade500,
+                fontStyle: FontStyle.italic,
+              ),
             ),
             const SizedBox(height: 8),
             // Signature canvas
@@ -2731,8 +3180,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               clipBehavior: Clip.antiAlias,
               child: widget.readOnlyMode
                   ? Center(
-                      child: Text('—',
-                          style: TextStyle(color: Colors.grey.shade400)),
+                      child: Text(
+                        '—',
+                        style: TextStyle(color: Colors.grey.shade400),
+                      ),
                     )
                   : Signature(
                       controller: _signaturePadController,
@@ -2742,19 +3193,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     ),
             ),
             // "Sign here" watermark hint
-            if (!widget.readOnlyMode &&
-                _signaturePadController.isEmpty) ...[
+            if (!widget.readOnlyMode && _signaturePadController.isEmpty) ...[
               const SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.gesture_rounded,
-                      size: 13, color: Colors.grey.shade400),
+                  Icon(
+                    Icons.gesture_rounded,
+                    size: 13,
+                    color: Colors.grey.shade400,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     'Draw signature above',
-                    style: TextStyle(
-                        fontSize: 11, color: Colors.grey.shade400),
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
                   ),
                 ],
               ),
@@ -2790,17 +3242,27 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               items: [
                 _expenseItem('travel', Icons.directions_car_rounded, 'Travel'),
                 _expenseItem('food', Icons.restaurant_rounded, 'Food'),
-                _expenseItem('parking', Icons.local_parking_rounded, 'Parking / Toll'),
+                _expenseItem(
+                  'parking',
+                  Icons.local_parking_rounded,
+                  'Parking / Toll',
+                ),
                 _expenseItem('other', Icons.more_horiz_rounded, 'Other'),
               ],
-              onChanged: widget.readOnlyMode ? null
-                : (v) => setState(() => _expenseCategory = v!),
+              onChanged: widget.readOnlyMode
+                  ? null
+                  : (v) => setState(() => _expenseCategory = v!),
             ),
             TextField(
               controller: _amount,
               readOnly: widget.readOnlyMode,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Amount', prefixText: '₹ '),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Amount',
+                prefixText: '₹ ',
+              ),
             ),
             TextField(
               controller: _expenseNote,
@@ -2829,36 +3291,60 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               ...visit.expenses.map((expense) {
                 final cat = '${expense['category']}';
                 final icon = switch (cat) {
-                  'travel'  => Icons.directions_car_rounded,
-                  'food'    => Icons.restaurant_rounded,
+                  'travel' => Icons.directions_car_rounded,
+                  'food' => Icons.restaurant_rounded,
                   'parking' => Icons.local_parking_rounded,
-                  _         => Icons.more_horiz_rounded,
+                  _ => Icons.more_horiz_rounded,
                 };
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A73E8).withAlpha(15),
-                        borderRadius: BorderRadius.circular(8)),
-                      child: Icon(icon, size: 16, color: const Color(0xFF1A73E8)),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(_label(cat),
-                      style: const TextStyle(fontWeight: FontWeight.w500))),
-                    Text('₹${expense['amount']}',
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
-                  ]),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A73E8).withAlpha(15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          icon,
+                          size: 16,
+                          color: const Color(0xFF1A73E8),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _label(cat),
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      Text(
+                        '₹${expense['amount']}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
                 );
               }),
               const Divider(height: 16),
-              Row(children: [
-                const Text('Total', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                const Spacer(),
-                Text('₹${visit.expenseTotal.toStringAsFixed(2)}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-              ]),
+              Row(
+                children: [
+                  const Text(
+                    'Total',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '₹${visit.expenseTotal.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 12),
               if (!widget.readOnlyMode)
                 SizedBox(
@@ -2878,8 +3364,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         child: Column(
           children: [
             // Return mode as radio buttons
-            const Align(alignment: Alignment.centerLeft,
-              child: Text('Duty completion', style: TextStyle(fontWeight: FontWeight.w600))),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Duty completion',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
             const SizedBox(height: 4),
             RadioListTile<String>(
               contentPadding: EdgeInsets.zero,
@@ -2887,9 +3378,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               value: 'return_office',
               groupValue: _returnMode,
               title: const Text('Return to Office'),
-              subtitle: const Text('End of Office', style: TextStyle(fontSize: 11)),
-              onChanged: widget.readOnlyMode ? null
-                : (v) => setState(() => _returnMode = v!),
+              subtitle: const Text(
+                'End of Office',
+                style: TextStyle(fontSize: 11),
+              ),
+              onChanged: widget.readOnlyMode
+                  ? null
+                  : (v) => setState(() => _returnMode = v!),
             ),
             RadioListTile<String>(
               contentPadding: EdgeInsets.zero,
@@ -2898,8 +3393,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               groupValue: _returnMode,
               title: const Text('End Duty from Client'),
               subtitle: const Text('No Return', style: TextStyle(fontSize: 11)),
-              onChanged: widget.readOnlyMode ? null
-                : (v) => setState(() => _returnMode = v!),
+              onChanged: widget.readOnlyMode
+                  ? null
+                  : (v) => setState(() => _returnMode = v!),
             ),
             const Divider(height: 16),
             _captureTiles(),
@@ -2927,8 +3423,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               children: [
                 const Text(
                   'Client Signature',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 13),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 if (!widget.readOnlyMode)
                   TextButton.icon(
@@ -2936,11 +3431,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                         ? null
                         : () => setState(() => _signaturePadController.clear()),
                     icon: const Icon(Icons.refresh_rounded, size: 14),
-                    label: const Text('Clear',
-                        style: TextStyle(fontSize: 12)),
+                    label: const Text('Clear', style: TextStyle(fontSize: 12)),
                     style: TextButton.styleFrom(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
                       foregroundColor: _signaturePadController.isEmpty
                           ? Colors.grey
                           : Colors.redAccent,
@@ -2954,9 +3447,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   ? 'Signature captured'
                   : 'Ask the client to sign in the box below',
               style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade500,
-                  fontStyle: FontStyle.italic),
+                fontSize: 11,
+                color: Colors.grey.shade500,
+                fontStyle: FontStyle.italic,
+              ),
             ),
             const SizedBox(height: 8),
             // Signature canvas
@@ -2964,16 +3458,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               height: 140,
               decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border.all(
-                    color: Colors.grey.shade400, width: 1.5),
+                border: Border.all(color: Colors.grey.shade400, width: 1.5),
                 borderRadius: BorderRadius.circular(10),
               ),
               clipBehavior: Clip.antiAlias,
               child: widget.readOnlyMode
                   ? Center(
-                      child: Text('—',
-                          style:
-                              TextStyle(color: Colors.grey.shade400)),
+                      child: Text(
+                        '—',
+                        style: TextStyle(color: Colors.grey.shade400),
+                      ),
                     )
                   : Signature(
                       controller: _signaturePadController,
@@ -2982,19 +3476,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       height: 140,
                     ),
             ),
-            if (!widget.readOnlyMode &&
-                _signaturePadController.isEmpty) ...[
+            if (!widget.readOnlyMode && _signaturePadController.isEmpty) ...[
               const SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.gesture_rounded,
-                      size: 13, color: Colors.grey.shade400),
+                  Icon(
+                    Icons.gesture_rounded,
+                    size: 13,
+                    color: Colors.grey.shade400,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     'Draw signature above',
-                    style: TextStyle(
-                        fontSize: 11, color: Colors.grey.shade400),
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
                   ),
                 ],
               ),
@@ -3040,18 +3535,28 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         icon: Icons.business_rounded,
         color: const Color(0xFF16A34A),
         title: 'Client Details',
-        child: Column(children: [
-          EmployeeInfoRow('Client', visit.clientName),
-          EmployeeInfoRow('Contact',
-              visit.contactPerson.isEmpty ? '—' : visit.contactPerson),
-          EmployeeInfoRow('Phone',
-              visit.contactPhone.isEmpty ? '—' : visit.contactPhone),
-          EmployeeInfoRow('Address',
-              visit.address.isEmpty ? '—' : visit.address),
-          EmployeeInfoRow('Purpose',
-              visit.purpose.isEmpty ? '—' : visit.purpose),
-          EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
-        ]),
+        child: Column(
+          children: [
+            EmployeeInfoRow('Client', visit.clientName),
+            EmployeeInfoRow(
+              'Contact',
+              visit.contactPerson.isEmpty ? '—' : visit.contactPerson,
+            ),
+            EmployeeInfoRow(
+              'Phone',
+              visit.contactPhone.isEmpty ? '—' : visit.contactPhone,
+            ),
+            EmployeeInfoRow(
+              'Address',
+              visit.address.isEmpty ? '—' : visit.address,
+            ),
+            EmployeeInfoRow(
+              'Purpose',
+              visit.purpose.isEmpty ? '—' : visit.purpose,
+            ),
+            EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
+          ],
+        ),
       ),
       const SizedBox(height: 12),
 
@@ -3065,59 +3570,87 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           icon: Icons.receipt_long_rounded,
           color: const Color(0xFFEF4444),
           title: 'Expenses',
-          child: Column(children: [
-            ...visit.expenses.map((expense) {
-              final cat = '${expense['category']}';
-              final icon = switch (cat) {
-                'travel'  => Icons.directions_car_rounded,
-                'food'    => Icons.restaurant_rounded,
-                'parking' => Icons.local_parking_rounded,
-                _         => Icons.receipt_rounded,
-              };
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(children: [
-                  Container(
-                    width: 30, height: 30,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withAlpha(15),
-                      borderRadius: BorderRadius.circular(8)),
-                    child: Icon(icon, size: 15,
-                        color: const Color(0xFFEF4444)),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            children: [
+              ...visit.expenses.map((expense) {
+                final cat = '${expense['category']}';
+                final icon = switch (cat) {
+                  'travel' => Icons.directions_car_rounded,
+                  'food' => Icons.restaurant_rounded,
+                  'parking' => Icons.local_parking_rounded,
+                  _ => Icons.receipt_rounded,
+                };
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
                     children: [
-                      Text(_label(cat),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13)),
-                      if ('${expense['note'] ?? ''}'.isNotEmpty)
-                        Text('${expense['note']}',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade500)),
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withAlpha(15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          icon,
+                          size: 15,
+                          color: const Color(0xFFEF4444),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _label(cat),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            if ('${expense['note'] ?? ''}'.isNotEmpty)
+                              Text(
+                                '${expense['note']}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '₹${expense['amount']}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
                     ],
-                  )),
-                  Text('₹${expense['amount']}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 14)),
-                ]),
-              );
-            }),
-            const Divider(height: 16),
-            Row(children: [
-              const Text('Total',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 15)),
-              const Spacer(),
-              Text('₹${visit.expenseTotal.toStringAsFixed(2)}',
-                  style: const TextStyle(
+                  ),
+                );
+              }),
+              const Divider(height: 16),
+              Row(
+                children: [
+                  const Text(
+                    'Total',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '₹${visit.expenseTotal.toStringAsFixed(2)}',
+                    style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 15,
-                      color: Color(0xFFEF4444))),
-            ]),
-          ]),
+                      color: Color(0xFFEF4444),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
       ],
@@ -3128,28 +3661,37 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           icon: Icons.checklist_rounded,
           color: const Color(0xFF34A853),
           title: 'Checklist',
-          child: Column(children: visit.checklist.map((item) {
-            final done = item['done'] == true;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(children: [
-                Icon(
-                  done
-                      ? Icons.check_circle_rounded
-                      : Icons.radio_button_unchecked,
-                  size: 18,
-                  color: done
-                      ? const Color(0xFF34A853)
-                      : Colors.grey.shade400,
+          child: Column(
+            children: visit.checklist.map((item) {
+              final done = item['done'] == true;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      done
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked,
+                      size: 18,
+                      color: done
+                          ? const Color(0xFF34A853)
+                          : Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '${item['label'] ?? ''}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: done ? null : Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                Expanded(child: Text('${item['label'] ?? ''}',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: done ? null : Colors.grey.shade500))),
-              ]),
-            );
-          }).toList()),
+              );
+            }).toList(),
+          ),
         ),
         const SizedBox(height: 12),
       ],
@@ -3161,15 +3703,18 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           color: const Color(0xFF1A73E8),
           title: 'Attendees (${visit.attendees.length})',
           child: Wrap(
-            spacing: 8, runSpacing: 6,
-            children: visit.attendees.map((a) => Chip(
-              avatar: const Icon(Icons.person_rounded, size: 14),
-              label: Text('$a',
-                  style: const TextStyle(fontSize: 12)),
-              padding: EdgeInsets.zero,
-              materialTapTargetSize:
-                  MaterialTapTargetSize.shrinkWrap,
-            )).toList(),
+            spacing: 8,
+            runSpacing: 6,
+            children: visit.attendees
+                .map(
+                  (a) => Chip(
+                    avatar: const Icon(Icons.person_rounded, size: 14),
+                    label: Text('$a', style: const TextStyle(fontSize: 12)),
+                    padding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                )
+                .toList(),
           ),
         ),
         const SizedBox(height: 12),
@@ -3182,24 +3727,25 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ],
 
       // ── Action buttons ────────────────────────────────────────────
-      Row(children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _working ? null : () => _downloadReport(visit),
-            icon: const Icon(Icons.download_rounded),
-            label: const Text('Download Report'),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _working ? null : () => _downloadReport(visit),
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('Download Report'),
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: FilledButton.icon(
-            onPressed: () =>
-                Navigator.of(context).popUntil((r) => r.isFirst),
-            icon: const Icon(Icons.history_rounded),
-            label: const Text('View History'),
+          const SizedBox(width: 10),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+              icon: const Icon(Icons.history_rounded),
+              label: const Text('View History'),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
       if (widget.reviewerMode && visit.managerVerifiedBy.isEmpty) ...[
         const SizedBox(height: 12),
         SizedBox(
@@ -3212,9 +3758,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ),
       ],
     ],
-    _ => (widget.reviewerMode || widget.readOnlyMode)
-        ? _superAdminVisitDetail(visit)
-        : [_visitInfo(visit)],
+    _ =>
+      (widget.reviewerMode || widget.readOnlyMode)
+          ? _superAdminVisitDetail(visit)
+          : [_visitInfo(visit)],
   };
 
   Future<void> _push(Widget screen) async {
@@ -3380,19 +3927,23 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(visit.clientName,
+              Text(
+                visit.clientName,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: ThemeConfig.getTextPrimary(context),
                 ),
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-              Text(visit.visitId,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                visit.visitId,
                 style: TextStyle(
                   fontSize: 11,
                   color: ThemeConfig.getTextMuted(context),
-                )),
+                ),
+              ),
             ],
           ),
         ),
@@ -3415,10 +3966,22 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(visit.employeeName.isEmpty ? visit.employeeUserId : visit.employeeName,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                      Text(visit.employeeUserId,
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                      Text(
+                        visit.employeeName.isEmpty
+                            ? visit.employeeUserId
+                            : visit.employeeName,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        visit.employeeUserId,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -3429,14 +3992,21 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         const SizedBox(height: 6),
         EmployeeInfoRow('Client', visit.clientName),
         EmployeeInfoRow('Contact', visit.contactPerson),
-        EmployeeInfoRow('Phone', visit.contactPhone.isEmpty ? '—' : visit.contactPhone),
+        EmployeeInfoRow(
+          'Phone',
+          visit.contactPhone.isEmpty ? '—' : visit.contactPhone,
+        ),
         EmployeeInfoRow('Address', visit.address),
-        EmployeeInfoRow('Date & Time',
-          '${_date(visit.scheduledAt)}  ${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}'),
-        EmployeeInfoRow('Duration',
+        EmployeeInfoRow(
+          'Date & Time',
+          '${_date(visit.scheduledAt)}  ${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}',
+        ),
+        EmployeeInfoRow(
+          'Duration',
           visit.durationMinutes < 60
-            ? '${visit.durationMinutes} minutes'
-            : '${visit.durationMinutes ~/ 60} hour${visit.durationMinutes == 60 ? '' : 's'}'),
+              ? '${visit.durationMinutes} minutes'
+              : '${visit.durationMinutes ~/ 60} hour${visit.durationMinutes == 60 ? '' : 's'}',
+        ),
         EmployeeInfoRow('Purpose', visit.purpose),
         EmployeeInfoRow('Travel mode', _label(visit.travelMode)),
         if (visit.notes.isNotEmpty) EmployeeInfoRow('Notes', visit.notes),
@@ -3451,23 +4021,26 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   /// attendees, and all attachments (selfies + signature + proof + docs).
   List<Widget> _superAdminVisitDetail(ClientVisit visit) {
     Color statusColor(String s) => switch (s) {
-      'completed'   => ClientVisitColors.green,
+      'completed' => ClientVisitColors.green,
       'in_progress' => const Color(0xFF34A853),
-      'travelling'  => const Color(0xFF1A73E8),
-      'approved'    => const Color(0xFF16A34A),
-      'pending'     => const Color(0xFFF59E0B),
-      'rejected'    => const Color(0xFFEF4444),
-      _             => Colors.grey,
+      'travelling' => const Color(0xFF1A73E8),
+      'approved' => const Color(0xFF16A34A),
+      'pending' => const Color(0xFFF59E0B),
+      'rejected' => const Color(0xFFEF4444),
+      _ => Colors.grey,
     };
 
-    final isActive = visit.status == 'travelling' ||
-        visit.status == 'in_progress';
+    final isActive =
+        visit.status == 'travelling' || visit.status == 'in_progress';
     final hasRoute = visit.travelRoute.isNotEmpty;
     final hasCompleted = visit.status == 'completed';
 
     return [
       // ── 1. Status badge ───────────────────────────────────────────
-      _stageBadge(_label(visit.status).toUpperCase(), statusColor(visit.status)),
+      _stageBadge(
+        _label(visit.status).toUpperCase(),
+        statusColor(visit.status),
+      ),
       const SizedBox(height: 14),
 
       // ── 2. LIVE MAP (travelling/in_progress) ──────────────────────
@@ -3502,31 +4075,46 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         icon: Icons.badge_outlined,
         color: const Color(0xFF1A73E8),
         title: 'Employee',
-        child: Column(children: [
-          Row(children: [
-            _employeeAvatar(visit),
-            const SizedBox(width: 12),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          children: [
+            Row(
               children: [
-                Text(
-                  visit.employeeName.isEmpty
-                      ? visit.employeeUserId
-                      : visit.employeeName,
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w800)),
-                Text(visit.employeeUserId,
-                    style: TextStyle(
-                        fontSize: 11, color: Colors.grey.shade500)),
+                _employeeAvatar(visit),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        visit.employeeName.isEmpty
+                            ? visit.employeeUserId
+                            : visit.employeeName,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        visit.employeeUserId,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
-            )),
-          ]),
-          const SizedBox(height: 10),
-          const Divider(height: 1),
-          const SizedBox(height: 6),
-          EmployeeInfoRow('Manager ID',
-              visit.managerUserId.isEmpty ? '—' : visit.managerUserId),
-        ]),
+            ),
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            const SizedBox(height: 6),
+            EmployeeInfoRow(
+              'Manager ID',
+              visit.managerUserId.isEmpty ? '—' : visit.managerUserId,
+            ),
+          ],
+        ),
       ),
       const SizedBox(height: 12),
 
@@ -3535,28 +4123,40 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         icon: Icons.business_rounded,
         color: const Color(0xFF16A34A),
         title: 'Client Details',
-        child: Column(children: [
-          EmployeeInfoRow('Client Name', visit.clientName),
-          EmployeeInfoRow('Contact Person',
-              visit.contactPerson.isEmpty ? '—' : visit.contactPerson),
-          EmployeeInfoRow(
-              'Phone', visit.contactPhone.isEmpty ? '—' : visit.contactPhone),
-          EmployeeInfoRow(
-              'Address', visit.address.isEmpty ? '—' : visit.address),
-          EmployeeInfoRow(
-              'Purpose', visit.purpose.isEmpty ? '—' : visit.purpose),
-          EmployeeInfoRow('Scheduled',
-              '${_date(visit.scheduledAt)}  ${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}'),
-          EmployeeInfoRow(
-            'Planned Duration',
-            visit.durationMinutes < 60
-                ? '${visit.durationMinutes} min'
-                : '${visit.durationMinutes ~/ 60}h'
-                    '${visit.durationMinutes % 60 > 0 ? ' ${visit.durationMinutes % 60}m' : ''}',
-          ),
-          EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
-          if (visit.notes.isNotEmpty) EmployeeInfoRow('Notes', visit.notes),
-        ]),
+        child: Column(
+          children: [
+            EmployeeInfoRow('Client Name', visit.clientName),
+            EmployeeInfoRow(
+              'Contact Person',
+              visit.contactPerson.isEmpty ? '—' : visit.contactPerson,
+            ),
+            EmployeeInfoRow(
+              'Phone',
+              visit.contactPhone.isEmpty ? '—' : visit.contactPhone,
+            ),
+            EmployeeInfoRow(
+              'Address',
+              visit.address.isEmpty ? '—' : visit.address,
+            ),
+            EmployeeInfoRow(
+              'Purpose',
+              visit.purpose.isEmpty ? '—' : visit.purpose,
+            ),
+            EmployeeInfoRow(
+              'Scheduled',
+              '${_date(visit.scheduledAt)}  ${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}',
+            ),
+            EmployeeInfoRow(
+              'Planned Duration',
+              visit.durationMinutes < 60
+                  ? '${visit.durationMinutes} min'
+                  : '${visit.durationMinutes ~/ 60}h'
+                        '${visit.durationMinutes % 60 > 0 ? ' ${visit.durationMinutes % 60}m' : ''}',
+            ),
+            EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
+            if (visit.notes.isNotEmpty) EmployeeInfoRow('Notes', visit.notes),
+          ],
+        ),
       ),
       const SizedBox(height: 12),
 
@@ -3565,27 +4165,32 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         icon: Icons.approval_rounded,
         color: const Color(0xFF9333EA),
         title: 'Approval',
-        child: Column(children: [
-          EmployeeInfoRow('Status', _label(visit.status)),
-          EmployeeInfoRow(
+        child: Column(
+          children: [
+            EmployeeInfoRow('Status', _label(visit.status)),
+            EmployeeInfoRow(
               'Approved By',
               visit.approvedByName.isEmpty
                   ? '—'
-                  : '${visit.approvedByName} (${visit.approvedByRole})'),
-          EmployeeInfoRow(
+                  : '${visit.approvedByName} (${visit.approvedByRole})',
+            ),
+            EmployeeInfoRow(
               'Approved At',
               visit.approvedAt == null
                   ? '—'
                   : '${_date(visit.approvedAt!)}  '
-                      '${TimeOfDay.fromDateTime(visit.approvedAt!.toLocal()).format(context)}'),
-          if (visit.approvalComment.isNotEmpty)
-            EmployeeInfoRow('Comment', visit.approvalComment),
-          EmployeeInfoRow(
+                        '${TimeOfDay.fromDateTime(visit.approvedAt!.toLocal()).format(context)}',
+            ),
+            if (visit.approvalComment.isNotEmpty)
+              EmployeeInfoRow('Comment', visit.approvalComment),
+            EmployeeInfoRow(
               'Manager Verification',
               visit.managerVerifiedBy.isEmpty
                   ? 'Pending'
-                  : '✓ Verified by ${visit.managerVerifiedBy}'),
-        ]),
+                  : '✓ Verified by ${visit.managerVerifiedBy}',
+            ),
+          ],
+        ),
       ),
       const SizedBox(height: 12),
 
@@ -3594,37 +4199,52 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         icon: Icons.timeline_rounded,
         color: const Color(0xFF0EA5E9),
         title: 'Visit Timeline',
-        child: Column(children: [
-          _timeRow('Office Check-Out', visit.officeCheckOutAt),
-          _timeRow('Reached Client', visit.reachedClientAt),
-          _timeRow('Visit Start', visit.checkInAt),
-          _timeRow('Visit End / Checkout', visit.checkOutAt),
-          if (visit.officeCheckOutAt != null ||
-              visit.checkOutAt != null) ...[
-            const Divider(height: 16),
-            Row(children: [
-              _durationBox(
-                  'Travel',
-                  visit.officeCheckOutAt != null &&
-                          visit.reachedClientAt != null
-                      ? _duration(visit.reachedClientAt!.toLocal()
-                          .difference(visit.officeCheckOutAt!.toLocal()))
-                      : '—'),
-              _durationBox(
-                  'Visit',
-                  visit.checkInAt != null && visit.checkOutAt != null
-                      ? _duration(visit.checkOutAt!.toLocal()
-                          .difference(visit.checkInAt!.toLocal()))
-                      : '—'),
-              _durationBox(
-                  'Total Duty',
-                  visit.officeCheckOutAt != null && visit.checkOutAt != null
-                      ? _duration(visit.checkOutAt!.toLocal()
-                          .difference(visit.officeCheckOutAt!.toLocal()))
-                      : '—'),
-            ]),
+        child: Column(
+          children: [
+            _timeRow('Office Check-Out', visit.officeCheckOutAt),
+            _timeRow('Reached Client', visit.reachedClientAt),
+            _timeRow('Visit Start', visit.checkInAt),
+            _timeRow('Visit End / Checkout', visit.checkOutAt),
+            if (visit.officeCheckOutAt != null || visit.checkOutAt != null) ...[
+              const Divider(height: 16),
+              Row(
+                children: [
+                  _durationBox(
+                    'Travel',
+                    visit.officeCheckOutAt != null &&
+                            visit.reachedClientAt != null
+                        ? _duration(
+                            visit.reachedClientAt!.toLocal().difference(
+                              visit.officeCheckOutAt!.toLocal(),
+                            ),
+                          )
+                        : '—',
+                  ),
+                  _durationBox(
+                    'Visit',
+                    visit.checkInAt != null && visit.checkOutAt != null
+                        ? _duration(
+                            visit.checkOutAt!.toLocal().difference(
+                              visit.checkInAt!.toLocal(),
+                            ),
+                          )
+                        : '—',
+                  ),
+                  _durationBox(
+                    'Total Duty',
+                    visit.officeCheckOutAt != null && visit.checkOutAt != null
+                        ? _duration(
+                            visit.checkOutAt!.toLocal().difference(
+                              visit.officeCheckOutAt!.toLocal(),
+                            ),
+                          )
+                        : '—',
+                  ),
+                ],
+              ),
+            ],
           ],
-        ]),
+        ),
       ),
       const SizedBox(height: 12),
 
@@ -3636,13 +4256,19 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           icon: Icons.description_rounded,
           color: const Color(0xFFF59E0B),
           title: 'Outcome & Follow-Up',
-          child: Column(children: [
-            EmployeeInfoRow(
-                'Outcome', visit.outcome.isEmpty ? '—' : visit.outcome),
-            EmployeeInfoRow(
-                'Follow-Up', visit.followUp.isEmpty ? '—' : visit.followUp),
-            EmployeeInfoRow('Return Mode', _label(visit.returnMode)),
-          ]),
+          child: Column(
+            children: [
+              EmployeeInfoRow(
+                'Outcome',
+                visit.outcome.isEmpty ? '—' : visit.outcome,
+              ),
+              EmployeeInfoRow(
+                'Follow-Up',
+                visit.followUp.isEmpty ? '—' : visit.followUp,
+              ),
+              EmployeeInfoRow('Return Mode', _label(visit.returnMode)),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
       ],
@@ -3653,57 +4279,88 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           icon: Icons.receipt_long_rounded,
           color: const Color(0xFFEF4444),
           title: 'Expenses',
-          child: Column(children: [
-            ...visit.expenses.map((expense) {
-              final cat = '${expense['category']}';
-              final icon = switch (cat) {
-                'travel'  => Icons.directions_car_rounded,
-                'food'    => Icons.restaurant_rounded,
-                'parking' => Icons.local_parking_rounded,
-                'expense' => Icons.receipt_rounded,
-                _         => Icons.more_horiz_rounded,
-              };
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(children: [
-                  Container(
-                    width: 32, height: 32,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withAlpha(15),
-                      borderRadius: BorderRadius.circular(8)),
-                    child: Icon(icon, size: 16, color: const Color(0xFFEF4444)),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            children: [
+              ...visit.expenses.map((expense) {
+                final cat = '${expense['category']}';
+                final icon = switch (cat) {
+                  'travel' => Icons.directions_car_rounded,
+                  'food' => Icons.restaurant_rounded,
+                  'parking' => Icons.local_parking_rounded,
+                  'expense' => Icons.receipt_rounded,
+                  _ => Icons.more_horiz_rounded,
+                };
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
                     children: [
-                      Text(_label(cat),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13)),
-                      if ('${expense['note'] ?? ''}'.isNotEmpty)
-                        Text('${expense['note']}',
-                            style: TextStyle(
-                                fontSize: 11, color: Colors.grey.shade500)),
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withAlpha(15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          icon,
+                          size: 16,
+                          color: const Color(0xFFEF4444),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _label(cat),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                            if ('${expense['note'] ?? ''}'.isNotEmpty)
+                              Text(
+                                '${expense['note']}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '₹${expense['amount']}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
                     ],
-                  )),
-                  Text('₹${expense['amount']}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 14)),
-                ]),
-              );
-            }),
-            const Divider(height: 16),
-            Row(children: [
-              const Text('Total',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
-              const Spacer(),
-              Text('₹${visit.expenseTotal.toStringAsFixed(2)}',
-                  style: const TextStyle(
+                  ),
+                );
+              }),
+              const Divider(height: 16),
+              Row(
+                children: [
+                  const Text(
+                    'Total',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '₹${visit.expenseTotal.toStringAsFixed(2)}',
+                    style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 15,
-                      color: Color(0xFFEF4444))),
-            ]),
-          ]),
+                      color: Color(0xFFEF4444),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
       ],
@@ -3720,23 +4377,29 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               final label = '${item['label'] ?? ''}';
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(children: [
-                  Icon(
-                    done
-                        ? Icons.check_circle_rounded
-                        : Icons.radio_button_unchecked,
-                    size: 18,
-                    color: done
-                        ? const Color(0xFF34A853)
-                        : Colors.grey.shade400,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                      child: Text(label,
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: done ? null : Colors.grey.shade500))),
-                ]),
+                child: Row(
+                  children: [
+                    Icon(
+                      done
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked,
+                      size: 18,
+                      color: done
+                          ? const Color(0xFF34A853)
+                          : Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: done ? null : Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               );
             }).toList(),
           ),
@@ -3754,14 +4417,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             spacing: 8,
             runSpacing: 6,
             children: visit.attendees
-                .map((a) => Chip(
-                      avatar: const Icon(Icons.person_rounded, size: 14),
-                      label: Text('$a',
-                          style: const TextStyle(fontSize: 12)),
-                      padding: EdgeInsets.zero,
-                      materialTapTargetSize:
-                          MaterialTapTargetSize.shrinkWrap,
-                    ))
+                .map(
+                  (a) => Chip(
+                    avatar: const Icon(Icons.person_rounded, size: 14),
+                    label: Text('$a', style: const TextStyle(fontSize: 12)),
+                    padding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                )
                 .toList(),
           ),
         ),
@@ -3809,23 +4472,27 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: color.withAlpha(22),
-                borderRadius: BorderRadius.circular(8),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: color.withAlpha(22),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 15, color: color),
               ),
-              child: Icon(icon, size: 15, color: color),
-            ),
-            const SizedBox(width: 8),
-            Text(title,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: color,
-              )),
-          ]),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           const Divider(height: 1),
           const SizedBox(height: 8),
@@ -3841,25 +4508,49 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     final parts = name.trim().split(' ');
     final initials = parts.length >= 2
         ? '${parts.first[0]}${parts.last[0]}'.toUpperCase()
-        : name.isNotEmpty ? name[0].toUpperCase() : '?';
+        : name.isNotEmpty
+        ? name[0].toUpperCase()
+        : '?';
     return Container(
-      width: 48, height: 48,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: const Color(0xFF1A73E8).withAlpha(20),
-        border: Border.all(color: const Color(0xFF1A73E8).withAlpha(60), width: 1.5),
+        border: Border.all(
+          color: const Color(0xFF1A73E8).withAlpha(60),
+          width: 1.5,
+        ),
       ),
       clipBehavior: Clip.antiAlias,
       child: hasPhoto
-          ? Image.network(visit.employeePhotoUrl, fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Center(child: Text(initials,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A73E8)))))
-          : Center(child: Text(initials,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800,
-                color: Color(0xFF1A73E8)))),
+          ? Image.network(
+              visit.employeePhotoUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Center(
+                child: Text(
+                  initials,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1A73E8),
+                  ),
+                ),
+              ),
+            )
+          : Center(
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1A73E8),
+                ),
+              ),
+            ),
     );
   }
+
   Widget _approvalInfo(ClientVisit visit) => EmployeeCard(
     child: Column(
       children: [
@@ -3913,24 +4604,37 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     String totalDuty = '—';
     if (visit.officeCheckOutAt != null && visit.reachedClientAt != null) {
       travelDuration = _duration(
-        visit.reachedClientAt!.toLocal().difference(visit.officeCheckOutAt!.toLocal()));
+        visit.reachedClientAt!.toLocal().difference(
+          visit.officeCheckOutAt!.toLocal(),
+        ),
+      );
     }
     if (visit.checkInAt != null && visit.checkOutAt != null) {
       visitDuration = _duration(
-        visit.checkOutAt!.toLocal().difference(visit.checkInAt!.toLocal()));
+        visit.checkOutAt!.toLocal().difference(visit.checkInAt!.toLocal()),
+      );
     }
     if (visit.officeCheckOutAt != null && visit.checkOutAt != null) {
       totalDuty = _duration(
-        visit.checkOutAt!.toLocal().difference(visit.officeCheckOutAt!.toLocal()));
+        visit.checkOutAt!.toLocal().difference(
+          visit.officeCheckOutAt!.toLocal(),
+        ),
+      );
     }
-    final proofCount = visit.attachments.where((a) =>
-      a['category'] == 'proof' || a['category'] == 'client_check_in').length;
+    final proofCount = visit.attachments
+        .where(
+          (a) => a['category'] == 'proof' || a['category'] == 'client_check_in',
+        )
+        .length;
 
     return EmployeeCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Visit timeline', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Visit timeline',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 10),
           _timeRow('Office Check-Out', visit.officeCheckOutAt),
           _timeRow('Reached Client', visit.reachedClientAt),
@@ -3939,49 +4643,88 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           _timeRow('Return / Checkout', visit.checkOutAt),
           const Divider(height: 16),
           // Duration metrics row
-          Row(children: [
-            _durationBox('Travel\nDuration', travelDuration),
-            _durationBox('Visit\nDuration', visitDuration),
-            _durationBox('Total Duty', totalDuty),
-          ]),
+          Row(
+            children: [
+              _durationBox('Travel\nDuration', travelDuration),
+              _durationBox('Visit\nDuration', visitDuration),
+              _durationBox('Total Duty', totalDuty),
+            ],
+          ),
           const Divider(height: 16),
           // Expenses + Proof
-          Row(children: [
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Expenses', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                Text('₹${visit.expenseTotal.toStringAsFixed(2)}',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              ],
-            )),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Proof Uploaded', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
-                Text('$proofCount file${proofCount == 1 ? '' : 's'}',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              ],
-            )),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Expenses',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                    Text(
+                      '₹${visit.expenseTotal.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Proof Uploaded',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                    Text(
+                      '$proofCount file${proofCount == 1 ? '' : 's'}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
           const Divider(height: 16),
           // Manager verification
-          Row(children: [
-            Icon(
-              visit.managerVerifiedBy.isEmpty ? Icons.pending_outlined : Icons.verified_rounded,
-              size: 16,
-              color: visit.managerVerifiedBy.isEmpty ? Colors.orange : ClientVisitColors.green,
-            ),
-            const SizedBox(width: 6),
-            Text('Manager Verification: ',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-            Text(
-              visit.managerVerifiedBy.isEmpty ? 'Pending' : '✓ Verified',
-              style: TextStyle(
-                fontSize: 12,
-                color: visit.managerVerifiedBy.isEmpty ? Colors.orange : ClientVisitColors.green,
-                fontWeight: FontWeight.w700)),
-          ]),
+          Row(
+            children: [
+              Icon(
+                visit.managerVerifiedBy.isEmpty
+                    ? Icons.pending_outlined
+                    : Icons.verified_rounded,
+                size: 16,
+                color: visit.managerVerifiedBy.isEmpty
+                    ? Colors.orange
+                    : ClientVisitColors.green,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Manager Verification: ',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                visit.managerVerifiedBy.isEmpty ? 'Pending' : '✓ Verified',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: visit.managerVerifiedBy.isEmpty
+                      ? Colors.orange
+                      : ClientVisitColors.green,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -3990,11 +4733,17 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   Widget _durationBox(String label, String value) => Expanded(
     child: Column(
       children: [
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
-          textAlign: TextAlign.center),
+        Text(
+          label,
+          style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 2),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-          textAlign: TextAlign.center),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+          textAlign: TextAlign.center,
+        ),
       ],
     ),
   );
@@ -4040,6 +4789,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ],
     ),
   );
+
   /// Gallery of all uploaded attachments — shown on the completed stage (12)
   /// Grouped photos gallery — shown on the completed stage (12) for every
   /// role including SuperAdmin and reviewers.
@@ -4059,33 +4809,33 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
     // Category display meta
     String _catLabel(String cat) => switch (cat) {
-      'office_checkout'  => 'Office Checkout',
-      'client_check_in'  => 'Client Check-In',
-      'checkout'         => 'Return Checkout',
-      'check_in'         => 'Check-In',
-      'proof'            => 'Visit Proof',
-      'expense'          => 'Expense Receipt',
-      _                  => cat.replaceAll('_', ' '),
+      'office_checkout' => 'Office Checkout',
+      'client_check_in' => 'Client Check-In',
+      'checkout' => 'Return Checkout',
+      'check_in' => 'Check-In',
+      'proof' => 'Visit Proof',
+      'expense' => 'Expense Receipt',
+      _ => cat.replaceAll('_', ' '),
     };
 
     IconData _catIcon(String cat) => switch (cat) {
-      'office_checkout'  => Icons.login_rounded,
-      'client_check_in'  => Icons.location_on_rounded,
-      'checkout'         => Icons.logout_rounded,
-      'check_in'         => Icons.camera_front_rounded,
-      'proof'            => Icons.photo_library_rounded,
-      'expense'          => Icons.receipt_rounded,
-      _                  => Icons.attach_file_rounded,
+      'office_checkout' => Icons.login_rounded,
+      'client_check_in' => Icons.location_on_rounded,
+      'checkout' => Icons.logout_rounded,
+      'check_in' => Icons.camera_front_rounded,
+      'proof' => Icons.photo_library_rounded,
+      'expense' => Icons.receipt_rounded,
+      _ => Icons.attach_file_rounded,
     };
 
     Color _catColor(String cat) => switch (cat) {
-      'office_checkout'  => const Color(0xFF1A73E8),
-      'client_check_in'  => const Color(0xFF16A34A),
-      'checkout'         => const Color(0xFF9333EA),
-      'check_in'         => const Color(0xFF0EA5E9),
-      'proof'            => const Color(0xFFF59E0B),
-      'expense'          => const Color(0xFFEF4444),
-      _                  => const Color(0xFF64748B),
+      'office_checkout' => const Color(0xFF1A73E8),
+      'client_check_in' => const Color(0xFF16A34A),
+      'checkout' => const Color(0xFF9333EA),
+      'check_in' => const Color(0xFF0EA5E9),
+      'proof' => const Color(0xFFF59E0B),
+      'expense' => const Color(0xFFEF4444),
+      _ => const Color(0xFF64748B),
     };
 
     final selfies = visit.attachments
@@ -4093,21 +4843,29 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         .toList();
     // Separate client signatures (proof files with 'signature' in the name)
     final signatures = visit.attachments
-        .where((a) =>
-            !selfieCategories.contains('${a['category']}') &&
-            '${a['category']}' == 'proof' &&
-            '${a['original_name'] ?? a['public_id'] ?? ''}'
-                .toLowerCase()
-                .contains('signature'))
+        .where(
+          (a) =>
+              !selfieCategories.contains('${a['category']}') &&
+              '${a['category']}' == 'proof' &&
+              '${a['original_name'] ?? a['public_id'] ?? ''}'
+                  .toLowerCase()
+                  .contains('signature'),
+        )
         .toList();
     final others = visit.attachments
-        .where((a) =>
-            !selfieCategories.contains('${a['category']}') &&
-            !signatures.contains(a))
+        .where(
+          (a) =>
+              !selfieCategories.contains('${a['category']}') &&
+              !signatures.contains(a),
+        )
         .toList();
 
     // ── Full-screen viewer ────────────────────────────────────────────────────
-    void openViewer(BuildContext ctx, List<Map<String, dynamic>> items, int start) {
+    void openViewer(
+      BuildContext ctx,
+      List<Map<String, dynamic>> items,
+      int start,
+    ) {
       final pageCtrl = PageController(initialPage: start);
       showDialog(
         context: ctx,
@@ -4120,24 +4878,34 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 controller: pageCtrl,
                 itemCount: items.length,
                 itemBuilder: (_, i) {
-                  final item  = items[i];
-                  final url   = '${item['url'] ?? ''}';
+                  final item = items[i];
+                  final url = '${item['url'] ?? ''}';
                   final isImg = item['resource_type'] != 'raw';
-                  final cat   = '${item['category'] ?? ''}';
+                  final cat = '${item['category'] ?? ''}';
                   return Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Expanded(
                         child: InteractiveViewer(
                           child: isImg && url.isNotEmpty
-                              ? Image.network(url, fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) =>
-                                      const Center(child: Icon(
-                                        Icons.broken_image_rounded,
-                                        color: Colors.white, size: 64)))
-                              : const Center(child: Icon(
-                                  Icons.insert_drive_file_rounded,
-                                  color: Colors.white, size: 64)),
+                              ? Image.network(
+                                  url,
+                                  fit: BoxFit.contain,
+                                  errorBuilder: (_, __, ___) => const Center(
+                                    child: Icon(
+                                      Icons.broken_image_rounded,
+                                      color: Colors.white,
+                                      size: 64,
+                                    ),
+                                  ),
+                                )
+                              : const Center(
+                                  child: Icon(
+                                    Icons.insert_drive_file_rounded,
+                                    color: Colors.white,
+                                    size: 64,
+                                  ),
+                                ),
                         ),
                       ),
                       // caption
@@ -4146,9 +4914,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                         child: Text(
                           _catLabel(cat),
                           style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600),
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -4158,7 +4927,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               ),
               // Close
               Positioned(
-                top: 8, right: 8,
+                top: 8,
+                right: 8,
                 child: Material(
                   color: Colors.black45,
                   shape: const CircleBorder(),
@@ -4171,7 +4941,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               // Page indicator
               if (items.length > 1)
                 Positioned(
-                  top: 14, left: 0, right: 0,
+                  top: 14,
+                  left: 0,
+                  right: 0,
                   child: Center(
                     child: AnimatedBuilder(
                       animation: pageCtrl,
@@ -4182,7 +4954,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                         return Text(
                           '${page + 1} / ${items.length}',
                           style: const TextStyle(
-                              color: Colors.white70, fontSize: 12),
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
                         );
                       },
                     ),
@@ -4202,11 +4976,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       int indexInGroup, {
       double size = 110,
     }) {
-      final url    = '${item['url'] ?? ''}';
-      final cat    = '${item['category'] ?? ''}';
-      final isImg  = item['resource_type'] != 'raw';
-      final color  = _catColor(cat);
-      final icon   = _catIcon(cat);
+      final url = '${item['url'] ?? ''}';
+      final cat = '${item['category'] ?? ''}';
+      final isImg = item['resource_type'] != 'raw';
+      final color = _catColor(cat);
+      final icon = _catIcon(cat);
 
       return GestureDetector(
         onTap: () => openViewer(ctx, group, indexInGroup),
@@ -4223,17 +4997,25 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               if (isImg && url.isNotEmpty)
                 Image.network(
                   url,
-                  width: size, height: size, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _attachPlaceholder(size, icon, color),
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      _attachPlaceholder(size, icon, color),
                 )
               else
                 _attachPlaceholder(size, icon, color),
 
               // Category label strip at bottom
               Positioned(
-                bottom: 0, left: 0, right: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 4,
+                    horizontal: 6,
+                  ),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
@@ -4249,9 +5031,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                         child: Text(
                           _catLabel(cat),
                           style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700),
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -4263,15 +5046,19 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
               // Zoom hint icon (top-right corner)
               Positioned(
-                top: 4, right: 4,
+                top: 4,
+                right: 4,
                 child: Container(
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     color: Colors.black38,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: const Icon(Icons.zoom_in_rounded,
-                      color: Colors.white, size: 11),
+                  child: const Icon(
+                    Icons.zoom_in_rounded,
+                    color: Colors.white,
+                    size: 11,
+                  ),
                 ),
               ),
             ],
@@ -4294,26 +5081,32 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Section header
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(
-                color: headerColor.withAlpha(25),
-                borderRadius: BorderRadius.circular(6),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: headerColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(headerIcon, size: 14, color: headerColor),
               ),
-              child: Icon(headerIcon, size: 14, color: headerColor),
-            ),
-            const SizedBox(width: 8),
-            Text(title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: headerColor,
-              )),
-            const SizedBox(width: 6),
-            Text('(${items.length})',
-              style: const TextStyle(fontSize: 11, color: Colors.grey)),
-          ]),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: headerColor,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '(${items.length})',
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           // Horizontal scroll row of tiles
           SizedBox(
@@ -4330,48 +5123,73 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       );
     }
 
-    return Builder(builder: (ctx) => EmployeeCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Card header
-          Row(children: [
-            const Icon(Icons.photo_library_outlined, size: 16),
-            const SizedBox(width: 6),
-            Text(
-              'Visit Photos & Documents',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+    return Builder(
+      builder: (ctx) => EmployeeCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Card header
+            Row(
+              children: [
+                const Icon(Icons.photo_library_outlined, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  'Visit Photos & Documents',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${visit.attachments.length} file${visit.attachments.length == 1 ? '' : 's'}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                ),
+              ],
             ),
-            const Spacer(),
-            Text(
-              '${visit.attachments.length} file${visit.attachments.length == 1 ? '' : 's'}',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-            ),
-          ]),
 
-          // ── Selfies section ──
-          if (selfies.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            section(ctx, 'Selfies', Icons.camera_front_rounded,
-                const Color(0xFF1A73E8), selfies, tileSize: 120),
-          ],
+            // ── Selfies section ──
+            if (selfies.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              section(
+                ctx,
+                'Selfies',
+                Icons.camera_front_rounded,
+                const Color(0xFF1A73E8),
+                selfies,
+                tileSize: 120,
+              ),
+            ],
 
-          // ── Client Signatures section ──
-          if (signatures.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            section(ctx, 'Client Signatures', Icons.gesture_rounded,
-                const Color(0xFF9333EA), signatures, tileSize: 110),
-          ],
+            // ── Client Signatures section ──
+            if (signatures.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              section(
+                ctx,
+                'Client Signatures',
+                Icons.gesture_rounded,
+                const Color(0xFF9333EA),
+                signatures,
+                tileSize: 110,
+              ),
+            ],
 
-          // ── Proof & documents section ──
-          if (others.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            section(ctx, 'Proof & Documents', Icons.photo_library_rounded,
-                const Color(0xFFF59E0B), others, tileSize: 100),
+            // ── Proof & documents section ──
+            if (others.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              section(
+                ctx,
+                'Proof & Documents',
+                Icons.photo_library_rounded,
+                const Color(0xFFF59E0B),
+                others,
+                tileSize: 100,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
-    ));
+    );
   }
 
   /// Placeholder shown when an image fails or the file is not an image.
@@ -4493,14 +5311,15 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
   }
 
   void _buildRouteFromVisit(ClientVisit visit) {
-    final points = visit.travelRoute.map((p) {
-      final lat =
-          double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
-      final lng =
-          double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
-      if (lat != null && lng != null) return LatLng(lat, lng);
-      return null;
-    }).whereType<LatLng>().toList();
+    final points = visit.travelRoute
+        .map((p) {
+          final lat = double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
+          final lng = double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
+          if (lat != null && lng != null) return LatLng(lat, lng);
+          return null;
+        })
+        .whereType<LatLng>()
+        .toList();
 
     LatLng? current;
     if (points.isNotEmpty) current = points.last;
@@ -4508,18 +5327,16 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
     final destLat = visit.clientLatitude;
     final destLng = visit.clientLongitude;
     final dest =
-        (destLat != null && destLng != null &&
-                destLat != 0.0 && destLng != 0.0)
-            ? LatLng(destLat, destLng)
-            : null;
+        (destLat != null && destLng != null && destLat != 0.0 && destLng != 0.0)
+        ? LatLng(destLat, destLng)
+        : null;
 
     if (mounted) {
       setState(() {
         _routePoints = points;
         _currentPosition = current;
         _destination = dest;
-        _lastUpdated =
-            TimeOfDay.fromDateTime(DateTime.now()).format(context);
+        _lastUpdated = TimeOfDay.fromDateTime(DateTime.now()).format(context);
         _error = null;
       });
     }
@@ -4528,8 +5345,10 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
   void _startPolling() {
     _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
       try {
-        final updated =
-            await widget.service.fetchVisit(widget.userId, widget.visitId);
+        final updated = await widget.service.fetchVisit(
+          widget.userId,
+          widget.visitId,
+        );
         if (mounted) _buildRouteFromVisit(updated);
       } catch (_) {
         // Silently ignore poll errors — show stale data
@@ -4543,39 +5362,52 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Status row
-        Row(children: [
-          Container(
-            width: 8, height: 8,
-            decoration: const BoxDecoration(
-              color: Color(0xFFEA4335), shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          const Text('LIVE',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFFEA4335),
-                  letterSpacing: 1)),
-          const SizedBox(width: 8),
-          Text(
-            _routePoints.isEmpty
-                ? 'Waiting for GPS…'
-                : '${_routePoints.length} points  ·  Updated $_lastUpdated',
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-          ),
-          const Spacer(),
-          if (_routePoints.isNotEmpty)
-            GestureDetector(
-              onTap: () {
-                try {
-                  _mapController.move(_currentPosition!,
-                      _mapController.camera.zoom);
-                } catch (_) {}
-              },
-              child: const Icon(Icons.my_location_rounded,
-                  size: 16, color: Color(0xFF1A73E8)),
+        Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEA4335),
+                shape: BoxShape.circle,
+              ),
             ),
-        ]),
+            const SizedBox(width: 6),
+            const Text(
+              'LIVE',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFFEA4335),
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _routePoints.isEmpty
+                  ? 'Waiting for GPS…'
+                  : '${_routePoints.length} points  ·  Updated $_lastUpdated',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+            ),
+            const Spacer(),
+            if (_routePoints.isNotEmpty)
+              GestureDetector(
+                onTap: () {
+                  try {
+                    _mapController.move(
+                      _currentPosition!,
+                      _mapController.camera.zoom,
+                    );
+                  } catch (_) {}
+                },
+                child: const Icon(
+                  Icons.my_location_rounded,
+                  size: 16,
+                  color: Color(0xFF1A73E8),
+                ),
+              ),
+          ],
+        ),
         const SizedBox(height: 8),
         // Map
         ClipRRect(
@@ -4591,8 +5423,10 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
                         children: [
                           CircularProgressIndicator(),
                           SizedBox(height: 10),
-                          Text('Waiting for employee location…',
-                              style: TextStyle(fontSize: 12)),
+                          Text(
+                            'Waiting for employee location…',
+                            style: TextStyle(fontSize: 12),
+                          ),
                         ],
                       ),
                     ),
@@ -4613,8 +5447,7 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
           Text(
             'Last known: ${_currentPosition!.latitude.toStringAsFixed(5)}, '
             '${_currentPosition!.longitude.toStringAsFixed(5)}',
-            style:
-                TextStyle(fontSize: 10, color: Colors.grey.shade500),
+            style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
           ),
         ],
       ],
@@ -4638,22 +5471,25 @@ class _RouteMapCardState extends State<_RouteMapCard> {
   @override
   void initState() {
     super.initState();
-    _points = widget.visit.travelRoute.map((p) {
-      final lat =
-          double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
-      final lng =
-          double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
-      if (lat != null && lng != null) return LatLng(lat, lng);
-      return null;
-    }).whereType<LatLng>().toList();
+    _points = widget.visit.travelRoute
+        .map((p) {
+          final lat = double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
+          final lng = double.tryParse('${p['longitude'] ?? p['lng'] ?? ''}');
+          if (lat != null && lng != null) return LatLng(lat, lng);
+          return null;
+        })
+        .whereType<LatLng>()
+        .toList();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_points.length >= 2 && mounted) {
         try {
-          _mapController.fitCamera(CameraFit.bounds(
-            bounds: LatLngBounds.fromPoints(_points),
-            padding: const EdgeInsets.all(40),
-          ));
+          _mapController.fitCamera(
+            CameraFit.bounds(
+              bounds: LatLngBounds.fromPoints(_points),
+              padding: const EdgeInsets.all(40),
+            ),
+          );
         } catch (_) {}
       }
     });
@@ -4671,8 +5507,11 @@ class _RouteMapCardState extends State<_RouteMapCard> {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
         child: Center(
-            child: Text('No route data recorded.',
-                style: TextStyle(fontSize: 12))),
+          child: Text(
+            'No route data recorded.',
+            style: TextStyle(fontSize: 12),
+          ),
+        ),
       );
     }
 
@@ -4683,14 +5522,16 @@ class _RouteMapCardState extends State<_RouteMapCard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Stats row
-        Row(children: [
-          const Icon(Icons.route_rounded,
-              size: 14, color: Color(0xFF9333EA)),
-          const SizedBox(width: 6),
-          Text('${_points.length} GPS points recorded',
-              style: TextStyle(
-                  fontSize: 11, color: Colors.grey.shade600)),
-        ]),
+        Row(
+          children: [
+            const Icon(Icons.route_rounded, size: 14, color: Color(0xFF9333EA)),
+            const SizedBox(width: 6),
+            Text(
+              '${_points.length} GPS points recorded',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
         // Map
         ClipRRect(
@@ -4699,65 +5540,75 @@ class _RouteMapCardState extends State<_RouteMapCard> {
             height: 240,
             child: FlutterMap(
               mapController: _mapController,
-              options: MapOptions(
-                initialCenter: origin,
-                initialZoom: 13,
-              ),
+              options: MapOptions(initialCenter: origin, initialZoom: 13),
               children: [
                 TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.bitbyte.hrms',
                 ),
-                PolylineLayer(polylines: [
-                  Polyline(
-                    points: _points,
-                    color: const Color(0xFF9333EA),
-                    strokeWidth: 4,
-                  ),
-                ]),
-                MarkerLayer(markers: [
-                  // Start marker — green
-                  Marker(
-                    point: origin,
-                    width: 36, height: 36,
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF34A853),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.play_arrow_rounded,
-                          color: Colors.white, size: 20),
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _points,
+                      color: const Color(0xFF9333EA),
+                      strokeWidth: 4,
                     ),
-                  ),
-                  // End marker — red
-                  Marker(
-                    point: destination,
-                    width: 36, height: 36,
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEA4335),
-                        shape: BoxShape.circle,
+                  ],
+                ),
+                MarkerLayer(
+                  markers: [
+                    // Start marker — green
+                    Marker(
+                      point: origin,
+                      width: 36,
+                      height: 36,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF34A853),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
-                      child: const Icon(Icons.flag_rounded,
-                          color: Colors.white, size: 20),
                     ),
-                  ),
-                ]),
+                    // End marker — red
+                    Marker(
+                      point: destination,
+                      width: 36,
+                      height: 36,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEA4335),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.flag_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 6),
-        Row(children: [
-          const Icon(Icons.circle, size: 10, color: Color(0xFF34A853)),
-          const SizedBox(width: 4),
-          const Text('Start', style: TextStyle(fontSize: 11)),
-          const SizedBox(width: 12),
-          const Icon(Icons.circle, size: 10, color: Color(0xFFEA4335)),
-          const SizedBox(width: 4),
-          const Text('End', style: TextStyle(fontSize: 11)),
-        ]),
+        Row(
+          children: [
+            const Icon(Icons.circle, size: 10, color: Color(0xFF34A853)),
+            const SizedBox(width: 4),
+            const Text('Start', style: TextStyle(fontSize: 11)),
+            const SizedBox(width: 12),
+            const Icon(Icons.circle, size: 10, color: Color(0xFFEA4335)),
+            const SizedBox(width: 4),
+            const Text('End', style: TextStyle(fontSize: 11)),
+          ],
+        ),
       ],
     );
   }
@@ -4805,21 +5656,29 @@ class _FlowTimerState extends State<_FlowTimer> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.timer_rounded, color: Color(0xFF1A73E8), size: 20),
+              const Icon(
+                Icons.timer_rounded,
+                color: Color(0xFF1A73E8),
+                size: 20,
+              ),
               const SizedBox(width: 8),
-              Text('$h:$m:$s',
+              Text(
+                '$h:$m:$s',
                 style: const TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF1A73E8),
                   letterSpacing: 2,
                   fontFeatures: [FontFeature.tabularFigures()],
-                )),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          Text('Visit Timer',
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+          Text(
+            'Visit Timer',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+          ),
         ],
       ),
     );
@@ -4831,7 +5690,7 @@ class _RouteOption {
   final List<LatLng> points;
   final double distanceKm;
   final int durationMinutes;
-  final String via;        // e.g. "NH 44 and AH45"
+  final String via; // e.g. "NH 44 and AH45"
   final bool hasTolls;
 
   const _RouteOption({
@@ -4863,7 +5722,8 @@ class _RouteOption {
 /// - Callback reports ETA/distance to parent for bottom sheet display.
 class _LiveMapView extends StatefulWidget {
   final MapController mapController;
-  final List<LatLng> routePoints;   // actual GPS breadcrumb trail
+  final List<LatLng> routePoints; // actual GPS breadcrumb trail
+  final List<LatLng> waypoints;
   final LatLng? origin;
   final LatLng? current;
   final LatLng? destination;
@@ -4871,13 +5731,16 @@ class _LiveMapView extends StatefulWidget {
   final bool navigationMode;
   final bool showEtaOverlay;
   final void Function(String eta, String distance)? onEtaUpdate;
-  final void Function(List<_RouteOption> routes, int selectedIndex)? onRoutesReady;
+  final void Function(List<_RouteOption> routes, int selectedIndex)?
+  onRoutesReady;
+  final ValueChanged<double>? onRotationChanged;
   final int selectedRouteIndex;
 
   const _LiveMapView({
     super.key,
     required this.mapController,
     required this.routePoints,
+    this.waypoints = const [],
     this.origin,
     this.current,
     this.destination,
@@ -4886,6 +5749,7 @@ class _LiveMapView extends StatefulWidget {
     this.showEtaOverlay = false,
     this.onEtaUpdate,
     this.onRoutesReady,
+    this.onRotationChanged,
     this.selectedRouteIndex = 0,
   });
 
@@ -4915,9 +5779,10 @@ class _LiveMapViewState extends State<_LiveMapView>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
-    );
+    _pulseAnim = Tween<double>(
+      begin: 0.5,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
     if (widget.current != null && widget.destination != null) {
       _fetchRoute(widget.current!, widget.destination!);
     }
@@ -4962,8 +5827,10 @@ class _LiveMapViewState extends State<_LiveMapView>
         final name = '${step['name'] ?? ''}'.trim();
         for (final token in [...ref.split(';'), ...name.split(' ')]) {
           final t = token.trim();
-          if (RegExp(r'^(NH|AH|SH|MDR|ODR)\s*\d+', caseSensitive: false)
-              .hasMatch(t)) {
+          if (RegExp(
+            r'^(NH|AH|SH|MDR|ODR)\s*\d+',
+            caseSensitive: false,
+          ).hasMatch(t)) {
             highways.add(t.replaceAll(RegExp(r'\s+'), ' '));
           }
         }
@@ -4983,10 +5850,14 @@ class _LiveMapViewState extends State<_LiveMapView>
     _fetchingRoute = true;
     _lastRouteFetch = from;
     try {
+      final coordinates = <LatLng>[
+        from,
+        ...widget.waypoints,
+        to,
+      ].map((point) => '${point.longitude},${point.latitude}').join(';');
       final url = Uri.parse(
         'https://router.project-osrm.org/route/v1/driving/'
-        '${from.longitude},${from.latitude};'
-        '${to.longitude},${to.latitude}'
+        '$coordinates'
         '?overview=full&geometries=geojson&alternatives=3&steps=true&annotations=false',
       );
       final response = await http
@@ -5002,8 +5873,10 @@ class _LiveMapViewState extends State<_LiveMapView>
           final distM = (route['distance'] as num).toDouble();
           final durS = (route['duration'] as num).toDouble();
           final coords = (route['geometry']['coordinates'] as List)
-              .map((c) =>
-                  LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+              .map(
+                (c) =>
+                    LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()),
+              )
               .toList();
           final via = _viaLabel(route);
           return _RouteOption(
@@ -5011,7 +5884,8 @@ class _LiveMapViewState extends State<_LiveMapView>
             distanceKm: distM / 1000,
             durationMinutes: (durS / 60).ceil(),
             via: via,
-            hasTolls: via.toLowerCase().contains('nh') ||
+            hasTolls:
+                via.toLowerCase().contains('nh') ||
                 via.toLowerCase().contains('ah'),
           );
         }).toList();
@@ -5049,8 +5923,7 @@ class _LiveMapViewState extends State<_LiveMapView>
       if (_routes[index].points.isNotEmpty) {
         final bounds = LatLngBounds.fromPoints(_routes[index].points);
         widget.mapController.fitCamera(
-          CameraFit.bounds(
-              bounds: bounds, padding: const EdgeInsets.all(60)),
+          CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60)),
         );
       }
     } catch (_) {}
@@ -5062,7 +5935,8 @@ class _LiveMapViewState extends State<_LiveMapView>
     final lat2 = to.latitudeInRad;
     final dLng = to.longitudeInRad - from.longitudeInRad;
     final y = math.sin(dLng) * math.cos(lat2);
-    final x = math.cos(lat1) * math.sin(lat2) -
+    final x =
+        math.cos(lat1) * math.sin(lat2) -
         math.sin(lat1) * math.cos(lat2) * math.cos(dLng);
     return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
   }
@@ -5071,15 +5945,17 @@ class _LiveMapViewState extends State<_LiveMapView>
   // Never fall back to raw GPS breadcrumb as route (causes spider-web mess).
   List<LatLng> get _displayRoute =>
       _selected != null && _selected!.points.length >= 2
-          ? _selected!.points
-          : [];
+      ? _selected!.points
+      : [];
 
   LatLng get _center {
     final cur = widget.current;
     final dst = widget.destination;
     // Don't center on invalid 0,0 destination
-    final validDst = (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0))
-        ? dst : null;
+    final validDst =
+        (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0))
+        ? dst
+        : null;
     return cur ?? validDst ?? widget.origin ?? const LatLng(20.5937, 78.9629);
   }
 
@@ -5087,8 +5963,13 @@ class _LiveMapViewState extends State<_LiveMapView>
   Widget build(BuildContext context) {
     final cur = widget.current;
     final dst = widget.destination;
-    final validDst = (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0)) ? dst : null;
-    final heading = (cur != null && validDst != null) ? _bearing(cur, validDst) : 0.0;
+    final validDst =
+        (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0))
+        ? dst
+        : null;
+    final heading = (cur != null && validDst != null)
+        ? _bearing(cur, validDst)
+        : 0.0;
     final currentColor = widget.navigationMode
         ? const Color(0xFF34A853)
         : const Color(0xFF1A73E8);
@@ -5102,18 +5983,38 @@ class _LiveMapViewState extends State<_LiveMapView>
             options: MapOptions(
               initialCenter: _center,
               initialZoom: 15,
+              onPositionChanged: (camera, hasGesture) {
+                widget.onRotationChanged?.call(camera.rotation);
+              },
               interactionOptions: const InteractionOptions(
-                flags: InteractiveFlag.pinchZoom |
+                flags:
+                    InteractiveFlag.pinchZoom |
+                    InteractiveFlag.pinchMove |
                     InteractiveFlag.drag |
                     InteractiveFlag.doubleTapZoom |
                     InteractiveFlag.rotate,
+                enableMultiFingerGestureRace: true,
+                rotationThreshold: 4,
+                pinchZoomThreshold: 0.25,
+                pinchMoveThreshold: 8,
+                rotationWinGestures:
+                    MultiFingerGesture.rotate |
+                    MultiFingerGesture.pinchZoom |
+                    MultiFingerGesture.pinchMove,
+                pinchZoomWinGestures:
+                    MultiFingerGesture.rotate |
+                    MultiFingerGesture.pinchZoom |
+                    MultiFingerGesture.pinchMove,
+                pinchMoveWinGestures:
+                    MultiFingerGesture.rotate |
+                    MultiFingerGesture.pinchZoom |
+                    MultiFingerGesture.pinchMove,
               ),
             ),
             children: [
               // OpenStreetMap tiles.
               TileLayer(
-                urlTemplate:
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.bitbyte.hrms',
                 maxNativeZoom: 19,
               ),
@@ -5121,9 +6022,11 @@ class _LiveMapViewState extends State<_LiveMapView>
               // ── All alternate routes drawn on map (Google Maps style) ──
               // Draw unselected routes first (behind), selected last (on top).
               ...List.generate(_routes.length, (i) {
-                if (_routes[i].points.length < 2) return const SizedBox.shrink();
+                if (_routes[i].points.length < 2)
+                  return const SizedBox.shrink();
                 final isSelected = i == _selectedRouteIndex;
-                if (isSelected) return const SizedBox.shrink(); // drawn separately below
+                if (isSelected)
+                  return const SizedBox.shrink(); // drawn separately below
                 final altColor = i == 1
                     ? const Color(0xFF4FC3F7)
                     : Colors.grey.shade400;
@@ -5134,14 +6037,14 @@ class _LiveMapViewState extends State<_LiveMapView>
                       Polyline(
                         points: _routes[i].points,
                         color: Colors.white,
-                        strokeWidth: 12,
+                        strokeWidth: 9,
                         strokeCap: StrokeCap.round,
                         strokeJoin: StrokeJoin.round,
                       ),
                       Polyline(
                         points: _routes[i].points,
                         color: altColor.withAlpha(180),
-                        strokeWidth: 9,
+                        strokeWidth: 6,
                         strokeCap: StrokeCap.round,
                         strokeJoin: StrokeJoin.round,
                       ),
@@ -5152,11 +6055,13 @@ class _LiveMapViewState extends State<_LiveMapView>
 
               // ── Time labels on each route (mid-point bubble) ──
               MarkerLayer(
+                rotate: true,
                 markers: List.generate(_routes.length, (i) {
                   if (_routes[i].points.length < 2) {
                     return Marker(
                       point: const LatLng(0, 0),
-                      width: 0, height: 0,
+                      width: 0,
+                      height: 0,
                       child: const SizedBox.shrink(),
                     );
                   }
@@ -5171,7 +6076,9 @@ class _LiveMapViewState extends State<_LiveMapView>
                       onTap: () => _selectRoute(i),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: isSelected
                               ? const Color(0xFF1A73E8)
@@ -5179,9 +6086,10 @@ class _LiveMapViewState extends State<_LiveMapView>
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: const [
                             BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 4,
-                                offset: Offset(0, 2)),
+                              color: Colors.black26,
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
                           ],
                           border: isSelected
                               ? null
@@ -5231,7 +6139,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                     Polyline(
                       points: _displayRoute,
                       color: Colors.white,
-                      strokeWidth: 13,
+                      strokeWidth: 10,
                       strokeCap: StrokeCap.round,
                       strokeJoin: StrokeJoin.round,
                     ),
@@ -5239,7 +6147,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                     Polyline(
                       points: _displayRoute,
                       color: const Color(0xFF3F00D7),
-                      strokeWidth: 10,
+                      strokeWidth: 7,
                       strokeCap: StrokeCap.round,
                       strokeJoin: StrokeJoin.round,
                     ),
@@ -5248,6 +6156,7 @@ class _LiveMapViewState extends State<_LiveMapView>
 
               // ── Markers ──────────────────────────────────────────────
               MarkerLayer(
+                rotate: true,
                 markers: [
                   // ── Origin — small green dot (office start point) ──
                   if (widget.origin != null)
@@ -5261,18 +6170,53 @@ class _LiveMapViewState extends State<_LiveMapView>
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2.5),
                           boxShadow: const [
-                            BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2)),
+                            BoxShadow(
+                              color: Colors.black38,
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
                           ],
                         ),
                       ),
                     ),
 
                   // ── Destination — large red Google Maps style teardrop pin ──
-                  if (dst != null && !(dst.latitude == 0.0 && dst.longitude == 0.0))
+                  ...List.generate(
+                    widget.waypoints.length,
+                    (index) => Marker(
+                      point: widget.waypoints[index],
+                      width: 28,
+                      height: 28,
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFF5F6368),
+                            width: 3,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black26, blurRadius: 4),
+                          ],
+                        ),
+                        child: Text(
+                          '${index + 1}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF202124),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (dst != null &&
+                      !(dst.latitude == 0.0 && dst.longitude == 0.0))
                     Marker(
                       point: dst,
-                      width: 44,
-                      height: 58,
+                      width: 28,
+                      height: 38,
                       alignment: Alignment.bottomCenter,
                       child: Stack(
                         alignment: Alignment.topCenter,
@@ -5281,8 +6225,8 @@ class _LiveMapViewState extends State<_LiveMapView>
                           Positioned(
                             bottom: 0,
                             child: Container(
-                              width: 14,
-                              height: 6,
+                              width: 9,
+                              height: 4,
                               decoration: BoxDecoration(
                                 color: Colors.black26,
                                 borderRadius: BorderRadius.circular(8),
@@ -5291,13 +6235,17 @@ class _LiveMapViewState extends State<_LiveMapView>
                           ),
                           // Pin body
                           CustomPaint(
-                            size: const Size(44, 52),
+                            size: const Size(28, 34),
                             painter: _RedPinPainter(),
                           ),
                           // Inner white dot
                           const Positioned(
-                            top: 10,
-                            child: Icon(Icons.circle, color: Colors.white, size: 14),
+                            top: 7,
+                            child: Icon(
+                              Icons.circle,
+                              color: Colors.white,
+                              size: 9,
+                            ),
                           ),
                         ],
                       ),
@@ -5307,8 +6255,8 @@ class _LiveMapViewState extends State<_LiveMapView>
                   if (cur != null)
                     Marker(
                       point: cur,
-                      width: 64,
-                      height: 64,
+                      width: widget.navigationMode ? 48 : 32,
+                      height: widget.navigationMode ? 48 : 32,
                       child: AnimatedBuilder(
                         animation: _pulseAnim,
                         builder: (_, __) => Stack(
@@ -5316,19 +6264,26 @@ class _LiveMapViewState extends State<_LiveMapView>
                           children: [
                             // Outer pulse ring
                             Container(
-                              width: 64 * _pulseAnim.value,
-                              height: 64 * _pulseAnim.value,
+                              width:
+                                  (widget.navigationMode ? 48 : 32) *
+                                  _pulseAnim.value,
+                              height:
+                                  (widget.navigationMode ? 48 : 32) *
+                                  _pulseAnim.value,
                               decoration: BoxDecoration(
                                 color: currentColor.withAlpha(
-                                  (50 * (1.2 - _pulseAnim.value)).round().clamp(0, 255),
+                                  (50 * (1.2 - _pulseAnim.value)).round().clamp(
+                                    0,
+                                    255,
+                                  ),
                                 ),
                                 shape: BoxShape.circle,
                               ),
                             ),
                             // Mid ring
                             Container(
-                              width: 36,
-                              height: 36,
+                              width: widget.navigationMode ? 32 : 24,
+                              height: widget.navigationMode ? 32 : 24,
                               decoration: BoxDecoration(
                                 color: currentColor.withAlpha(50),
                                 shape: BoxShape.circle,
@@ -5342,12 +6297,15 @@ class _LiveMapViewState extends State<_LiveMapView>
                             Transform.rotate(
                               angle: heading * math.pi / 180,
                               child: Container(
-                                width: 24,
-                                height: 24,
+                                width: widget.navigationMode ? 23 : 16,
+                                height: widget.navigationMode ? 23 : 16,
                                 decoration: BoxDecoration(
                                   color: currentColor,
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2.5),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2.5,
+                                  ),
                                   boxShadow: const [
                                     BoxShadow(
                                       color: Colors.black38,
@@ -5361,7 +6319,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                                       ? Icons.navigation
                                       : Icons.circle,
                                   color: Colors.white,
-                                  size: 14,
+                                  size: widget.navigationMode ? 13 : 8,
                                 ),
                               ),
                             ),
@@ -5378,79 +6336,92 @@ class _LiveMapViewState extends State<_LiveMapView>
         // ── LIVE badge ───────────────────────────────────────────────
         if (!widget.fullScreen)
           Positioned(
-          left: 10,
-          top: 10,
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withAlpha(170),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.circle, color: Color(0xFFEA4335), size: 8),
-                SizedBox(width: 4),
-                Text(
-                  'LIVE',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1,
+            left: 10,
+            top: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(170),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.circle, color: Color(0xFFEA4335), size: 8),
+                  SizedBox(width: 4),
+                  Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
 
         // ── Map control buttons (right side, Google Maps style) ─────
         if (!widget.fullScreen)
           Positioned(
-          right: 10,
-          bottom: widget.fullScreen ? 260 : 10,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Zoom In
-              _mapControlButton(
-                icon: Icons.add,
-                onTap: () {
-                  try { widget.mapController.move(widget.mapController.camera.center, widget.mapController.camera.zoom + 1); } catch (_) {}
-                },
-              ),
-              const SizedBox(height: 4),
-              // Zoom Out
-              _mapControlButton(
-                icon: Icons.remove,
-                onTap: () {
-                  try { widget.mapController.move(widget.mapController.camera.center, widget.mapController.camera.zoom - 1); } catch (_) {}
-                },
-              ),
-              const SizedBox(height: 8),
-              // Compass / Rotate North
-              _mapControlButton(
-                icon: Icons.explore,
-                tooltip: 'Reset north',
-                onTap: () {
-                  try { widget.mapController.rotate(0); } catch (_) {}
-                },
-              ),
-              const SizedBox(height: 4),
-              // Re-center on current position
-              if (cur != null)
+            right: 10,
+            bottom: widget.fullScreen ? 260 : 10,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Zoom In
                 _mapControlButton(
-                  icon: Icons.my_location,
-                  iconColor: const Color(0xFF1A73E8),
+                  icon: Icons.add,
                   onTap: () {
-                    try { widget.mapController.move(cur, 16); } catch (_) {}
+                    try {
+                      widget.mapController.move(
+                        widget.mapController.camera.center,
+                        widget.mapController.camera.zoom + 1,
+                      );
+                    } catch (_) {}
                   },
                 ),
-            ],
+                const SizedBox(height: 4),
+                // Zoom Out
+                _mapControlButton(
+                  icon: Icons.remove,
+                  onTap: () {
+                    try {
+                      widget.mapController.move(
+                        widget.mapController.camera.center,
+                        widget.mapController.camera.zoom - 1,
+                      );
+                    } catch (_) {}
+                  },
+                ),
+                const SizedBox(height: 8),
+                // Compass / Rotate North
+                _mapControlButton(
+                  icon: Icons.explore,
+                  tooltip: 'Reset north',
+                  onTap: () {
+                    try {
+                      widget.mapController.rotate(0);
+                    } catch (_) {}
+                  },
+                ),
+                const SizedBox(height: 4),
+                // Re-center on current position
+                if (cur != null)
+                  _mapControlButton(
+                    icon: Icons.my_location,
+                    iconColor: const Color(0xFF1A73E8),
+                    onTap: () {
+                      try {
+                        widget.mapController.move(cur, 16);
+                      } catch (_) {}
+                    },
+                  ),
+              ],
+            ),
           ),
-        ),
 
         // ── Bottom ETA card — only shown in card (non-fullscreen) mode ──
         if (!widget.fullScreen && _selected != null)
@@ -5463,8 +6434,11 @@ class _LiveMapViewState extends State<_LiveMapView>
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
-                  const Icon(Icons.directions_car,
-                      color: Color(0xFF1A73E8), size: 22),
+                  const Icon(
+                    Icons.directions_car,
+                    color: Color(0xFF1A73E8),
+                    size: 22,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -5482,7 +6456,9 @@ class _LiveMapViewState extends State<_LiveMapView>
                         Text(
                           _selected!.distanceLabel,
                           style: const TextStyle(
-                              fontSize: 11, color: Color(0xFF5F6368)),
+                            fontSize: 11,
+                            color: Color(0xFF5F6368),
+                          ),
                         ),
                       ],
                     ),
@@ -5511,19 +6487,24 @@ class _LiveMapViewState extends State<_LiveMapView>
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: const [
                   BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 6,
-                      offset: Offset(0, 2)),
+                    color: Colors.black26,
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
                 ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.directions_car,
-                      color: Color(0xFF1A73E8), size: 18),
+                  const Icon(
+                    Icons.directions_car,
+                    color: Color(0xFF1A73E8),
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Text(
-                    '${_selected!.durationLabel}  •  ${_selected!.distanceLabel}',                    style: const TextStyle(
+                    '${_selected!.durationLabel}  •  ${_selected!.distanceLabel}',
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF202124),
@@ -5564,6 +6545,7 @@ class _LiveMapViewState extends State<_LiveMapView>
       child: SizedBox(height: 300, child: mapStack),
     );
   }
+
   // Helper: single square map control button (Google Maps style white card).
   Widget _mapControlButton({
     required IconData icon,
@@ -5582,8 +6564,12 @@ class _LiveMapViewState extends State<_LiveMapView>
           child: SizedBox(
             width: 40,
             height: 40,
-            child: Icon(icon, size: 20,
-                color: iconColor ?? Theme.of(context).colorScheme.onSurfaceVariant),
+            child: Icon(
+              icon,
+              size: 20,
+              color:
+                  iconColor ?? Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ),
