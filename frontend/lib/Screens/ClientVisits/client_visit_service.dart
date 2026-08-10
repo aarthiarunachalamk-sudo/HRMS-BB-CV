@@ -7,6 +7,26 @@ import 'client_visit_models.dart';
 class ClientVisitService {
   static final Uri _base = ApiConfig.uri('/client-visits/');
 
+  Future<http.Response> _getWithRenderRetry(Uri uri) async {
+    Object? lastError;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final response = await http
+            .get(uri)
+            .timeout(const Duration(seconds: 65));
+        if (!{502, 503, 504}.contains(response.statusCode) || attempt == 2) {
+          return response;
+        }
+        lastError = Exception('Server returned ${response.statusCode}.');
+      } catch (error) {
+        lastError = error;
+        if (attempt == 2) rethrow;
+      }
+      await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+    }
+    throw Exception('Client Visit server is unavailable: $lastError');
+  }
+
   Future<List<Map<String, dynamic>>> fetchVisitApprovers(
     String userId, {
     bool requiresRoleAwareApprovers = false,
@@ -49,16 +69,14 @@ class ClientVisitService {
     String userId, {
     String status = '',
   }) async {
-    final response = await http
-        .get(
-          _base.replace(
-            queryParameters: {
-              'user_id': userId,
-              if (status.isNotEmpty) 'status': status,
-            },
-          ),
-        )
-        .timeout(const Duration(seconds: 10));
+    final response = await _getWithRenderRetry(
+      _base.replace(
+        queryParameters: {
+          'user_id': userId,
+          if (status.isNotEmpty) 'status': status,
+        },
+      ),
+    );
     final body = _body(response);
     final visits = (body['visits'] as List? ?? const [])
         .whereType<Map>()
@@ -72,7 +90,7 @@ class ClientVisitService {
   }
 
   Future<ClientVisit> fetchVisit(String userId, int id) async {
-    final response = await http.get(
+    final response = await _getWithRenderRetry(
       Uri.parse('$_base$id/').replace(queryParameters: {'user_id': userId}),
     );
     return ClientVisit.fromJson(
@@ -233,7 +251,7 @@ class ClientVisitService {
     } catch (_) {
       if (response.statusCode >= 500) {
         throw Exception(
-          'Client Visit server error (${response.statusCode}). Refresh the dashboard before retrying.',
+          'Client Visit server error (${response.statusCode}). Please try again.',
         );
       }
       throw Exception(

@@ -5294,12 +5294,15 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
   LatLng? _currentPosition;
   LatLng? _destination;
   String? _error;
-  String _lastUpdated = '';
+  DateTime? _lastUpdatedAt;
+  bool _reachedClient = false;
+  int _lastFittedPointCount = -1;
+  bool _polling = false;
 
   @override
   void initState() {
     super.initState();
-    _buildRouteFromVisit(widget.visit);
+    _buildRouteFromVisit(widget.visit, notify: false);
     _startPolling();
   }
 
@@ -5310,7 +5313,7 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
     super.dispose();
   }
 
-  void _buildRouteFromVisit(ClientVisit visit) {
+  void _buildRouteFromVisit(ClientVisit visit, {bool notify = true}) {
     final points = visit.travelRoute
         .map((p) {
           final lat = double.tryParse('${p['latitude'] ?? p['lat'] ?? ''}');
@@ -5331,19 +5334,53 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
         ? LatLng(destLat, destLng)
         : null;
 
-    if (mounted) {
-      setState(() {
-        _routePoints = points;
-        _currentPosition = current;
-        _destination = dest;
-        _lastUpdated = TimeOfDay.fromDateTime(DateTime.now()).format(context);
-        _error = null;
-      });
+    if (!mounted) return;
+    void applyUpdate() {
+      _routePoints = points;
+      _currentPosition = current;
+      _destination = dest;
+      _lastUpdatedAt = DateTime.now();
+      _reachedClient = visit.reachedClientAt != null;
+      _error = null;
     }
+
+    if (notify) {
+      setState(applyUpdate);
+    } else {
+      applyUpdate();
+    }
+    if (_lastFittedPointCount != points.length) {
+      _lastFittedPointCount = points.length;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _fitRouteOverview());
+    }
+  }
+
+  void _fitRouteOverview() {
+    if (!mounted) return;
+    final points = <LatLng>[
+      ..._routePoints,
+      if (_destination != null) _destination!,
+    ];
+    try {
+      _mapController.rotate(0);
+      if (points.length >= 2) {
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: LatLngBounds.fromPoints(points),
+            padding: const EdgeInsets.all(34),
+            maxZoom: 16,
+          ),
+        );
+      } else if (points.length == 1) {
+        _mapController.move(points.first, 16);
+      }
+    } catch (_) {}
   }
 
   void _startPolling() {
     _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      if (_polling) return;
+      _polling = true;
       try {
         final updated = await widget.service.fetchVisit(
           widget.userId,
@@ -5352,12 +5389,17 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
         if (mounted) _buildRouteFromVisit(updated);
       } catch (_) {
         // Silently ignore poll errors — show stale data
+      } finally {
+        _polling = false;
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final lastUpdated = _lastUpdatedAt == null
+        ? '—'
+        : TimeOfDay.fromDateTime(_lastUpdatedAt!).format(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -5367,41 +5409,42 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
             Container(
               width: 8,
               height: 8,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEA4335),
+              decoration: BoxDecoration(
+                color: _reachedClient
+                    ? const Color(0xFF34A853)
+                    : const Color(0xFFEA4335),
                 shape: BoxShape.circle,
               ),
             ),
             const SizedBox(width: 6),
-            const Text(
-              'LIVE',
+            Text(
+              _reachedClient ? 'ARRIVED · LIVE ROUTE' : 'LIVE',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w900,
-                color: Color(0xFFEA4335),
+                color: _reachedClient
+                    ? const Color(0xFF34A853)
+                    : const Color(0xFFEA4335),
                 letterSpacing: 1,
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              _routePoints.isEmpty
-                  ? 'Waiting for GPS…'
-                  : '${_routePoints.length} points  ·  Updated $_lastUpdated',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+            Expanded(
+              child: Text(
+                _routePoints.isEmpty
+                    ? 'Waiting for GPS…'
+                    : '${_routePoints.length} points  ·  Updated $lastUpdated',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              ),
             ),
-            const Spacer(),
+            const SizedBox(width: 6),
             if (_routePoints.isNotEmpty)
               GestureDetector(
-                onTap: () {
-                  try {
-                    _mapController.move(
-                      _currentPosition!,
-                      _mapController.camera.zoom,
-                    );
-                  } catch (_) {}
-                },
+                onTap: _fitRouteOverview,
                 child: const Icon(
-                  Icons.my_location_rounded,
+                  Icons.route_rounded,
                   size: 16,
                   color: Color(0xFF1A73E8),
                 ),
@@ -5413,7 +5456,7 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: SizedBox(
-            height: 260,
+            height: 300,
             child: _routePoints.isEmpty && _destination == null
                 ? Container(
                     color: Colors.grey.shade100,
@@ -5438,6 +5481,11 @@ class _ReviewerLiveMapState extends State<_ReviewerLiveMap> {
                     current: _currentPosition,
                     destination: _destination,
                     fullScreen: false,
+                    fetchRoadRoute: false,
+                    routeTrailColor: const Color(0xFF1A73E8),
+                    currentPositionColor: _reachedClient
+                        ? const Color(0xFF34A853)
+                        : const Color(0xFF1A73E8),
                   ),
           ),
         ),
@@ -5730,6 +5778,9 @@ class _LiveMapView extends StatefulWidget {
   final bool fullScreen;
   final bool navigationMode;
   final bool showEtaOverlay;
+  final bool fetchRoadRoute;
+  final Color routeTrailColor;
+  final Color? currentPositionColor;
   final void Function(String eta, String distance)? onEtaUpdate;
   final void Function(List<_RouteOption> routes, int selectedIndex)?
   onRoutesReady;
@@ -5747,6 +5798,9 @@ class _LiveMapView extends StatefulWidget {
     this.fullScreen = false,
     this.navigationMode = false,
     this.showEtaOverlay = false,
+    this.fetchRoadRoute = true,
+    this.routeTrailColor = const Color(0xFF777777),
+    this.currentPositionColor,
     this.onEtaUpdate,
     this.onRoutesReady,
     this.onRotationChanged,
@@ -5783,7 +5837,9 @@ class _LiveMapViewState extends State<_LiveMapView>
       begin: 0.5,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
-    if (widget.current != null && widget.destination != null) {
+    if (widget.fetchRoadRoute &&
+        widget.current != null &&
+        widget.destination != null) {
       _fetchRoute(widget.current!, widget.destination!);
     }
   }
@@ -5798,7 +5854,7 @@ class _LiveMapViewState extends State<_LiveMapView>
         widget.selectedRouteIndex < _routes.length) {
       setState(() => _selectedRouteIndex = widget.selectedRouteIndex);
     }
-    if (cur == null || dst == null) return;
+    if (!widget.fetchRoadRoute || cur == null || dst == null) return;
     // Skip if destination is invalid (0,0 sentinel)
     if (dst.latitude == 0.0 && dst.longitude == 0.0) return;
     // Re-fetch every ~500 m of movement.
@@ -5970,9 +6026,11 @@ class _LiveMapViewState extends State<_LiveMapView>
     final heading = (cur != null && validDst != null)
         ? _bearing(cur, validDst)
         : 0.0;
-    final currentColor = widget.navigationMode
-        ? const Color(0xFF34A853)
-        : const Color(0xFF1A73E8);
+    final currentColor =
+        widget.currentPositionColor ??
+        (widget.navigationMode
+            ? const Color(0xFF34A853)
+            : const Color(0xFF1A73E8));
 
     final mapStack = Stack(
       children: [
@@ -6124,8 +6182,8 @@ class _LiveMapViewState extends State<_LiveMapView>
                     ),
                     Polyline(
                       points: widget.routePoints,
-                      color: Colors.grey.withAlpha(180),
-                      strokeWidth: 5,
+                      color: widget.routeTrailColor,
+                      strokeWidth: 6,
                       strokeCap: StrokeCap.round,
                     ),
                   ],
