@@ -3693,6 +3693,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   ? null
                   : (v) => setState(() => _expenseCategory = v!),
             ),
+            const SizedBox(height: 12),
             TextField(
               controller: _amount,
               readOnly: widget.readOnlyMode,
@@ -3704,6 +3705,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 prefixText: '₹ ',
               ),
             ),
+            const SizedBox(height: 12),
             TextField(
               controller: _expenseNote,
               readOnly: widget.readOnlyMode,
