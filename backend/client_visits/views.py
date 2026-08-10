@@ -741,6 +741,30 @@ def visit_tracking_link(request, pk):
     if visit.status not in {'travelling', 'in_progress'}:
         return _error('Live tracking can only be shared during an active visit.', 409)
 
+    # The mobile map may have resolved a text-only client address locally.
+    # Persist that resolved point so the public page can draw and fit the route.
+    destination_latitude = request.data.get('destination_latitude')
+    destination_longitude = request.data.get('destination_longitude')
+    if destination_latitude is not None or destination_longitude is not None:
+        try:
+            destination_latitude = float(destination_latitude)
+            destination_longitude = float(destination_longitude)
+        except (TypeError, ValueError):
+            return _error('Valid destination coordinates are required.')
+        if not (
+            -90 <= destination_latitude <= 90
+            and -180 <= destination_longitude <= 180
+            and not (
+                destination_latitude == 0.0
+                and destination_longitude == 0.0
+            )
+        ):
+            return _error('Destination coordinates are outside the valid range.')
+        if visit.latitude is None or visit.longitude is None:
+            visit.latitude = destination_latitude
+            visit.longitude = destination_longitude
+            visit.save(update_fields=['latitude', 'longitude', 'updated_at'])
+
     raw_token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
     link = ClientVisitTrackingLink.objects.create(

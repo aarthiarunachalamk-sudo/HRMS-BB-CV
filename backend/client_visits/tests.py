@@ -608,18 +608,20 @@ class ClientVisitApiTests(APITestCase):
         visit_id = self._create().data['visit']['id']
         visit = ClientVisit.objects.get(pk=visit_id)
         visit.status = 'travelling'
-        visit.latitude = 13.0844
-        visit.longitude = 80.2710
         visit.travel_route = [{
             'latitude': 13.0831,
             'longitude': 80.2709,
             'recorded_at': timezone.now().isoformat(),
         }]
-        visit.save(update_fields=['status', 'latitude', 'longitude', 'travel_route'])
+        visit.save(update_fields=['status', 'travel_route'])
 
         created = self.client.post(
             f'/api/client-visits/{visit_id}/tracking-link/',
-            {'user_id': self.employee.user_id},
+            {
+                'user_id': self.employee.user_id,
+                'destination_latitude': 13.0844,
+                'destination_longitude': 80.2710,
+            },
             format='json',
         )
         self.assertEqual(created.status_code, 201)
@@ -640,6 +642,7 @@ class ClientVisitApiTests(APITestCase):
             public_data.data['current_location']['latitude'],
             13.0831,
         )
+        self.assertEqual(public_data.data['destination']['latitude'], 13.0844)
         self.assertNotIn('contact_phone', public_data.data)
         self.assertNotIn('address', public_data.data)
         self.assertNotIn('travel_route', public_data.data)

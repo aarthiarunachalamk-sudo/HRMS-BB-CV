@@ -149,12 +149,21 @@ class ClientVisitService {
     _body(response);
   }
 
-  Future<String> createTrackingLink(String userId, int id) async {
+  Future<String> createTrackingLink(
+    String userId,
+    int id, {
+    double? destinationLatitude,
+    double? destinationLongitude,
+  }) async {
     final response = await http
         .post(
           Uri.parse('$_base$id/tracking-link/'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'user_id': userId}),
+          body: jsonEncode({
+            'user_id': userId,
+            'destination_latitude': destinationLatitude,
+            'destination_longitude': destinationLongitude,
+          }),
         )
         .timeout(const Duration(seconds: 15));
     final url = '${_body(response)['tracking_url'] ?? ''}'.trim();

@@ -834,25 +834,23 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Future<void> _clientCheckIn() async {
-    // Step 7 validation: both selfie AND GPS required for client check-in.
-    if (_selfiePath == null) {
-      _message('Please capture your selfie at the client location.');
-      return;
-    }
+    // Client-site photos require consent, so only GPS is mandatory.
     if (_capturedPosition == null) {
       _message('Please capture your GPS location at the client site.');
       return;
     }
     await _run(() async {
-      final selfiePath = _selfiePath!;
       final position = _capturedPosition!;
-      await widget.service.uploadFiles(
-        widget.userId,
-        widget.visitId,
-        'client_check_in',
-        [selfiePath],
-        fallbackCategory: 'check_in',
-      );
+      final selfiePath = _selfiePath;
+      if (selfiePath != null) {
+        await widget.service.uploadFiles(
+          widget.userId,
+          widget.visitId,
+          'client_check_in',
+          [selfiePath],
+          fallbackCategory: 'check_in',
+        );
+      }
       await widget.service.action(
         widget.userId,
         widget.visitId,
@@ -2092,10 +2090,18 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Future<void> _shareDirections(ClientVisit visit) async {
+    if (_destinationLatLng == null) {
+      _message('Please wait while the client location is being resolved.');
+      _geocodingDone = false;
+      unawaited(_geocodeDestination(visit.address, visit.clientName));
+      return;
+    }
     try {
       final trackingUrl = await widget.service.createTrackingLink(
         widget.userId,
         widget.visitId,
+        destinationLatitude: _destinationLatLng?.latitude,
+        destinationLongitude: _destinationLatLng?.longitude,
       );
       final message = 'Track the live journey to ${visit.clientName}:\n'
           '$trackingUrl\n\n'
@@ -2355,9 +2361,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       EmployeeCard(
         child: Column(
           children: [
-            _captureTiles(),
+            _captureTiles(selfieOptional: true),
             const SizedBox(height: 10),
-            const Text('Capture arrival selfie and GPS to begin the visit.'),
+            const Text(
+              'GPS is required. Add a selfie only when the client agrees.',
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 14),
             if (widget.readOnlyMode)
               _monitoringNotice()
@@ -3226,7 +3235,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ),
       );
 
-  Widget _captureTiles() {
+  Widget _captureTiles({bool selfieOptional = false}) {
     final isDark = ThemeConfig.isDark(context);
     final border = ThemeConfig.getCardBorder(context);
     final neutralSurface = isDark
@@ -3244,11 +3253,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             icon: _selfiePath == null
                 ? Icons.camera_alt_rounded
                 : Icons.check_circle_rounded,
-            title: 'Selfie',
+            title: selfieOptional ? 'Selfie (optional)' : 'Selfie',
             subtitle: _capturingSelfie
                 ? 'Opening camera...'
                 : _selfiePath == null
-                ? 'Tap to capture'
+                ? (selfieOptional ? 'With client consent' : 'Tap to capture')
                 : 'Captured - tap to retake',
             ready: _selfiePath != null,
             busy: _capturingSelfie,
