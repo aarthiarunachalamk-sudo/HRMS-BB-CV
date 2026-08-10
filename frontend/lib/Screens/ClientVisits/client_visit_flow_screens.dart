@@ -1201,89 +1201,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               ),
             ),
 
-            // ── Google Maps style top search bar ─────────────────────
+            // ── Google Maps style origin / destination card ─────────
             Positioned(
               top: safePad.top + 8,
-              left: 30,
-              right: 30,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(26),
-                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2))],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Back arrow + Your location row
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                      child: Row(children: [
-                        const Icon(Icons.circle, size: 11, color: Color(0xFF1A73E8)),
-                        const SizedBox(width: 10),
-                        const Expanded(child: Text('Your location',
-                          style: TextStyle(fontSize: 14, color: Color(0xFF1A73E8), fontWeight: FontWeight.w500))),
-                        PopupMenuButton<String>(
-                          padding: EdgeInsets.zero,
-                          icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF5F6368)),
-                          onSelected: (value) {
-                            if (value == 'routes') _showRouteOptions();
-                            if (value == 'overview') _fitMapBounds();
-                            if (value == 'close') Navigator.of(context).maybePop();
-                          },
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 'routes', child: Text('Route options')),
-                            PopupMenuItem(value: 'overview', child: Text('Route overview')),
-                            PopupMenuItem(value: 'close', child: Text('Close directions')),
-                          ],
-                        ),
-                      ]),
-                    ),
-                    // Dotted separator
-                    Padding(
-                      padding: const EdgeInsets.only(left: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: List.generate(3, (_) => Container(
-                          width: 3,
-                          height: 3,
-                          margin: const EdgeInsets.only(bottom: 2),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFBDBDBD),
-                            shape: BoxShape.circle,
-                          ),
-                        )),
-                      ),
-                    ),
-                    // Destination row
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                      child: Row(children: [
-                        const Icon(Icons.location_on, size: 18, color: Color(0xFFEA4335)),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _destinationLatLng == null
-                              ? Row(children: [
-                                  const SizedBox(width: 12, height: 12,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF5F6368))),
-                                  const SizedBox(width: 8),
-                                  const Text('Finding destination…',
-                                    style: TextStyle(fontSize: 13, color: Color(0xFF5F6368))),
-                                ])
-                              : Text(visit.clientName,
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF202124)),
-                                  maxLines: 1, overflow: TextOverflow.ellipsis),
-                        ),
-                        // Fit map to show both points
-                        GestureDetector(
-                          onTap: _fitMapBounds,
-                          child: Icon(Icons.swap_vert, size: 20, color: Colors.grey.shade400),
-                        ),
-                      ]),
-                    ),
-                  ],
-                ),
-              ),
+              left: 16,
+              right: 16,
+              child: _travelDirectionsHeader(visit),
             ),
 
             // ── Map controls (right side) ─────────────────────────
@@ -1700,6 +1623,203 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ), // Scaffold
     ); // ClientVisitTheme
   } // _buildTravelScreen
+
+  Widget _travelDirectionsHeader(ClientVisit visit) {
+    return Container(
+      height: 88,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 46,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned(
+                  top: 14,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFD2E3FC),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF1A73E8),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 36,
+                  child: Column(
+                    children: List.generate(
+                      3,
+                      (_) => Container(
+                        width: 3,
+                        height: 3,
+                        margin: const EdgeInsets.only(bottom: 2),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFBDBDBD),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const Positioned(
+                  bottom: 10,
+                  child: Icon(
+                    Icons.location_on_outlined,
+                    size: 23,
+                    color: Color(0xFFEA4335),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                SizedBox(
+                  height: 43.5,
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Your location',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF1A73E8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      PopupMenuButton<String>(
+                        tooltip: 'More options',
+                        padding: EdgeInsets.zero,
+                        onSelected: (value) {
+                          if (value == 'routes') _showRouteOptions();
+                          if (value == 'overview') _fitMapBounds();
+                          if (value == 'close') {
+                            Navigator.of(context).maybePop();
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                            value: 'routes',
+                            child: Text('Route options'),
+                          ),
+                          PopupMenuItem(
+                            value: 'overview',
+                            child: Text('Route overview'),
+                          ),
+                          PopupMenuItem(
+                            value: 'close',
+                            child: Text('Close directions'),
+                          ),
+                        ],
+                        child: const SizedBox(
+                          width: 42,
+                          height: 40,
+                          child: Icon(
+                            Icons.more_vert,
+                            size: 21,
+                            color: Color(0xFF5F6368),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  endIndent: 48,
+                  color: Colors.grey.shade300,
+                ),
+                SizedBox(
+                  height: 43.5,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _destinationLatLng == null
+                            ? const Row(
+                                children: [
+                                  SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Color(0xFF5F6368),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Finding destination…',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF5F6368),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Text(
+                                visit.clientName.toUpperCase(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF202124),
+                                ),
+                              ),
+                      ),
+                      Tooltip(
+                        message: 'Show route overview',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: _fitMapBounds,
+                          child: const SizedBox(
+                            width: 42,
+                            height: 40,
+                            child: Icon(
+                              Icons.swap_vert_rounded,
+                              size: 24,
+                              color: Color(0xFF5F6368),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   DropdownMenuItem<String> _expenseItem(String value, IconData icon, String label) =>
       DropdownMenuItem<String>(
         value: value,
