@@ -1323,57 +1323,128 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                               onTap: () {
                                 setState(() => _selectedRouteIndex = i);
                                 try {
-                                  if (r.points.length >= 2) _mapController.fitCamera(CameraFit.bounds(
-                                    bounds: LatLngBounds.fromPoints(r.points),
-                                    padding: const EdgeInsets.fromLTRB(40, 160, 40, 260)));
+                                  if (r.points.length >= 2)
+                                    _mapController.fitCamera(CameraFit.bounds(
+                                      bounds: LatLngBounds.fromPoints(r.points),
+                                      padding: const EdgeInsets.fromLTRB(
+                                          40, 160, 40, 300)));
                                 } catch (_) {}
                               },
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 180),
-                                margin: const EdgeInsets.only(bottom: 6),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 12),
                                 decoration: BoxDecoration(
-                                  color: isSel ? const Color(0xFF1967D2) : Colors.grey.shade100,
-                                  borderRadius: BorderRadius.circular(8),
+                                  color: isSel
+                                      ? const Color(0xFF1967D2)
+                                      : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: isSel
+                                      ? null
+                                      : Border.all(
+                                          color: Colors.grey.shade300),
                                 ),
                                 child: Row(children: [
+                                  // Car icon
                                   Icon(Icons.directions_car_rounded,
-                                    color: isSel ? Colors.white : Colors.grey.shade600, size: 18),
-                                  const SizedBox(width: 10),
+                                    color: isSel
+                                        ? Colors.white
+                                        : Colors.grey.shade600,
+                                    size: 22),
+                                  const SizedBox(width: 12),
+                                  // Time + distance + via
                                   Expanded(child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Row(children: [
-                                        Text(r.durationLabel, style: TextStyle(fontSize: 15,
-                                          fontWeight: FontWeight.w800,
-                                          color: isSel ? Colors.white : const Color(0xFF202124))),
-                                        const SizedBox(width: 8),
-                                        Text(r.distanceLabel, style: TextStyle(fontSize: 12,
-                                          color: isSel ? Colors.white70 : const Color(0xFF5F6368))),
-                                        if (i == 0) ...[
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.baseline,
+                                        textBaseline:
+                                            TextBaseline.alphabetic,
+                                        children: [
+                                          Text(r.durationLabel,
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w900,
+                                              color: isSel
+                                                  ? Colors.white
+                                                  : const Color(0xFF202124),
+                                            )),
                                           const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                            decoration: BoxDecoration(
-                                              color: isSel ? Colors.white24 : const Color(0xFF34A853).withAlpha(30),
-                                              borderRadius: BorderRadius.circular(4)),
-                                            child: Text('Fastest', style: TextStyle(fontSize: 10,
-                                              fontWeight: FontWeight.w700,
-                                              color: isSel ? Colors.white : const Color(0xFF34A853)))),
+                                          Text(r.distanceLabel,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                              color: isSel
+                                                  ? Colors.white70
+                                                  : const Color(0xFF5F6368),
+                                            )),
+                                          const SizedBox(width: 6),
+                                          // Fastest badge
+                                          if (i == 0)
+                                            Container(
+                                              padding: const EdgeInsets
+                                                  .symmetric(
+                                                  horizontal: 6,
+                                                  vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: isSel
+                                                    ? Colors.white24
+                                                    : const Color(0xFF34A853)
+                                                        .withAlpha(25),
+                                                borderRadius:
+                                                    BorderRadius.circular(4)),
+                                              child: Text('Fastest',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: isSel
+                                                      ? Colors.white
+                                                      : const Color(
+                                                          0xFF34A853),
+                                                ))),
                                         ],
-                                      ]),
-                                      if (r.via.isNotEmpty) Text(r.via, style: TextStyle(fontSize: 11,
-                                        color: isSel ? Colors.white70 : const Color(0xFF5F6368))),
-                                      if (r.hasTolls) Row(children: [
-                                        Icon(Icons.toll_rounded, size: 11,
-                                          color: isSel ? Colors.orangeAccent : const Color(0xFFF29900)),
-                                        const SizedBox(width: 3),
-                                        Text('Tolls', style: TextStyle(fontSize: 11,
-                                          color: isSel ? Colors.orangeAccent : const Color(0xFFF29900))),
-                                      ]),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      // Via label
+                                      if (r.via.isNotEmpty)
+                                        Text('via ${r.via}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: isSel
+                                                ? Colors.white70
+                                                : const Color(0xFF5F6368),
+                                          )),
+                                      // Toll row
+                                      if (r.hasTolls)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                              top: 3),
+                                          child: Row(children: [
+                                            Icon(Icons.toll_rounded,
+                                              size: 12,
+                                              color: isSel
+                                                  ? Colors.orangeAccent
+                                                  : const Color(0xFFF29900)),
+                                            const SizedBox(width: 3),
+                                            Text('Tolls',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: isSel
+                                                    ? Colors.orangeAccent
+                                                    : const Color(
+                                                        0xFFF29900))),
+                                          ]),
+                                        ),
                                     ],
                                   )),
-                                  if (isSel) const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                                  // Selected checkmark
+                                  if (isSel)
+                                    const Icon(Icons.check_circle_rounded,
+                                        color: Colors.white, size: 22),
                                 ]),
                               ),
                             );
@@ -1381,100 +1452,239 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                         ),
                       ),
                     const Divider(height: 1),
-                    // Drive label row
+                    // ── Google Maps style Drive header ──────────────────
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-                      child: Row(children: [
-                        const Icon(Icons.directions_car_rounded, size: 18, color: Color(0xFF202124)),
-                        const SizedBox(width: 8),
-                        const Text('Drive', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF202124))),
-                        const Spacer(),
-                        if (_etaText.isNotEmpty) Text(_etaText,
-                          style: const TextStyle(fontSize: 13, color: Color(0xFF5F6368))),
-                        if (_distanceText.isNotEmpty) ...[
-                          const SizedBox(width: 4),
-                          Text('· $_distanceText',
-                            style: const TextStyle(fontSize: 13, color: Color(0xFF5F6368))),
-                        ],
-                        // Speed indicator
-                        if (_lastTrackedPosition != null) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1A73E8).withAlpha(15),
-                              borderRadius: BorderRadius.circular(6),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.directions_car_rounded,
+                              size: 22, color: Color(0xFF202124)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Big bold ETA + distance — matches Google Maps
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      _etaText.isNotEmpty ? _etaText : '—',
+                                      style: const TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF202124),
+                                      ),
+                                    ),
+                                    if (_distanceText.isNotEmpty) ...[
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '(${_distanceText})',
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFF5F6368),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                // Route description
+                                if (_routeOptions.isNotEmpty &&
+                                    _selectedRouteIndex <
+                                        _routeOptions.length) ...[
+                                  Text(
+                                    _selectedRouteIndex == 0
+                                        ? 'Fastest route, via ${_routeOptions[0].via.isNotEmpty ? _routeOptions[0].via : 'main road'}'
+                                        : 'Via ${_routeOptions[_selectedRouteIndex].via.isNotEmpty ? _routeOptions[_selectedRouteIndex].via : 'alternate road'}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF5F6368),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  // Toll + fuel info row
+                                  Row(children: [
+                                    if (_routeOptions[_selectedRouteIndex]
+                                        .hasTolls) ...[
+                                      const Icon(Icons.toll_rounded,
+                                          size: 13,
+                                          color: Color(0xFFF29900)),
+                                      const SizedBox(width: 3),
+                                      const Text('Tolls  ',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: Color(0xFFF29900),
+                                              fontWeight: FontWeight.w600)),
+                                      const Text('·  ',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: Color(0xFF9AA0A6))),
+                                    ],
+                                    const Icon(Icons.local_gas_station_rounded,
+                                        size: 13,
+                                        color: Color(0xFF34A853)),
+                                    const SizedBox(width: 3),
+                                    const Text('Saves fuel',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF34A853),
+                                            fontWeight: FontWeight.w600)),
+                                  ]),
+                                ],
+                              ],
                             ),
-                            child: Text(
-                              '${(_lastTrackedPosition!.speed * 3.6).toStringAsFixed(0)} km/h',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                                color: Color(0xFF1A73E8))),
                           ),
+                          // Speed chip — top right
+                          if (_lastTrackedPosition != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1A73E8).withAlpha(15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: const Color(0xFF1A73E8)
+                                        .withAlpha(50)),
+                              ),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    '${(_lastTrackedPosition!.speed * 3.6).toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w900,
+                                        color: Color(0xFF1A73E8)),
+                                  ),
+                                  const Text('km/h',
+                                      style: TextStyle(
+                                          fontSize: 9,
+                                          color: Color(0xFF1A73E8),
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
                         ],
-                      ]),
+                      ),
                     ),
                     // Emergency contact row
-                    if (visit.contactPerson.isNotEmpty || visit.contactPhone.isNotEmpty)
+                    if (visit.contactPerson.isNotEmpty ||
+                        visit.contactPhone.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                        padding:
+                            const EdgeInsets.fromLTRB(16, 8, 16, 0),
                         child: Row(children: [
-                          const Icon(Icons.emergency_rounded, size: 14, color: Color(0xFFEA4335)),
+                          const Icon(Icons.emergency_rounded,
+                              size: 14, color: Color(0xFFEA4335)),
                           const SizedBox(width: 6),
-                          Text('Emergency Contact: ', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                          Expanded(child: Text('${visit.contactPerson} (${visit.contactPhone})',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                            maxLines: 1, overflow: TextOverflow.ellipsis)),
+                          Text('Emergency: ',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w600)),
+                          Expanded(
+                              child: Text(
+                                  '${visit.contactPerson} (${visit.contactPhone})',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis)),
                           if (visit.contactPhone.isNotEmpty)
                             GestureDetector(
-                              onTap: () => _message('Calling ${visit.contactPhone}'),
-                              child: const Icon(Icons.call, size: 16, color: Color(0xFF34A853)),
+                              onTap: () =>
+                                  _message('Calling ${visit.contactPhone}'),
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF34A853)
+                                      .withAlpha(15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.call,
+                                    size: 16,
+                                    color: Color(0xFF34A853)),
+                              ),
                             ),
                         ]),
                       ),
-                    // Action buttons row
+                    // ── Action buttons — Google Maps style ───────────────
                     Padding(
-                      padding: EdgeInsets.fromLTRB(12, 4, 12, safePad.bottom + 12),
+                      padding: EdgeInsets.fromLTRB(
+                          12, 12, 12, safePad.bottom + 12),
                       child: Row(children: [
-                        // Start / Stop
+                        // Start / Stop navigation
                         Expanded(
                           flex: 2,
                           child: FilledButton.icon(
                             style: FilledButton.styleFrom(
-                              backgroundColor: _navMode ? Colors.grey.shade600 : const Color(0xFF34A853),
-                              padding: const EdgeInsets.symmetric(vertical: 13),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              backgroundColor: _navMode
+                                  ? Colors.grey.shade700
+                                  : const Color(0xFF34A853),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(30)),
                             ),
                             onPressed: () {
                               setState(() => _navMode = !_navMode);
-                              if (_navMode && _lastTrackedPosition != null) {
-                                try { _mapController.move(LatLng(_lastTrackedPosition!.latitude, _lastTrackedPosition!.longitude), 17); } catch (_) {}
+                              if (_navMode &&
+                                  _lastTrackedPosition != null) {
+                                try {
+                                  _mapController.move(
+                                      LatLng(
+                                          _lastTrackedPosition!
+                                              .latitude,
+                                          _lastTrackedPosition!
+                                              .longitude),
+                                      17);
+                                } catch (_) {}
                               } else if (!_navMode) {
                                 _fitMapBounds();
                               }
                             },
-                            icon: Icon(_navMode ? Icons.stop_rounded : Icons.navigation_rounded, size: 18),
+                            icon: Icon(
+                                _navMode
+                                    ? Icons.stop_rounded
+                                    : Icons.navigation_rounded,
+                                size: 20),
                             label: Text(_navMode ? 'Stop' : 'Start',
-                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700)),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         // Reached client
                         if (!widget.readOnlyMode)
                           Expanded(
                             flex: 3,
                             child: FilledButton.icon(
                               style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF1A73E8),
-                                padding: const EdgeInsets.symmetric(vertical: 13),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                backgroundColor:
+                                    const Color(0xFF1A73E8),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(30)),
                               ),
                               onPressed: _working ? null : _reached,
-                              icon: const Icon(Icons.flag_rounded, size: 18),
+                              icon: const Icon(Icons.flag_rounded,
+                                  size: 20),
                               label: const Text('Reached client',
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                                  style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700)),
                             ),
                           ),
-                        if (widget.readOnlyMode) Expanded(flex: 3, child: _monitoringNotice()),
+                        if (widget.readOnlyMode)
+                          Expanded(
+                              flex: 3, child: _monitoringNotice()),
                       ]),
                     ),
                     if (_trackingError != null)
@@ -4538,14 +4748,14 @@ class _LiveMapViewState extends State<_LiveMapView>
                       Polyline(
                         points: _routes[i].points,
                         color: Colors.white,
-                        strokeWidth: 9,
+                        strokeWidth: 12,
                         strokeCap: StrokeCap.round,
                         strokeJoin: StrokeJoin.round,
                       ),
                       Polyline(
                         points: _routes[i].points,
                         color: altColor.withAlpha(180),
-                        strokeWidth: 6,
+                        strokeWidth: 9,
                         strokeCap: StrokeCap.round,
                         strokeJoin: StrokeJoin.round,
                       ),
@@ -4614,28 +4824,36 @@ class _LiveMapViewState extends State<_LiveMapView>
                   polylines: [
                     Polyline(
                       points: widget.routePoints,
+                      color: Colors.white.withAlpha(200),
+                      strokeWidth: 7,
+                      strokeCap: StrokeCap.round,
+                    ),
+                    Polyline(
+                      points: widget.routePoints,
                       color: Colors.grey.withAlpha(180),
-                      strokeWidth: 4,
+                      strokeWidth: 5,
                       strokeCap: StrokeCap.round,
                     ),
                   ],
                 ),
 
-              // ── Selected road route (Google-Maps style blue, drawn on top) ──
+              // ── Selected road route (Google-Maps style bold blue) ──
               if (_displayRoute.length >= 2)
                 PolylineLayer(
                   polylines: [
+                    // Thick white border/shadow underneath
                     Polyline(
                       points: _displayRoute,
                       color: Colors.white,
-                      strokeWidth: 9,
+                      strokeWidth: 13,
                       strokeCap: StrokeCap.round,
                       strokeJoin: StrokeJoin.round,
                     ),
+                    // Bold blue fill — matches Google Maps
                     Polyline(
                       points: _displayRoute,
                       color: const Color(0xFF1A73E8),
-                      strokeWidth: 6,
+                      strokeWidth: 10,
                       strokeCap: StrokeCap.round,
                       strokeJoin: StrokeJoin.round,
                     ),
