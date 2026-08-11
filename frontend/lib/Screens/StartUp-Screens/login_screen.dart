@@ -206,35 +206,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoggingIn = true);
 
-    // Show a waking-up banner if the first attempt takes > 4 seconds
-    // (Render free plan cold-start can take 30–50 s).
-    Timer? wakeUpTimer;
-    ScaffoldMessengerState? messenger;
-    if (mounted) {
-      messenger = ScaffoldMessenger.of(context);
-      wakeUpTimer = Timer(const Duration(seconds: 4), () {
-        if (mounted) {
-          messenger?.showSnackBar(SnackBar(
-            content: const Row(children: [
-              SizedBox(
-                width: 18, height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white),
-              ),
-              SizedBox(width: 12),
-              Expanded(child: Text(
-                'Server is waking up… please wait (up to 60 s).',
-                style: TextStyle(fontSize: 13),
-              )),
-            ]),
-            backgroundColor: const Color(0xFF1A73E8),
-            duration: const Duration(seconds: 60),
-            behavior: SnackBarBehavior.floating,
-          ));
-        }
-      });
-    }
-
     try {
       final data = await _loginRequest();
       if (!mounted) return;
@@ -410,8 +381,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       _showServerUnavailable();
     } finally {
-      wakeUpTimer?.cancel();
-      messenger?.hideCurrentSnackBar();
       if (mounted) setState(() => _isLoggingIn = false);
     }
   }
@@ -652,15 +621,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     child: Center(
                                       child: _isLoggingIn
-                                          ? const SizedBox(
-                                              width: 22,
-                                              height: 22,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2.4,
-                                                valueColor:
-                                                    AlwaysStoppedAnimation(
-                                                      Colors.white,
-                                                    ),
+                                          ? const Text(
+                                              'Logging in...',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
                                               ),
                                             )
                                           : const Text(
