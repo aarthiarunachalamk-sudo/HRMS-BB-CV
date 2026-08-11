@@ -1,5 +1,10 @@
+import uuid
+
+from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db import transaction
+from django.db.models import Q
 
 
 class ClientVisit(models.Model):
@@ -129,3 +134,171 @@ class ClientVisitTrackingLink(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class ClientVisitJourney(models.Model):
+    class Status(models.TextChoices):
+        SCHEDULED = 'SCHEDULED', 'Scheduled'
+        READY = 'READY', 'Ready'
+        IN_PROGRESS = 'IN_PROGRESS', 'In progress'
+        PAUSED = 'PAUSED', 'Paused'
+        COMPLETED = 'COMPLETED', 'Completed'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+
+    ACTIVE_STATUSES = (Status.IN_PROGRESS, Status.PAUSED)
+    VALID_TRANSITIONS = {
+        Status.SCHEDULED: {Status.READY, Status.CANCELLED},
+        Status.READY: {Status.IN_PROGRESS, Status.CANCELLED},
+        Status.IN_PROGRESS: {Status.PAUSED, Status.COMPLETED, Status.CANCELLED},
+        Status.PAUSED: {Status.IN_PROGRESS, Status.COMPLETED, Status.CANCELLED},
+        Status.COMPLETED: set(),
+        Status.CANCELLED: set(),
+    }
+
+    source_visit = models.OneToOneField(
+        ClientVisit,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='live_journey',
+    )
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='client_visit_journeys',
+    )
+    assigned_team_lead = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='assigned_client_visit_journeys',
+    )
+    client_name = models.CharField(max_length=160)
+    client_contact = models.CharField(max_length=120, blank=True)
+    meeting_purpose = models.CharField(max_length=240)
+    destination_address = models.TextField(blank=True)
+    destination_latitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        validators=[MinValueValidator(-90), MaxValueValidator(90)],
+    )
+    destination_longitude = models.DecimalField(
+        max_digits=10, decimal_places=7,
+        validators=[MinValueValidator(-180), MaxValueValidator(180)],
+    )
+    scheduled_at = models.DateTimeField(db_index=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.SCHEDULED,
+        db_index=True,
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancel_reason = models.TextField(blank=True)
+    start_latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    start_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    end_latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    end_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    total_distance_metres = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_duration_seconds = models.PositiveBigIntegerField(default=0)
+    moving_duration_seconds = models.PositiveBigIntegerField(default=0)
+    stationary_duration_seconds = models.PositiveBigIntegerField(default=0)
+    last_location_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-scheduled_at', '-id']
+        indexes = [
+            models.Index(fields=['status', 'last_location_at'], name='cvj_status_last_idx'),
+            models.Index(fields=['assigned_team_lead', 'status'], name='cvj_tl_status_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employee'],
+                condition=Q(status__in=['IN_PROGRESS', 'PAUSED']),
+                name='one_active_client_journey_per_employee',
+            ),
+            models.CheckConstraint(
+                condition=Q(destination_latitude__gte=-90, destination_latitude__lte=90),
+                name='cvj_destination_latitude_valid',
+            ),
+            models.CheckConstraint(
+                condition=Q(destination_longitude__gte=-180, destination_longitude__lte=180),
+                name='cvj_destination_longitude_valid',
+            ),
+        ]
+
+    def can_transition_to(self, target):
+        return target in self.VALID_TRANSITIONS.get(self.status, set())
+
+
+class JourneyLocationPoint(models.Model):
+    client_generated_id = models.UUIDField(default=uuid.uuid4, unique=True)
+    journey = models.ForeignKey(
+        ClientVisitJourney,
+        on_delete=models.CASCADE,
+        related_name='location_points',
+    )
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='journey_location_points',
+    )
+    latitude = models.DecimalField(max_digits=10, decimal_places=7)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7)
+    accuracy_metres = models.DecimalField(max_digits=8, decimal_places=2)
+    altitude = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    speed_metres_per_second = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    heading = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    captured_at = models.DateTimeField()
+    received_at = models.DateTimeField()
+    sequence_number = models.PositiveBigIntegerField()
+    is_mocked = models.BooleanField(null=True, blank=True)
+    battery_percentage = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    is_low_accuracy = models.BooleanField(default=False)
+    is_suspicious = models.BooleanField(default=False)
+    suspicion_reason = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['captured_at', 'sequence_number', 'id']
+        indexes = [
+            models.Index(fields=['journey', 'captured_at'], name='jlp_journey_time_idx'),
+            models.Index(fields=['journey', 'sequence_number'], name='jlp_journey_seq_idx'),
+            models.Index(fields=['employee', 'captured_at'], name='jlp_employee_time_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['journey', 'sequence_number'],
+                name='unique_journey_sequence_number',
+            ),
+            models.CheckConstraint(
+                condition=Q(latitude__gte=-90, latitude__lte=90),
+                name='jlp_latitude_valid',
+            ),
+            models.CheckConstraint(
+                condition=Q(longitude__gte=-180, longitude__lte=180),
+                name='jlp_longitude_valid',
+            ),
+            models.CheckConstraint(
+                condition=Q(accuracy_metres__gte=0),
+                name='jlp_accuracy_non_negative',
+            ),
+        ]
+
+
+class JourneyStop(models.Model):
+    journey = models.ForeignKey(
+        ClientVisitJourney,
+        on_delete=models.CASCADE,
+        related_name='stops',
+    )
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField()
+    duration_seconds = models.PositiveBigIntegerField()
+    latitude = models.DecimalField(max_digits=10, decimal_places=7)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['started_at']
+        indexes = [models.Index(fields=['journey', 'started_at'], name='jstop_journey_time_idx')]

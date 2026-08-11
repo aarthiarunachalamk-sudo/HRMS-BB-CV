@@ -13,6 +13,7 @@ import 'client_visit_service.dart';
 import 'client_visit_flow_screens.dart';
 import 'client_visit_theme.dart';
 import 'client_visit_downloads.dart';
+import '../ClientJourneys/journey_screens.dart';
 
 const _statuses = [
   'all',
@@ -263,6 +264,31 @@ class _ClientVisitDashboardScreenState
               (!widget.readOnlyMode && widget.allowCreate) ? 90 : 16,
             ),
             children: [
+              Card(
+                child: ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.route_rounded)),
+                  title: Text(
+                    widget.reviewerMode || widget.readOnlyMode
+                        ? 'Live Journey Tracking'
+                        : 'Client Visit Live Journeys',
+                  ),
+                  subtitle: Text(
+                    widget.reviewerMode || widget.readOnlyMode
+                        ? 'Track assigned employees and review actual routes.'
+                        : 'Start only with consent; GPS continues offline.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ClientJourneyHubScreen(
+                        userId: widget.userId,
+                        teamMode: widget.reviewerMode || widget.readOnlyMode,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               if (result != null)
                 _Summary(
                   summary: result.summary,

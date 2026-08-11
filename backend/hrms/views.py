@@ -1,5 +1,6 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.cache import cache
@@ -110,6 +111,7 @@ def login_view(request):
 
             # Resolve photo ONCE, reuse result
             photo_url = _passport_photo_for_email(user.email)
+            refresh = RefreshToken.for_user(user)
 
             return Response({
                 'success': True,
@@ -122,6 +124,10 @@ def login_view(request):
                 'profile_photo_url': photo_url,
                 'requires_profile_photo': not bool(photo_url),
                 'permissions': permissions_for_role(login_role),
+                # Additive JWT support for authenticated journey APIs. Existing
+                # clients can ignore these fields and keep their current flow.
+                'access_token': str(refresh.access_token),
+                'refresh_token': str(refresh),
             })
         if not candidates:
             return Response({'success': False, 'message': 'User not found'}, status=404)

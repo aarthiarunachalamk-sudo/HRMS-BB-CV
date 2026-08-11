@@ -5,6 +5,8 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
 from client_visits import views as client_visit_views
+from client_visits import journey_views
+from rest_framework_simplejwt.views import TokenRefreshView
 import time
 
 
@@ -28,6 +30,10 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("hrms.urls")),
     path("api/client-visits/", include("client_visits.urls")),
+    path("api/client-journeys/", include("client_visits.journey_urls")),
+    path("api/team/client-journeys/active/", journey_views.team_active_journeys),
+    path("api/team/client-journeys/history/", journey_views.team_journey_history),
+    path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path(
         "track/client-visit/<str:token>/",
         client_visit_views.public_tracking_page,

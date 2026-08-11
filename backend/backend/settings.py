@@ -94,6 +94,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
+    'channels',
     'corsheaders',
     'hrms',
     'client_visits',
@@ -173,6 +175,42 @@ TEMPLATES = [
 ]
  
 WSGI_APPLICATION = 'backend.wsgi.application'
+ASGI_APPLICATION = 'backend.asgi.application'
+
+REST_FRAMEWORK = {
+    'DEFAULT_THROTTLE_RATES': {
+        'journey_location': os.getenv('JOURNEY_LOCATION_THROTTLE', '120/minute'),
+    },
+}
+
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_MINUTES', '30'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_DAYS', '14'))),
+    'UPDATE_LAST_LOGIN': False,
+}
+
+CLIENT_JOURNEY_LOW_ACCURACY_METRES = float(os.getenv('CLIENT_JOURNEY_LOW_ACCURACY_METRES', '100'))
+CLIENT_JOURNEY_MAX_SPEED_MPS = float(os.getenv('CLIENT_JOURNEY_MAX_SPEED_MPS', '70'))
+CLIENT_JOURNEY_MAX_BATCH_SIZE = int(os.getenv('CLIENT_JOURNEY_MAX_BATCH_SIZE', '100'))
+CLIENT_JOURNEY_STOP_RADIUS_METRES = float(os.getenv('CLIENT_JOURNEY_STOP_RADIUS_METRES', '50'))
+CLIENT_JOURNEY_STOP_MIN_SECONDS = int(os.getenv('CLIENT_JOURNEY_STOP_MIN_SECONDS', '300'))
+CLIENT_JOURNEY_GAP_SECONDS = int(os.getenv('CLIENT_JOURNEY_GAP_SECONDS', '180'))
+CLIENT_JOURNEY_RETENTION_DAYS = int(os.getenv('CLIENT_JOURNEY_RETENTION_DAYS', '365'))
+
+redis_url = os.getenv('REDIS_URL', '').strip()
+if redis_url:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {'hosts': [redis_url]},
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'},
+    }
  
  
 # Database

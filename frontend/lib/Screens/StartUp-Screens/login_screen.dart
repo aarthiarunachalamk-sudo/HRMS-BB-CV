@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
+import 'package:hrms_mobileapp_bitbyte/backend/auth_session.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:convert';
@@ -251,6 +252,14 @@ class _LoginScreenState extends State<LoginScreen> {
             (route) => false,
           );
           return;
+        }
+        final accessToken = '${data['access_token'] ?? ''}';
+        final refreshToken = '${data['refresh_token'] ?? ''}';
+        if (accessToken.isNotEmpty && refreshToken.isNotEmpty) {
+          await AuthSession.saveTokens(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+          );
         }
         await _updateRememberedCredentials();
         if (!mounted) return;

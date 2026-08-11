@@ -5,9 +5,11 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/splash_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/ClientJourneys/journey_tracker.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  JourneyTracker.initialize();
   await _initializeFirebase();
   runApp(const MyApp());
 }
