@@ -18,6 +18,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:signature/signature.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
@@ -2175,6 +2176,28 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                       ),
                     // ── Action buttons — Google Maps style ───────────────
                     Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF1A73E8),
+                            side: const BorderSide(color: Color(0xFF1A73E8)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                          onPressed: _openInGoogleMaps,
+                          icon: const Icon(Icons.map_rounded, size: 20),
+                          label: const Text(
+                            'OPEN IN GOOGLE MAPS',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
                       padding: EdgeInsets.fromLTRB(
                         12,
                         12,
@@ -2892,6 +2915,49 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       if (mounted) {
         _message('$error');
       }
+    }
+  }
+
+  Future<void> _openInGoogleMaps() async {
+    final destination = _destinationLatLng;
+    if (destination == null) {
+      _message('Please wait while the client location is being resolved.');
+      return;
+    }
+
+    final current = _lastTrackedPosition;
+    final destinationValue = '${destination.latitude},${destination.longitude}';
+    final originValue = current == null
+        ? null
+        : '${current.latitude},${current.longitude}';
+    final googleMapsAppUri = Uri.parse(
+      'google.navigation:q=$destinationValue&mode=d',
+    );
+    final googleMapsWebUri =
+        Uri.https('www.google.com', '/maps/dir/', <String, String>{
+          'api': '1',
+          if (originValue != null) 'origin': originValue,
+          'destination': destinationValue,
+          'travelmode': 'driving',
+        });
+
+    try {
+      if (Platform.isAndroid &&
+          await launchUrl(
+            googleMapsAppUri,
+            mode: LaunchMode.externalApplication,
+          )) {
+        return;
+      }
+      if (await launchUrl(
+        googleMapsWebUri,
+        mode: LaunchMode.externalApplication,
+      )) {
+        return;
+      }
+      if (mounted) _message('Google Maps could not be opened.');
+    } catch (_) {
+      if (mounted) _message('Google Maps could not be opened.');
     }
   }
 
@@ -6444,6 +6510,13 @@ class _GoogleMapBridge {
     _controller = controller;
   }
 
+  void dispose() {
+    final controller = _controller;
+    _controller = null;
+    _camera = null;
+    controller?.dispose();
+  }
+
   void updateCamera(gmaps.CameraPosition camera) {
     _camera = camera;
   }
@@ -6580,6 +6653,8 @@ class _LiveMapViewState extends State<_LiveMapView>
   LatLng? _lastRouteFetch;
   late final _GoogleMapBridge _googleBridge;
   bool _googleMapsConfigured = false;
+  bool _googleMapsCheckComplete = false;
+  gmaps.MapType _googleMapType = gmaps.MapType.normal;
 
   _RouteOption? get _selected =>
       _routes.isEmpty ? null : _routes[_selectedRouteIndex];
@@ -6606,9 +6681,14 @@ class _LiveMapViewState extends State<_LiveMapView>
     try {
       final configured =
           await _mapsChannel.invokeMethod<bool>('isConfigured') ?? false;
-      if (mounted) setState(() => _googleMapsConfigured = configured);
+      if (mounted) {
+        setState(() {
+          _googleMapsConfigured = configured;
+          _googleMapsCheckComplete = true;
+        });
+      }
     } catch (_) {
-      // Keep the existing embedded map as a safe fallback.
+      if (mounted) setState(() => _googleMapsCheckComplete = true);
     }
   }
 
@@ -6635,6 +6715,7 @@ class _LiveMapViewState extends State<_LiveMapView>
   @override
   void dispose() {
     _pulse.dispose();
+    _googleBridge.dispose();
     super.dispose();
   }
 
@@ -6752,6 +6833,15 @@ class _LiveMapViewState extends State<_LiveMapView>
         );
       }
     } catch (_) {}
+  }
+
+  void _toggleGoogleMapType() {
+    setState(() {
+      _googleMapType = switch (_googleMapType) {
+        gmaps.MapType.normal => gmaps.MapType.hybrid,
+        _ => gmaps.MapType.normal,
+      };
+    });
   }
 
   /// Bearing from [from] to [to] in degrees (0 = north, 90 = east).
@@ -6894,374 +6984,374 @@ class _LiveMapViewState extends State<_LiveMapView>
     final mapStack = Stack(
       children: [
         // ── MAP ──────────────────────────────────────────────────────
-        Positioned.fill(
-          child: FlutterMap(
-            mapController: widget.mapController,
-            options: MapOptions(
-              initialCenter: _center,
-              initialZoom: 15,
-              onPositionChanged: (camera, hasGesture) {
-                widget.onRotationChanged?.call(camera.rotation);
-              },
-              interactionOptions: const InteractionOptions(
-                flags:
-                    InteractiveFlag.pinchZoom |
-                    InteractiveFlag.pinchMove |
-                    InteractiveFlag.drag |
-                    InteractiveFlag.doubleTapZoom |
-                    InteractiveFlag.rotate,
-                enableMultiFingerGestureRace: true,
-                rotationThreshold: 4,
-                pinchZoomThreshold: 0.25,
-                pinchMoveThreshold: 8,
-                rotationWinGestures:
-                    MultiFingerGesture.rotate |
-                    MultiFingerGesture.pinchZoom |
-                    MultiFingerGesture.pinchMove,
-                pinchZoomWinGestures:
-                    MultiFingerGesture.rotate |
-                    MultiFingerGesture.pinchZoom |
-                    MultiFingerGesture.pinchMove,
-                pinchMoveWinGestures:
-                    MultiFingerGesture.rotate |
-                    MultiFingerGesture.pinchZoom |
-                    MultiFingerGesture.pinchMove,
+        if (!_googleMapsConfigured)
+          Positioned.fill(
+            child: FlutterMap(
+              mapController: widget.mapController,
+              options: MapOptions(
+                initialCenter: _center,
+                initialZoom: 15,
+                onPositionChanged: (camera, hasGesture) {
+                  widget.onRotationChanged?.call(camera.rotation);
+                },
+                interactionOptions: const InteractionOptions(
+                  flags:
+                      InteractiveFlag.pinchZoom |
+                      InteractiveFlag.pinchMove |
+                      InteractiveFlag.drag |
+                      InteractiveFlag.doubleTapZoom |
+                      InteractiveFlag.rotate,
+                  enableMultiFingerGestureRace: true,
+                  rotationThreshold: 4,
+                  pinchZoomThreshold: 0.25,
+                  pinchMoveThreshold: 8,
+                  rotationWinGestures:
+                      MultiFingerGesture.rotate |
+                      MultiFingerGesture.pinchZoom |
+                      MultiFingerGesture.pinchMove,
+                  pinchZoomWinGestures:
+                      MultiFingerGesture.rotate |
+                      MultiFingerGesture.pinchZoom |
+                      MultiFingerGesture.pinchMove,
+                  pinchMoveWinGestures:
+                      MultiFingerGesture.rotate |
+                      MultiFingerGesture.pinchZoom |
+                      MultiFingerGesture.pinchMove,
+                ),
               ),
-            ),
-            children: [
-              // OpenStreetMap tiles.
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.bitbyte.hrms',
-                maxNativeZoom: 19,
-              ),
+              children: [
+                // OpenStreetMap tiles.
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.bitbyte.hrms',
+                  maxNativeZoom: 19,
+                ),
 
-              // ── All alternate routes drawn on map (Google Maps style) ──
-              // Draw unselected routes first (behind), selected last (on top).
-              ...List.generate(_routes.length, (i) {
-                if (_routes[i].points.length < 2)
-                  return const SizedBox.shrink();
-                final isSelected = i == _selectedRouteIndex;
-                if (isSelected)
-                  return const SizedBox.shrink(); // drawn separately below
-                final altColor = i == 1
-                    ? const Color(0xFF4FC3F7)
-                    : Colors.grey.shade400;
-                return GestureDetector(
-                  onTap: () => _selectRoute(i),
-                  child: PolylineLayer(
+                // ── All alternate routes drawn on map (Google Maps style) ──
+                // Draw unselected routes first (behind), selected last (on top).
+                ...List.generate(_routes.length, (i) {
+                  if (_routes[i].points.length < 2)
+                    return const SizedBox.shrink();
+                  final isSelected = i == _selectedRouteIndex;
+                  if (isSelected)
+                    return const SizedBox.shrink(); // drawn separately below
+                  final altColor = i == 1
+                      ? const Color(0xFF4FC3F7)
+                      : Colors.grey.shade400;
+                  return GestureDetector(
+                    onTap: () => _selectRoute(i),
+                    child: PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: _routes[i].points,
+                          color: Colors.white,
+                          strokeWidth: 9,
+                          strokeCap: StrokeCap.round,
+                          strokeJoin: StrokeJoin.round,
+                        ),
+                        Polyline(
+                          points: _routes[i].points,
+                          color: altColor.withAlpha(180),
+                          strokeWidth: 6,
+                          strokeCap: StrokeCap.round,
+                          strokeJoin: StrokeJoin.round,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+
+                // ── Time labels on each route (mid-point bubble) ──
+                MarkerLayer(
+                  rotate: true,
+                  markers: List.generate(_routes.length, (i) {
+                    if (_routes[i].points.length < 2) {
+                      return Marker(
+                        point: const LatLng(0, 0),
+                        width: 0,
+                        height: 0,
+                        child: const SizedBox.shrink(),
+                      );
+                    }
+                    final pts = _routes[i].points;
+                    final mid = pts[pts.length ~/ 2];
+                    final isSelected = i == _selectedRouteIndex;
+                    return Marker(
+                      point: mid,
+                      width: 80,
+                      height: 30,
+                      child: GestureDetector(
+                        onTap: () => _selectRoute(i),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF1A73E8)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                            border: isSelected
+                                ? null
+                                : Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Text(
+                            _routes[i].durationLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: isSelected
+                                  ? Colors.white
+                                  : const Color(0xFF202124),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+
+                // ── Travelled breadcrumb (grey) ──
+                if (widget.showBreadcrumb && widget.routePoints.length >= 2)
+                  PolylineLayer(
                     polylines: [
                       Polyline(
-                        points: _routes[i].points,
+                        points: widget.routePoints,
+                        color: Colors.white.withAlpha(200),
+                        strokeWidth: 7,
+                        strokeCap: StrokeCap.round,
+                      ),
+                      Polyline(
+                        points: widget.routePoints,
+                        color: Colors.grey.withAlpha(180),
+                        strokeWidth: 6,
+                        strokeCap: StrokeCap.round,
+                      ),
+                    ],
+                  ),
+
+                // ── Selected road route (Google-Maps style bold blue) ──
+                if (_displayRoute.length >= 2)
+                  PolylineLayer(
+                    polylines: [
+                      // Thick white border/shadow underneath
+                      Polyline(
+                        points: _displayRoute,
                         color: Colors.white,
-                        strokeWidth: 9,
+                        strokeWidth: 10,
                         strokeCap: StrokeCap.round,
                         strokeJoin: StrokeJoin.round,
                       ),
+                      // Deep indigo route fill used by the reference preview.
                       Polyline(
-                        points: _routes[i].points,
-                        color: altColor.withAlpha(180),
-                        strokeWidth: 6,
+                        points: _displayRoute,
+                        color: const Color(0xFF3F00D7),
+                        strokeWidth: 7,
                         strokeCap: StrokeCap.round,
                         strokeJoin: StrokeJoin.round,
                       ),
                     ],
                   ),
-                );
-              }),
 
-              // ── Time labels on each route (mid-point bubble) ──
-              MarkerLayer(
-                rotate: true,
-                markers: List.generate(_routes.length, (i) {
-                  if (_routes[i].points.length < 2) {
-                    return Marker(
-                      point: const LatLng(0, 0),
-                      width: 0,
-                      height: 0,
-                      child: const SizedBox.shrink(),
-                    );
-                  }
-                  final pts = _routes[i].points;
-                  final mid = pts[pts.length ~/ 2];
-                  final isSelected = i == _selectedRouteIndex;
-                  return Marker(
-                    point: mid,
-                    width: 80,
-                    height: 30,
-                    child: GestureDetector(
-                      onTap: () => _selectRoute(i),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFF1A73E8)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black26,
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                          border: isSelected
-                              ? null
-                              : Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Text(
-                          _routes[i].durationLabel,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: isSelected
-                                ? Colors.white
-                                : const Color(0xFF202124),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-
-              // ── Travelled breadcrumb (grey) ──
-              if (widget.showBreadcrumb && widget.routePoints.length >= 2)
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: widget.routePoints,
-                      color: Colors.white.withAlpha(200),
-                      strokeWidth: 7,
-                      strokeCap: StrokeCap.round,
-                    ),
-                    Polyline(
-                      points: widget.routePoints,
-                      color: Colors.grey.withAlpha(180),
-                      strokeWidth: 6,
-                      strokeCap: StrokeCap.round,
-                    ),
-                  ],
-                ),
-
-              // ── Selected road route (Google-Maps style bold blue) ──
-              if (_displayRoute.length >= 2)
-                PolylineLayer(
-                  polylines: [
-                    // Thick white border/shadow underneath
-                    Polyline(
-                      points: _displayRoute,
-                      color: Colors.white,
-                      strokeWidth: 10,
-                      strokeCap: StrokeCap.round,
-                      strokeJoin: StrokeJoin.round,
-                    ),
-                    // Deep indigo route fill used by the reference preview.
-                    Polyline(
-                      points: _displayRoute,
-                      color: const Color(0xFF3F00D7),
-                      strokeWidth: 7,
-                      strokeCap: StrokeCap.round,
-                      strokeJoin: StrokeJoin.round,
-                    ),
-                  ],
-                ),
-
-              // ── Markers ──────────────────────────────────────────────
-              MarkerLayer(
-                rotate: true,
-                markers: [
-                  // ── Origin — small green dot (office start point) ──
-                  if (widget.origin != null)
-                    Marker(
-                      point: widget.origin!,
-                      width: 20,
-                      height: 20,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF34A853),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2.5),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black38,
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                  // ── Destination — large red Google Maps style teardrop pin ──
-                  ...List.generate(
-                    widget.waypoints.length,
-                    (index) => Marker(
-                      point: widget.waypoints[index],
-                      width: 28,
-                      height: 28,
-                      child: Container(
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFF5F6368),
-                            width: 3,
-                          ),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black26, blurRadius: 4),
-                          ],
-                        ),
-                        child: Text(
-                          '${index + 1}',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF202124),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (dst != null &&
-                      !(dst.latitude == 0.0 && dst.longitude == 0.0))
-                    Marker(
-                      point: dst,
-                      width: 28,
-                      height: 38,
-                      alignment: Alignment.bottomCenter,
-                      child: Stack(
-                        alignment: Alignment.topCenter,
-                        children: [
-                          // Drop shadow
-                          Positioned(
-                            bottom: 0,
-                            child: Container(
-                              width: 9,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.black26,
-                                borderRadius: BorderRadius.circular(8),
+                // ── Markers ──────────────────────────────────────────────
+                MarkerLayer(
+                  rotate: true,
+                  markers: [
+                    // ── Origin — small green dot (office start point) ──
+                    if (widget.origin != null)
+                      Marker(
+                        point: widget.origin!,
+                        width: 20,
+                        height: 20,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF34A853),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2.5),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black38,
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
                               ),
-                            ),
+                            ],
                           ),
-                          // Pin body
-                          CustomPaint(
-                            size: const Size(28, 34),
-                            painter: _RedPinPainter(),
-                          ),
-                          // Inner white dot
-                          const Positioned(
-                            top: 7,
-                            child: Icon(
-                              Icons.circle,
-                              color: Colors.white,
-                              size: 9,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
 
-                  // ── Current position — pulsing green dot + direction arrow ──
-                  if (cur != null)
-                    Marker(
-                      point: cur,
-                      width: widget.navigationMode ? 48 : 32,
-                      height: widget.navigationMode ? 48 : 32,
-                      child: AnimatedBuilder(
-                        animation: _pulseAnim,
-                        builder: (_, __) => Stack(
+                    // ── Destination — large red Google Maps style teardrop pin ──
+                    ...List.generate(
+                      widget.waypoints.length,
+                      (index) => Marker(
+                        point: widget.waypoints[index],
+                        width: 28,
+                        height: 28,
+                        child: Container(
                           alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF5F6368),
+                              width: 3,
+                            ),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black26, blurRadius: 4),
+                            ],
+                          ),
+                          child: Text(
+                            '${index + 1}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF202124),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (dst != null &&
+                        !(dst.latitude == 0.0 && dst.longitude == 0.0))
+                      Marker(
+                        point: dst,
+                        width: 28,
+                        height: 38,
+                        alignment: Alignment.bottomCenter,
+                        child: Stack(
+                          alignment: Alignment.topCenter,
                           children: [
-                            // Outer pulse ring
-                            Container(
-                              width:
-                                  (widget.navigationMode ? 48 : 32) *
-                                  _pulseAnim.value,
-                              height:
-                                  (widget.navigationMode ? 48 : 32) *
-                                  _pulseAnim.value,
-                              decoration: BoxDecoration(
-                                color: currentColor.withAlpha(
-                                  (50 * (1.2 - _pulseAnim.value)).round().clamp(
-                                    0,
-                                    255,
-                                  ),
-                                ),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            // Mid ring
-                            Container(
-                              width: widget.navigationMode ? 32 : 24,
-                              height: widget.navigationMode ? 32 : 24,
-                              decoration: BoxDecoration(
-                                color: currentColor.withAlpha(50),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: currentColor.withAlpha(100),
-                                  width: 1.5,
-                                ),
-                              ),
-                            ),
-                            // Directional arrow (rotates toward destination)
-                            Transform.rotate(
-                              angle: heading * math.pi / 180,
+                            // Drop shadow
+                            Positioned(
+                              bottom: 0,
                               child: Container(
-                                width: widget.navigationMode
-                                    ? 23
-                                    : hasCustomPositionIcon
-                                    ? 24
-                                    : 16,
-                                height: widget.navigationMode
-                                    ? 23
-                                    : hasCustomPositionIcon
-                                    ? 24
-                                    : 16,
+                                width: 9,
+                                height: 4,
                                 decoration: BoxDecoration(
-                                  color: currentColor,
+                                  color: Colors.black26,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                            // Pin body
+                            CustomPaint(
+                              size: const Size(28, 34),
+                              painter: _RedPinPainter(),
+                            ),
+                            // Inner white dot
+                            const Positioned(
+                              top: 7,
+                              child: Icon(
+                                Icons.circle,
+                                color: Colors.white,
+                                size: 9,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // ── Current position — pulsing green dot + direction arrow ──
+                    if (cur != null)
+                      Marker(
+                        point: cur,
+                        width: widget.navigationMode ? 48 : 32,
+                        height: widget.navigationMode ? 48 : 32,
+                        child: AnimatedBuilder(
+                          animation: _pulseAnim,
+                          builder: (_, __) => Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Outer pulse ring
+                              Container(
+                                width:
+                                    (widget.navigationMode ? 48 : 32) *
+                                    _pulseAnim.value,
+                                height:
+                                    (widget.navigationMode ? 48 : 32) *
+                                    _pulseAnim.value,
+                                decoration: BoxDecoration(
+                                  color: currentColor.withAlpha(
+                                    (50 * (1.2 - _pulseAnim.value))
+                                        .round()
+                                        .clamp(0, 255),
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              // Mid ring
+                              Container(
+                                width: widget.navigationMode ? 32 : 24,
+                                height: widget.navigationMode ? 32 : 24,
+                                decoration: BoxDecoration(
+                                  color: currentColor.withAlpha(50),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: Colors.white,
-                                    width: 2.5,
+                                    color: currentColor.withAlpha(100),
+                                    width: 1.5,
                                   ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black38,
-                                      blurRadius: 4,
-                                      offset: Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  widget.currentPositionIcon ??
-                                      (widget.navigationMode
-                                          ? Icons.navigation
-                                          : Icons.circle),
-                                  color: Colors.white,
-                                  size: widget.navigationMode
-                                      ? 13
-                                      : hasCustomPositionIcon
-                                      ? 15
-                                      : 8,
                                 ),
                               ),
-                            ),
-                          ],
+                              // Directional arrow (rotates toward destination)
+                              Transform.rotate(
+                                angle: heading * math.pi / 180,
+                                child: Container(
+                                  width: widget.navigationMode
+                                      ? 23
+                                      : hasCustomPositionIcon
+                                      ? 24
+                                      : 16,
+                                  height: widget.navigationMode
+                                      ? 23
+                                      : hasCustomPositionIcon
+                                      ? 24
+                                      : 16,
+                                  decoration: BoxDecoration(
+                                    color: currentColor,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 2.5,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Colors.black38,
+                                        blurRadius: 4,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    widget.currentPositionIcon ??
+                                        (widget.navigationMode
+                                            ? Icons.navigation
+                                            : Icons.circle),
+                                    color: Colors.white,
+                                    size: widget.navigationMode
+                                        ? 13
+                                        : hasCustomPositionIcon
+                                        ? 15
+                                        : 8,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
 
         if (_googleMapsConfigured)
           Positioned.fill(
@@ -7288,7 +7378,7 @@ class _LiveMapViewState extends State<_LiveMapView>
                 _googleBridge.updateCamera(camera);
                 widget.onRotationChanged?.call(camera.bearing);
               },
-              mapType: gmaps.MapType.normal,
+              mapType: _googleMapType,
               trafficEnabled: true,
               buildingsEnabled: true,
               compassEnabled: false,
@@ -7307,7 +7397,53 @@ class _LiveMapViewState extends State<_LiveMapView>
           ),
 
         // ── LIVE badge ───────────────────────────────────────────────
-        if (!widget.fullScreen && widget.showLiveBadge)
+        if (!_googleMapsCheckComplete)
+          const Positioned.fill(
+            child: ColoredBox(
+              color: Color(0xFFF8F9FA),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+
+        if (_googleMapsCheckComplete && !_googleMapsConfigured)
+          Positioned.fill(
+            child: ColoredBox(
+              color: const Color(0xFFF8F9FA),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.map_outlined,
+                          size: 48,
+                          color: Color(0xFF1A73E8),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Google Maps is not configured',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Add MAPS_API_KEY to android/local.properties and rebuild the app. Enable Maps SDK for Android for this key.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        if (_googleMapsConfigured && !widget.fullScreen && widget.showLiveBadge)
           Positioned(
             left: 10,
             top: 10,
@@ -7337,13 +7473,23 @@ class _LiveMapViewState extends State<_LiveMapView>
           ),
 
         // ── Map control buttons (right side, Google Maps style) ─────
-        if (!widget.fullScreen && widget.showMapControls)
+        if (_googleMapsConfigured &&
+            !widget.fullScreen &&
+            widget.showMapControls)
           Positioned(
             right: 10,
             bottom: widget.fullScreen ? 260 : 10,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                _mapControlButton(
+                  icon: Icons.layers_rounded,
+                  tooltip: _googleMapType == gmaps.MapType.normal
+                      ? 'Satellite view'
+                      : 'Map view',
+                  onTap: _toggleGoogleMapType,
+                ),
+                const SizedBox(height: 8),
                 // Zoom In
                 _mapControlButton(
                   icon: Icons.add,
@@ -7375,7 +7521,7 @@ class _LiveMapViewState extends State<_LiveMapView>
           ),
 
         // ── Bottom ETA card — only shown in card (non-fullscreen) mode ──
-        if (!widget.fullScreen && _selected != null)
+        if (_googleMapsConfigured && !widget.fullScreen && _selected != null)
           Positioned(
             left: 0,
             right: 0,
@@ -7426,7 +7572,7 @@ class _LiveMapViewState extends State<_LiveMapView>
           ),
 
         // ── ETA pill (full-screen mode, above bottom sheet) ──────────
-        if (widget.showEtaOverlay && _selected != null)
+        if (_googleMapsConfigured && widget.showEtaOverlay && _selected != null)
           Positioned(
             left: 12,
             right: 60,
