@@ -5,6 +5,11 @@ services:
     plan: free
     rootDir: backend
     branch: main
+    # This repository also contains the Flutter application. Do not rebuild the
+    # Django service for frontend-only commits.
+    buildFilter:
+      paths:
+        - backend/**
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
     preDeployCommand: python manage.py migrate --noinput
     startCommand: gunicorn backend.wsgi:application --bind "0.0.0.0:$PORT" --workers 2 --timeout 120 --access-logfile - --error-logfile -
