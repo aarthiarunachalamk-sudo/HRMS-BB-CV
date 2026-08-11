@@ -3886,7 +3886,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Client Signature',
+                  'Your Signature',
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 if (!widget.readOnlyMode)
@@ -3910,7 +3910,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             Text(
               widget.readOnlyMode
                   ? 'Signature captured'
-                  : 'Ask the client to sign in the box below',
+                  : 'Sign in the box below',
               style: TextStyle(
                 fontSize: 11,
                 color: Colors.grey.shade500,
@@ -4173,7 +4173,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Client Signature',
+                  'Your Signature',
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
                 if (!widget.readOnlyMode)
@@ -4196,7 +4196,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             Text(
               widget.readOnlyMode
                   ? 'Signature captured'
-                  : 'Ask the client to sign in the box below',
+                  : 'Sign in the box below',
               style: TextStyle(
                 fontSize: 11,
                 color: Colors.grey.shade500,
@@ -5987,7 +5987,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               const SizedBox(height: 16),
               section(
                 ctx,
-                'Client Signatures',
+                'Your Signatures',
                 Icons.gesture_rounded,
                 const Color(0xFF9333EA),
                 signatures,
@@ -6415,12 +6415,12 @@ class _RouteMapCardState extends State<_RouteMapCard> {
         (_rawPoints.isNotEmpty ? _rawPoints.first : null);
     _destination =
         _validPoint(
-          widget.visit.reachedClientLatitude,
-          widget.visit.reachedClientLongitude,
-        ) ??
-        _validPoint(
           widget.visit.clientLatitude,
           widget.visit.clientLongitude,
+        ) ??
+        _validPoint(
+          widget.visit.reachedClientLatitude,
+          widget.visit.reachedClientLongitude,
         ) ??
         (_rawPoints.isNotEmpty ? _rawPoints.last : null);
 
@@ -6460,7 +6460,7 @@ class _RouteMapCardState extends State<_RouteMapCard> {
       if (!mounted) return;
       setState(() {
         _loadingRoute = false;
-        _routeSummary = 'Arrival confirmed at the client location';
+        _routeSummary = 'Start and client locations are very close';
       });
       return;
     }
@@ -6505,14 +6505,14 @@ class _RouteMapCardState extends State<_RouteMapCard> {
         _routeSummary = distanceKm > 0
             ? '${distanceKm.toStringAsFixed(1)} km road route'
                   '${durationMinutes > 0 ? ' · about $durationMinutes min' : ''}'
-            : 'Office checkout to client arrival';
+            : 'Start location to client location';
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _fitRoute());
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _loadingRoute = false;
-        _routeSummary = 'Office checkout to client arrival';
+        _routeSummary = 'Start location to client location';
       });
     }
   }
@@ -6670,11 +6670,11 @@ class _RouteMapCardState extends State<_RouteMapCard> {
           children: [
             const Icon(Icons.circle, size: 10, color: Color(0xFF34A853)),
             const SizedBox(width: 4),
-            const Text('Office checkout', style: TextStyle(fontSize: 11)),
+            const Text('Start location', style: TextStyle(fontSize: 11)),
             const SizedBox(width: 12),
             const Icon(Icons.circle, size: 10, color: Color(0xFFEA4335)),
             const SizedBox(width: 4),
-            const Text('Client arrival', style: TextStyle(fontSize: 11)),
+            const Text('Client location', style: TextStyle(fontSize: 11)),
           ],
         ),
       ],

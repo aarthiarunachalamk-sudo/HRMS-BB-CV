@@ -1544,7 +1544,7 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
             TextField(
               controller: signature,
               decoration: const InputDecoration(
-                labelText: 'Client signature / OTP name',
+                labelText: 'Your signature / OTP name',
               ),
             ),
             FilledButton(
