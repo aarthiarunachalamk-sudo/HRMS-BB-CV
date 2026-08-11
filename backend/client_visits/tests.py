@@ -683,3 +683,86 @@ class ClientVisitApiTests(APITestCase):
             visit = ClientVisit.objects.get(pk=visit_id)
             self.assertEqual(visit.status, 'approved', role)
             self.assertEqual(visit.approved_by, approver.user_id, role)
+
+    def test_active_route_is_tl_only_then_available_to_history_roles(self):
+        hr = User.objects.create_user('route-history-hr@example.com', role='hr')
+        ceo = User.objects.create_user('route-history-ceo@example.com', role='ceo')
+        visit_id = self._create().data['visit']['id']
+        visit = ClientVisit.objects.get(pk=visit_id)
+        visit.status = 'travelling'
+        visit.travel_route = [{
+            'latitude': 13.0831,
+            'longitude': 80.2709,
+            'recorded_at': timezone.now().isoformat(),
+        }]
+        visit.save(update_fields=['status', 'travel_route'])
+
+        tl_detail = self.client.get(
+            f'/api/client-visits/{visit_id}/',
+            {'user_id': self.manager.user_id},
+        )
+        self.assertEqual(len(tl_detail.data['visit']['travel_route']), 1)
+
+        for viewer in (hr, ceo):
+            active_detail = self.client.get(
+                f'/api/client-visits/{visit_id}/',
+                {'user_id': viewer.user_id},
+            )
+            self.assertEqual(active_detail.status_code, 200)
+            self.assertEqual(active_detail.data['visit']['travel_route'], [])
+
+        visit.status = 'completed'
+        visit.save(update_fields=['status'])
+        completed_detail = self.client.get(
+            f'/api/client-visits/{visit_id}/',
+            {'user_id': hr.user_id},
+        )
+        self.assertEqual(len(completed_detail.data['visit']['travel_route']), 1)
+
+    def test_tl_completion_notifies_hr_and_executive_history_roles(self):
+        requester = User.objects.create_user(
+            'completed-visit-tl@example.com',
+            role='tl',
+        )
+        hr = User.objects.create_user('completed-visit-hr@example.com', role='hr')
+        visit = ClientVisit.objects.create(
+            employee_user_id=requester.user_id,
+            employee_name='TL Visitor',
+            manager_user_id=hr.user_id,
+            client_name='History Client',
+            contact_person='Client Manager',
+            contact_phone='9876543210',
+            address='Chennai',
+            scheduled_date=timezone.localdate(),
+            scheduled_time=timezone.localtime().time(),
+            purpose='Completion audit test',
+            status='in_progress',
+        )
+
+        response = self.client.post(
+            f'/api/client-visits/{visit.id}/complete/',
+            {
+                'user_id': requester.user_id,
+                'outcome': 'Visit objectives completed.',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+
+        for role in ('hr', 'ceo', 'md', 'superadmin'):
+            self.assertTrue(AppNotification.objects.filter(
+                recipient_role=role,
+                title='Client Visit Completed - History Ready',
+                reference_id=str(visit.id),
+            ).exists(), role)
+
+        notifications = self.client.get('/api/notifications/', {
+            'user_id': hr.user_id,
+            'role': 'hr',
+        })
+        self.assertEqual(notifications.status_code, 200)
+        self.assertTrue(any(
+            item['reference_id'] == str(visit.id)
+            and item['title'] == 'Client Visit Completed - History Ready'
+            for item in notifications.data['notifications']
+        ))

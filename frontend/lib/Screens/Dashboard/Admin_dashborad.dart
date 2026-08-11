@@ -30,7 +30,13 @@ const List<List<IconData>> _tabIcons = [
   [Icons.beach_access_outlined, Icons.beach_access_rounded],
   [Icons.event_outlined, Icons.event_rounded],
 ];
-const _tabLabels = ['Dashboard', 'Employees', 'Attendance', 'Leave', 'Meetings'];
+const _tabLabels = [
+  'Dashboard',
+  'Employees',
+  'Attendance',
+  'Leave',
+  'Meetings',
+];
 
 // ─────────────────────────────────────────────────────────────
 //  Role options
@@ -65,21 +71,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // ── helpers ─────────────────────────────────────────────────
   void _logout() => Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
+    MaterialPageRoute(builder: (_) => const LoginScreen()),
+    (route) => false,
+  );
 
   void _toggleTheme() {
-    MyApp.themeNotifier.value =
-        MyApp.themeNotifier.value == ThemeMode.dark
-            ? ThemeMode.light
-            : ThemeMode.dark;
+    MyApp.themeNotifier.value = MyApp.themeNotifier.value == ThemeMode.dark
+        ? ThemeMode.light
+        : ThemeMode.dark;
     setState(() {});
   }
 
   Future<void> _pickProfileImage() async {
-    final picked = await ImagePicker()
-        .pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
     if (picked == null || !mounted) return;
     setState(() => _profileImage = File(picked.path));
   }
@@ -147,41 +154,39 @@ class _AdminDashboardState extends State<AdminDashboard> {
         if (!didPop) _handleBack();
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: c.isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+        value: c.isDark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
         child: Scaffold(
-        key: _scaffoldKey,
-        backgroundColor: c.bg,
-        drawer: _buildDrawer(c),
-        body: Container(
-          decoration: BoxDecoration(gradient: c.bgGradient),
-          child: SafeArea(
-            child: Column(
-              children: [
-                // ── Top bar ──────────────────────────────────
-                _TopBar(
-                  c: c,
-                  title: _tabLabels[_tab.index],
-                  onMenu: () => _scaffoldKey.currentState?.openDrawer(),
-                  onTheme: _toggleTheme,
-                ),
+          key: _scaffoldKey,
+          backgroundColor: c.bg,
+          drawer: _buildDrawer(c),
+          body: Container(
+            decoration: BoxDecoration(gradient: c.bgGradient),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // ── Top bar ──────────────────────────────────
+                  _TopBar(
+                    c: c,
+                    title: _tabLabels[_tab.index],
+                    onMenu: () => _scaffoldKey.currentState?.openDrawer(),
+                    onTheme: _toggleTheme,
+                  ),
 
-                // ── Role-based dropdown ──────────────────────
-                _RoleDropdown(
-                  c: c,
-                  role: _role,
-                  onChanged: _switchRole,
-                ),
+                  // ── Role-based dropdown ──────────────────────
+                  _RoleDropdown(c: c, role: _role, onChanged: _switchRole),
 
-                // ── Page content ─────────────────────────────
-                Expanded(child: _buildPage(c)),
+                  // ── Page content ─────────────────────────────
+                  Expanded(child: _buildPage(c)),
 
-                // ── Bottom nav ───────────────────────────────
-                _BottomNav(c: c, tab: _tab, onTap: _setTab),
-              ],
+                  // ── Bottom nav ───────────────────────────────
+                  _BottomNav(c: c, tab: _tab, onTap: _setTab),
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -211,8 +216,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // ── Drawer ───────────────────────────────────────────────────
   Widget _buildDrawer(AdminPalette c) {
-    final name =
-        widget.firstName.isEmpty ? 'Admin' : widget.firstName;
+    final name = widget.firstName.isEmpty ? 'Admin' : widget.firstName;
 
     return Drawer(
       backgroundColor: c.surface,
@@ -236,23 +240,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           ? FileImage(_profileImage!)
                           : null,
                       child: _profileImage == null
-                          ? const Icon(Icons.admin_panel_settings_rounded,
-                              color: Colors.white, size: 30)
+                          ? const Icon(
+                              Icons.admin_panel_settings_rounded,
+                              color: Colors.white,
+                              size: 30,
+                            )
                           : null,
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Text(name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800)),
-                  const Text('Admin',
-                      style:
-                          TextStyle(color: Colors.white70, fontSize: 12)),
-                  Text(widget.userId,
-                      style: const TextStyle(
-                          color: Colors.white60, fontSize: 11)),
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Text(
+                    'Admin',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                  Text(
+                    widget.userId,
+                    style: const TextStyle(color: Colors.white60, fontSize: 11),
+                  ),
                 ],
               ),
             ),
@@ -307,10 +319,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     onTap: () => _openAdminPage(
                       ClientVisitModuleScreen(
                         userId: widget.userId,
-                        roleLabel: 'Admin · Review',
+                        roleLabel: 'Admin · Client Visits',
                         requesterRole: 'admin',
                         reviewerMode: true,
-                        allowCreate: false,
+                        allowCreate: true,
                       ),
                     ),
                   ),
@@ -319,42 +331,53 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     icon: Icons.task_alt_rounded,
                     label: 'Tasks',
                     selected: false,
-                    onTap: () => _openAdminPage(AdminTasksScreen(userId: widget.userId)),
+                    onTap: () =>
+                        _openAdminPage(AdminTasksScreen(userId: widget.userId)),
                   ),
                   _DrawerTile(
                     c: c,
                     icon: Icons.devices_rounded,
                     label: 'Assets',
                     selected: false,
-                    onTap: () => _openAdminPage(AdminAssetsScreen(userId: widget.userId)),
+                    onTap: () => _openAdminPage(
+                      AdminAssetsScreen(userId: widget.userId),
+                    ),
                   ),
                   _DrawerTile(
                     c: c,
                     icon: Icons.insert_chart_outlined_rounded,
                     label: 'Reports',
                     selected: false,
-                    onTap: () => _openAdminPage(AdminReportsScreen(userId: widget.userId)),
+                    onTap: () => _openAdminPage(
+                      AdminReportsScreen(userId: widget.userId),
+                    ),
                   ),
                   _DrawerTile(
                     c: c,
                     icon: Icons.notifications_rounded,
                     label: 'Notifications',
                     selected: false,
-                    onTap: () => _openAdminPage(AdminNotificationsScreen(userId: widget.userId)),
+                    onTap: () => _openAdminPage(
+                      AdminNotificationsScreen(userId: widget.userId),
+                    ),
                   ),
                   _DrawerTile(
                     c: c,
                     icon: Icons.settings_rounded,
                     label: 'Settings',
                     selected: false,
-                    onTap: () => _openAdminPage(AdminSettingsScreen(userId: widget.userId)),
+                    onTap: () => _openAdminPage(
+                      AdminSettingsScreen(userId: widget.userId),
+                    ),
                   ),
                   _DrawerTile(
                     c: c,
                     icon: Icons.account_circle_rounded,
                     label: 'Profile',
                     selected: false,
-                    onTap: () => _openAdminPage(AdminProfileScreen(userId: widget.userId)),
+                    onTap: () => _openAdminPage(
+                      AdminProfileScreen(userId: widget.userId),
+                    ),
                   ),
                 ],
               ),
@@ -365,28 +388,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
             // Theme toggle
             ListTile(
               leading: Icon(
-                c.isDark
-                    ? Icons.light_mode_outlined
-                    : Icons.dark_mode_outlined,
+                c.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
                 color: c.primary,
               ),
               title: Text(
                 c.isDark ? 'Light Mode' : 'Dark Mode',
-                style: TextStyle(
-                    color: c.text, fontWeight: FontWeight.w600),
+                style: TextStyle(color: c.text, fontWeight: FontWeight.w600),
               ),
               onTap: _toggleTheme,
             ),
 
             // Logout
             ListTile(
-              leading:
-                  const Icon(Icons.logout_rounded, color: Colors.redAccent),
-              title: const Text('Logout',
-                  style: TextStyle(
-                      color: Colors.redAccent,
-                      fontWeight: FontWeight.w700)),
-              onTap: () => showLogoutConfirmation(context: context, onLogout: _logout),
+              leading: const Icon(
+                Icons.logout_rounded,
+                color: Colors.redAccent,
+              ),
+              title: const Text(
+                'Logout',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              onTap: () =>
+                  showLogoutConfirmation(context: context, onLogout: _logout),
             ),
             const SizedBox(height: 8),
           ],
@@ -416,31 +442,36 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-      child: Row(children: [
-        IconButton(
-          onPressed: onMenu,
-          icon: Icon(Icons.menu_rounded, color: c.text, size: 26),
-          tooltip: 'Menu',
-        ),
-        const SizedBox(width: 2),
-        const BitByteLogo(compact: true),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            title,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                color: c.text, fontSize: 16, fontWeight: FontWeight.w900),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onMenu,
+            icon: Icon(Icons.menu_rounded, color: c.text, size: 26),
+            tooltip: 'Menu',
           ),
-        ),
-        IconButton(
-          onPressed: onTheme,
-          icon: Icon(
-            c.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-            color: c.primary,
+          const SizedBox(width: 2),
+          const BitByteLogo(compact: true),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: c.text,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ),
-        ),
-      ]),
+          IconButton(
+            onPressed: onTheme,
+            icon: Icon(
+              c.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+              color: c.primary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -478,54 +509,84 @@ class _RoleDropdown extends StatelessWidget {
             dropdownColor: c.surface,
             icon: Icon(Icons.keyboard_arrow_down_rounded, color: c.primary),
             style: TextStyle(
-                color: c.text, fontSize: 13, fontWeight: FontWeight.w800),
+              color: c.text,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
             // What shows when closed
             selectedItemBuilder: (context) => _AdminRole.values.map((_) {
-              return Row(children: [
-                Icon(Icons.manage_accounts_outlined,
-                    color: c.primary, size: 18),
-                const SizedBox(width: 8),
-                Text('Role View',
+              return Row(
+                children: [
+                  Icon(
+                    Icons.manage_accounts_outlined,
+                    color: c.primary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Role View',
                     style: TextStyle(
-                        color: c.muted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    role == _AdminRole.admin ? 'Admin' : 'Employee',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                      color: c.muted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      role == _AdminRole.admin ? 'Admin' : 'Employee',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
                         color: c.text,
                         fontSize: 13,
-                        fontWeight: FontWeight.w800),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
-                ),
-              ]);
+                ],
+              );
             }).toList(),
             // Drop-down items
             items: [
               DropdownMenuItem(
                 value: _AdminRole.admin,
-                child: Row(children: [
-                  Icon(Icons.admin_panel_settings_outlined,
-                      color: c.primary, size: 18),
-                  const SizedBox(width: 10),
-                  Text('Admin',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.admin_panel_settings_outlined,
+                      color: c.primary,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Admin',
                       style: TextStyle(
-                          color: c.text, fontWeight: FontWeight.w700)),
-                ]),
+                        color: c.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               DropdownMenuItem(
                 value: _AdminRole.employee,
-                child: Row(children: [
-                  Icon(Icons.person_outline_rounded,
-                      color: c.green, size: 18),
-                  const SizedBox(width: 10),
-                  Text('Employee',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.person_outline_rounded,
+                      color: c.green,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Employee',
                       style: TextStyle(
-                          color: c.text, fontWeight: FontWeight.w700)),
-                ]),
+                        color: c.text,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
             onChanged: (v) {
@@ -546,11 +607,7 @@ class _BottomNav extends StatelessWidget {
   final _AdminTab tab;
   final ValueChanged<_AdminTab> onTap;
 
-  const _BottomNav({
-    required this.c,
-    required this.tab,
-    required this.onTap,
-  });
+  const _BottomNav({required this.c, required this.tab, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -573,9 +630,7 @@ class _BottomNav extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      selected
-                          ? _tabIcons[t.index][1]
-                          : _tabIcons[t.index][0],
+                      selected ? _tabIcons[t.index][1] : _tabIcons[t.index][0],
                       color: selected ? c.primary : c.muted,
                       size: 20,
                     ),
@@ -625,10 +680,10 @@ class _DrawerTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: ListTile(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        tileColor:
-            selected ? c.primary.withValues(alpha: 0.12) : Colors.transparent,
-        leading: Icon(icon,
-            color: selected ? c.primary : c.muted, size: 20),
+        tileColor: selected
+            ? c.primary.withValues(alpha: 0.12)
+            : Colors.transparent,
+        leading: Icon(icon, color: selected ? c.primary : c.muted, size: 20),
         title: Text(
           label,
           style: TextStyle(

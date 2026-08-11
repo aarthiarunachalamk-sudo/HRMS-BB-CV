@@ -73,8 +73,13 @@ class ClientVisitDownloads {
 
 class ClientVisitDownloadedFilesScreen extends StatefulWidget {
   final String userId;
+  final bool embedded;
 
-  const ClientVisitDownloadedFilesScreen({super.key, required this.userId});
+  const ClientVisitDownloadedFilesScreen({
+    super.key,
+    required this.userId,
+    this.embedded = false,
+  });
 
   @override
   State<ClientVisitDownloadedFilesScreen> createState() =>
@@ -134,10 +139,94 @@ class _ClientVisitDownloadedFilesScreenState
   @override
   Widget build(BuildContext context) {
     final files = _files;
+    final body = SafeArea(
+      top: false,
+      child: files == null
+          ? const Center(child: CircularProgressIndicator())
+          : files.isEmpty
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.folder_open_rounded, size: 48),
+                    SizedBox(height: 12),
+                    Text(
+                      'No downloaded client visit documents yet.',
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Downloaded PDFs will appear here automatically.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                itemCount: files.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final file = files[index];
+                  final clientName = '${file['client_name'] ?? 'Client'}';
+                  final reference = '${file['visit_reference'] ?? ''}';
+                  return Card(
+                    child: ListTile(
+                      onTap: () => _open(file),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      leading: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFFEF4444,
+                          ).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.picture_as_pdf_rounded,
+                          color: Color(0xFFEF4444),
+                        ),
+                      ),
+                      title: Text(
+                        clientName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Text(
+                          [
+                            if (reference.isNotEmpty) reference,
+                            _date('${file['downloaded_at'] ?? ''}'),
+                            '${file['display_path'] ?? ''}',
+                          ].join('\n'),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.open_in_new_rounded),
+                    ),
+                  );
+                },
+              ),
+            ),
+    );
+    if (widget.embedded) return body;
     return ClientVisitTheme(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Downloaded Files'),
+          title: const Text('Downloaded Documents'),
           centerTitle: true,
           actions: [
             IconButton(
@@ -147,89 +236,7 @@ class _ClientVisitDownloadedFilesScreenState
             ),
           ],
         ),
-        body: SafeArea(
-          top: false,
-          child: files == null
-              ? const Center(child: CircularProgressIndicator())
-              : files.isEmpty
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(28),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.folder_open_rounded, size: 48),
-                        SizedBox(height: 12),
-                        Text(
-                          'No downloaded client visit reports yet.',
-                          textAlign: TextAlign.center,
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Downloaded PDFs will appear here automatically.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                    itemCount: files.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final file = files[index];
-                      final clientName = '${file['client_name'] ?? 'Client'}';
-                      final reference = '${file['visit_reference'] ?? ''}';
-                      return Card(
-                        child: ListTile(
-                          onTap: () => _open(file),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
-                          ),
-                          leading: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: const Color(
-                                0xFFEF4444,
-                              ).withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.picture_as_pdf_rounded,
-                              color: Color(0xFFEF4444),
-                            ),
-                          ),
-                          title: Text(
-                            clientName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 5),
-                            child: Text(
-                              [
-                                if (reference.isNotEmpty) reference,
-                                _date('${file['downloaded_at'] ?? ''}'),
-                                '${file['display_path'] ?? ''}',
-                              ].join('\n'),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          trailing: const Icon(Icons.open_in_new_rounded),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-        ),
+        body: body,
       ),
     );
   }

@@ -9,7 +9,6 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
-import 'client_visit_navigation.dart';
 import 'client_visit_service.dart';
 import 'client_visit_flow_screens.dart';
 import 'client_visit_theme.dart';
@@ -28,6 +27,8 @@ const _statuses = [
 
 class ClientVisitDashboardScreen extends StatefulWidget {
   final String userId;
+  final String title;
+  final String roleLabel;
   final bool reviewerMode;
   final bool readOnlyMode;
   final bool allowCreate;
@@ -38,6 +39,8 @@ class ClientVisitDashboardScreen extends StatefulWidget {
   const ClientVisitDashboardScreen({
     super.key,
     required this.userId,
+    this.title = 'Visit Dashboard',
+    this.roleLabel = '',
     this.reviewerMode = false,
     this.readOnlyMode = false,
     this.allowCreate = true,
@@ -60,12 +63,22 @@ class _ClientVisitDashboardScreenState
   String? _error;
   bool _initialVisitOpened = false;
   int _downloadCount = 0;
+  Timer? _statusClock;
 
   @override
   void initState() {
     super.initState();
     _load();
     _loadDownloads();
+    _statusClock = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _statusClock?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadDownloads() async {
@@ -74,11 +87,22 @@ class _ClientVisitDashboardScreenState
   }
 
   Future<void> _openDownloads() async {
+    await _openHistory(initialTab: 1);
+    await _loadDownloads();
+  }
+
+  Future<void> _openHistory({int initialTab = 0}) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ClientVisitDownloadedFilesScreen(userId: widget.userId),
+        builder: (_) => ClientVisitHistoryScreen(
+          userId: widget.userId,
+          viewerRole: widget.requesterRole,
+          initialTab: initialTab,
+          onOpenVisit: _openVisit,
+        ),
       ),
     );
+    await _load();
     await _loadDownloads();
   }
 
@@ -138,6 +162,7 @@ class _ClientVisitDashboardScreenState
         builder: (_) => _ClientVisitStatusListScreen(
           title: title,
           userId: widget.userId,
+          viewerRole: widget.requesterRole,
           statuses: statuses,
           historyMode: historyMode,
           onOpenVisit: _openVisit,
@@ -157,6 +182,7 @@ class _ClientVisitDashboardScreenState
       step: 0,
       service: _service,
       reviewerMode: canVerify,
+      viewerRole: widget.requesterRole,
     );
   }
 
@@ -195,153 +221,21 @@ class _ClientVisitDashboardScreenState
     ),
   };
 
-  Future<void> _openEmployeeTravel(ClientVisit visit) async {
-    while (mounted) {
-      final opened = await openClientVisitNavigation(visit);
-      if (!mounted) return;
-      if (!opened) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'No compatible map app was found for this destination.',
-            ),
-          ),
-        );
-        return;
-      }
-
-      final action = await showModalBottomSheet<String>(
-        context: context,
-        isDismissible: true,
-        enableDrag: true,
-        showDragHandle: true,
-        builder: (sheetContext) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  visit.clientName,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Choose your current travel status.',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: ThemeConfig.loginButtonColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: () => Navigator.pop(sheetContext, 'reached'),
-                  icon: const Icon(Icons.flag_rounded),
-                  label: const Text('REACHED DESTINATION'),
-                ),
-                const SizedBox(height: 10),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: ThemeConfig.loginButtonColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: () => Navigator.pop(sheetContext, 'continue'),
-                  icon: const Icon(Icons.navigation_rounded),
-                  label: const Text('STILL CONTINUING'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-
-      if (action == 'continue') continue;
-      if (action == 'reached') {
-        await _markReachedDestination(visit);
-      }
-      return;
-    }
-  }
-
-  Future<void> _markReachedDestination(ClientVisit visit) async {
-    try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        throw Exception('Turn on location services before marking arrival.');
-      }
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        throw Exception('Location permission is required to mark arrival.');
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
-      );
-      await _service
-          .action(widget.userId, visit.id, 'reached-client', <String, double>{
-            'latitude': position.latitude,
-            'longitude': position.longitude,
-            'accuracy': position.accuracy,
-            'speed': position.speed,
-          });
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ClientVisitCheckInScreen(
-            userId: widget.userId,
-            visitId: visit.id,
-            service: _service,
-          ),
-        ),
-      );
-      await _load();
-      await _loadDownloads();
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$error'.replaceFirst('Exception: ', ''))),
-        );
-      }
-    }
-  }
-
   Future<void> _openVisit(ClientVisit visit) async {
     if (visit.status == 'travelling' && visit.reachedClientAt == null) {
       if (!widget.readOnlyMode && visit.employeeUserId == widget.userId) {
-        await _openEmployeeTravel(visit);
-      } else {
-        final opened = await openClientVisitNavigation(visit);
-        if (mounted && !opened) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'No compatible map app was found for this destination.',
-              ),
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ClientVisitTravelProgressScreen(
+              userId: widget.userId,
+              visitId: visit.id,
+              service: _service,
             ),
-          );
-        }
+          ),
+        );
+        await _load();
+        return;
       }
-      return;
     }
 
     late final Widget screen;
@@ -376,9 +270,19 @@ class _ClientVisitDashboardScreenState
     return ClientVisitTheme(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Visit Dashboard'),
+          title: Text(widget.title),
           centerTitle: true,
           actions: [
+            if (widget.roleLabel.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Center(
+                  child: Text(
+                    widget.roleLabel,
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ),
+              ),
             IconButton(
               icon: const Icon(Icons.refresh_rounded),
               onPressed: _load,
@@ -416,10 +320,7 @@ class _ClientVisitDashboardScreenState
                       _openStatusList('Upcoming Visits', const {'approved'}),
                   onPendingApproval: () =>
                       _openStatusList('Pending Approval', const {'pending'}),
-                  onHistory: () => _openStatusList('Visit History', const {
-                    'completed',
-                    'rejected',
-                  }, historyMode: true),
+                  onHistory: () => _openHistory(),
                   downloadCount: _downloadCount,
                   onDownloads: _openDownloads,
                 ),
@@ -482,6 +383,7 @@ class _ClientVisitDashboardScreenState
 class _ClientVisitStatusListScreen extends StatefulWidget {
   final String title;
   final String userId;
+  final String viewerRole;
   final Set<String> statuses;
   final bool historyMode;
   final Future<void> Function(ClientVisit visit) onOpenVisit;
@@ -489,6 +391,7 @@ class _ClientVisitStatusListScreen extends StatefulWidget {
   const _ClientVisitStatusListScreen({
     required this.title,
     required this.userId,
+    required this.viewerRole,
     required this.statuses,
     this.historyMode = false,
     required this.onOpenVisit,
@@ -531,11 +434,11 @@ class _ClientVisitStatusListScreenState
   }
 
   bool _isHistoryVisit(ClientVisit visit) {
-    final ownVisit = visit.employeeUserId == widget.userId;
-    if (ownVisit) return !const {'draft', 'pending'}.contains(visit.status);
-    return visit.managerUserId == widget.userId &&
-        !ownVisit &&
-        !const {'draft', 'pending'}.contains(visit.status);
+    if (!const {'completed', 'rejected'}.contains(visit.status)) return false;
+    final role = widget.viewerRole.trim().toLowerCase();
+    if (const {'hr', 'ceo', 'md', 'superadmin'}.contains(role)) return true;
+    return visit.employeeUserId == widget.userId ||
+        visit.managerUserId == widget.userId;
   }
 
   @override
@@ -577,6 +480,22 @@ class _ClientVisitStatusListScreenState
   );
 
   List<Widget> _historySections(List<ClientVisit> visits) {
+    final role = widget.viewerRole.trim().toLowerCase();
+    final organizationHistory = const {
+      'hr',
+      'ceo',
+      'md',
+      'superadmin',
+    }.contains(role);
+    if (organizationHistory) {
+      return [
+        _HistoryHeader(title: 'Completed Visit History', count: visits.length),
+        if (visits.isEmpty)
+          const _HistoryEmpty('No completed client visits yet.')
+        else
+          ...visits.map(_visitCard),
+      ];
+    }
     final own = visits
         .where((visit) => visit.employeeUserId == widget.userId)
         .toList();
@@ -607,6 +526,189 @@ class _ClientVisitStatusListScreenState
   );
 }
 
+class ClientVisitHistoryScreen extends StatelessWidget {
+  final String userId;
+  final String viewerRole;
+  final int initialTab;
+  final Future<void> Function(ClientVisit visit) onOpenVisit;
+
+  const ClientVisitHistoryScreen({
+    super.key,
+    required this.userId,
+    required this.viewerRole,
+    required this.onOpenVisit,
+    this.initialTab = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) => DefaultTabController(
+    length: 2,
+    initialIndex: initialTab,
+    child: ClientVisitTheme(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Visit History'),
+          centerTitle: true,
+          bottom: const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.calendar_month_rounded), text: 'History'),
+              Tab(
+                icon: Icon(Icons.folder_copy_rounded),
+                text: 'Downloaded Documents',
+              ),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _CalendarVisitHistoryTab(
+              userId: userId,
+              viewerRole: viewerRole,
+              onOpenVisit: onOpenVisit,
+            ),
+            ClientVisitDownloadedFilesScreen(userId: userId, embedded: true),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _CalendarVisitHistoryTab extends StatefulWidget {
+  final String userId;
+  final String viewerRole;
+  final Future<void> Function(ClientVisit visit) onOpenVisit;
+
+  const _CalendarVisitHistoryTab({
+    required this.userId,
+    required this.viewerRole,
+    required this.onOpenVisit,
+  });
+
+  @override
+  State<_CalendarVisitHistoryTab> createState() =>
+      _CalendarVisitHistoryTabState();
+}
+
+class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
+  final _service = ClientVisitService();
+  List<ClientVisit>? _visits;
+  DateTime? _selectedDate;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final result = await _service.fetchVisits(widget.userId);
+      final visits = result.visits.where(_isVisibleHistoryVisit).toList()
+        ..sort((a, b) => b.scheduledAt.compareTo(a.scheduledAt));
+      if (!mounted) return;
+      setState(() {
+        _visits = visits;
+        _selectedDate ??= visits.isEmpty
+            ? DateTime.now()
+            : _dateOnly(visits.first.scheduledAt);
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = '$error'.replaceFirst('Exception: ', ''));
+      }
+    }
+  }
+
+  bool _isVisibleHistoryVisit(ClientVisit visit) {
+    if (!const {'completed', 'rejected'}.contains(visit.status)) return false;
+    final role = widget.viewerRole.trim().toLowerCase();
+    if (const {
+      'hr',
+      'admin',
+      'superadmin',
+      'ceo',
+      'md',
+      'director',
+    }.contains(role)) {
+      return true;
+    }
+    return visit.employeeUserId == widget.userId ||
+        visit.managerUserId == widget.userId;
+  }
+
+  DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
+
+  bool _sameDate(DateTime left, DateTime right) =>
+      left.year == right.year &&
+      left.month == right.month &&
+      left.day == right.day;
+
+  @override
+  Widget build(BuildContext context) {
+    final visits = _visits;
+    if (_error != null) {
+      return _Message(
+        icon: Icons.cloud_off_rounded,
+        text: _error!,
+        onRetry: _load,
+      );
+    }
+    if (visits == null || _selectedDate == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final filtered = visits
+        .where((visit) => _sameDate(visit.scheduledAt, _selectedDate!))
+        .toList();
+    final selectedLabel =
+        '${_selectedDate!.day.toString().padLeft(2, '0')}/'
+        '${_selectedDate!.month.toString().padLeft(2, '0')}/'
+        '${_selectedDate!.year}';
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        children: [
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: CalendarDatePicker(
+              key: ValueKey(selectedLabel),
+              initialDate: _selectedDate!,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now().add(const Duration(days: 730)),
+              onDateChanged: (date) =>
+                  setState(() => _selectedDate = _dateOnly(date)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _HistoryHeader(
+            title: 'Visits on $selectedLabel',
+            count: filtered.length,
+          ),
+          const SizedBox(height: 8),
+          if (filtered.isEmpty)
+            const _HistoryEmpty('No completed visits on this date.')
+          else
+            ...filtered.map(
+              (visit) => _VisitCard(
+                visit: visit,
+                historyViewerUserId: widget.userId,
+                onTap: () async {
+                  await widget.onOpenVisit(visit);
+                  await _load();
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class ClientVisitModuleScreen extends StatelessWidget {
   final String userId;
   final String roleLabel;
@@ -632,36 +734,17 @@ class ClientVisitModuleScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Client Visits'),
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 190),
-              child: Text(
-                roleLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-            ),
-          ),
-        ),
-      ],
-    ),
-    body: ClientVisitDashboardScreen(
-      userId: userId,
-      reviewerMode: reviewerMode,
-      readOnlyMode: readOnlyMode,
-      allowCreate: allowCreate,
-      assignedApprovalsOnly: assignedApprovalsOnly,
-      allowVerification: allowVerification,
-      requesterRole: requesterRole,
-      initialVisitId: initialVisitId,
-    ),
+  Widget build(BuildContext context) => ClientVisitDashboardScreen(
+    userId: userId,
+    title: 'Client Visits',
+    roleLabel: roleLabel,
+    reviewerMode: reviewerMode,
+    readOnlyMode: readOnlyMode,
+    allowCreate: allowCreate,
+    assignedApprovalsOnly: assignedApprovalsOnly,
+    allowVerification: allowVerification,
+    requesterRole: requesterRole,
+    initialVisitId: initialVisitId,
   );
 }
 
@@ -699,10 +782,18 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   String? _tlLoadError;
   bool _saving = false;
 
+  bool get _selfApprovingRole => const {
+    'admin',
+    'superadmin',
+    'ceo',
+    'md',
+    'director',
+  }.contains(widget.requesterRole.trim().toLowerCase());
+
   @override
   void initState() {
     super.initState();
-    _loadReportingTls();
+    if (!_selfApprovingRole) _loadReportingTls();
   }
 
   Future<void> _loadReportingTls() async {
@@ -757,7 +848,13 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   ///   "11.686478,78.120482"
   ///   Google Maps share URL containing @lat,lng
   static ({double lat, double lng})? _parseCoords(String raw) {
-    final text = raw.trim();
+    var text = raw.trim();
+    try {
+      text = Uri.decodeFull(text);
+    } on FormatException {
+      // Continue with the original value when a shared page contains an
+      // incomplete percent-escape sequence.
+    }
     if (text.isEmpty) return null;
 
     // Google Maps URL: contains @lat,lng,zoom or ?q=lat,lng
@@ -767,6 +864,31 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     if (urlLatLng != null) {
       final lat = double.tryParse(urlLatLng.group(1)!);
       final lng = double.tryParse(urlLatLng.group(2)!);
+      if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
+        return (lat: lat, lng: lng);
+      }
+    }
+
+    // Google Maps place links often store their exact pin as !3dLAT!4dLNG.
+    final dataLatLng = RegExp(
+      r'!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)',
+    ).firstMatch(text);
+    if (dataLatLng != null) {
+      final lat = double.tryParse(dataLatLng.group(1)!);
+      final lng = double.tryParse(dataLatLng.group(2)!);
+      if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
+        return (lat: lat, lng: lng);
+      }
+    }
+
+    // Direction/share links can carry q, query, destination, ll or center.
+    final queryLatLng = RegExp(
+      r'(?:[?&](?:q|query|destination|ll|center)=)(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (queryLatLng != null) {
+      final lat = double.tryParse(queryLatLng.group(1)!);
+      final lng = double.tryParse(queryLatLng.group(2)!);
       if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
         return (lat: lat, lng: lng);
       }
@@ -805,11 +927,8 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   String? _validateCoords(String? value) {
     if ((value ?? '').trim().isEmpty) return null; // optional field
     final text = value!.trim();
-    // Accept shortened Google Maps links as valid input
-    if (RegExp(
-      r'https?://(maps\.app\.goo\.gl|goo\.gl/maps)/\S+',
-      caseSensitive: false,
-    ).hasMatch(text)) {
+    // Accept Google Maps links; exact coordinates are resolved on submit.
+    if (_mapsUrl(text) != null) {
       return null;
     }
     if (_parseCoords(text) == null) {
@@ -824,8 +943,10 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     String url,
   ) async {
     try {
+      final extractedUrl = _mapsUrl(url);
+      if (extractedUrl == null) return null;
       // Follow the redirect chain (up to 5 hops) without downloading the body
-      String current = url;
+      String current = extractedUrl;
       for (int i = 0; i < 5; i++) {
         final request = http.Request('HEAD', Uri.parse(current))
           ..followRedirects = false;
@@ -834,7 +955,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
         );
         final location = response.headers['location'];
         if (location == null) break;
-        current = location;
+        current = Uri.parse(current).resolve(location).toString();
         // Try to extract coords from this URL
         final coords = _parseCoords(current);
         if (coords != null) return coords;
@@ -844,7 +965,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
           .get(Uri.parse(current), headers: {'User-Agent': 'HRMS-Bitbyte/1.0'})
           .timeout(const Duration(seconds: 8));
       // Look for @lat,lng pattern in the response body or final URL
-      final bodyCoords = _parseCoords(resp.request?.url.toString() ?? '');
+      final bodyCoords =
+          _parseCoords(resp.request?.url.toString() ?? '') ??
+          _parseCoords(resp.body);
       if (bodyCoords != null) return bodyCoords;
       // Scan the HTML body for coordinates
       final match = RegExp(
@@ -859,6 +982,14 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       }
     } catch (_) {}
     return null;
+  }
+
+  static String? _mapsUrl(String text) {
+    final match = RegExp(
+      r'https?://(?:(?:maps\.app\.goo\.gl|goo\.gl/maps)(?:/|\?|$)|(?:www\.)?google\.[a-z.]+/maps(?:/|\?|$)|maps\.google\.[a-z.]+(?:/|\?|$))[^\s]*',
+      caseSensitive: false,
+    ).firstMatch(text.trim());
+    return match?.group(0)?.replaceAll(RegExp(r'[),.;]+$'), '');
   }
 
   String? _mobileNumber(String? value) {
@@ -877,12 +1008,13 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       final rawLocation = _locationCoords.text.trim();
       // Resolve coordinates: parse directly, or follow short URL redirect
       var coords = _parseCoords(rawLocation);
-      if (coords == null &&
-          RegExp(
-            r'https?://(maps\.app\.goo\.gl|goo\.gl/maps)/\S+',
-            caseSensitive: false,
-          ).hasMatch(rawLocation)) {
+      if (coords == null && _mapsUrl(rawLocation) != null) {
         coords = await _resolveShortUrl(rawLocation);
+      }
+      if (rawLocation.isNotEmpty && coords == null) {
+        throw Exception(
+          'Could not locate this shared Maps link. Check the link and try again.',
+        );
       }
       await widget.service.create(widget.userId, {
         'client_name': _client.text.trim(),
@@ -898,7 +1030,8 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
         'travel_mode': _travelMode,
         'purpose': _purpose.text.trim(),
         'notes': _notes.text.trim(),
-        'manager_user_id': _selectedManagerId ?? _manager.text.trim(),
+        if (!_selfApprovingRole)
+          'manager_user_id': _selectedManagerId ?? _manager.text.trim(),
         'submit': submit,
       });
       if (mounted) {
@@ -928,7 +1061,11 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  submit ? 'Submitted Successfully' : 'Draft Saved',
+                  submit
+                      ? (_selfApprovingRole
+                            ? 'Visit Created Successfully'
+                            : 'Submitted Successfully')
+                      : 'Draft Saved',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -938,7 +1075,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                 const SizedBox(height: 8),
                 Text(
                   submit
-                      ? 'Your visit request has been submitted for approval.'
+                      ? (_selfApprovingRole
+                            ? 'Your visit is approved and ready for the scheduled flow.'
+                            : 'Your visit request has been submitted for approval.')
                       : 'Your visit request has been saved as a draft.',
                   style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   textAlign: TextAlign.center,
@@ -1006,7 +1145,11 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                             Text('Saving…'),
                           ],
                         )
-                      : const Text('Submit request'),
+                      : Text(
+                          _selfApprovingRole
+                              ? 'Create visit'
+                              : 'Submit request',
+                        ),
                 ),
               ),
             ],
@@ -1157,7 +1300,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   validator: _required,
                   decoration: const InputDecoration(labelText: 'Purpose'),
                 ),
-                if (_visitApprovers.isNotEmpty)
+                if (!_selfApprovingRole && _visitApprovers.isNotEmpty)
                   DropdownButtonFormField<String>(
                     initialValue: _selectedManagerId,
                     validator: _required,
@@ -1180,7 +1323,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                     onChanged: (value) =>
                         setState(() => _selectedManagerId = value),
                   )
-                else
+                else if (!_selfApprovingRole)
                   TextFormField(
                     controller: _manager,
                     validator: _required,
@@ -1963,7 +2106,7 @@ class _Summary extends StatelessWidget {
       const SizedBox(height: 8),
       _wideBox(
         context,
-        'Downloaded Files',
+        'Downloaded Documents',
         downloadCount,
         ClientVisitColors.blue,
         onDownloads,
@@ -2143,13 +2286,15 @@ class _VisitCard extends StatelessWidget {
 
   Color get _statusColor => employeeStatusColor(visit.status);
 
-  String get _statusLabel => _label(visit.status);
+  String get _statusLabel =>
+      visit.isReadyToStart ? 'Start to Visit' : _label(visit.status);
 
   String get _nextActionLabel => switch (visit.status) {
     'draft' => 'Complete request',
     'pending' => 'View request',
-    'approved' => 'Continue visit',
-    'travelling' => 'Open navigation',
+    'approved' =>
+      visit.isReadyToStart ? 'Start to Visit' : 'View approved visit',
+    'travelling' => 'View travel options',
     'in_progress' => 'Continue client visit',
     'completed' => 'View visit summary',
     'rejected' => 'Review requested changes',

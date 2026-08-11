@@ -144,8 +144,9 @@ class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
       final value => value,
     };
     final isApprover = role == 'tl' || role == 'hr' || role == 'ceo';
-    final isReadOnly = role == 'md' || role == 'director';
-    final visitId = int.tryParse('${notification['reference_id'] ?? ''}');
+    final isReadOnly = role == 'superadmin';
+    final reference = '${notification['reference_id'] ?? ''}';
+    final visitId = int.tryParse(reference.split(':').first);
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ClientVisitModuleScreen(
@@ -154,7 +155,15 @@ class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
           requesterRole: role,
           reviewerMode: isApprover || role == 'admin',
           readOnlyMode: isReadOnly,
-          allowCreate: role == 'employee' || role == 'tl' || role == 'hr',
+          allowCreate: const {
+            'employee',
+            'tl',
+            'hr',
+            'admin',
+            'ceo',
+            'md',
+            'director',
+          }.contains(role),
           assignedApprovalsOnly: isApprover,
           allowVerification: role == 'tl' || role == 'hr' || role == 'admin',
           initialVisitId: visitId,
@@ -170,6 +179,7 @@ class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
     'md' => 'Managing Director',
     'director' => 'Executive Director',
     'admin' || 'administrator' => 'Admin',
+    'superadmin' => 'Super Admin',
     _ => 'Employee',
   };
 
@@ -269,12 +279,39 @@ _NotificationPresentation? _notificationPresentation(Map notification) {
   ].join(' ').toLowerCase();
 
   if (module == 'client_visit' || module == 'client-visit') {
-    return const _NotificationPresentation(
-      fallbackTitle: 'Client Visit Approval Required',
-      fallbackMessage: 'A client visit request is waiting for your approval.',
-      icon: Icons.approval_rounded,
-      accent: Color(0xFF2F91FF),
-      buttonLabel: 'View request',
+    final reminder =
+        searchable.contains('client visit in 2 hours') ||
+        searchable.contains('start to visit in 1 hour') ||
+        searchable.contains('start to visit is now available');
+    final completed =
+        searchable.contains('completed') ||
+        searchable.contains('history ready');
+    return _NotificationPresentation(
+      fallbackTitle: reminder
+          ? 'Upcoming Client Visit'
+          : completed
+          ? 'Client Visit History Ready'
+          : 'Client Visit Approval Required',
+      fallbackMessage: reminder
+          ? 'Your approved client visit is approaching.'
+          : completed
+          ? 'The completed visit details and report are ready for review.'
+          : 'A client visit request is waiting for your approval.',
+      icon: reminder
+          ? Icons.schedule_rounded
+          : completed
+          ? Icons.history_rounded
+          : Icons.approval_rounded,
+      accent: reminder
+          ? const Color(0xFFFFA000)
+          : completed
+          ? const Color(0xFF16A34A)
+          : const Color(0xFF2F91FF),
+      buttonLabel: reminder
+          ? 'View visit'
+          : completed
+          ? 'View history'
+          : 'View request',
     );
   }
 

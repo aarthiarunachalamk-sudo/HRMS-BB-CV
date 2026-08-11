@@ -110,10 +110,10 @@ class _ClientVisitTravelProgressScreenState
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAndOpen());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  Future<void> _loadAndOpen() async {
+  Future<void> _load() async {
     try {
       final visit = await widget.service.fetchVisit(
         widget.userId,
@@ -124,7 +124,6 @@ class _ClientVisitTravelProgressScreenState
         _visit = visit;
         _error = null;
       });
-      await _openNavigation();
     } catch (error) {
       if (mounted) {
         setState(() => _error = '$error'.replaceFirst('Exception: ', ''));
@@ -236,7 +235,7 @@ class _ClientVisitTravelProgressScreenState
                     Text(_error!, textAlign: TextAlign.center),
                     const SizedBox(height: 12),
                     OutlinedButton(
-                      onPressed: _loadAndOpen,
+                      onPressed: _load,
                       child: const Text('Retry'),
                     ),
                   ],
@@ -452,6 +451,7 @@ class ClientVisitReadOnlyFlowScreen extends StatelessWidget {
   final int step;
   final ClientVisitService service;
   final bool reviewerMode;
+  final String viewerRole;
 
   const ClientVisitReadOnlyFlowScreen({
     super.key,
@@ -460,6 +460,7 @@ class ClientVisitReadOnlyFlowScreen extends StatelessWidget {
     required this.step,
     required this.service,
     this.reviewerMode = false,
+    this.viewerRole = '',
   });
 
   @override
@@ -470,6 +471,7 @@ class ClientVisitReadOnlyFlowScreen extends StatelessWidget {
     service: service,
     readOnlyMode: true,
     reviewerMode: reviewerMode,
+    viewerRole: viewerRole,
   );
 }
 
@@ -480,6 +482,7 @@ class _VisitFlowPage extends StatefulWidget {
   final ClientVisitService service;
   final bool reviewerMode;
   final bool readOnlyMode;
+  final String viewerRole;
   const _VisitFlowPage({
     required this.step,
     required this.userId,
@@ -487,6 +490,7 @@ class _VisitFlowPage extends StatefulWidget {
     required this.service,
     this.reviewerMode = false,
     this.readOnlyMode = false,
+    this.viewerRole = '',
   });
   @override
   State<_VisitFlowPage> createState() => _VisitFlowPageState();
@@ -1430,6 +1434,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   }
 
   Future<void> _downloadReport(ClientVisit visit) async {
+    if (visit.status != 'completed') {
+      _message('The report is available after the visit is completed.');
+      return;
+    }
     await _run(() async {
       ClientVisit reportVisit;
       try {
@@ -3257,8 +3265,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     4 => [
       if (visit.status == 'approved') ...[
         _stageBadge(
-          _approvalBadgeLabel(visit.approvedByRole),
-          ClientVisitColors.green,
+          visit.isReadyToStart
+              ? 'START TO VISIT'
+              : _approvalBadgeLabel(visit.approvedByRole),
+          visit.isReadyToStart
+              ? ClientVisitColors.blue
+              : ClientVisitColors.green,
         ),
         const SizedBox(height: 12),
       ],
@@ -3271,16 +3283,32 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       if (widget.readOnlyMode)
         _monitoringNotice()
       else if (visit.status == 'approved')
-        FilledButton.icon(
-          onPressed: () => _replace(
-            ClientVisitOfficeCheckoutScreen(
-              userId: widget.userId,
-              visitId: widget.visitId,
-              service: widget.service,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!visit.isReadyToStart) ...[
+              _statusNotice(
+                visit,
+                message:
+                    'Approved. Start to Visit will be available at '
+                    '${_dateTime(visit.startVisitAt)} (one hour before the visit).',
+              ),
+              const SizedBox(height: 12),
+            ],
+            FilledButton.icon(
+              onPressed: visit.isReadyToStart
+                  ? () => _replace(
+                      ClientVisitOfficeCheckoutScreen(
+                        userId: widget.userId,
+                        visitId: widget.visitId,
+                        service: widget.service,
+                      ),
+                    )
+                  : null,
+              icon: const Icon(Icons.directions_car),
+              label: Text(visit.isReadyToStart ? 'Start to Visit' : 'Approved'),
             ),
-          ),
-          icon: const Icon(Icons.directions_car),
-          label: const Text('Start from office'),
+          ],
         )
       else
         _statusNotice(visit),
@@ -4848,6 +4876,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
     final isActive =
         visit.status == 'travelling' || visit.status == 'in_progress';
+    final canViewLiveTracking = widget.viewerRole.trim().toLowerCase() == 'tl';
     final hasRoute =
         visit.travelRoute.isNotEmpty ||
         (visit.officeCheckOutLatitude != null &&
@@ -4865,7 +4894,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       const SizedBox(height: 14),
 
       // ── 2. LIVE MAP (travelling/in_progress) ──────────────────────
-      if (isActive) ...[
+      if (isActive && canViewLiveTracking) ...[
         _saSection(
           icon: Icons.gps_fixed_rounded,
           color: const Color(0xFF1A73E8),
@@ -4875,6 +4904,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             userId: widget.userId,
             service: widget.service,
             visit: visit,
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+
+      if (isActive && !canViewLiveTracking) ...[
+        _saSection(
+          icon: Icons.lock_clock_rounded,
+          color: const Color(0xFF64748B),
+          title: 'Visit In Progress',
+          child: const Text(
+            'Live tracking is available to the assigned Team Lead. The full '
+            'route, evidence and downloadable report will be available here '
+            'after the visit is completed.',
           ),
         ),
         const SizedBox(height: 12),
@@ -5271,14 +5314,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ],
 
       // ── 14. Download report ───────────────────────────────────────
-      SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: _working ? null : () => _downloadReport(visit),
-          icon: const Icon(Icons.download_rounded),
-          label: const Text('Download Report'),
+      if (hasCompleted)
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _working ? null : () => _downloadReport(visit),
+            icon: const Icon(Icons.download_rounded),
+            label: const Text('Download Completed Visit Report'),
+          ),
         ),
-      ),
     ];
   }
 
@@ -5388,7 +5432,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       ],
     ),
   );
-  Widget _statusNotice(ClientVisit visit) => EmployeeCard(
+  Widget _statusNotice(ClientVisit visit, {String? message}) => EmployeeCard(
     child: Column(
       children: [
         Icon(
@@ -5397,9 +5441,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          visit.status == 'rejected'
-              ? visit.approvalComment
-              : 'Waiting for TL approval',
+          message ??
+              (visit.status == 'rejected'
+                  ? visit.approvalComment
+                  : 'Waiting for TL approval'),
           textAlign: TextAlign.center,
         ),
       ],

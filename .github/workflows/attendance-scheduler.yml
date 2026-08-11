@@ -1,14 +1,10 @@
-name: Attendance scheduler
+name: HRMS reminder scheduler
 
 on:
   schedule:
-    # GitHub cron uses UTC. These are 09:00, 09:10, 09:20 and 09:30 IST.
-    - cron: '30,40,50 3 * * *'
-    - cron: '0 4 * * *'
-    # Approved second-half leave auto checkout: 13:00 IST.
-    - cron: '30 7 * * *'
-    # Normal auto checkout: 18:30 IST.
-    - cron: '0 13 * * *'
+    # Every ten minutes from 05:30 to 22:29 IST. Commands deduplicate
+    # reminders and internally apply their own attendance time windows.
+    - cron: '*/10 0-16 * * *'
   workflow_dispatch:
 
 permissions:
@@ -29,11 +25,9 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
     steps:
-      # Scheduled workflows are defined on the default branch, but the HRMS
-      # application is currently deployed from develop2.
       - uses: actions/checkout@v4
         with:
-          ref: develop2
+          ref: main
 
       - uses: actions/setup-python@v5
         with:
@@ -45,4 +39,6 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Process reminders and automatic checkouts
-        run: python manage.py auto_checkout_attendance
+        run: |
+          python manage.py auto_checkout_attendance
+          python manage.py send_client_visit_reminders

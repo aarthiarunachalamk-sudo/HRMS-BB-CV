@@ -428,10 +428,10 @@ class _CeoDashboardState extends State<CeoDashboard>
                         _openPage(
                           ClientVisitModuleScreen(
                             userId: widget.userId,
-                            roleLabel: 'CEO · Approvals',
+                            roleLabel: 'CEO · Client Visits',
                             requesterRole: 'ceo',
                             reviewerMode: true,
-                            allowCreate: false,
+                            allowCreate: true,
                             assignedApprovalsOnly: true,
                             allowVerification: false,
                           ),
@@ -723,7 +723,7 @@ class _CeoDashboardState extends State<CeoDashboard>
         userId: widget.userId,
         reviewerMode: true,
         requesterRole: 'ceo',
-        allowCreate: false,
+        allowCreate: true,
         assignedApprovalsOnly: true,
         allowVerification: false,
       ),
@@ -731,10 +731,10 @@ class _CeoDashboardState extends State<CeoDashboard>
         onClientVisits: () => _openPage(
           ClientVisitModuleScreen(
             userId: widget.userId,
-            roleLabel: 'CEO · Approvals',
+            roleLabel: 'CEO · Client Visits',
             requesterRole: 'ceo',
             reviewerMode: true,
-            allowCreate: false,
+            allowCreate: true,
             assignedApprovalsOnly: true,
             allowVerification: false,
           ),
@@ -12598,10 +12598,10 @@ class _NotificationsDynamicPageState extends State<_NotificationsDynamicPage> {
       MaterialPageRoute(
         builder: (_) => ClientVisitModuleScreen(
           userId: widget.userId,
-          roleLabel: 'CEO · Approval',
+          roleLabel: 'CEO · Client Visits',
           requesterRole: 'ceo',
           reviewerMode: true,
-          allowCreate: false,
+          allowCreate: true,
           assignedApprovalsOnly: true,
           allowVerification: false,
           initialVisitId: int.tryParse('${notification['reference_id'] ?? ''}'),

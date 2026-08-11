@@ -1,5 +1,5 @@
 from decimal import Decimal, InvalidOperation
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as datetime_timezone
 import hashlib
 import json
 import logging
@@ -33,7 +33,10 @@ from .storage import upload_client_visit_file
 
 
 SUPERVISOR_ROLES = {'manager', 'tl', 'hr', 'admin', 'superadmin'}
+COMPLETION_HISTORY_ROLES = {'hr', 'ceo', 'md', 'superadmin'}
+SELF_APPROVING_VISIT_ROLES = {'admin', 'superadmin', 'ceo', 'md', 'director'}
 DAILY_VISIT_LIMIT = 5   # maximum visits any employee may schedule on a single date
+IST = datetime_timezone(timedelta(hours=5, minutes=30))
 logger = logging.getLogger(__name__)
 EDITABLE_FIELDS = (
     'client_name', 'contact_person', 'contact_phone', 'address', 'latitude',
@@ -50,6 +53,24 @@ def _actor(request):
 
 def _error(message, status=400):
     return Response({'success': False, 'message': message}, status=status)
+
+
+def _visit_start_at(visit):
+    if isinstance(visit.scheduled_date, str) or isinstance(
+        visit.scheduled_time,
+        str,
+    ):
+        scheduled_at = datetime.fromisoformat(
+            f'{visit.scheduled_date}T{visit.scheduled_time}'
+        )
+        scheduled_at = scheduled_at.replace(tzinfo=IST)
+    else:
+        scheduled_at = datetime.combine(
+            visit.scheduled_date,
+            visit.scheduled_time,
+            tzinfo=IST,
+        )
+    return scheduled_at - timedelta(hours=1)
 
 
 def _is_camera_image(upload):
@@ -280,6 +301,48 @@ def _notify_visit_progress(visit, *, title, message, notification_type='info', i
         )
 
 
+def _notify_visit_completed(visit):
+    """Publish one completion audit event to operational leadership.
+
+    A reporting TL still receives a direct notification for an employee visit.
+    HR receives the role notification even when a different HR user approved a
+    TL's request, so the completed visit always enters HR history. Executive
+    roles receive the same read-only history/report event.
+    """
+    title = 'Client Visit Completed - History Ready'
+    message = (
+        f'{visit.employee_name} completed {visit.visit_id} at '
+        f'{visit.client_name}. Visit details and the downloadable report are '
+        f'now available in Client Visit History.'
+    )
+    assigned_role = ''
+    if visit.manager_user_id:
+        assigned_role = (
+            User.objects.filter(
+                user_id=visit.manager_user_id,
+                is_active=True,
+            ).values_list('role', flat=True).first()
+            or ''
+        )
+        if assigned_role not in COMPLETION_HISTORY_ROLES:
+            _notify(
+                user_id=visit.manager_user_id,
+                title=title,
+                message=message,
+                notification_type='success',
+                visit=visit,
+            )
+
+    for dashboard_role in COMPLETION_HISTORY_ROLES:
+        _notify(
+            role=dashboard_role,
+            title=title,
+            message=message,
+            notification_type='success',
+            visit=visit,
+        )
+
+
 def _can_view(visit, user_id, user):
     if visit.employee_user_id == user_id or visit.manager_user_id == user_id:
         return True
@@ -295,7 +358,7 @@ def _attachment_payload(item):
     }
 
 
-def _visit_payload(item, detailed=True, approver_lookup=None):
+def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
     approver = None
     if item.approved_by and approver_lookup is not None:
         approver = approver_lookup.get(item.approved_by)
@@ -315,6 +378,16 @@ def _visit_payload(item, detailed=True, approver_lookup=None):
         employee_photo_url = _passport_photo_for_email(emp_user.email) if emp_user else ''
     except Exception:
         employee_photo_url = ''
+    # Active GPS samples are operational data for the travelling employee and
+    # their TL. Leadership receives the retained route after completion as part
+    # of the auditable/downloadable visit history.
+    include_route = (
+        viewer is None
+        or item.status == 'completed'
+        or item.employee_user_id == viewer.user_id
+        or viewer.role == 'tl'
+    )
+    start_visit_at = _visit_start_at(item)
     payload = {
         'id': item.id, 'visit_id': item.visit_id, 'employee_user_id': item.employee_user_id,
         'employee_name': item.employee_name, 'employee_photo_url': employee_photo_url,
@@ -327,6 +400,10 @@ def _visit_payload(item, detailed=True, approver_lookup=None):
         'scheduled_time': item.scheduled_time.strftime('%H:%M') if hasattr(item.scheduled_time, 'strftime') else str(item.scheduled_time)[:5],
         'duration_minutes': item.duration_minutes, 'travel_mode': item.travel_mode,
         'purpose': item.purpose, 'notes': item.notes, 'status': item.status,
+        'start_visit_at': start_visit_at.isoformat(),
+        'can_start_visit': (
+            item.status == 'approved' and timezone.now() >= start_visit_at
+        ),
         'approval_comment': item.approval_comment, 'approved_by': item.approved_by,
         'approved_by_name': approver_name, 'approved_by_role': approver_role,
         'approved_at': item.approved_at.isoformat() if item.approved_at else None,
@@ -336,7 +413,7 @@ def _visit_payload(item, detailed=True, approver_lookup=None):
         'reached_client_at': item.reached_client_at.isoformat() if item.reached_client_at else None,
         'reached_client_latitude': float(item.reached_client_latitude) if item.reached_client_latitude is not None else None,
         'reached_client_longitude': float(item.reached_client_longitude) if item.reached_client_longitude is not None else None,
-        'travel_route': item.travel_route,
+        'travel_route': item.travel_route if include_route else [],
         'start_odometer': float(item.start_odometer) if item.start_odometer is not None else None,
         'check_in_at': item.check_in_at.isoformat() if item.check_in_at else None,
         'check_out_at': item.check_out_at.isoformat() if item.check_out_at else None,
@@ -409,7 +486,7 @@ def visit_list_create(request):
             'success': True,
             'summary': counts,
             'visits': [
-                _visit_payload(item, False, approver_lookup)
+                _visit_payload(item, False, approver_lookup, viewer=user)
                 for item in items
             ],
         })
@@ -437,7 +514,16 @@ def visit_list_create(request):
     visit.contact_phone = contact_phone
     if reporting_manager:
         visit.manager_user_id = reporting_manager.user_id
-    visit.status = 'pending' if str(request.data.get('submit') or '').lower() in {'1', 'true', 'yes'} else 'draft'
+    submitted = str(request.data.get('submit') or '').lower() in {
+        '1', 'true', 'yes',
+    }
+    if submitted and user.role in SELF_APPROVING_VISIT_ROLES:
+        visit.status = 'approved'
+        visit.approved_by = user_id
+        visit.approved_at = timezone.now()
+        visit.manager_user_id = ''
+    else:
+        visit.status = 'pending' if submitted else 'draft'
 
     # Enforce the daily visit limit — count all non-rejected visits for this
     # employee on the requested date.
@@ -472,7 +558,10 @@ def visit_detail(request, pk):
     if not user or not _can_view(visit, user_id, user):
         return _error('You cannot access this visit.', 403)
     if request.method == 'GET':
-        return Response({'success': True, 'visit': _visit_payload(visit)})
+        return Response({
+            'success': True,
+            'visit': _visit_payload(visit, viewer=user),
+        })
     if visit.employee_user_id != user_id or visit.status not in {'draft', 'rejected'}:
         return _error('Only the employee can edit a draft or rejected visit.', 409)
     contact_phone = None
@@ -497,13 +586,19 @@ def visit_detail(request, pk):
         visit.manager_user_id = reporting_manager.user_id
     submitted = str(request.data.get('submit') or '').lower() in {'1', 'true', 'yes'}
     if submitted:
-        visit.status = 'pending'
+        if user.role in SELF_APPROVING_VISIT_ROLES:
+            visit.status = 'approved'
+            visit.approved_by = user_id
+            visit.approved_at = timezone.now()
+            visit.manager_user_id = ''
+        else:
+            visit.status = 'pending'
         visit.approval_comment = ''
     try:
         visit.save()
     except (ValueError, TypeError) as exc:
         return _error(f'Invalid visit data: {exc}')
-    if submitted:
+    if submitted and visit.status == 'pending':
         _safe_notify_visit_submitted(visit)
     return Response({'success': True, 'message': 'Visit updated.', 'visit': _visit_payload(visit)})
 
@@ -593,6 +688,13 @@ def visit_start_travel(request, pk):
         return _error('Only the assigned employee can start travel.', 403)
     if visit.status != 'approved':
         return _error('The visit must be approved before office check-out.', 409)
+    earliest_start = _visit_start_at(visit)
+    if timezone.now() < earliest_start:
+        return _error(
+            'Start to Visit will be available at '
+            f'{earliest_start:%d-%m-%Y %I:%M %p} (one hour before the visit).',
+            409,
+        )
     visit.status = 'travelling'
     visit.office_check_out_at = timezone.now()
     visit.office_check_out_latitude = request.data.get('latitude') or None
@@ -860,12 +962,7 @@ def visit_complete(request, pk):
     visit.return_mode = str(request.data.get('return_mode') or 'return_office').strip()
     visit.client_signature_name = str(request.data.get('client_signature_name') or '').strip()
     visit.save()
-    _notify_visit_progress(
-        visit,
-        title='Client Visit Completed',
-        message=f'{visit.visit_id} at {visit.client_name} was completed. Outcome: {visit.outcome}',
-        notification_type='success',
-    )
+    _notify_visit_completed(visit)
     return Response({'success': True, 'message': 'Visit completed.', 'visit': _visit_payload(visit)})
 
 

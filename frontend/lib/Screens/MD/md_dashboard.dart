@@ -412,10 +412,12 @@ class _MdDashboardState extends State<MdDashboard> {
       ),
       'client-visits': ClientVisitModuleScreen(
         userId: widget.userId,
-        roleLabel: '$_roleShortLabel · Monitoring',
+        roleLabel: '$_roleShortLabel · Client Visits',
         requesterRole: _isDirector ? 'director' : 'md',
-        readOnlyMode: true,
-        allowCreate: false,
+        reviewerMode: true,
+        allowCreate: true,
+        assignedApprovalsOnly: true,
+        allowVerification: false,
       ),
     };
     final screen = screens[flow];
@@ -536,8 +538,10 @@ class _MdDashboardState extends State<MdDashboard> {
       case _MdStep.clientVisits:
         return ClientVisitDashboardScreen(
           userId: widget.userId,
-          readOnlyMode: true,
-          allowCreate: false,
+          reviewerMode: true,
+          allowCreate: true,
+          assignedApprovalsOnly: true,
+          allowVerification: false,
           requesterRole: _isDirector ? 'director' : 'md',
         );
       case _MdStep.more:
