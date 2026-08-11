@@ -147,6 +147,18 @@ class _DashboardNotificationGateState extends State<DashboardNotificationGate> {
     final isReadOnly = role == 'superadmin';
     final reference = '${notification['reference_id'] ?? ''}';
     final visitId = int.tryParse(reference.split(':').first);
+    if (_isCompletedClientVisitNotification(notification)) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ClientVisitHistoryScreen(
+            userId: widget.userId,
+            viewerRole: role,
+            initialVisitId: visitId,
+          ),
+        ),
+      );
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ClientVisitModuleScreen(
@@ -269,6 +281,16 @@ class _NotificationPresentation {
   });
 }
 
+bool _isCompletedClientVisitNotification(Map notification) {
+  final searchable = [
+    notification['title'],
+    notification['message'],
+    notification['subtitle'],
+  ].join(' ').toLowerCase();
+  return searchable.contains('completed') ||
+      searchable.contains('history ready');
+}
+
 _NotificationPresentation? _notificationPresentation(Map notification) {
   final module = '${notification['module'] ?? ''}'.trim().toLowerCase();
   final type = '${notification['type'] ?? ''}'.trim().toLowerCase();
@@ -283,9 +305,7 @@ _NotificationPresentation? _notificationPresentation(Map notification) {
         searchable.contains('client visit in 2 hours') ||
         searchable.contains('start to visit in 1 hour') ||
         searchable.contains('start to visit is now available');
-    final completed =
-        searchable.contains('completed') ||
-        searchable.contains('history ready');
+    final completed = _isCompletedClientVisitNotification(notification);
     return _NotificationPresentation(
       fallbackTitle: reminder
           ? 'Upcoming Client Visit'

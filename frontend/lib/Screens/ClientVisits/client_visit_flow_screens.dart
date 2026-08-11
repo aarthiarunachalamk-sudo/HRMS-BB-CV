@@ -426,12 +426,14 @@ class ClientVisitSummaryScreen extends StatelessWidget {
   final int visitId;
   final ClientVisitService service;
   final bool reviewerMode;
+  final Future<void> Function()? onViewHistory;
   const ClientVisitSummaryScreen({
     super.key,
     required this.userId,
     required this.visitId,
     required this.service,
     this.reviewerMode = false,
+    this.onViewHistory,
   });
   @override
   Widget build(BuildContext context) => _VisitFlowPage(
@@ -440,6 +442,7 @@ class ClientVisitSummaryScreen extends StatelessWidget {
     visitId: visitId,
     service: service,
     reviewerMode: reviewerMode,
+    onViewHistory: onViewHistory,
   );
 }
 
@@ -452,6 +455,7 @@ class ClientVisitReadOnlyFlowScreen extends StatelessWidget {
   final ClientVisitService service;
   final bool reviewerMode;
   final String viewerRole;
+  final Future<void> Function()? onViewHistory;
 
   const ClientVisitReadOnlyFlowScreen({
     super.key,
@@ -461,6 +465,7 @@ class ClientVisitReadOnlyFlowScreen extends StatelessWidget {
     required this.service,
     this.reviewerMode = false,
     this.viewerRole = '',
+    this.onViewHistory,
   });
 
   @override
@@ -472,6 +477,7 @@ class ClientVisitReadOnlyFlowScreen extends StatelessWidget {
     readOnlyMode: true,
     reviewerMode: reviewerMode,
     viewerRole: viewerRole,
+    onViewHistory: onViewHistory,
   );
 }
 
@@ -483,6 +489,7 @@ class _VisitFlowPage extends StatefulWidget {
   final bool reviewerMode;
   final bool readOnlyMode;
   final String viewerRole;
+  final Future<void> Function()? onViewHistory;
   const _VisitFlowPage({
     required this.step,
     required this.userId,
@@ -491,6 +498,7 @@ class _VisitFlowPage extends StatefulWidget {
     this.reviewerMode = false,
     this.readOnlyMode = false,
     this.viewerRole = '',
+    this.onViewHistory,
   });
   @override
   State<_VisitFlowPage> createState() => _VisitFlowPageState();
@@ -4522,7 +4530,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           const SizedBox(width: 10),
           Expanded(
             child: FilledButton.icon(
-              onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+              onPressed: () async {
+                final openHistory = widget.onViewHistory;
+                if (openHistory != null) {
+                  await openHistory();
+                } else if (mounted) {
+                  Navigator.of(context).pop();
+                }
+              },
               icon: const Icon(Icons.history_rounded),
               label: const Text('View History'),
             ),
@@ -6431,6 +6446,7 @@ class _RouteMapCard extends StatefulWidget {
 
 class _RouteMapCardState extends State<_RouteMapCard> {
   final MapController _mapController = MapController();
+  final _GoogleMapBridge _googleMapBridge = _GoogleMapBridge();
   final List<LatLng> _rawPoints = [];
   List<LatLng> _roadPoints = [];
   LatLng? _origin;
@@ -6458,16 +6474,13 @@ class _RouteMapCardState extends State<_RouteMapCard> {
           widget.visit.officeCheckOutLongitude,
         ) ??
         (_rawPoints.isNotEmpty ? _rawPoints.first : null);
-    _destination =
-        _validPoint(
-          widget.visit.clientLatitude,
-          widget.visit.clientLongitude,
-        ) ??
-        _validPoint(
-          widget.visit.reachedClientLatitude,
-          widget.visit.reachedClientLongitude,
-        ) ??
-        (_rawPoints.isNotEmpty ? _rawPoints.last : null);
+    _destination = _bestRecordedDestination(
+      _validPoint(widget.visit.clientLatitude, widget.visit.clientLongitude),
+      _validPoint(
+        widget.visit.reachedClientLatitude,
+        widget.visit.reachedClientLongitude,
+      ),
+    );
 
     if (_origin != null && _destination != null) {
       _roadPoints = [_origin!, _destination!];
@@ -6489,6 +6502,64 @@ class _RouteMapCardState extends State<_RouteMapCard> {
       return null;
     }
     return LatLng(lat, lng);
+  }
+
+  LatLng? _bestRecordedDestination(
+    LatLng? plannedDestination,
+    LatLng? recordedArrival,
+  ) {
+    final origin = _origin;
+    if (origin == null) {
+      return plannedDestination ??
+          recordedArrival ??
+          (_rawPoints.isNotEmpty ? _rawPoints.last : null);
+    }
+    if (plannedDestination == null) {
+      return recordedArrival ??
+          (_rawPoints.isNotEmpty ? _rawPoints.last : null);
+    }
+    if (recordedArrival == null) return plannedDestination;
+
+    final distance = const Distance();
+    final plannedMetres = distance.as(
+      LengthUnit.Meter,
+      origin,
+      plannedDestination,
+    );
+    final arrivalMetres = distance.as(
+      LengthUnit.Meter,
+      origin,
+      recordedArrival,
+    );
+    if (plannedMetres < 30 && arrivalMetres > plannedMetres + 30) {
+      return recordedArrival;
+    }
+    return plannedDestination;
+  }
+
+  Future<void> _openGoogleRoute() async {
+    final origin = _origin;
+    final destination = _destination;
+    if (origin == null || destination == null) return;
+    final mode = switch (widget.visit.travelMode.trim().toLowerCase()) {
+      'walk' || 'walking' => 'walking',
+      'bike' || 'bicycle' || 'bicycling' || 'two wheeler' => 'bicycling',
+      _ => 'driving',
+    };
+    final opened = await launchUrl(
+      Uri.https('www.google.com', '/maps/dir/', <String, String>{
+        'api': '1',
+        'origin': '${origin.latitude},${origin.longitude}',
+        'destination': '${destination.latitude},${destination.longitude}',
+        'travelmode': mode,
+      }),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Google Maps could not be opened.')),
+      );
+    }
   }
 
   Future<void> _loadRoadRoute() async {
@@ -6567,6 +6638,7 @@ class _RouteMapCardState extends State<_RouteMapCard> {
     final destination = _destination;
     if (!mounted || origin == null || destination == null) return;
     try {
+      unawaited(_googleMapBridge.fit([origin, destination], padding: 55));
       if (const Distance().as(LengthUnit.Meter, origin, destination) < 30) {
         _mapController.move(destination, 16);
       } else {
@@ -6644,67 +6716,92 @@ class _RouteMapCardState extends State<_RouteMapCard> {
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: SizedBox(
-            height: 270,
-            child: FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(initialCenter: origin, initialZoom: 13),
+            height: 300,
+            child: Stack(
               children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.bitbyte.hrms',
-                ),
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _roadPoints,
-                      color: Colors.white,
-                      strokeWidth: 10,
-                    ),
-                    Polyline(
-                      points: _roadPoints,
-                      color: const Color(0xFF1A73E8),
-                      strokeWidth: 6,
-                    ),
-                  ],
-                ),
-                MarkerLayer(
-                  rotate: true,
-                  markers: [
-                    // Start marker — green
-                    Marker(
-                      point: origin,
-                      width: 36,
-                      height: 36,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF34A853),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.business_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                Visibility(
+                  visible: false,
+                  child: FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(initialCenter: origin, initialZoom: 13),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.bitbyte.hrms',
                       ),
-                    ),
-                    // End marker — red
-                    Marker(
-                      point: destination,
-                      width: 36,
-                      height: 36,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEA4335),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.flag_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: _roadPoints,
+                            color: Colors.white,
+                            strokeWidth: 10,
+                          ),
+                          Polyline(
+                            points: _roadPoints,
+                            color: const Color(0xFF1A73E8),
+                            strokeWidth: 6,
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      MarkerLayer(
+                        rotate: true,
+                        markers: [
+                          // Start marker — green
+                          Marker(
+                            point: origin,
+                            width: 36,
+                            height: 36,
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF34A853),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.business_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                          // End marker — red
+                          Marker(
+                            point: destination,
+                            width: 36,
+                            height: 36,
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFEA4335),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.flag_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned.fill(
+                  child: _LiveMapView(
+                    mapController: _mapController,
+                    googleMapBridge: _googleMapBridge,
+                    routePoints: _rawPoints,
+                    origin: origin,
+                    current: origin,
+                    destination: destination,
+                    fullScreen: false,
+                    showBreadcrumb: true,
+                    showMapControls: true,
+                    showLiveBadge: false,
+                    showConfigurationNotice: false,
+                    currentPositionColor: const Color(0xFF34A853),
+                    currentPositionIcon: Icons.business_rounded,
+                  ),
                 ),
               ],
             ),
@@ -6721,6 +6818,15 @@ class _RouteMapCardState extends State<_RouteMapCard> {
             const SizedBox(width: 4),
             const Text('Client location', style: TextStyle(fontSize: 11)),
           ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _openGoogleRoute,
+            icon: const Icon(Icons.map_rounded),
+            label: const Text('OPEN ROUTE IN GOOGLE MAPS'),
+          ),
         ),
       ],
     );
@@ -6932,6 +7038,7 @@ class _LiveMapView extends StatefulWidget {
   final bool showBreadcrumb;
   final bool showMapControls;
   final bool showLiveBadge;
+  final bool showConfigurationNotice;
   final void Function(String eta, String distance)? onEtaUpdate;
   final void Function(List<_RouteOption> routes, int selectedIndex)?
   onRoutesReady;
@@ -6955,6 +7062,7 @@ class _LiveMapView extends StatefulWidget {
     this.showBreadcrumb = true,
     this.showMapControls = true,
     this.showLiveBadge = true,
+    this.showConfigurationNotice = false,
     this.onEtaUpdate,
     this.onRoutesReady,
     this.onRotationChanged,
@@ -7731,7 +7839,9 @@ class _LiveMapViewState extends State<_LiveMapView>
             ),
           ),
 
-        if (_googleMapsCheckComplete && !_googleMapsConfigured)
+        if (_googleMapsCheckComplete &&
+            !_googleMapsConfigured &&
+            widget.showConfigurationNotice)
           Positioned.fill(
             child: ColoredBox(
               color: const Color(0xFFF8F9FA),

@@ -91,13 +91,14 @@ class _ClientVisitDashboardScreenState
     await _loadDownloads();
   }
 
-  Future<void> _openHistory({int initialTab = 0}) async {
+  Future<void> _openHistory({int initialTab = 0, int? initialVisitId}) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ClientVisitHistoryScreen(
           userId: widget.userId,
           viewerRole: widget.requesterRole,
           initialTab: initialTab,
+          initialVisitId: initialVisitId,
           onOpenVisit: _openVisit,
         ),
       ),
@@ -183,6 +184,7 @@ class _ClientVisitDashboardScreenState
       service: _service,
       reviewerMode: canVerify,
       viewerRole: widget.requesterRole,
+      onViewHistory: () => _openHistory(initialVisitId: visit.id),
     );
   }
 
@@ -213,6 +215,7 @@ class _ClientVisitDashboardScreenState
       userId: widget.userId,
       visitId: visit.id,
       service: _service,
+      onViewHistory: () => _openHistory(initialVisitId: visit.id),
     ),
     _ => ClientVisitApprovedScreen(
       userId: widget.userId,
@@ -530,14 +533,16 @@ class ClientVisitHistoryScreen extends StatelessWidget {
   final String userId;
   final String viewerRole;
   final int initialTab;
-  final Future<void> Function(ClientVisit visit) onOpenVisit;
+  final int? initialVisitId;
+  final Future<void> Function(ClientVisit visit)? onOpenVisit;
 
   const ClientVisitHistoryScreen({
     super.key,
     required this.userId,
     required this.viewerRole,
-    required this.onOpenVisit,
+    this.onOpenVisit,
     this.initialTab = 0,
+    this.initialVisitId,
   });
 
   @override
@@ -565,6 +570,7 @@ class ClientVisitHistoryScreen extends StatelessWidget {
               userId: userId,
               viewerRole: viewerRole,
               onOpenVisit: onOpenVisit,
+              initialVisitId: initialVisitId,
             ),
             ClientVisitDownloadedFilesScreen(userId: userId, embedded: true),
           ],
@@ -577,12 +583,14 @@ class ClientVisitHistoryScreen extends StatelessWidget {
 class _CalendarVisitHistoryTab extends StatefulWidget {
   final String userId;
   final String viewerRole;
-  final Future<void> Function(ClientVisit visit) onOpenVisit;
+  final int? initialVisitId;
+  final Future<void> Function(ClientVisit visit)? onOpenVisit;
 
   const _CalendarVisitHistoryTab({
     required this.userId,
     required this.viewerRole,
-    required this.onOpenVisit,
+    this.onOpenVisit,
+    this.initialVisitId,
   });
 
   @override
@@ -611,7 +619,19 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
       if (!mounted) return;
       setState(() {
         _visits = visits;
-        _selectedDate ??= visits.isEmpty
+        ClientVisit? initialVisit;
+        final initialVisitId = widget.initialVisitId;
+        if (initialVisitId != null) {
+          for (final visit in visits) {
+            if (visit.id == initialVisitId) {
+              initialVisit = visit;
+              break;
+            }
+          }
+        }
+        _selectedDate ??= initialVisit != null
+            ? _dateOnly(initialVisit.scheduledAt)
+            : visits.isEmpty
             ? DateTime.now()
             : _dateOnly(visits.first.scheduledAt);
       });
@@ -646,6 +666,41 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
       left.year == right.year &&
       left.month == right.month &&
       left.day == right.day;
+
+  Future<void> _openVisit(ClientVisit visit) async {
+    final callback = widget.onOpenVisit;
+    if (callback != null) {
+      await callback(visit);
+      await _load();
+      return;
+    }
+
+    final role = widget.viewerRole.trim().toLowerCase();
+    final ownVisit = visit.employeeUserId == widget.userId;
+    final leadershipView = const {
+      'hr',
+      'admin',
+      'superadmin',
+      'ceo',
+      'md',
+      'director',
+    }.contains(role);
+    final screen = ownVisit && !leadershipView
+        ? ClientVisitSummaryScreen(
+            userId: widget.userId,
+            visitId: visit.id,
+            service: _service,
+          )
+        : ClientVisitReadOnlyFlowScreen(
+            userId: widget.userId,
+            visitId: visit.id,
+            step: 0,
+            service: _service,
+            viewerRole: role,
+          );
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    await _load();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -697,10 +752,7 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
               (visit) => _VisitCard(
                 visit: visit,
                 historyViewerUserId: widget.userId,
-                onTap: () async {
-                  await widget.onOpenVisit(visit);
-                  await _load();
-                },
+                onTap: () => _openVisit(visit),
               ),
             ),
         ],
