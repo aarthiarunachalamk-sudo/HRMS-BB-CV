@@ -9,6 +9,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
+import 'client_visit_navigation.dart';
 import 'client_visit_service.dart';
 import 'client_visit_flow_screens.dart';
 import 'client_visit_theme.dart';
@@ -147,15 +148,6 @@ class _ClientVisitDashboardScreenState
     await _load();
   }
 
-  int _currentFlowStep(ClientVisit visit) => switch (visit.status) {
-    'pending' || 'rejected' || 'draft' => 3,
-    'approved' => 4,
-    'travelling' => visit.reachedClientAt == null ? 6 : 7,
-    'in_progress' => 8,
-    'completed' => 12,
-    _ => 3,
-  };
-
   Widget _monitoringScreen(ClientVisit visit, {bool canVerify = false}) {
     // All visits — completed or not — use step 0 → _superAdminVisitDetail
     // so TL/SuperAdmin always see the full detail view with route map,
@@ -205,6 +197,21 @@ class _ClientVisitDashboardScreenState
   };
 
   Future<void> _openVisit(ClientVisit visit) async {
+    if (visit.status == 'travelling' && visit.reachedClientAt == null) {
+      final opened = await openClientVisitNavigation(visit);
+      if (!mounted) return;
+      if (!opened) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No compatible map app was found for this destination.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     late final Widget screen;
     if (widget.readOnlyMode) {
       screen = _monitoringScreen(visit);

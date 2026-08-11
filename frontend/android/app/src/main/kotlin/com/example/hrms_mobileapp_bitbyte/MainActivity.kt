@@ -75,6 +75,48 @@ class MainActivity : FlutterActivity() {
                 return@setMethodCallHandler
             }
 
+            if (call.method == "openDirectionsChooser") {
+                val latitude = call.argument<Double>("latitude")
+                val longitude = call.argument<Double>("longitude")
+                val address = call.argument<String>("address")?.trim().orEmpty()
+                val label = call.argument<String>("label")?.trim().orEmpty()
+                val hasCoordinates = latitude != null && longitude != null
+                if (!hasCoordinates && address.isBlank()) {
+                    result.error(
+                        "DESTINATION_MISSING",
+                        "Destination is not available for this visit",
+                        null
+                    )
+                    return@setMethodCallHandler
+                }
+
+                val query = if (hasCoordinates) {
+                    val coordinates = "$latitude,$longitude"
+                    if (label.isBlank()) coordinates else "$coordinates($label)"
+                } else {
+                    if (label.isBlank()) address else "$label, $address"
+                }
+                val geoUri = Uri.Builder()
+                    .scheme("geo")
+                    .opaquePart("0,0")
+                    .appendQueryParameter("q", query)
+                    .build()
+                val mapIntent = Intent(Intent.ACTION_VIEW, geoUri)
+                if (mapIntent.resolveActivity(packageManager) == null) {
+                    result.success(false)
+                    return@setMethodCallHandler
+                }
+
+                return@setMethodCallHandler try {
+                    startActivity(Intent.createChooser(mapIntent, "Open route with"))
+                    result.success(true)
+                } catch (_: ActivityNotFoundException) {
+                    result.success(false)
+                } catch (_: SecurityException) {
+                    result.success(false)
+                }
+            }
+
             if (call.method != "openMap") {
                 result.notImplemented()
                 return@setMethodCallHandler

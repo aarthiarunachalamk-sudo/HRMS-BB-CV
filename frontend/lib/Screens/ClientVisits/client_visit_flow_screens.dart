@@ -22,6 +22,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
+import 'client_visit_navigation.dart';
 import 'client_visit_service.dart';
 import 'client_visit_theme.dart';
 import 'client_visit_downloads.dart';
@@ -84,7 +85,7 @@ class ClientVisitOfficeCheckoutScreen extends StatelessWidget {
   );
 }
 
-class ClientVisitTravelProgressScreen extends StatelessWidget {
+class ClientVisitTravelProgressScreen extends StatefulWidget {
   final String userId;
   final int visitId;
   final ClientVisitService service;
@@ -94,13 +95,47 @@ class ClientVisitTravelProgressScreen extends StatelessWidget {
     required this.visitId,
     required this.service,
   });
+
   @override
-  Widget build(BuildContext context) => _VisitFlowPage(
-    step: 6,
-    userId: userId,
-    visitId: visitId,
-    service: service,
-  );
+  State<ClientVisitTravelProgressScreen> createState() =>
+      _ClientVisitTravelProgressScreenState();
+}
+
+class _ClientVisitTravelProgressScreenState
+    extends State<ClientVisitTravelProgressScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openNavigation());
+  }
+
+  Future<void> _openNavigation() async {
+    var opened = false;
+    try {
+      final visit = await widget.service.fetchVisit(
+        widget.userId,
+        widget.visitId,
+      );
+      opened = await openClientVisitNavigation(visit);
+    } catch (_) {
+      opened = false;
+    }
+    if (!mounted) return;
+    if (!opened) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No compatible map app was found for this destination.',
+          ),
+        ),
+      );
+    }
+    Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: Text('Opening map apps...')));
 }
 
 class ClientVisitCheckInScreen extends StatelessWidget {
@@ -900,13 +935,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               'odometer': _odometer.text.trim(),
           });
       if (mounted) {
-        _replace(
-          ClientVisitTravelProgressScreen(
-            userId: widget.userId,
-            visitId: widget.visitId,
-            service: widget.service,
-          ),
-        );
+        final visit = _visit;
+        final opened = visit != null
+            ? await openClientVisitNavigation(visit)
+            : false;
+        if (!mounted) return;
+        if (!opened) {
+          _message('No compatible map app was found for this destination.');
+        }
+        Navigator.of(context).pop(true);
       }
     });
   }
