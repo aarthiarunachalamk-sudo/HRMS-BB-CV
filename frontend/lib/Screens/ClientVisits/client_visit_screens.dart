@@ -237,12 +237,28 @@ class _ClientVisitDashboardScreenState
                 ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: ThemeConfig.loginButtonColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
                   onPressed: () => Navigator.pop(sheetContext, 'reached'),
                   icon: const Icon(Icons.flag_rounded),
                   label: const Text('REACHED DESTINATION'),
                 ),
                 const SizedBox(height: 10),
-                OutlinedButton.icon(
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: ThemeConfig.loginButtonColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
                   onPressed: () => Navigator.pop(sheetContext, 'continue'),
                   icon: const Icon(Icons.navigation_rounded),
                   label: const Text('STILL CONTINUING'),
@@ -2129,6 +2145,26 @@ class _VisitCard extends StatelessWidget {
 
   String get _statusLabel => _label(visit.status);
 
+  String get _nextActionLabel => switch (visit.status) {
+    'draft' => 'Complete request',
+    'pending' => 'View request',
+    'approved' => 'Continue visit',
+    'travelling' => 'Open navigation',
+    'in_progress' => 'Continue client visit',
+    'completed' => 'View visit summary',
+    'rejected' => 'Review requested changes',
+    _ => 'Open visit',
+  };
+
+  IconData get _nextActionIcon => switch (visit.status) {
+    'approved' => Icons.logout_rounded,
+    'travelling' => Icons.navigation_rounded,
+    'in_progress' => Icons.play_arrow_rounded,
+    'completed' => Icons.receipt_long_rounded,
+    'rejected' => Icons.edit_note_rounded,
+    _ => Icons.arrow_forward_rounded,
+  };
+
   String get _historyDetails {
     if (historyViewerUserId.isEmpty) return '';
     final ownVisit = visit.employeeUserId == historyViewerUserId;
@@ -2328,6 +2364,30 @@ class _VisitCard extends StatelessWidget {
                     ),
                   ),
                 ],
+                const SizedBox(height: 10),
+                Divider(height: 1, color: _statusColor.withAlpha(35)),
+                const SizedBox(height: 9),
+                Row(
+                  children: [
+                    Icon(_nextActionIcon, size: 16, color: _statusColor),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        _nextActionLabel,
+                        style: TextStyle(
+                          color: _statusColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: _statusColor,
+                    ),
+                  ],
+                ),
               ],
             ),
           ),

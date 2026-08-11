@@ -279,16 +279,32 @@ class _ClientVisitTravelProgressScreenState
                     const SizedBox(height: 32),
                     SizedBox(
                       width: double.infinity,
-                      child: OutlinedButton.icon(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: ThemeConfig.loginButtonColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
                         onPressed: _working ? null : _openNavigation,
                         icon: const Icon(Icons.map_rounded),
-                        label: const Text('CONTINUE IN MAP APP'),
+                        label: const Text('STILL CONTINUING'),
                       ),
                     ),
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: ThemeConfig.loginButtonColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
                         onPressed: _working ? null : _reachedDestination,
                         icon: _working
                             ? const SizedBox(
@@ -4652,6 +4668,61 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     ),
   );
 
+  int get _flowStageIndex => switch (widget.step) {
+    <= 3 => 0,
+    4 || 5 => 1,
+    6 => 2,
+    7 => 3,
+    8 || 9 || 10 => 4,
+    _ => 5,
+  };
+
+  String get _flowStageLabel => const [
+    'Approval',
+    'Office checkout',
+    'Travel',
+    'Client check-in',
+    'Client visit',
+    'Complete',
+  ][_flowStageIndex];
+
+  Widget _flowProgress() => Column(
+    children: [
+      Row(
+        children: [
+          Text(
+            'STEP ${_flowStageIndex + 1} OF 6',
+            style: const TextStyle(
+              color: Color(0xFF1A73E8),
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.7,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            _flowStageLabel,
+            style: TextStyle(
+              color: ThemeConfig.getTextSecondary(context),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 7),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: LinearProgressIndicator(
+          minHeight: 5,
+          value: (_flowStageIndex + 1) / 6,
+          color: ThemeConfig.loginButtonColor,
+          backgroundColor: const Color(0xFF1A73E8).withAlpha(22),
+        ),
+      ),
+    ],
+  );
+
   Widget _stepHeader(ClientVisit visit) => Container(
     margin: const EdgeInsets.only(bottom: 4),
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -4660,33 +4731,39 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: const Color(0xFF1A73E8).withAlpha(30)),
     ),
-    child: Row(
+    child: Column(
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                visit.clientName,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: ThemeConfig.getTextPrimary(context),
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    visit.clientName,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: ThemeConfig.getTextPrimary(context),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    visit.visitId,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: ThemeConfig.getTextMuted(context),
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                visit.visitId,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: ThemeConfig.getTextMuted(context),
-                ),
-              ),
-            ],
-          ),
+            ),
+            _statusChip(visit.status),
+          ],
         ),
-        _statusChip(visit.status),
+        const SizedBox(height: 11),
+        _flowProgress(),
       ],
     ),
   );
