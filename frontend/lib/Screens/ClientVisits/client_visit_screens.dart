@@ -14,7 +14,6 @@ import 'client_visit_service.dart';
 import 'client_visit_flow_screens.dart';
 import 'client_visit_theme.dart';
 import 'client_visit_downloads.dart';
-import '../ClientJourneys/journey_screens.dart';
 
 const _statuses = [
   'all',
@@ -196,8 +195,8 @@ class _ClientVisitDashboardScreenState
     ),
   };
 
-  Future<void> _openVisit(ClientVisit visit) async {
-    if (visit.status == 'travelling' && visit.reachedClientAt == null) {
+  Future<void> _openEmployeeTravel(ClientVisit visit) async {
+    while (mounted) {
       final opened = await openClientVisitNavigation(visit);
       if (!mounted) return;
       if (!opened) {
@@ -208,6 +207,123 @@ class _ClientVisitDashboardScreenState
             ),
           ),
         );
+        return;
+      }
+
+      final action = await showModalBottomSheet<String>(
+        context: context,
+        isDismissible: true,
+        enableDrag: true,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  visit.clientName,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Choose your current travel status.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () => Navigator.pop(sheetContext, 'reached'),
+                  icon: const Icon(Icons.flag_rounded),
+                  label: const Text('REACHED DESTINATION'),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.pop(sheetContext, 'continue'),
+                  icon: const Icon(Icons.navigation_rounded),
+                  label: const Text('STILL CONTINUING'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      if (action == 'continue') continue;
+      if (action == 'reached') {
+        await _markReachedDestination(visit);
+      }
+      return;
+    }
+  }
+
+  Future<void> _markReachedDestination(ClientVisit visit) async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw Exception('Turn on location services before marking arrival.');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Location permission is required to mark arrival.');
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      await _service
+          .action(widget.userId, visit.id, 'reached-client', <String, double>{
+            'latitude': position.latitude,
+            'longitude': position.longitude,
+            'accuracy': position.accuracy,
+            'speed': position.speed,
+          });
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ClientVisitCheckInScreen(
+            userId: widget.userId,
+            visitId: visit.id,
+            service: _service,
+          ),
+        ),
+      );
+      await _load();
+      await _loadDownloads();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$error'.replaceFirst('Exception: ', ''))),
+        );
+      }
+    }
+  }
+
+  Future<void> _openVisit(ClientVisit visit) async {
+    if (visit.status == 'travelling' && visit.reachedClientAt == null) {
+      if (!widget.readOnlyMode && visit.employeeUserId == widget.userId) {
+        await _openEmployeeTravel(visit);
+      } else {
+        final opened = await openClientVisitNavigation(visit);
+        if (mounted && !opened) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No compatible map app was found for this destination.',
+              ),
+            ),
+          );
+        }
       }
       return;
     }
@@ -271,31 +387,6 @@ class _ClientVisitDashboardScreenState
               (!widget.readOnlyMode && widget.allowCreate) ? 90 : 16,
             ),
             children: [
-              Card(
-                child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.route_rounded)),
-                  title: Text(
-                    widget.reviewerMode || widget.readOnlyMode
-                        ? 'Live Journey Tracking'
-                        : 'Client Visit Live Journeys',
-                  ),
-                  subtitle: Text(
-                    widget.reviewerMode || widget.readOnlyMode
-                        ? 'Track assigned employees and review actual routes.'
-                        : 'Start only with consent; GPS continues offline.',
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ClientJourneyHubScreen(
-                        userId: widget.userId,
-                        teamMode: widget.reviewerMode || widget.readOnlyMode,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
               if (result != null)
                 _Summary(
                   summary: result.summary,

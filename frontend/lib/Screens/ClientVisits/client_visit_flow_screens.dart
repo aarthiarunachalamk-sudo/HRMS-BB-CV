@@ -103,23 +103,39 @@ class ClientVisitTravelProgressScreen extends StatefulWidget {
 
 class _ClientVisitTravelProgressScreenState
     extends State<ClientVisitTravelProgressScreen> {
+  ClientVisit? _visit;
+  String? _error;
+  bool _working = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _openNavigation());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAndOpen());
   }
 
-  Future<void> _openNavigation() async {
-    var opened = false;
+  Future<void> _loadAndOpen() async {
     try {
       final visit = await widget.service.fetchVisit(
         widget.userId,
         widget.visitId,
       );
-      opened = await openClientVisitNavigation(visit);
-    } catch (_) {
-      opened = false;
+      if (!mounted) return;
+      setState(() {
+        _visit = visit;
+        _error = null;
+      });
+      await _openNavigation();
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = '$error'.replaceFirst('Exception: ', ''));
+      }
     }
+  }
+
+  Future<void> _openNavigation() async {
+    final visit = _visit;
+    if (visit == null) return;
+    final opened = await openClientVisitNavigation(visit);
     if (!mounted) return;
     if (!opened) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -130,12 +146,169 @@ class _ClientVisitTravelProgressScreenState
         ),
       );
     }
-    Navigator.of(context).pop(true);
+  }
+
+  Future<void> _reachedDestination() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reached destination?'),
+        content: const Text(
+          'Confirm that you have arrived. Your current GPS location will be '
+          'recorded as the arrival point.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Not yet'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Yes, reached'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || _working) return;
+
+    setState(() => _working = true);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw Exception('Turn on location services before marking arrival.');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Location permission is required to mark arrival.');
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      await widget.service.action(
+        widget.userId,
+        widget.visitId,
+        'reached-client',
+        <String, double>{
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'accuracy': position.accuracy,
+          'speed': position.speed,
+        },
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => ClientVisitCheckInScreen(
+            userId: widget.userId,
+            visitId: widget.visitId,
+            service: widget.service,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$error'.replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
   }
 
   @override
-  Widget build(BuildContext context) =>
-      const Scaffold(body: Center(child: Text('Opening map apps...')));
+  Widget build(BuildContext context) => ClientVisitTheme(
+    child: Scaffold(
+      appBar: AppBar(title: const Text('Travelling')),
+      body: _error != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_error!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: _loadAndOpen,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : _visit == null
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.navigation_rounded,
+                      size: 72,
+                      color: Color(0xFF1A73E8),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      _visit!.clientName,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _visit!.address,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Navigation continues in your selected map app.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _working ? null : _openNavigation,
+                        icon: const Icon(Icons.map_rounded),
+                        label: const Text('CONTINUE IN MAP APP'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _working ? null : _reachedDestination,
+                        icon: _working
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.flag_rounded),
+                        label: const Text('REACHED DESTINATION'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    ),
+  );
 }
 
 class ClientVisitCheckInScreen extends StatelessWidget {
@@ -936,14 +1109,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           });
       if (mounted) {
         final visit = _visit;
-        final opened = visit != null
-            ? await openClientVisitNavigation(visit)
-            : false;
-        if (!mounted) return;
-        if (!opened) {
-          _message('No compatible map app was found for this destination.');
-        }
-        Navigator.of(context).pop(true);
+        if (visit != null) await openClientVisitNavigation(visit);
+        if (mounted) Navigator.of(context).pop(true);
       }
     });
   }
