@@ -20,7 +20,9 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:signature/signature.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
+import '../Employee/employee_service.dart';
 import '../Employee/employee_shared.dart';
+import '../Employee/employee_selfie_attendance_screen.dart';
 import 'client_visit_models.dart';
 import 'client_visit_navigation.dart';
 import 'client_visit_service.dart';
@@ -1464,6 +1466,20 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         'return_mode': _returnMode,
       });
       if (mounted) {
+        if (_returnMode == 'return_office') {
+          await Navigator.of(context).push<
+              Map<String, dynamic>>(
+            MaterialPageRoute(
+              builder: (_) => EmployeeSelfieAttendanceScreen(
+                userId: widget.userId,
+                service: EmployeeService(),
+                action: EmployeeAttendanceAction.checkIn,
+                workMode: 'office',
+              ),
+            ),
+          );
+          if (!mounted) return;
+        }
         _replace(
           ClientVisitSummaryScreen(
             userId: widget.userId,

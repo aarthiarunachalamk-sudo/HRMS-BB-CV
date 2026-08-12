@@ -748,11 +748,13 @@ class _EmployeeSelfieAttendanceScreenState
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
             waitingForLocation
                 ? 'Enable geo location to open selfie camera'
                 : 'Please capture your selfie',
+            textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 18),
@@ -775,10 +777,10 @@ class _EmployeeSelfieAttendanceScreenState
           ],
           Container(
             height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: cardBg,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -798,19 +800,31 @@ class _EmployeeSelfieAttendanceScreenState
                 GestureDetector(
                   onTap: waitingForLocation ? _loadLocation : _captureSelfie,
                   child: Container(
-                    width: 46,
-                    height: 46,
+                    width: 52,
+                    height: 52,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white70, width: 3),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.12),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: (_submitting || _processingCapture)
                         ? const Padding(
                             padding: EdgeInsets.all(12),
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const SizedBox.shrink(),
+                        : Icon(
+                            waitingForLocation
+                                ? Icons.location_searching_rounded
+                                : Icons.camera_alt_rounded,
+                            color: Theme.of(context).primaryColor,
+                          ),
                   ),
                 ),
                 _RoundIconButton(
@@ -951,6 +965,7 @@ class _EmployeeSelfieAttendanceScreenState
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
             width: 108,
@@ -968,6 +983,7 @@ class _EmployeeSelfieAttendanceScreenState
           const SizedBox(height: 20),
           Text(
             successText,
+            textAlign: TextAlign.center,
             style: const TextStyle(
               color: EmployeeColors.green,
               fontSize: 18,
@@ -977,10 +993,15 @@ class _EmployeeSelfieAttendanceScreenState
           const SizedBox(height: 14),
           Text(
             time,
+            textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 4),
-          Text(date, style: const TextStyle(fontSize: 12)),
+          Text(
+            date,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12),
+          ),
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -1344,20 +1365,21 @@ class _InfoPopupCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF061B2D),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withAlpha(28)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
                 child: Icon(icon, size: 16, color: Colors.white),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   title,
@@ -1372,14 +1394,20 @@ class _InfoPopupCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             message,
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.left,
             style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             height: 44,
-            child: OutlinedButton(onPressed: onAction, child: Text(actionText)),
+            child: OutlinedButton(
+              onPressed: onAction,
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: color.withAlpha(190)),
+              ),
+              child: Text(actionText),
+            ),
           ),
         ],
       ),
