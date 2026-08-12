@@ -23,6 +23,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart
 import '../Employee/employee_service.dart';
 import '../Employee/employee_shared.dart';
 import '../Employee/employee_selfie_attendance_screen.dart';
+import '../Employee/employee_dashboard.dart';
 import 'client_visit_models.dart';
 import 'client_visit_navigation.dart';
 import 'client_visit_service.dart';
@@ -1311,6 +1312,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             [sigFile.path],
           );
           await sigFile.delete();
+          if (mounted) {
+            setState(() {
+              _signaturePadController.clear();
+              _signature.clear();
+            });
+          }
         }
       }
     });
@@ -1467,18 +1474,17 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       });
       if (mounted) {
         if (_returnMode == 'return_office') {
-          await Navigator.of(context).push<
-              Map<String, dynamic>>(
-            MaterialPageRoute(
-              builder: (_) => EmployeeSelfieAttendanceScreen(
-                userId: widget.userId,
-                service: EmployeeService(),
-                action: EmployeeAttendanceAction.checkIn,
-                workMode: 'office',
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => EmployeeDashboard(
+                  email: '',
+                  firstName: '',
+                  userId: widget.userId,
+                ),
               ),
-            ),
-          );
-          if (!mounted) return;
+            );
+          }
         }
         _replace(
           ClientVisitSummaryScreen(
