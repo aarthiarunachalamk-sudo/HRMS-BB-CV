@@ -29,7 +29,7 @@ $updatedPubspec = [regex]::Replace($originalPubspec, $versionPattern, $nextVersi
 [System.IO.File]::WriteAllText($pubspecPath, $updatedPubspec, $utf8WithoutBom)
 
 try {
-    # ── 3. Build all ABI splits ────────────────────────────────────────────────
+    # --- 3. Build all ABI splits ------------------------------------------------
     Write-Host ""
     Write-Host "========================================================"
     Write-Host "  BBT-ERP  v$displayVersion  (versionCode $buildNumber)"
@@ -37,6 +37,22 @@ try {
     Write-Host ""
 
     Set-Location $projectDirectory
+
+    # Verify flutter command and engine revision
+    $fv = & flutter --version 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "flutter command failed; attempting 'flutter precache' and 'flutter pub get'."
+        & flutter precache
+        if ($LASTEXITCODE -ne 0) { throw "'flutter precache' failed with exit code $LASTEXITCODE." }
+        & flutter pub get
+        if ($LASTEXITCODE -ne 0) { throw "'flutter pub get' failed with exit code $LASTEXITCODE." }
+    }
+    elseif ($fv -notmatch 'Engine') {
+        Write-Host "Engine revision not found in 'flutter --version' output; running 'flutter precache'."
+        & flutter precache
+        if ($LASTEXITCODE -ne 0) { throw "'flutter precache' failed with exit code $LASTEXITCODE." }
+    }
+
     & flutter build apk --release --split-per-abi `
         --build-name $versionName `
         --build-number $buildNumber
@@ -45,7 +61,7 @@ try {
         throw "Flutter release build failed with exit code $LASTEXITCODE."
     }
 
-    # ── 4. Rename arm64 APK to BBT-ERP-version.X.X.apk ───────────────────────
+    # --- 4. Rename arm64 APK to BBT-ERP-version.X.X.apk -------------------------
     $releaseApkName = "BBT-ERP-version.$displayVersion.apk"
     $src = Join-Path $apkDirectory 'app-arm64-v8a-release.apk'
 
@@ -56,7 +72,7 @@ try {
     $dst = Join-Path $apkDirectory $releaseApkName
     Copy-Item -LiteralPath $src -Destination $dst -Force
 
-    # ── 5. Summary ────────────────────────────────────────────────────────────
+    # --- 5. Summary -------------------------------------------------------------
     Write-Host ""
     Write-Host "Release complete!"
     Write-Host "  Version name  : $versionName"
