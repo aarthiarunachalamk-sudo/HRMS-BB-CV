@@ -32,6 +32,7 @@ class EmployeeDashboard extends StatefulWidget {
   final String userId;
   final String? roleSwitchLabel;
   final WidgetBuilder? roleSwitchBuilder;
+  final int initialTab;
 
   const EmployeeDashboard({
     super.key,
@@ -40,6 +41,7 @@ class EmployeeDashboard extends StatefulWidget {
     required this.userId,
     this.roleSwitchLabel,
     this.roleSwitchBuilder,
+    this.initialTab = 0,
   });
 
   @override
@@ -68,6 +70,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
       firstName: widget.firstName,
       userId: widget.userId,
     );
+    _selectedIndex = widget.initialTab;
     _load();
     unawaited(_registerForNotifications());
     _refreshTimer = Timer.periodic(

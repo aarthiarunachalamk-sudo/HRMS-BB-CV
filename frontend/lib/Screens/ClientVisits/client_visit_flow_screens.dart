@@ -371,11 +371,15 @@ class ClientVisitWorkUpdateScreen extends StatelessWidget {
   final String userId;
   final int visitId;
   final ClientVisitService service;
+  final List<String>? initialAttendees;
+  final List<Map<String, dynamic>>? initialChecklist;
   const ClientVisitWorkUpdateScreen({
     super.key,
     required this.userId,
     required this.visitId,
     required this.service,
+    this.initialAttendees,
+    this.initialChecklist,
   });
   @override
   Widget build(BuildContext context) => _VisitFlowPage(
@@ -383,6 +387,8 @@ class ClientVisitWorkUpdateScreen extends StatelessWidget {
     userId: userId,
     visitId: visitId,
     service: service,
+    initialAttendees: initialAttendees,
+    initialChecklist: initialChecklist,
   );
 }
 
@@ -492,6 +498,8 @@ class _VisitFlowPage extends StatefulWidget {
   final bool reviewerMode;
   final bool readOnlyMode;
   final String viewerRole;
+  final List<String>? initialAttendees;
+  final List<Map<String, dynamic>>? initialChecklist;
   final Future<void> Function()? onViewHistory;
   const _VisitFlowPage({
     required this.step,
@@ -501,6 +509,8 @@ class _VisitFlowPage extends StatefulWidget {
     this.reviewerMode = false,
     this.readOnlyMode = false,
     this.viewerRole = '',
+    this.initialAttendees,
+    this.initialChecklist,
     this.onViewHistory,
   });
   @override
@@ -555,6 +565,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
   // Hand-drawn signature pad controller (Step 9)
   late final SignatureController _signaturePadController;
 
+  void _onSignatureChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
@@ -562,12 +577,13 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       penStrokeWidth: 2.5,
       penColor: Colors.black,
       exportBackgroundColor: Colors.white,
-    );
+    )..addListener(_onSignatureChanged);
     _load();
   }
 
   @override
   void dispose() {
+    _signaturePadController.removeListener(_onSignatureChanged);
     for (final controller in [
       _notes,
       _attendee,
@@ -605,6 +621,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   .whereType<Map>()
                   .map((item) => Map<String, dynamic>.from(item))
                   .toList();
+        if (widget.step == 9 && widget.initialAttendees != null) {
+          _attendees = List<String>.from(widget.initialAttendees!);
+        }
+        if (widget.step == 9 && widget.initialChecklist != null) {
+          _checklist = widget.initialChecklist!
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
       });
       if (widget.step == 6 && visit.status == 'travelling') {
         unawaited(_startTravelTracking());
@@ -1474,25 +1498,25 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
       });
       if (mounted) {
         if (_returnMode == 'return_office') {
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (_) => EmployeeDashboard(
-                  email: '',
-                  firstName: '',
-                  userId: widget.userId,
-                ),
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => EmployeeDashboard(
+                email: '',
+                firstName: '',
+                userId: widget.userId,
+                initialTab: 1,
               ),
-            );
-          }
+            ),
+          );
+        } else {
+          _replace(
+            ClientVisitSummaryScreen(
+              userId: widget.userId,
+              visitId: widget.visitId,
+              service: widget.service,
+            ),
+          );
         }
-        _replace(
-          ClientVisitSummaryScreen(
-            userId: widget.userId,
-            visitId: widget.visitId,
-            service: widget.service,
-          ),
-        );
       }
     });
   }
@@ -3741,6 +3765,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                     userId: widget.userId,
                     visitId: widget.visitId,
                     service: widget.service,
+                    initialAttendees: _attendees,
+                    initialChecklist: _checklist,
                   ),
                 ),
                 icon: const Icon(Icons.edit_note, size: 18),
@@ -4632,7 +4658,15 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                 if (openHistory != null) {
                   await openHistory();
                 } else if (mounted) {
-                  Navigator.of(context).pop();
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ClientVisitHistoryScreen(
+                        userId: widget.userId,
+                        viewerRole: widget.viewerRole,
+                        initialVisitId: widget.visitId,
+                      ),
+                    ),
+                  );
                 }
               },
               icon: const Icon(Icons.history_rounded),
