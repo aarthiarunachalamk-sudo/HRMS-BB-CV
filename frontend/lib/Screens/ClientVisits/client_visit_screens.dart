@@ -249,7 +249,13 @@ class _ClientVisitDashboardScreenState
     } else if (widget.reviewerMode) {
       final canReview =
           !widget.assignedApprovalsOnly || visit.managerUserId == widget.userId;
-      screen = visit.status == 'pending' && canReview
+      final isHrFinalApproval =
+          visit.tlApprovedBy.isNotEmpty &&
+          widget.requesterRole.trim().toLowerCase() == 'hr';
+      screen =
+          visit.status == 'pending' &&
+              canReview &&
+              (visit.tlApprovedBy.isEmpty || isHrFinalApproval)
           ? ClientVisitManagerApprovalScreen(
               userId: widget.userId,
               visitId: visit.id,

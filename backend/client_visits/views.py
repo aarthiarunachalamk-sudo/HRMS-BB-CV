@@ -155,6 +155,36 @@ def _safe_notify_visit_submitted(visit):
         logger.exception('Unable to send submitted Client Visit notifications for %s', visit.pk)
 
 
+def _notify_hr_approval_required(visit, tl_user):
+    tl_name = f'{tl_user.first_name} {tl_user.last_name}'.strip() or tl_user.email
+    message = (
+        f'{tl_name} approved {visit.visit_id} for {visit.client_name}. '
+        'Final HR approval is required.'
+    )
+    _notify(
+        role='hr',
+        title='Client Visit HR Approval Required',
+        message=message,
+        notification_type='warning',
+        visit=visit,
+    )
+    _notify(
+        user_id=visit.employee_user_id,
+        title='TL Approved Client Visit',
+        message=f'{message} Waiting for HR approval.',
+        notification_type='info',
+        visit=visit,
+    )
+
+
+def _safe_notify_hr_approval_required(visit, tl_user):
+    try:
+        _notify_hr_approval_required(visit, tl_user)
+    except Exception:
+        logger.exception(
+            'Unable to send HR approval notification for Client Visit %s',
+            visit.pk,
+        )
 def _resolve_reporting_manager(value, *, requester=None):
     raw = str(value or '').strip()
     if not raw:
@@ -352,6 +382,20 @@ def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
     if approver:
         approver_name = f'{approver.first_name} {approver.last_name}'.strip() or approver.email
         approver_role = approver.role
+    tl_approver = None
+    if item.tl_approved_by:
+        tl_approver = User.objects.filter(
+            user_id=item.tl_approved_by,
+            is_active=True,
+        ).only('role', 'first_name', 'last_name', 'email').first()
+    tl_approved_by_name = ''
+    tl_approved_by_role = ''
+    if tl_approver:
+        tl_approved_by_name = (
+            f'{tl_approver.first_name} {tl_approver.last_name}'.strip()
+            or tl_approver.email
+        )
+        tl_approved_by_role = tl_approver.role
     # Resolve employee profile photo (best-effort, fails silently)
     try:
         emp_user = User.objects.filter(user_id=item.employee_user_id, is_active=True).only('email').first()
@@ -382,6 +426,11 @@ def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
         'approval_comment': item.approval_comment, 'approved_by': item.approved_by,
         'approved_by_name': approver_name, 'approved_by_role': approver_role,
         'approved_at': item.approved_at.isoformat() if item.approved_at else None,
+        'tl_approval_comment': item.tl_approval_comment,
+        'tl_approved_by': item.tl_approved_by,
+        'tl_approved_by_name': tl_approved_by_name,
+        'tl_approved_by_role': tl_approved_by_role,
+        'tl_approved_at': item.tl_approved_at.isoformat() if item.tl_approved_at else None,
         'office_check_out_at': item.office_check_out_at.isoformat() if item.office_check_out_at else None,
         'office_check_out_latitude': float(item.office_check_out_latitude) if item.office_check_out_latitude is not None else None,
         'office_check_out_longitude': float(item.office_check_out_longitude) if item.office_check_out_longitude is not None else None,
@@ -599,13 +648,41 @@ def visit_approval(request, pk):
         return _error('CEO approval applies only to HR client visits.', 403)
     if not required_approver_role and user.role in {'manager', 'tl'} and visit.manager_user_id != user_id:
         return _error('This visit is not assigned to you.', 403)
+    if visit.tl_approved_by and user.role != 'hr':
+        return _error('Final HR approval is required for this visit.', 403)
+    if (
+        not required_approver_role
+        and user.role == 'hr'
+        and not visit.tl_approved_by
+        and visit.manager_user_id != user_id
+    ):
+        return _error('TL approval is required before HR approval.', 409)
     if visit.status != 'pending':
         return _error('Only pending visits can be reviewed.', 409)
     action = str(request.data.get('action') or '').lower()
     if action not in {'approve', 'reject', 'changes'}:
         return _error('Action must be approve, reject, or changes.')
+    comment = str(request.data.get('comment') or '').strip()
+    is_employee_tl_stage = (
+        not required_approver_role and user.role in {'manager', 'tl'}
+    )
+    if is_employee_tl_stage and action == 'approve':
+        if visit.tl_approved_by:
+            return _error('TL approval is already recorded.', 409)
+        visit.status = 'pending'
+        visit.tl_approval_comment = comment
+        visit.tl_approved_by = user_id
+        visit.tl_approved_at = timezone.now()
+        visit.save()
+        _safe_notify_hr_approval_required(visit, user)
+        return Response({
+            'success': True,
+            'message': 'TL approved. Waiting for final HR approval.',
+            'visit': _visit_payload(visit),
+        })
+
     visit.status = 'approved' if action == 'approve' else 'rejected'
-    visit.approval_comment = str(request.data.get('comment') or '').strip()
+    visit.approval_comment = comment
     visit.approved_by = user_id
     visit.approved_at = timezone.now()
     visit.save()

@@ -20,6 +20,11 @@ class ClientVisit {
   final String approvedByName;
   final String approvedByRole;
   final DateTime? approvedAt;
+  final String tlApprovalComment;
+  final String tlApprovedBy;
+  final String tlApprovedByName;
+  final String tlApprovedByRole;
+  final DateTime? tlApprovedAt;
   final String outcome;
   final String followUp;
   final DateTime? officeCheckOutAt;
@@ -67,6 +72,11 @@ class ClientVisit {
     required this.approvedByName,
     required this.approvedByRole,
     required this.approvedAt,
+    required this.tlApprovalComment,
+    required this.tlApprovedBy,
+    required this.tlApprovedByName,
+    required this.tlApprovedByRole,
+    required this.tlApprovedAt,
     required this.outcome,
     required this.followUp,
     required this.officeCheckOutAt,
@@ -118,6 +128,11 @@ class ClientVisit {
       approvedByName: '${json['approved_by_name'] ?? ''}',
       approvedByRole: '${json['approved_by_role'] ?? ''}',
       approvedAt: DateTime.tryParse('${json['approved_at'] ?? ''}'),
+      tlApprovalComment: '${json['tl_approval_comment'] ?? ''}',
+      tlApprovedBy: '${json['tl_approved_by'] ?? ''}',
+      tlApprovedByName: '${json['tl_approved_by_name'] ?? ''}',
+      tlApprovedByRole: '${json['tl_approved_by_role'] ?? ''}',
+      tlApprovedAt: DateTime.tryParse('${json['tl_approved_at'] ?? ''}'),
       outcome: '${json['outcome'] ?? ''}',
       followUp: '${json['follow_up'] ?? ''}',
       officeCheckOutAt: DateTime.tryParse(

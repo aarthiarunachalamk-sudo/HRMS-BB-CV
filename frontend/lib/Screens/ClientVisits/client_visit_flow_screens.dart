@@ -3248,6 +3248,51 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     3 => [
       _visitInfo(visit),
       const SizedBox(height: 12),
+      if (visit.tlApprovedBy.isNotEmpty) ...[
+        EmployeeCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: ClientVisitColors.green,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'TL APPROVED',
+                    style: TextStyle(
+                      color: ClientVisitColors.green,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              EmployeeInfoRow(
+                'Approved by',
+                visit.tlApprovedByName.isEmpty
+                    ? visit.tlApprovedBy
+                    : visit.tlApprovedByName,
+              ),
+              if (visit.tlApprovedAt != null)
+                EmployeeInfoRow(
+                  'Approved at',
+                  _dateTime(visit.tlApprovedAt!),
+                ),
+              if (visit.tlApprovalComment.isNotEmpty)
+                EmployeeInfoRow('TL comment', visit.tlApprovalComment),
+              const SizedBox(height: 6),
+              const Text(
+                'Waiting for final HR approval',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
       if (widget.readOnlyMode)
         _monitoringNotice()
       else
@@ -5077,8 +5122,26 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         child: Column(
           children: [
             EmployeeInfoRow('Status', _label(visit.status)),
+            if (visit.tlApprovedBy.isNotEmpty) ...[
+              EmployeeInfoRow('TL Status', 'Approved'),
+              EmployeeInfoRow(
+                'TL Approved By',
+                visit.tlApprovedByName.isEmpty
+                    ? visit.tlApprovedBy
+                    : visit.tlApprovedByName,
+              ),
+              EmployeeInfoRow(
+                'TL Approved At',
+                visit.tlApprovedAt == null
+                    ? 'â€”'
+                    : '${_date(visit.tlApprovedAt!)}  '
+                          '${TimeOfDay.fromDateTime(visit.tlApprovedAt!.toLocal()).format(context)}',
+              ),
+              if (visit.tlApprovalComment.isNotEmpty)
+                EmployeeInfoRow('TL Comment', visit.tlApprovalComment),
+            ],
             EmployeeInfoRow(
-              'Approved By',
+              'Final Approved By',
               visit.approvedByName.isEmpty
                   ? '—'
                   : '${visit.approvedByName} (${visit.approvedByRole})',

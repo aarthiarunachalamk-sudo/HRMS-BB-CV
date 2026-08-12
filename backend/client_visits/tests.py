@@ -43,6 +43,58 @@ class ClientVisitApiTests(APITestCase):
             'submit': True,
         }, format='json')
 
+    def test_employee_visit_requires_tl_then_hr_approval(self):
+        hr = User.objects.create_user(
+            'employee-visit-final-hr@example.com',
+            role='hr',
+        )
+        created = self._create()
+        visit_id = created.data['visit']['id']
+
+        tl_approval = self.client.post(
+            f'/api/client-visits/{visit_id}/approval/',
+            {
+                'user_id': self.manager.user_id,
+                'action': 'approve',
+                'comment': 'TL approved this visit.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(tl_approval.status_code, 200)
+        self.assertEqual(tl_approval.data['visit']['status'], 'pending')
+        self.assertEqual(
+            tl_approval.data['visit']['tl_approved_by'],
+            self.manager.user_id,
+        )
+        self.assertEqual(
+            tl_approval.data['visit']['tl_approval_comment'],
+            'TL approved this visit.',
+        )
+        self.assertTrue(AppNotification.objects.filter(
+            recipient_role='hr',
+            title='Client Visit HR Approval Required',
+            reference_id=str(visit_id),
+        ).exists())
+
+        hr_approval = self.client.post(
+            f'/api/client-visits/{visit_id}/approval/',
+            {
+                'user_id': hr.user_id,
+                'action': 'approve',
+                'comment': 'Final HR approval.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(hr_approval.status_code, 200)
+        self.assertEqual(hr_approval.data['visit']['status'], 'approved')
+        self.assertEqual(hr_approval.data['visit']['approved_by'], hr.user_id)
+        self.assertEqual(
+            hr_approval.data['visit']['tl_approved_by'],
+            self.manager.user_id,
+        )
+
     @patch('client_visits.storage.cloudinary.config')
     def test_client_visit_cloudinary_must_differ_from_primary_account(self, config):
         config.return_value.cloud_name = 'client-visits-test-cloud'
@@ -667,22 +719,23 @@ class ClientVisitApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 410)
 
-    def test_tl_and_hr_can_approve_client_visits(self):
-        for role in ('tl', 'hr'):
-            visit_id = self._create().data['visit']['id']
-            approver = self.manager if role == 'tl' else User.objects.create_user(
-                'client-visit-approver-hr@example.com',
-                role='hr',
-            )
-            response = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
-                'user_id': approver.user_id,
-                'action': 'approve',
-                'comment': f'Approved by {role.upper()}.',
-            }, format='json')
-            self.assertEqual(response.status_code, 200, role)
-            visit = ClientVisit.objects.get(pk=visit_id)
-            self.assertEqual(visit.status, 'approved', role)
-            self.assertEqual(visit.approved_by, approver.user_id, role)
+    def test_hr_cannot_skip_tl_approval_for_employee_visit(self):
+        visit_id = self._create().data['visit']['id']
+        hr = User.objects.create_user(
+            'client-visit-approver-hr@example.com',
+            role='hr',
+        )
+
+        response = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
+            'user_id': hr.user_id,
+            'action': 'approve',
+            'comment': 'Attempted final HR approval.',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 409)
+        visit = ClientVisit.objects.get(pk=visit_id)
+        self.assertEqual(visit.status, 'pending')
+        self.assertEqual(visit.tl_approved_by, '')
 
     def test_active_route_is_tl_only_then_available_to_history_roles(self):
         hr = User.objects.create_user('route-history-hr@example.com', role='hr')
