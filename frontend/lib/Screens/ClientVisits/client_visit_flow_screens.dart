@@ -571,6 +571,11 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     setState(() {});
   }
 
+  bool _isApproved(ClientVisit v) {
+    // Consider visit approved if backend status was set, or TL/manager approval timestamps exist
+    return v.status == 'approved' || v.tlApprovedAt != null || v.approvedAt != null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -3408,7 +3413,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ),
     ],
     4 => [
-      if (visit.status == 'approved') ...[
+      if (_isApproved(visit)) ...[
         _stageBadge(
           'START TO VISIT',
           ClientVisitColors.blue,
@@ -3416,14 +3421,14 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         const SizedBox(height: 12),
       ],
       _visitInfo(visit),
-      if (visit.status == 'approved') ...[
+      if (_isApproved(visit)) ...[
         const SizedBox(height: 12),
         _approvalInfo(visit),
       ],
       const SizedBox(height: 12),
       if (widget.readOnlyMode)
         _monitoringNotice()
-      else if (visit.status == 'approved')
+      else if (_isApproved(visit))
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -3761,15 +3766,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => _push(
-                  ClientVisitWorkUpdateScreen(
-                    userId: widget.userId,
-                    visitId: widget.visitId,
-                    service: widget.service,
-                    initialAttendees: _attendees,
-                    initialChecklist: _checklist,
-                  ),
-                ),
+                onPressed: _startSequentialPostVisitFlow,
                 icon: const Icon(Icons.edit_note, size: 18),
                 label: const Text('Add Update'),
               ),
@@ -4694,9 +4691,62 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           : [_visitInfo(visit)],
   };
 
-  Future<void> _push(Widget screen) async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+  Future<T?> _push<T>(Widget screen) async {
+    final result = await Navigator.of(context)
+        .push<T>(MaterialPageRoute(builder: (_) => screen));
     await _load();
+    return result;
+  }
+
+  /// Sequential flow: Add Update -> Upload Proof -> Expense -> Return/Checkout
+  Future<void> _startSequentialPostVisitFlow() async {
+    // 1) Add Update
+    final updated = await _push<bool>(
+      ClientVisitWorkUpdateScreen(
+        userId: widget.userId,
+        visitId: widget.visitId,
+        service: widget.service,
+        initialAttendees: _attendees,
+        initialChecklist: _checklist,
+      ),
+    );
+    if (!mounted) return;
+    if (updated != true) return; // user cancelled or didn't save
+
+    // 2) Upload Proof (prompt image picker similar to existing Upload Proof button)
+    try {
+      final images = await ImagePicker().pickMultiImage(imageQuality: 82);
+      if (images.isNotEmpty && mounted) {
+        await _run(() => widget.service.uploadFiles(
+              widget.userId,
+              widget.visitId,
+              'proof',
+              images.map((i) => i.path).toList(),
+            ));
+        if (mounted) _message('Proof uploaded.');
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    // 3) Expense claim screen
+    await _push(
+      ClientVisitExpenseScreen(
+        userId: widget.userId,
+        visitId: widget.visitId,
+        service: widget.service,
+      ),
+    );
+    if (!mounted) return;
+
+    // 4) Return / direct checkout screen
+    await _push(
+      ClientVisitReturnCheckoutScreen(
+        userId: widget.userId,
+        visitId: widget.visitId,
+        service: widget.service,
+      ),
+    );
   }
 
   Widget _flowButton(IconData icon, String label, VoidCallback onPressed) =>
