@@ -36,6 +36,7 @@ try {
     Write-Host "========================================================"
     Write-Host ""
 
+    Set-Location $projectDirectory
     & flutter build apk --release --split-per-abi `
         --build-name $versionName `
         --build-number $buildNumber
