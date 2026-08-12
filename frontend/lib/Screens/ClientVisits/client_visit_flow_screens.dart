@@ -1136,11 +1136,56 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               'odometer': _odometer.text.trim(),
           });
       if (mounted) {
-        final visit = _visit;
-        if (visit != null) await openClientVisitNavigation(visit);
+        final showMap = await _showOfficeCheckoutSuccessDialog();
+        if (!mounted) return;
+        if (showMap) {
+          final visit = _visit;
+          final opened = visit != null
+              ? await openClientVisitNavigation(visit)
+              : false;
+          if (!mounted) return;
+          if (!opened) {
+            _message(
+              'No compatible map app was found for this destination.',
+            );
+          }
+        }
         if (mounted) Navigator.of(context).pop(true);
       }
     });
+  }
+
+  Future<bool> _showOfficeCheckoutSuccessDialog() async {
+    final showMap = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(
+          Icons.check_circle_rounded,
+          color: ClientVisitColors.green,
+          size: 52,
+        ),
+        title: const Text('Office check-out successful'),
+        content: const Text(
+          'Your office check-out has been recorded. Open Google Maps to '
+          'start navigation to the client location.',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.map_rounded),
+            label: const Text('Show in Google Maps'),
+          ),
+        ],
+      ),
+    );
+    return showMap ?? false;
   }
 
   Future<void> _reached() async {
@@ -3273,12 +3318,8 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
     4 => [
       if (visit.status == 'approved') ...[
         _stageBadge(
-          visit.isReadyToStart
-              ? 'START TO VISIT'
-              : _approvalBadgeLabel(visit.approvedByRole),
-          visit.isReadyToStart
-              ? ClientVisitColors.blue
-              : ClientVisitColors.green,
+          'START TO VISIT',
+          ClientVisitColors.blue,
         ),
         const SizedBox(height: 12),
       ],
@@ -3294,27 +3335,16 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!visit.isReadyToStart) ...[
-              _statusNotice(
-                visit,
-                message:
-                    'Approved. Start to Visit will be available at '
-                    '${_dateTime(visit.startVisitAt)} (one hour before the visit).',
-              ),
-              const SizedBox(height: 12),
-            ],
             FilledButton.icon(
-              onPressed: visit.isReadyToStart
-                  ? () => _replace(
-                      ClientVisitOfficeCheckoutScreen(
-                        userId: widget.userId,
-                        visitId: widget.visitId,
-                        service: widget.service,
-                      ),
-                    )
-                  : null,
+              onPressed: () => _replace(
+                ClientVisitOfficeCheckoutScreen(
+                  userId: widget.userId,
+                  visitId: widget.visitId,
+                  service: widget.service,
+                ),
+              ),
               icon: const Icon(Icons.directions_car),
-              label: Text(visit.isReadyToStart ? 'Start to Visit' : 'Approved'),
+              label: const Text('Start to Visit'),
             ),
           ],
         )
@@ -8114,7 +8144,7 @@ class _LiveMapViewState extends State<_LiveMapView>
 String _title(int step) =>
     const {
       3: 'Manager Approval',
-      4: 'Approved Visit',
+      4: 'Start to Visit',
       5: 'Office Check-Out',
       6: 'Travel in Progress',
       7: 'Client Check-In',

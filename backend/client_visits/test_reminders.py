@@ -73,7 +73,7 @@ class ClientVisitReminderTests(TestCase):
         push.assert_not_called()
 
 
-class ClientVisitStartWindowTests(APITestCase):
+class ClientVisitStartTests(APITestCase):
     def setUp(self):
         self.employee = User.objects.create_user(
             'visit-start-window@example.com',
@@ -96,18 +96,18 @@ class ClientVisitStartWindowTests(APITestCase):
             format='json',
         )
 
+    @patch('client_visits.views.send_mobile_push', return_value=False)
     @patch('client_visits.views.timezone.now')
-    def test_start_to_visit_is_blocked_before_one_hour_window(self, now):
+    def test_start_to_visit_is_allowed_before_one_hour_window(self, now, _push):
         now.return_value = self.scheduled_at.astimezone(
             datetime_timezone.utc
         ) - timedelta(hours=1, minutes=1)
 
         response = self._start()
 
-        self.assertEqual(response.status_code, 409)
-        self.assertIn('one hour before', response.data['message'])
+        self.assertEqual(response.status_code, 200)
         self.visit.refresh_from_db()
-        self.assertEqual(self.visit.status, 'approved')
+        self.assertEqual(self.visit.status, 'travelling')
 
     @patch('client_visits.views.send_mobile_push', return_value=False)
     @patch('client_visits.views.timezone.now')

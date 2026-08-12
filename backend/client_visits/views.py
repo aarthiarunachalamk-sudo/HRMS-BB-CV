@@ -1,5 +1,4 @@
 from decimal import Decimal, InvalidOperation
-from datetime import datetime, timedelta, timezone as datetime_timezone
 import hashlib
 import json
 import logging
@@ -36,7 +35,6 @@ SUPERVISOR_ROLES = {'manager', 'tl', 'hr', 'admin', 'superadmin'}
 COMPLETION_HISTORY_ROLES = {'hr', 'ceo', 'md', 'superadmin'}
 SELF_APPROVING_VISIT_ROLES = {'admin', 'superadmin', 'ceo', 'md', 'director'}
 DAILY_VISIT_LIMIT = 5   # maximum visits any employee may schedule on a single date
-IST = datetime_timezone(timedelta(hours=5, minutes=30))
 logger = logging.getLogger(__name__)
 EDITABLE_FIELDS = (
     'client_name', 'contact_person', 'contact_phone', 'address', 'latitude',
@@ -53,24 +51,6 @@ def _actor(request):
 
 def _error(message, status=400):
     return Response({'success': False, 'message': message}, status=status)
-
-
-def _visit_start_at(visit):
-    if isinstance(visit.scheduled_date, str) or isinstance(
-        visit.scheduled_time,
-        str,
-    ):
-        scheduled_at = datetime.fromisoformat(
-            f'{visit.scheduled_date}T{visit.scheduled_time}'
-        )
-        scheduled_at = scheduled_at.replace(tzinfo=IST)
-    else:
-        scheduled_at = datetime.combine(
-            visit.scheduled_date,
-            visit.scheduled_time,
-            tzinfo=IST,
-        )
-    return scheduled_at - timedelta(hours=1)
 
 
 def _is_camera_image(upload):
@@ -387,7 +367,6 @@ def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
         or item.employee_user_id == viewer.user_id
         or viewer.role == 'tl'
     )
-    start_visit_at = _visit_start_at(item)
     payload = {
         'id': item.id, 'visit_id': item.visit_id, 'employee_user_id': item.employee_user_id,
         'employee_name': item.employee_name, 'employee_photo_url': employee_photo_url,
@@ -400,10 +379,6 @@ def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
         'scheduled_time': item.scheduled_time.strftime('%H:%M') if hasattr(item.scheduled_time, 'strftime') else str(item.scheduled_time)[:5],
         'duration_minutes': item.duration_minutes, 'travel_mode': item.travel_mode,
         'purpose': item.purpose, 'notes': item.notes, 'status': item.status,
-        'start_visit_at': start_visit_at.isoformat(),
-        'can_start_visit': (
-            item.status == 'approved' and timezone.now() >= start_visit_at
-        ),
         'approval_comment': item.approval_comment, 'approved_by': item.approved_by,
         'approved_by_name': approver_name, 'approved_by_role': approver_role,
         'approved_at': item.approved_at.isoformat() if item.approved_at else None,
@@ -688,13 +663,6 @@ def visit_start_travel(request, pk):
         return _error('Only the assigned employee can start travel.', 403)
     if visit.status != 'approved':
         return _error('The visit must be approved before office check-out.', 409)
-    earliest_start = _visit_start_at(visit)
-    if timezone.now() < earliest_start:
-        return _error(
-            'Start to Visit will be available at '
-            f'{earliest_start:%d-%m-%Y %I:%M %p} (one hour before the visit).',
-            409,
-        )
     visit.status = 'travelling'
     visit.office_check_out_at = timezone.now()
     visit.office_check_out_latitude = request.data.get('latitude') or None

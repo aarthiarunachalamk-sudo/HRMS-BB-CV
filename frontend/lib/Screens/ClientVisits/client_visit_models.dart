@@ -168,13 +168,6 @@ class ClientVisit {
             .toList()
       : <Map<String, dynamic>>[];
 
-  /// An approved visit becomes actionable one hour before its scheduled time.
-  /// The persisted backend status remains `approved` until travel actually
-  /// starts, preventing reminder/display state from being mistaken for travel.
-  DateTime get startVisitAt => scheduledAt.subtract(const Duration(hours: 1));
-
-  bool get isReadyToStart =>
-      status == 'approved' && !DateTime.now().isBefore(startVisitAt);
 }
 
 class ClientVisitListResult {

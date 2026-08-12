@@ -2339,13 +2339,12 @@ class _VisitCard extends StatelessWidget {
   Color get _statusColor => employeeStatusColor(visit.status);
 
   String get _statusLabel =>
-      visit.isReadyToStart ? 'Start to Visit' : _label(visit.status);
+      visit.status == 'approved' ? 'Start to Visit' : _label(visit.status);
 
   String get _nextActionLabel => switch (visit.status) {
     'draft' => 'Complete request',
     'pending' => 'View request',
-    'approved' =>
-      visit.isReadyToStart ? 'Start to Visit' : 'View approved visit',
+    'approved' => 'Start to Visit',
     'travelling' => 'View travel options',
     'in_progress' => 'Continue client visit',
     'completed' => 'View visit summary',
