@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 const _monthNames = <String>[
@@ -309,15 +310,22 @@ Future<DateTime?> showSeparatedDatePicker({
         builder: (context, setDialogState) => AlertDialog(
           title: Text(helpText ?? 'Select date'),
           contentPadding: const EdgeInsets.fromLTRB(12, 20, 12, 0),
-          content: SizedBox(
-            width: 380,
-            child: SeparatedCalendarDatePicker(
+          content: LayoutBuilder(
+            builder: (ctx, constraints) {
+              final screenWidth = MediaQuery.of(dialogContext).size.width;
+              final dialogWidth = math.min(380.0, screenWidth - 40.0);
+              return SizedBox(
+                width: dialogWidth,
+                child: SeparatedCalendarDatePicker(
               initialDate: selected,
               firstDate: firstDate,
               lastDate: lastDate,
               selectableDayPredicate: selectableDayPredicate,
               onDateChanged: (value) => setDialogState(() => selected = value),
-            ),
+                ),
+              );
+            },
+          ),
           ),
           actions: [
             TextButton(

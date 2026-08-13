@@ -15,9 +15,9 @@ enum EmployeeAttendanceAction { checkIn, checkOut }
 
 const int _fullDayCheckInCutoffHour = 12;
 const double _selfiePreviewAspectRatio = .76;
-const double _targetGpsAccuracyMeters = 15;
+const double _targetGpsAccuracyMeters = 25;
 const double _maximumGpsAccuracyMeters = 50;
-const Duration _gpsCaptureTimeout = Duration(seconds: 25);
+const Duration _gpsCaptureTimeout = Duration(seconds: 12);
 const Duration _maximumGpsAge = Duration(seconds: 45);
 
 class _GpsCaptureException implements Exception {
@@ -151,8 +151,6 @@ class _EmployeeSelfieAttendanceScreenState
     setState(() {
       _loadingLocation = true;
       _locationPermissionDeniedForever = false;
-      _position = null;
-      _gpsAddress = null;
       _error = null;
     });
 
@@ -168,8 +166,10 @@ class _EmployeeSelfieAttendanceScreenState
         return;
       }
 
+      // Check permission status without immediately requesting it.
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
+        // Only show the OS permission dialog when it has never been asked.
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied ||
@@ -187,6 +187,30 @@ class _EmployeeSelfieAttendanceScreenState
         return;
       }
 
+      // --- Fast path: reuse a recent last-known position ---
+      // This avoids re-acquiring GPS from scratch when the user already has a
+      // fresh fix (e.g. returning from the settings screen).
+      final lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null &&
+          !lastKnown.isMocked &&
+          lastKnown.accuracy > 0 &&
+          lastKnown.accuracy <= _maximumGpsAccuracyMeters) {
+        final age = DateTime.now().difference(lastKnown.timestamp).abs();
+        if (age <= _maximumGpsAge) {
+          if (mounted) {
+            setState(() {
+              _position = lastKnown;
+              _loadingLocation = false;
+              _error = null;
+            });
+          }
+          await _loadAddress(lastKnown);
+          await _initCamera();
+          return;
+        }
+      }
+
+      // --- Slow path: acquire a fresh GPS fix ---
       final position = await _capturePrecisePosition();
       if (!mounted) return;
       setState(() {
@@ -247,7 +271,10 @@ class _EmployeeSelfieAttendanceScreenState
           );
           return;
         }
-        final age = DateTime.now().difference(candidate.timestamp).abs();
+        // Some platform builds may return a null timestamp; treat that as fresh.
+        final age = candidate.timestamp == null
+          ? Duration.zero
+          : DateTime.now().difference(candidate.timestamp!).abs();
         if (age > _maximumGpsAge || candidate.accuracy <= 0) return;
         if (bestPosition == null ||
             candidate.accuracy < bestPosition!.accuracy) {

@@ -454,6 +454,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
     final pages = [
       EmployeeHomeScreen(
         data: _data,
+        userId: widget.userId,
         onTabSelected: _selectTab,
         onNotificationTap: _openNotification,
         onOpenNotifications: _openNotifications,

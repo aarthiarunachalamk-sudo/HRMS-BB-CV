@@ -48,12 +48,15 @@ if settings.DEBUG:
         document_root=settings.MEDIA_ROOT,
     )
 
-    urlpatterns += [
-        path(
-            "attendance-media/<path:path>",
-            serve,
-            {
-                "document_root": settings.BASE_DIR / "attendance",
-            },
-        ),
-    ]
+# Serve legacy attendance selfies stored at BASE_DIR/attendance/ (outside
+# MEDIA_ROOT) regardless of DEBUG mode so production deployments can also
+# serve check-in / check-out selfie images via this route.
+urlpatterns += [
+    path(
+        "attendance-media/<path:path>",
+        serve,
+        {
+            "document_root": settings.BASE_DIR / "attendance",
+        },
+    ),
+]

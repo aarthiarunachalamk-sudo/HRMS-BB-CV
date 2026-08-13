@@ -21,6 +21,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/TL/tl_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/TL/tl_shared.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 
 class TLDashboard extends StatefulWidget {
@@ -5796,6 +5797,11 @@ class _CreateTaskState extends State<_CreateTask> {
   bool _saving = false;
   bool _reviewing = false;
 
+  // Checklist items: each map has 'text' (String) and 'done' (bool).
+  final List<Map<String, dynamic>> _checklistItems = [];
+  // Attached files selected via file_selector.
+  final List<XFile> _attachedFiles = [];
+
   @override
   void dispose() {
     _title.dispose();
@@ -5890,6 +5896,65 @@ class _CreateTaskState extends State<_CreateTask> {
       return;
     }
     setState(() => _reviewing = true);
+  }
+
+  Future<void> _openChecklist() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => _ChecklistSheet(
+        items: _checklistItems,
+        onChanged: (updated) => setState(() {
+          _checklistItems
+            ..clear()
+            ..addAll(updated);
+        }),
+      ),
+    );
+  }
+
+  Future<void> _pickFiles() async {
+    const typeGroup = XTypeGroup(
+      label: 'Documents & Images',
+      extensions: [
+        'jpg', 'jpeg', 'png', 'gif', 'webp',
+        'pdf', 'doc', 'docx', 'xls', 'xlsx',
+        'ppt', 'pptx', 'txt', 'csv', 'zip',
+      ],
+    );
+    final files = await openFiles(acceptedTypeGroups: [typeGroup]);
+    if (files.isEmpty || !mounted) return;
+
+    // Guard: reject files > 10 MB each.
+    final tooBig = <String>[];
+    final valid = <XFile>[];
+    for (final f in files) {
+      final length = await f.length();
+      if (length > 10 * 1024 * 1024) {
+        tooBig.add(f.name);
+      } else {
+        valid.add(f);
+      }
+    }
+    if (tooBig.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Skipped ${tooBig.join(', ')} — each file must be 10 MB or smaller.',
+          ),
+        ),
+      );
+    }
+    if (valid.isEmpty) return;
+    setState(() => _attachedFiles.addAll(valid));
+  }
+
+  void _removeAttachment(int index) {
+    setState(() => _attachedFiles.removeAt(index));
   }
 
   @override
@@ -6166,17 +6231,40 @@ class _CreateTaskState extends State<_CreateTask> {
           ],
         ),
         const SizedBox(height: 9),
-        const _TaskOptionRow(
+        _TaskOptionRow(
           icon: Icons.playlist_add_check_rounded,
           title: 'Add Checklist',
-          trailing: '0/4',
+          trailing: '${_checklistItems.where((i) => i['done'] == true).length}/${_checklistItems.length}',
+          onTap: _openChecklist,
         ),
         const SizedBox(height: 5),
-        const _TaskOptionRow(
+        _TaskOptionRow(
           icon: Icons.attach_file_rounded,
           title: 'Attach Files',
-          trailing: '0',
+          trailing: '${_attachedFiles.length}',
+          onTap: _pickFiles,
         ),
+        if (_attachedFiles.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: List.generate(_attachedFiles.length, (i) {
+              final file = _attachedFiles[i];
+              return Chip(
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                label: Text(
+                  file.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10),
+                ),
+                deleteIcon: const Icon(Icons.close_rounded, size: 14),
+                onDeleted: () => _removeAttachment(i),
+              );
+            }),
+          ),
+        ],
         const SizedBox(height: 5),
         const _TaskOptionRow(
           icon: Icons.alarm_add_rounded,
@@ -6328,7 +6416,7 @@ class _CreateTaskState extends State<_CreateTask> {
                     child: _ReviewValue(
                       icon: Icons.check_box_outlined,
                       label: 'Checklist',
-                      value: '0/4',
+                      value: '${_checklistItems.where((i) => i['done'] == true).length}/${_checklistItems.length} items',
                       color: c.primary,
                     ),
                   ),
@@ -6337,7 +6425,7 @@ class _CreateTaskState extends State<_CreateTask> {
                     child: _ReviewValue(
                       icon: Icons.attach_file_rounded,
                       label: 'Attachments',
-                      value: '0 Files',
+                      value: '${_attachedFiles.length} File${_attachedFiles.length == 1 ? '' : 's'}',
                       color: c.primary,
                     ),
                   ),
@@ -6575,6 +6663,184 @@ class _CreateTaskState extends State<_CreateTask> {
   }
 }
 
+class _ChecklistSheet extends StatefulWidget {
+  final List<Map<String, dynamic>> items;
+  final ValueChanged<List<Map<String, dynamic>>> onChanged;
+
+  const _ChecklistSheet({required this.items, required this.onChanged});
+
+  @override
+  State<_ChecklistSheet> createState() => _ChecklistSheetState();
+}
+
+class _ChecklistSheetState extends State<_ChecklistSheet> {
+  late final List<Map<String, dynamic>> _items;
+  final _controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _items = List<Map<String, dynamic>>.from(
+      widget.items.map((e) => Map<String, dynamic>.from(e)),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _addItem() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _items.add({'text': text, 'done': false}));
+    _controller.clear();
+    widget.onChanged(List.from(_items));
+  }
+
+  void _toggleItem(int index) {
+    setState(() => _items[index]['done'] = !(_items[index]['done'] as bool));
+    widget.onChanged(List.from(_items));
+  }
+
+  void _removeItem(int index) {
+    setState(() => _items.removeAt(index));
+    widget.onChanged(List.from(_items));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TlPalette.of(context);
+    final viewInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 4, 16, 20 + viewInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Checklist',
+                  style: TextStyle(
+                    color: c.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _addItem(),
+                  decoration: InputDecoration(
+                    hintText: 'Add checklist item...',
+                    filled: true,
+                    fillColor: c.row,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: c.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: c.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: c.primary, width: 1.4),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _addItem,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: c.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(48, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Icon(Icons.add_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  'No checklist items yet. Add one above.',
+                  style: TextStyle(color: c.muted, fontSize: 12),
+                ),
+              ),
+            )
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _items.length,
+                separatorBuilder: (_, __) => Divider(
+                  height: 1,
+                  color: c.border,
+                ),
+                itemBuilder: (_, i) {
+                  final item = _items[i];
+                  final done = item['done'] as bool;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Checkbox(
+                      value: done,
+                      activeColor: c.primary,
+                      onChanged: (_) => _toggleItem(i),
+                    ),
+                    title: Text(
+                      '${item['text']}',
+                      style: TextStyle(
+                        color: done ? c.muted : c.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        decoration: done
+                            ? TextDecoration.lineThrough
+                            : TextDecoration.none,
+                      ),
+                    ),
+                    trailing: IconButton(
+                      icon: Icon(Icons.delete_outline_rounded,
+                          color: c.danger, size: 20),
+                      onPressed: () => _removeItem(i),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PriorityButton extends StatelessWidget {
   final String value;
   final bool selected;
@@ -6730,49 +6996,55 @@ class _TaskOptionRow extends StatelessWidget {
   final String title;
   final String? trailing;
   final Widget? trailingWidget;
+  final VoidCallback? onTap;
   const _TaskOptionRow({
     required this.icon,
     required this.title,
     this.trailing,
     this.trailingWidget,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final c = TlPalette.of(context);
-    return Container(
-      height: 42,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: c.row,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: c.border),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: c.primary, size: 18),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                color: c.text,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: c.row,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: c.border),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: c.primary, size: 18),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: c.text,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-          if (trailingWidget != null)
-            trailingWidget!
-          else ...[
-            Text(
-              trailing ?? '',
-              style: TextStyle(color: c.muted, fontSize: 10),
-            ),
-            const SizedBox(width: 5),
-            Icon(Icons.chevron_right_rounded, color: c.primary, size: 18),
+            if (trailingWidget != null)
+              trailingWidget!
+            else ...[
+              Text(
+                trailing ?? '',
+                style: TextStyle(color: c.muted, fontSize: 10),
+              ),
+              const SizedBox(width: 5),
+              Icon(Icons.chevron_right_rounded, color: c.primary, size: 18),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

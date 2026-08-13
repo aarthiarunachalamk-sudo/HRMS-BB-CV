@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 
 import 'employee_models.dart';
 import 'employee_shared.dart';
 
 class EmployeeHomeScreen extends StatelessWidget {
   final EmployeeDashboardData data;
+  final String userId;
   final ValueChanged<int> onTabSelected;
   final ValueChanged<Map<String, dynamic>> onNotificationTap;
   final VoidCallback onOpenNotifications;
@@ -20,6 +22,7 @@ class EmployeeHomeScreen extends StatelessWidget {
   const EmployeeHomeScreen({
     super.key,
     required this.data,
+    required this.userId,
     required this.onTabSelected,
     required this.onNotificationTap,
     required this.onOpenNotifications,
@@ -309,7 +312,13 @@ class EmployeeHomeScreen extends StatelessWidget {
                 Icons.person_rounded,
                 'Profile',
                 EmployeeColors.blue,
-                () => onTabSelected(3),
+                () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => UserPersonalInformationScreen(
+                      userId: userId,
+                    ),
+                  ),
+                ),
               ),
               _action(
                 context,

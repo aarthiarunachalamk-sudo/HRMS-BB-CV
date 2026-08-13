@@ -59,6 +59,16 @@ class _EmployeeAttendanceHistoryScreenState
         _toDate,
       );
       if (!mounted) return;
+      // Keep records and print resolved selfie URLs for debugging image loads
+      for (final r in records) {
+        try {
+          final raw = '${r['check_in_selfie'] ?? ''}';
+          final resolved = _attendanceImageUrl(raw);
+          // Use debugPrint so release builds omit verbose logs when Flutter
+          // strips debugPrint calls in release mode.
+          debugPrint('Attendance selfie raw: $raw -> resolved: $resolved');
+        } catch (_) {}
+      }
       setState(() {
         _records = records;
       });
@@ -1635,7 +1645,7 @@ class _SelfieError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uri = Uri.tryParse(url);
-    final label = uri == null ? 'Image not found' : uri.pathSegments.last;
+    final label = uri == null ? 'Image not found' : uri.toString();
     return Container(
       padding: const EdgeInsets.all(8),
       alignment: Alignment.center,
