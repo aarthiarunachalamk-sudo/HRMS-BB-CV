@@ -20,8 +20,11 @@ if (-not $versionMatch.Success) {
 $major       = [int]$versionMatch.Groups[1].Value
 $minor       = [int]$versionMatch.Groups[2].Value + 1   # auto-increment minor
 $buildNumber = [int]$versionMatch.Groups[4].Value + 1   # auto-increment versionCode
+# keep a semantic version for pubspec/flutter, and a custom display name
 $versionName = "$major.$minor.0"
 $displayVersion = "$major.$minor"                        # e.g.  1.6
+# Custom release name required: HRMS-BB-Version{major}.{minor}
+$customVersionName = "HRMS-BB-Version$major.$minor"
 
 # ── 2. Write incremented version back to pubspec.yaml ─────────────────────────
 $nextVersion    = "version: $versionName+$buildNumber"
@@ -32,7 +35,7 @@ try {
     # --- 3. Build all ABI splits ------------------------------------------------
     Write-Host ""
     Write-Host "========================================================"
-    Write-Host "  BBT-ERP  v$displayVersion  (versionCode $buildNumber)"
+    Write-Host "  HRMS-BB  $customVersionName  (versionCode $buildNumber)"
     Write-Host "========================================================"
     Write-Host ""
 
@@ -54,15 +57,15 @@ try {
     }
 
     & flutter build apk --release --split-per-abi `
-        --build-name $versionName `
+        --build-name $customVersionName `
         --build-number $buildNumber
 
     if ($LASTEXITCODE -ne 0) {
         throw "Flutter release build failed with exit code $LASTEXITCODE."
     }
 
-    # --- 4. Rename arm64 APK to BBT-ERP-version.X.X.apk -------------------------
-    $releaseApkName = "BBT-ERP-version.$displayVersion.apk"
+    # --- 4. Rename arm64 APK to HRMS-BB-Version{major}.{minor}.apk -----------
+    $releaseApkName = "HRMS-BB-Version$displayVersion.apk"
     $src = Join-Path $apkDirectory 'app-arm64-v8a-release.apk'
 
     if (-not (Test-Path -LiteralPath $src)) {
@@ -75,7 +78,7 @@ try {
     # --- 5. Summary -------------------------------------------------------------
     Write-Host ""
     Write-Host "Release complete!"
-    Write-Host "  Version name  : $versionName"
+    Write-Host "  Version name  : $customVersionName"
     Write-Host "  Version code  : $buildNumber"
     Write-Host "  Output folder : $apkDirectory"
     Write-Host ""
