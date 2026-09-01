@@ -25,6 +25,16 @@ const _statuses = [
   'rejected',
 ];
 
+const _clientVisitServices = <String, String>{
+  'web_app_development': 'Web App Development',
+  'personal_branding': 'Personal Branding',
+  'digital_marketing': 'Digital Marketing',
+  'business_analytics': 'Business Analytics',
+  'imagination_to_reality': 'Imagination to Reality',
+  'real_time_sales_data_driven_solutions':
+      'Real-Time Sales Data Driven Solutions',
+};
+
 class ClientVisitDashboardScreen extends StatefulWidget {
   final String userId;
   final String title;
@@ -834,6 +844,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   DateTime _date = DateTime.now();
   TimeOfDay _time = TimeOfDay.now();
   String _travelMode = 'car';
+  String? _serviceType;
   int _durationMinutes = 60;
   List<Map<String, dynamic>> _visitApprovers = const [];
   String? _selectedManagerId;
@@ -1086,6 +1097,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
             '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}',
         'duration_minutes': _durationMinutes,
         'travel_mode': _travelMode,
+        'service_type': _serviceType,
         'purpose': _purpose.text.trim(),
         'notes': _notes.text.trim(),
         if (!_selfApprovingRole)
@@ -1352,6 +1364,27 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                       .toList(),
                   onChanged: (value) =>
                       setState(() => _durationMinutes = value!),
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: _serviceType,
+                  validator: _required,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Service',
+                    hintText: 'Select the client service',
+                  ),
+                  items: _clientVisitServices.entries
+                      .map(
+                        (service) => DropdownMenuItem<String>(
+                          value: service.key,
+                          child: Text(
+                            service.value,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) => setState(() => _serviceType = value),
                 ),
                 TextFormField(
                   controller: _purpose,
@@ -1938,6 +1971,10 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
                     EmployeeInfoRow(
                       'Schedule',
                       '${_ymd(visit.scheduledAt)} ${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}',
+                    ),
+                    EmployeeInfoRow(
+                      'Service',
+                      visit.serviceName.isEmpty ? '—' : visit.serviceName,
                     ),
                     EmployeeInfoRow('Purpose', visit.purpose),
                     EmployeeInfoRow('Travel', _label(visit.travelMode)),
@@ -2545,7 +2582,18 @@ class _VisitCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                // Purpose
+                if (visit.serviceName.isNotEmpty) ...[
+                  Text(
+                    visit.serviceName,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                ],
                 Text(
                   visit.purpose,
                   style: TextStyle(

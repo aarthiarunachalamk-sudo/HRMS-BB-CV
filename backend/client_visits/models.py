@@ -8,6 +8,18 @@ from django.db.models import Q
 
 
 class ClientVisit(models.Model):
+    SERVICE_CHOICES = [
+        ('web_app_development', 'Web App Development'),
+        ('personal_branding', 'Personal Branding'),
+        ('digital_marketing', 'Digital Marketing'),
+        ('business_analytics', 'Business Analytics'),
+        ('imagination_to_reality', 'Imagination to Reality'),
+        (
+            'real_time_sales_data_driven_solutions',
+            'Real-Time Sales Data Driven Solutions',
+        ),
+    ]
+
     STATUS_CHOICES = [
         ('draft', 'Draft'),
         ('pending', 'Pending approval'),
@@ -32,6 +44,12 @@ class ClientVisit(models.Model):
     scheduled_time = models.TimeField()
     duration_minutes = models.PositiveIntegerField(default=60)
     travel_mode = models.CharField(max_length=30, default='car')
+    service_type = models.CharField(
+        max_length=50,
+        choices=SERVICE_CHOICES,
+        blank=True,
+        default='',
+    )
     purpose = models.CharField(max_length=180)
     notes = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', db_index=True)

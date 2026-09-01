@@ -36,10 +36,11 @@ COMPLETION_HISTORY_ROLES = {'hr', 'ceo', 'md', 'superadmin'}
 SELF_APPROVING_VISIT_ROLES = {'admin', 'superadmin', 'ceo', 'md', 'director'}
 DAILY_VISIT_LIMIT = 5   # maximum visits any employee may schedule on a single date
 logger = logging.getLogger(__name__)
+SERVICE_TYPES = {value for value, _ in ClientVisit.SERVICE_CHOICES}
 EDITABLE_FIELDS = (
     'client_name', 'contact_person', 'contact_phone', 'address', 'latitude',
     'longitude', 'scheduled_date', 'scheduled_time', 'duration_minutes',
-    'travel_mode', 'purpose', 'notes', 'manager_user_id',
+    'travel_mode', 'service_type', 'purpose', 'notes', 'manager_user_id',
 )
 
 
@@ -422,6 +423,8 @@ def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
         'scheduled_date': item.scheduled_date.isoformat() if hasattr(item.scheduled_date, 'isoformat') else str(item.scheduled_date),
         'scheduled_time': item.scheduled_time.strftime('%H:%M') if hasattr(item.scheduled_time, 'strftime') else str(item.scheduled_time)[:5],
         'duration_minutes': item.duration_minutes, 'travel_mode': item.travel_mode,
+        'service_type': item.service_type,
+        'service_name': item.get_service_type_display() if item.service_type else '',
         'purpose': item.purpose, 'notes': item.notes, 'status': item.status,
         'approval_comment': item.approval_comment, 'approved_by': item.approved_by,
         'approved_by_name': approver_name, 'approved_by_role': approver_role,
@@ -471,6 +474,15 @@ def _assign_fields(visit, data):
                 except (TypeError, ValueError):
                     continue
             setattr(visit, field, value)
+
+
+def _service_type_error(data):
+    if 'service_type' not in data:
+        return None
+    service_type = str(data.get('service_type') or '').strip()
+    if service_type and service_type not in SERVICE_TYPES:
+        return 'Select a valid client service.'
+    return None
 
 
 @api_view(['GET', 'POST'])
@@ -524,6 +536,9 @@ def visit_list_create(request):
     )
     if phone_error:
         return _error(phone_error)
+    service_error = _service_type_error(request.data)
+    if service_error:
+        return _error(service_error)
     reporting_manager, manager_error = _resolve_reporting_manager(
         request.data.get('manager_user_id'),
         requester=user,
@@ -588,6 +603,9 @@ def visit_detail(request, pk):
         })
     if visit.employee_user_id != user_id or visit.status not in {'draft', 'rejected'}:
         return _error('Only the employee can edit a draft or rejected visit.', 409)
+    service_error = _service_type_error(request.data)
+    if service_error:
+        return _error(service_error)
     contact_phone = None
     if 'contact_phone' in request.data:
         contact_phone, phone_error = _normalize_contact_phone(

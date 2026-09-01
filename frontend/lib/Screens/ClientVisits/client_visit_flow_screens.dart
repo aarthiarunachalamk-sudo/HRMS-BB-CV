@@ -1740,6 +1740,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               ['Scheduled', dateTime(reportVisit.scheduledAt)],
               ['Planned duration', '${reportVisit.durationMinutes} minutes'],
               ['Travel mode', _label(reportVisit.travelMode)],
+              ['Service', value(reportVisit.serviceName)],
               ['Purpose', value(reportVisit.purpose)],
               ['Notes', value(reportVisit.notes)],
               ['Created', dateTime(reportVisit.createdAt)],
@@ -4463,6 +4464,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               visit.address.isEmpty ? '—' : visit.address,
             ),
             EmployeeInfoRow(
+              'Service',
+              visit.serviceName.isEmpty ? '—' : visit.serviceName,
+            ),
+            EmployeeInfoRow(
               'Purpose',
               visit.purpose.isEmpty ? '—' : visit.purpose,
             ),
@@ -5039,6 +5044,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
         ),
         EmployeeInfoRow('Address', visit.address),
         EmployeeInfoRow(
+          'Service',
+          visit.serviceName.isEmpty ? '—' : visit.serviceName,
+        ),
+        EmployeeInfoRow(
           'Date & Time',
           '${_date(visit.scheduledAt)}  ${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}',
         ),
@@ -5198,6 +5207,10 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
             EmployeeInfoRow(
               'Address',
               visit.address.isEmpty ? '—' : visit.address,
+            ),
+            EmployeeInfoRow(
+              'Service',
+              visit.serviceName.isEmpty ? '—' : visit.serviceName,
             ),
             EmployeeInfoRow(
               'Purpose',

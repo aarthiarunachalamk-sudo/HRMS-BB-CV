@@ -21,9 +21,22 @@ class VisitExpenseInline(admin.TabularInline):
 
 @admin.register(ClientVisit)
 class ClientVisitAdmin(admin.ModelAdmin):
-    list_display = ('visit_id', 'employee_user_id', 'client_name', 'scheduled_date', 'status')
+    list_display = (
+        'visit_id',
+        'employee_user_id',
+        'client_name',
+        'service_type',
+        'scheduled_date',
+        'status',
+    )
     list_filter = ('status', 'scheduled_date')
-    search_fields = ('visit_id', 'employee_user_id', 'client_name', 'contact_person')
+    search_fields = (
+        'visit_id',
+        'employee_user_id',
+        'client_name',
+        'contact_person',
+        'service_type',
+    )
     inlines = (VisitAttachmentInline, VisitExpenseInline)
 
 

@@ -12,6 +12,8 @@ class ClientVisit {
   final DateTime scheduledAt;
   final int durationMinutes;
   final String travelMode;
+  final String serviceType;
+  final String serviceName;
   final String purpose;
   final String notes;
   final String status;
@@ -64,6 +66,8 @@ class ClientVisit {
     required this.scheduledAt,
     required this.durationMinutes,
     required this.travelMode,
+    required this.serviceType,
+    required this.serviceName,
     required this.purpose,
     required this.notes,
     required this.status,
@@ -120,6 +124,8 @@ class ClientVisit {
       scheduledAt: DateTime.tryParse('${date}T$time') ?? DateTime.now(),
       durationMinutes: int.tryParse('${json['duration_minutes']}') ?? 60,
       travelMode: '${json['travel_mode'] ?? 'car'}',
+      serviceType: '${json['service_type'] ?? ''}',
+      serviceName: '${json['service_name'] ?? ''}',
       purpose: '${json['purpose'] ?? ''}',
       notes: '${json['notes'] ?? ''}',
       status: '${json['status'] ?? 'draft'}',
