@@ -317,15 +317,14 @@ Future<DateTime?> showSeparatedDatePicker({
               return SizedBox(
                 width: dialogWidth,
                 child: SeparatedCalendarDatePicker(
-              initialDate: selected,
-              firstDate: firstDate,
-              lastDate: lastDate,
-              selectableDayPredicate: selectableDayPredicate,
-              onDateChanged: (value) => setDialogState(() => selected = value),
+                  initialDate: selected,
+                  firstDate: firstDate,
+                  lastDate: lastDate,
+                  selectableDayPredicate: selectableDayPredicate,
+                  onDateChanged: (value) => setDialogState(() => selected = value),
                 ),
               );
             },
-          ),
           ),
           actions: [
             TextButton(
