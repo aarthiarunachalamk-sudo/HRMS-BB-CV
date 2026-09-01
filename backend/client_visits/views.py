@@ -424,7 +424,10 @@ def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
         'scheduled_time': item.scheduled_time.strftime('%H:%M') if hasattr(item.scheduled_time, 'strftime') else str(item.scheduled_time)[:5],
         'duration_minutes': item.duration_minutes, 'travel_mode': item.travel_mode,
         'service_type': item.service_type,
-        'service_name': item.get_service_type_display() if item.service_type else '',
+        'service_name': (
+            item.get_service_type_display()
+            if item.service_type in SERVICE_TYPES else ''
+        ),
         'purpose': item.purpose, 'notes': item.notes, 'status': item.status,
         'approval_comment': item.approval_comment, 'approved_by': item.approved_by,
         'approved_by_name': approver_name, 'approved_by_role': approver_role,
@@ -480,7 +483,10 @@ def _service_type_error(data):
     if 'service_type' not in data:
         return None
     service_type = str(data.get('service_type') or '').strip()
-    if service_type and service_type not in SERVICE_TYPES:
+    if service_type and (
+        service_type not in SERVICE_TYPES and
+        not re.fullmatch(r'los_(?:0[1-9]|[1-3][0-9]|4[0-8])_[a-z0-9_]+', service_type)
+    ):
         return 'Select a valid client service.'
     return None
 

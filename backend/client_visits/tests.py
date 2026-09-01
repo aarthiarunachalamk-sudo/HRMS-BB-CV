@@ -466,6 +466,27 @@ class ClientVisitApiTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('valid client service', response.data['message'])
 
+    def test_visit_accepts_individual_los_service(self):
+        response = self.client.post('/api/client-visits/', {
+            'user_id': self.employee.user_id,
+            'manager_user_id': self.manager.user_id,
+            'client_name': 'ABC Solutions',
+            'contact_person': 'Rohit Sharma',
+            'contact_phone': '9876543210',
+            'address': 'Tech Park, Chennai',
+            'scheduled_date': '2026-08-10',
+            'scheduled_time': '10:30',
+            'service_type': 'los_28_web_billing_system',
+            'purpose': 'Discuss billing-system requirements',
+            'submit': True,
+        }, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            response.data['visit']['service_type'],
+            'los_28_web_billing_system',
+        )
+
     def test_visit_follows_approval_check_in_and_completion_workflow(self):
         md = User.objects.create_user('visit-monitor-md@example.com', role='md')
         director = User.objects.create_user(

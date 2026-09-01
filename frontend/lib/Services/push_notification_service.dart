@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -15,7 +16,8 @@ class PushNotificationService {
   static const _channel = AndroidNotificationChannel(
     'hrms_updates',
     'BBT HRMS updates',
-    description: 'Attendance, leave, approvals, payroll, tasks and BBT HRMS updates.',
+    description:
+        'Attendance, leave, approvals, payroll, tasks and BBT HRMS updates.',
     importance: Importance.high,
   );
   final StreamController<Map<String, dynamic>> _notificationTapController =
@@ -25,12 +27,27 @@ class PushNotificationService {
   final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+  bool _firebaseUnavailableReported = false;
   StreamSubscription<String>? _tokenRefreshSubscription;
   String? _registeredUserId;
   String? _registeredRole;
 
-  Future<void> initialize() async {
-    if (_initialized) return;
+  Future<bool> initialize() async {
+    if (_initialized) return true;
+    if (Firebase.apps.isEmpty) {
+      try {
+        await Firebase.initializeApp().timeout(const Duration(seconds: 10));
+      } catch (error) {
+        if (!_firebaseUnavailableReported) {
+          _firebaseUnavailableReported = true;
+          debugPrint(
+            'Push notifications are disabled because Firebase is not '
+            'configured for this build: $error',
+          );
+        }
+        return false;
+      }
+    }
     await _local.initialize(
       const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -59,11 +76,12 @@ class PushNotificationService {
       badge: true,
       sound: true,
     );
-    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
     FirebaseMessaging.onMessage.listen(_showForegroundNotification);
     FirebaseMessaging.onMessageOpenedApp.listen(
       (message) => _notificationTapController.add(message.data),
@@ -76,6 +94,7 @@ class PushNotificationService {
       );
     }
     _initialized = true;
+    return true;
   }
 
   Future<void> registerForUser(String userId, String role) async {
@@ -83,7 +102,7 @@ class PushNotificationService {
     final normalizedRole = role.trim().toLowerCase();
     if (normalizedUserId.isEmpty) return;
     try {
-      await initialize();
+      if (!await initialize()) return;
       final token = await FirebaseMessaging.instance.getToken();
       if (token == null || token.isEmpty) {
         debugPrint('Push token is not available for $normalizedUserId.');

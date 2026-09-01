@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_dropdown.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/logout_exit_dialog.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/constellation_background.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/login_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/logo_widget.dart';
@@ -890,30 +891,12 @@ class _EmployeeDrawer extends StatelessWidget {
                             end: Alignment.bottomRight,
                           ),
                         ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: avatarBg,
-                            image:
-                                profileImagePath == null ||
-                                    profileImagePath!.isEmpty
-                                ? null
-                                : DecorationImage(
-                                    image: employeeProfileImageProvider(
-                                      profileImagePath,
-                                    )!,
-                                    fit: BoxFit.cover,
-                                  ),
-                          ),
-                          child:
-                              profileImagePath == null ||
-                                  profileImagePath!.isEmpty
-                              ? const Icon(
-                                  Icons.add_a_photo_rounded,
-                                  color: EmployeeColors.blue,
-                                  size: 22,
-                                )
-                              : null,
+                        child: EmployeeAvatar(
+                          name: name,
+                          photoUrl: profileImagePath,
+                          radius: 31.5,
+                          backgroundColor: avatarBg,
+                          foregroundColor: EmployeeColors.blue,
                         ),
                       ),
                     ),

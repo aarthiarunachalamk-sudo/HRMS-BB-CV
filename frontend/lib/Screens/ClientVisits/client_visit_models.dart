@@ -1,3 +1,5 @@
+import 'client_visit_service_catalog.dart';
+
 class ClientVisit {
   final int id;
   final String visitId;
@@ -110,6 +112,9 @@ class ClientVisit {
   factory ClientVisit.fromJson(Map<String, dynamic> json) {
     final date = '${json['scheduled_date'] ?? ''}';
     final time = '${json['scheduled_time'] ?? '00:00'}';
+    final serviceType = '${json['service_type'] ?? ''}';
+    final backendServiceName = '${json['service_name'] ?? ''}';
+    final service = clientVisitServiceById(serviceType);
     return ClientVisit(
       id: int.tryParse('${json['id']}') ?? 0,
       visitId: '${json['visit_id'] ?? ''}',
@@ -124,8 +129,11 @@ class ClientVisit {
       scheduledAt: DateTime.tryParse('${date}T$time') ?? DateTime.now(),
       durationMinutes: int.tryParse('${json['duration_minutes']}') ?? 60,
       travelMode: '${json['travel_mode'] ?? 'car'}',
-      serviceType: '${json['service_type'] ?? ''}',
-      serviceName: '${json['service_name'] ?? ''}',
+      serviceType: serviceType,
+      serviceName:
+          backendServiceName.isNotEmpty && backendServiceName != serviceType
+          ? backendServiceName
+          : service?.name ?? backendServiceName,
       purpose: '${json['purpose'] ?? ''}',
       notes: '${json['notes'] ?? ''}',
       status: '${json['status'] ?? 'draft'}',
@@ -188,7 +196,6 @@ class ClientVisit {
             .map((item) => Map<String, dynamic>.from(item))
             .toList()
       : <Map<String, dynamic>>[];
-
 }
 
 class ClientVisitListResult {

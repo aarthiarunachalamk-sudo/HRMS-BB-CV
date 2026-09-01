@@ -326,6 +326,7 @@ class _HistoryAvatar extends StatelessWidget {
         radius: 24,
         backgroundColor: EmployeeColors.blue.withAlpha(45),
         backgroundImage: _imageProvider,
+        onBackgroundImageError: _imageProvider == null ? null : (_, _) {},
         child: _imageProvider == null
             ? Text(
                 title.substring(0, 1).toUpperCase(),

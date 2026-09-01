@@ -9,6 +9,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import '../Employee/employee_shared.dart';
 import 'client_visit_models.dart';
+import 'client_visit_service_catalog.dart';
 import 'client_visit_service.dart';
 import 'client_visit_flow_screens.dart';
 import 'client_visit_theme.dart';
@@ -24,16 +25,6 @@ const _statuses = [
   'completed',
   'rejected',
 ];
-
-const _clientVisitServices = <String, String>{
-  'web_app_development': 'Web App Development',
-  'personal_branding': 'Personal Branding',
-  'digital_marketing': 'Digital Marketing',
-  'business_analytics': 'Business Analytics',
-  'imagination_to_reality': 'Imagination to Reality',
-  'real_time_sales_data_driven_solutions':
-      'Real-Time Sales Data Driven Solutions',
-};
 
 class ClientVisitDashboardScreen extends StatefulWidget {
   final String userId;
@@ -412,72 +403,151 @@ class ClientVisitServicesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ClientVisitTheme(
     child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Services'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Services'), centerTitle: true),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(
-            'Bit Byte Services',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w900,
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0568D8), Color(0xFF00A7C7)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: ClientVisitColors.blue.withAlpha(45),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 34),
+                SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Bit Byte Services',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Digital solutions built to move client ideas forward.',
+                        style: TextStyle(
+                          color: Color(0xFFDDF5FF),
+                          fontSize: 12,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 20),
           Text(
-            'Choose the service that best matches the client requirement.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            'Explore our expertise',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tap any service to see capabilities and outcomes.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: ThemeConfig.getTextMuted(context),
             ),
           ),
-          const SizedBox(height: 16),
-          ..._clientVisitServices.entries.map(
+          const SizedBox(height: 12),
+          ...clientVisitServiceCatalog.map(
             (service) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: EmployeeCard(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: ClientVisitColors.blue.withAlpha(24),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        _serviceIcon(service.key),
-                        color: ClientVisitColors.blue,
-                      ),
+                padding: EdgeInsets.zero,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ClientVisitServiceDetailScreen(service: service),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            service.value,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                            ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: _serviceColor(service.module).withAlpha(24),
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _serviceDescription(service.key),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: ThemeConfig.getTextMuted(context),
-                                  height: 1.35,
+                          child: Icon(
+                            _serviceIcon(service.module),
+                            color: _serviceColor(service.module),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                service.module.toUpperCase(),
+                                style: TextStyle(
+                                  color: _serviceColor(service.module),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: .7,
                                 ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                service.name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                service.description,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: ThemeConfig.getTextMuted(context),
+                                      height: 1.35,
+                                    ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 15,
+                            color: _serviceColor(service.module),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -487,31 +557,206 @@ class ClientVisitServicesScreen extends StatelessWidget {
     ),
   );
 
-  static IconData _serviceIcon(String service) => switch (service) {
-    'web_app_development' => Icons.web_rounded,
-    'personal_branding' => Icons.badge_rounded,
-    'digital_marketing' => Icons.campaign_rounded,
-    'business_analytics' => Icons.analytics_rounded,
-    'imagination_to_reality' => Icons.lightbulb_rounded,
-    'real_time_sales_data_driven_solutions' => Icons.query_stats_rounded,
-    _ => Icons.business_center_rounded,
+  static Color _serviceColor(String module) => switch (module) {
+    'Digital Marketing' => const Color(0xFFFF8A1F),
+    'SEO' => const Color(0xFF12B981),
+    'Performance Marketing' => const Color(0xFFEF476F),
+    'Web Apps' => const Color(0xFF1687FF),
+    'Hosting' => const Color(0xFF00A7C7),
+    'Personal Branding' => const Color(0xFF8B5CF6),
+    'Mobile Apps' => const Color(0xFFE8B20E),
+    _ => ClientVisitColors.blue,
   };
 
-  static String _serviceDescription(String service) => switch (service) {
-    'web_app_development' =>
-      'High-performance, secure and scalable web applications from concept to deployment.',
-    'personal_branding' =>
-      'Identity systems, portfolio experiences and brand storytelling for founders and creators.',
-    'digital_marketing' =>
-      'SEO, paid campaigns, content strategy and social systems focused on measurable growth.',
-    'business_analytics' =>
-      'Dashboards, reporting automation and decision intelligence for operational clarity.',
-    'imagination_to_reality' =>
-      'Product strategy, UI systems, engineering architecture and launch planning for new ideas.',
-    'real_time_sales_data_driven_solutions' =>
-      'Live sales dashboards, pipeline intelligence and integrations for faster revenue decisions.',
-    _ => '',
+  static IconData _serviceIcon(String module) => switch (module) {
+    'Digital Marketing' => Icons.campaign_rounded,
+    'SEO' => Icons.manage_search_rounded,
+    'Performance Marketing' => Icons.ads_click_rounded,
+    'Web Apps' => Icons.web_rounded,
+    'Hosting' => Icons.cloud_rounded,
+    'Personal Branding' => Icons.badge_rounded,
+    'Mobile Apps' => Icons.phone_android_rounded,
+    _ => Icons.business_center_rounded,
   };
+}
+
+class ClientVisitServiceDetailScreen extends StatelessWidget {
+  final ClientVisitServiceItem service;
+
+  const ClientVisitServiceDetailScreen({super.key, required this.service});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ClientVisitServicesScreen._serviceColor(service.module);
+    return ClientVisitTheme(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Service Details')),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [color, Color.lerp(color, Colors.black, .28)!],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withAlpha(50),
+                    blurRadius: 20,
+                    offset: const Offset(0, 9),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(35),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      ClientVisitServicesScreen._serviceIcon(service.module),
+                      color: Colors.white,
+                      size: 29,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    service.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    service.description,
+                    style: const TextStyle(
+                      color: Color(0xFFEAF6FF),
+                      fontSize: 13,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+            _overviewCard(context, color),
+            const SizedBox(height: 14),
+            _pricingCard(context, color),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: color.withAlpha(18),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: color.withAlpha(65)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: color),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Select this service when creating a new client visit request.',
+                      style: TextStyle(fontSize: 12, height: 1.35),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _overviewCard(BuildContext context, Color color) => EmployeeCard(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.fact_check_rounded, color: color, size: 21),
+            const SizedBox(width: 9),
+            Text(
+              'Service information',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _infoRow('Module', service.module),
+        _infoRow('Unit', service.unit),
+        _infoRow('Frequency', service.frequency),
+        _infoRow('Payable', service.payable),
+      ],
+    ),
+  );
+
+  Widget _pricingCard(BuildContext context, Color color) => EmployeeCard(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.currency_rupee_rounded, color: color, size: 21),
+            const SizedBox(width: 9),
+            const Text(
+              'Package pricing',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...List.generate(
+          clientVisitPackageNames.length,
+          (index) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(child: Text(clientVisitPackageNames[index])),
+                Text(
+                  '₹${service.prices[index]}',
+                  style: TextStyle(color: color, fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Text(
+          'Prices are exclusive of GST.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    ),
+  );
+
+  Widget _infoRow(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ClientVisitStatusListScreen extends StatefulWidget {
@@ -1488,12 +1733,12 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                     labelText: 'Service',
                     hintText: 'Select the client service',
                   ),
-                  items: _clientVisitServices.entries
+                  items: clientVisitServiceCatalog
                       .map(
                         (service) => DropdownMenuItem<String>(
-                          value: service.key,
+                          value: service.id,
                           child: Text(
-                            service.value,
+                            '${service.module} • ${service.name}',
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -2642,7 +2887,7 @@ class _VisitCard extends StatelessWidget {
                           ? Image.network(
                               visit.employeePhotoUrl,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Center(
+                              errorBuilder: (_, _, _) => Center(
                                 child: Text(
                                   initials,
                                   style: TextStyle(

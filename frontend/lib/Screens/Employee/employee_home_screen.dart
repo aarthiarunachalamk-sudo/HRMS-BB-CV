@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
+import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 
 import 'employee_models.dart';
@@ -91,31 +92,14 @@ class EmployeeHomeScreen extends StatelessWidget {
                         end: Alignment.bottomRight,
                       ),
                     ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: ThemeConfig.isDark(context)
-                            ? const Color(0xFF0A3359)
-                            : const Color(0xFFEAF7FF),
-                        image:
-                            profileImagePath == null ||
-                                profileImagePath!.isEmpty
-                            ? null
-                            : DecorationImage(
-                                image: employeeProfileImageProvider(
-                                  profileImagePath,
-                                )!,
-                                fit: BoxFit.cover,
-                              ),
-                      ),
-                      child:
-                          profileImagePath == null || profileImagePath!.isEmpty
-                          ? const Icon(
-                              Icons.add_a_photo_rounded,
-                              color: EmployeeColors.blue,
-                              size: 24,
-                            )
-                          : null,
+                    child: EmployeeAvatar(
+                      name: '${profile['name'] ?? 'Employee'}',
+                      photoUrl: profileImagePath,
+                      radius: 32,
+                      backgroundColor: ThemeConfig.isDark(context)
+                          ? const Color(0xFF0A3359)
+                          : const Color(0xFFEAF7FF),
+                      foregroundColor: EmployeeColors.blue,
                     ),
                   ),
                 ),
