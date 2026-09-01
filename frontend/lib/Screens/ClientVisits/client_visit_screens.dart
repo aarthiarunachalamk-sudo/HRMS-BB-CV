@@ -163,6 +163,12 @@ class _ClientVisitDashboardScreenState
     if (changed == true) _load();
   }
 
+  Future<void> _openServices() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ClientVisitServicesScreen()),
+    );
+  }
+
   Future<void> _openStatusList(
     String title,
     Set<String> statuses, {
@@ -342,6 +348,7 @@ class _ClientVisitDashboardScreenState
                   onHistory: () => _openHistory(),
                   downloadCount: _downloadCount,
                   onDownloads: _openDownloads,
+                  onServices: _openServices,
                 ),
               const SizedBox(height: 12),
               SingleChildScrollView(
@@ -397,6 +404,114 @@ class _ClientVisitDashboardScreenState
       ),
     );
   }
+}
+
+class ClientVisitServicesScreen extends StatelessWidget {
+  const ClientVisitServicesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) => ClientVisitTheme(
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Services'),
+        centerTitle: true,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Bit Byte Services',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Choose the service that best matches the client requirement.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: ThemeConfig.getTextMuted(context),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ..._clientVisitServices.entries.map(
+            (service) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: EmployeeCard(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: ClientVisitColors.blue.withAlpha(24),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _serviceIcon(service.key),
+                        color: ClientVisitColors.blue,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            service.value,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _serviceDescription(service.key),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: ThemeConfig.getTextMuted(context),
+                                  height: 1.35,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  static IconData _serviceIcon(String service) => switch (service) {
+    'web_app_development' => Icons.web_rounded,
+    'personal_branding' => Icons.badge_rounded,
+    'digital_marketing' => Icons.campaign_rounded,
+    'business_analytics' => Icons.analytics_rounded,
+    'imagination_to_reality' => Icons.lightbulb_rounded,
+    'real_time_sales_data_driven_solutions' => Icons.query_stats_rounded,
+    _ => Icons.business_center_rounded,
+  };
+
+  static String _serviceDescription(String service) => switch (service) {
+    'web_app_development' =>
+      'High-performance, secure and scalable web applications from concept to deployment.',
+    'personal_branding' =>
+      'Identity systems, portfolio experiences and brand storytelling for founders and creators.',
+    'digital_marketing' =>
+      'SEO, paid campaigns, content strategy and social systems focused on measurable growth.',
+    'business_analytics' =>
+      'Dashboards, reporting automation and decision intelligence for operational clarity.',
+    'imagination_to_reality' =>
+      'Product strategy, UI systems, engineering architecture and launch planning for new ideas.',
+    'real_time_sales_data_driven_solutions' =>
+      'Live sales dashboards, pipeline intelligence and integrations for faster revenue decisions.',
+    _ => '',
+  };
 }
 
 class _ClientVisitStatusListScreen extends StatefulWidget {
@@ -2133,6 +2248,7 @@ class _Summary extends StatelessWidget {
   final VoidCallback onHistory;
   final int downloadCount;
   final VoidCallback onDownloads;
+  final VoidCallback onServices;
   const _Summary({
     required this.summary,
     required this.onInProgress,
@@ -2142,6 +2258,7 @@ class _Summary extends StatelessWidget {
     required this.onHistory,
     required this.downloadCount,
     required this.onDownloads,
+    required this.onServices,
   });
   @override
   Widget build(BuildContext context) => Column(
@@ -2205,6 +2322,17 @@ class _Summary extends StatelessWidget {
         downloadCount,
         ClientVisitColors.blue,
         onDownloads,
+      ),
+      const SizedBox(height: 12),
+      Text('Services', style: _sectionStyle(context)),
+      const SizedBox(height: 7),
+      _menuBox(
+        context,
+        'Services',
+        'View Bit Byte service catalogue',
+        Icons.design_services_rounded,
+        ClientVisitColors.blue,
+        onServices,
       ),
     ],
   );
@@ -2272,6 +2400,51 @@ class _Summary extends StatelessWidget {
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: color),
+        ],
+      ),
+    ),
+  );
+
+  Widget _menuBox(
+    BuildContext context,
+    String label,
+    String subtitle,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(16),
+    child: EmployeeCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: ThemeConfig.getTextPrimary(context),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: ThemeConfig.getTextMuted(context),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
             ),
           ),
           Icon(Icons.chevron_right_rounded, color: color),
