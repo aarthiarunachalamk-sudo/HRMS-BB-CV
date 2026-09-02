@@ -973,7 +973,8 @@ class _ClientVisitServiceSelectionPreviewScreenState
                       child: pw.Image(watermark ?? logo!, width: 310, height: 310),
                     ),
                   ),
-            buildFooter: (context) => pw.Container(
+          ),
+          footer: (context) => pw.Container(
               margin: const pw.EdgeInsets.only(top: 12),
               padding: const pw.EdgeInsets.only(top: 6),
               decoration: const pw.BoxDecoration(
@@ -995,7 +996,6 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 ],
               ),
             ),
-          ),
           build: (_) => [
             pw.Container(
               padding: const pw.EdgeInsets.all(18),
