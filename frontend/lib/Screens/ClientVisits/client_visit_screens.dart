@@ -1172,13 +1172,33 @@ class _ClientVisitServiceSelectionPreviewScreenState
                       const SizedBox(height: 8),
                       Text('${service.unit} • ${service.frequency}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context))),
                     ])),
-                    IconButton(
-                      tooltip: accepted ? 'Reject service' : 'Accept service',
-                      onPressed: () => _setAccepted(service.id, !accepted),
-                      icon: Icon(accepted ? Icons.check_circle_rounded : Icons.cancel_outlined, color: accepted ? const Color(0xFF12B981) : const Color(0xFFD93A4A)),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 82,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '₹${service.prices[widget.packageIndex]}',
+                            style: TextStyle(color: color, fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 12),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(22),
+                            onTap: () => _setAccepted(service.id, !accepted),
+                            child: Icon(
+                              accepted
+                                  ? Icons.check_circle_rounded
+                                  : Icons.cancel_outlined,
+                              color: accepted
+                                  ? const Color(0xFF12B981)
+                                  : const Color(0xFFD93A4A),
+                              size: 36,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 4),
-                    Text('₹${service.prices[widget.packageIndex]}', style: TextStyle(color: color, fontWeight: FontWeight.w900)),
                   ]),
                   ),
                 ),
@@ -1191,41 +1211,55 @@ class _ClientVisitServiceSelectionPreviewScreenState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              OutlinedButton.icon(
-                onPressed: _acceptedServiceIds.isEmpty || _generatingInvoice
-                    ? null
-                    : () => _generateInvoicePdf(acceptedServices),
-                icon: _generatingInvoice
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.picture_as_pdf_rounded),
-                label: Text(
-                  _generatingInvoice ? 'Generating invoice PDF...' : 'Generate invoice PDF',
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _acceptedServiceIds.isEmpty || _generatingInvoice
+                      ? null
+                      : () => _generateInvoicePdf(acceptedServices),
+                  icon: _generatingInvoice
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.picture_as_pdf_rounded),
+                  label: Text(
+                    _generatingInvoice
+                        ? 'Generating invoice PDF...'
+                        : 'Generate invoice PDF',
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: _invoiceFilePath == null ? null : _shareInvoicePdf,
-                icon: const Icon(Icons.share_rounded),
-                label: const Text('Share invoice via WhatsApp or apps'),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _invoiceFilePath == null ? null : _shareInvoicePdf,
+                  icon: const Icon(Icons.share_rounded),
+                  label: const Text('Share invoice via WhatsApp or apps'),
+                ),
               ),
               const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _returnToServices,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Add another service'),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _returnToServices,
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add another service'),
+                ),
               ),
               const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: _acceptedServiceIds.isEmpty
-                    ? null
-                    : _returnToServices,
-                icon: const Icon(Icons.check_circle_rounded),
-                label: Text(
-                  'Confirm ${_acceptedServiceIds.length} service${_acceptedServiceIds.length == 1 ? '' : 's'}',
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _acceptedServiceIds.isEmpty
+                      ? null
+                      : _returnToServices,
+                  icon: const Icon(Icons.check_circle_rounded),
+                  label: Text(
+                    'Confirm ${_acceptedServiceIds.length} service${_acceptedServiceIds.length == 1 ? '' : 's'}',
+                  ),
                 ),
               ),
             ],
