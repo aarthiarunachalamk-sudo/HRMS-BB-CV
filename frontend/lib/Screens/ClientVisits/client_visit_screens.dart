@@ -1001,7 +1001,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
             ),
             child: pw.Column(
               children: [
-                const pw.Text(
+                pw.Text(
                   '2nd Floor - West Wing, Raja Complex, Opp: Sago Serve, Omalur main road, Salem-636302, TN-India.',
                   style: pw.TextStyle(fontSize: 7.2, color: PdfColors.grey600),
                 ),
@@ -1009,17 +1009,17 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                   children: [
-                    const pw.Text('reachus@bitbytetech.org', style: pw.TextStyle(fontSize: 7, color: PdfColors.blue)),
-                    const pw.Text('www.bitbytetech.org', style: pw.TextStyle(fontSize: 7, color: PdfColors.blue)),
-                    const pw.Text('+91 99437 43136 – WhatsApp Only.', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                    pw.Text('reachus@bitbytetech.org', style: pw.TextStyle(fontSize: 7, color: PdfColors.blue)),
+                    pw.Text('www.bitbytetech.org', style: pw.TextStyle(fontSize: 7, color: PdfColors.blue)),
+                    pw.Text('+91 99437 43136 – WhatsApp Only.', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
                   ],
                 ),
                 pw.SizedBox(height: 3),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                   children: [
-                    const pw.Text('Internal Document', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
-                    const pw.Text('Confidential', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                    pw.Text('Internal Document', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                    pw.Text('Confidential', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
                     pw.Text('All rights reserved.  Page ${context.pageNumber} of ${context.pagesCount}', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
                   ],
                 ),
@@ -1083,7 +1083,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
                     children: [
                       pw.Text('reachus@bitbytetech.org', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.blue)),
                       pw.Text('www.bitbytetech.org', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.blue)),
-                      const pw.Text('+91 99437 43136 (WhatsApp Only)', style: pw.TextStyle(fontSize: 8.5)),
+                      pw.Text('+91 99437 43136 (WhatsApp Only)', style: pw.TextStyle(fontSize: 8.5)),
                     ],
                   ),
                 ],
