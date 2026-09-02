@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1281,7 +1282,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
 }
 
 class ClientVisitInvoicePreviewScreen extends StatelessWidget {
-  final List<int> invoiceBytes;
+  final Uint8List invoiceBytes;
   final String fileName;
 
   const ClientVisitInvoicePreviewScreen({
