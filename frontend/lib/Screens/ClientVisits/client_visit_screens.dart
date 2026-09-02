@@ -940,6 +940,8 @@ class _ClientVisitServiceSelectionPreviewScreenState
         0,
         (sum, service) => sum + service.prices[widget.packageIndex],
       );
+      final gst = (total * .18).round();
+      final grandTotal = total + gst;
       final now = DateTime.now();
       final invoiceNumber =
           'BBT-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.millisecondsSinceEpoch.toString().substring(8)}';
@@ -1039,20 +1041,30 @@ class _ClientVisitServiceSelectionPreviewScreenState
             pw.Align(
               alignment: pw.Alignment.centerRight,
               child: pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                width: 220,
+                padding: const pw.EdgeInsets.all(12),
                 decoration: pw.BoxDecoration(
                   color: const PdfColor.fromInt(0xFFE8F4FF),
                   borderRadius: pw.BorderRadius.circular(5),
                 ),
-                child: pw.Text(
-                  'TOTAL  INR $total',
-                  style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+                child: pw.Column(
+                  children: [
+                    _invoiceTotalRow('Subtotal', 'INR $total'),
+                    pw.SizedBox(height: 6),
+                    _invoiceTotalRow('GST (18%)', 'INR $gst'),
+                    pw.Divider(color: PdfColors.blueGrey, height: 16),
+                    _invoiceTotalRow(
+                      'Grand total',
+                      'INR $grandTotal',
+                      bold: true,
+                    ),
+                  ],
                 ),
               ),
             ),
             pw.SizedBox(height: 20),
             pw.Text(
-              'Prices are exclusive of GST. This invoice is generated from the client service selection.',
+              'GST at 18% is included in the grand total. This invoice is generated from the client service selection.',
               style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
             ),
           ],
@@ -1098,6 +1110,27 @@ class _ClientVisitServiceSelectionPreviewScreenState
     }
   }
 
+  pw.Widget _invoiceTotalRow(String label, String value, {bool bold = false}) =>
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            label,
+            style: pw.TextStyle(
+              fontSize: bold ? 11 : 9,
+              fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+            ),
+          ),
+          pw.Text(
+            value,
+            style: pw.TextStyle(
+              fontSize: bold ? 12 : 9,
+              fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+            ),
+          ),
+        ],
+      );
+
   Widget _reviewPill(IconData icon, String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
@@ -1125,6 +1158,8 @@ class _ClientVisitServiceSelectionPreviewScreenState
       0,
       (sum, service) => sum + service.prices[widget.packageIndex],
     );
+    final gst = (total * .18).round();
+    final grandTotal = total + gst;
     return ClientVisitTheme(
       child: Scaffold(
         appBar: AppBar(title: const Text('Final Service Check'), centerTitle: true),
@@ -1159,9 +1194,11 @@ class _ClientVisitServiceSelectionPreviewScreenState
                   ],
                 ),
                 const SizedBox(height: 14),
-                Row(children: [const Expanded(child: Text('Estimated total', style: TextStyle(fontWeight: FontWeight.w800))), Text('₹$total', style: const TextStyle(color: ClientVisitColors.blue, fontSize: 18, fontWeight: FontWeight.w900))]),
+                Row(children: [const Expanded(child: Text('Subtotal', style: TextStyle(fontWeight: FontWeight.w800))), Text('₹$total', style: const TextStyle(color: ClientVisitColors.blue, fontSize: 16, fontWeight: FontWeight.w900))]),
                 const SizedBox(height: 4),
-                Text('Prices are exclusive of GST.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context))),
+                Row(children: [Expanded(child: Text('GST (18%)', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context)))), Text('₹$gst', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context)))]),
+                const Divider(height: 16),
+                Row(children: [const Expanded(child: Text('Grand total', style: TextStyle(fontWeight: FontWeight.w900))), Text('₹$grandTotal', style: const TextStyle(color: ClientVisitColors.blue, fontSize: 18, fontWeight: FontWeight.w900))]),
               ]),
             ),
             const SizedBox(height: 18),
