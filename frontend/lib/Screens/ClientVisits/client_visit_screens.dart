@@ -1002,7 +1002,6 @@ class _ClientVisitServiceSelectionPreviewScreenState
                   width: 1.2,
                 ),
               ),
-              borderRadius: pw.BorderRadius.circular(3),
             ),
             child: pw.Column(
               children: [
