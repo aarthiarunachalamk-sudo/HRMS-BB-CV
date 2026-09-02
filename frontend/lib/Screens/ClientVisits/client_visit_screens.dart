@@ -981,7 +981,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
         pw.MultiPage(
           pageTheme: pw.PageTheme(
             pageFormat: PdfPageFormat.a4,
-            margin: pw.EdgeInsets.all(30),
+            margin: const pw.EdgeInsets.fromLTRB(24, 24, 24, 66),
             buildBackground: (_) => (watermark ?? logo) == null
                 ? pw.SizedBox()
                 : pw.Center(
@@ -992,35 +992,40 @@ class _ClientVisitServiceSelectionPreviewScreenState
                   ),
           ),
           footer: (context) => pw.Container(
-            margin: const pw.EdgeInsets.only(top: 12),
-            padding: const pw.EdgeInsets.only(top: 8),
-            decoration: const pw.BoxDecoration(
+            margin: const pw.EdgeInsets.only(top: 8),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: pw.BoxDecoration(
+              color: const PdfColor.fromInt(0xFFF3F8FC),
               border: pw.Border(
-                top: pw.BorderSide(color: PdfColors.grey300, width: .5),
+                top: const pw.BorderSide(
+                  color: PdfColor.fromInt(0xFF4D8AC8),
+                  width: 1.2,
+                ),
               ),
+              borderRadius: pw.BorderRadius.circular(3),
             ),
             child: pw.Column(
               children: [
                 pw.Text(
                   '2nd Floor - West Wing, Raja Complex, Opp: Sago Serve, Omalur main road, Salem-636302, TN-India.',
-                  style: pw.TextStyle(fontSize: 8.5, color: const PdfColor.fromInt(0xFF52677A)),
+                  style: pw.TextStyle(fontSize: 10, color: const PdfColor.fromInt(0xFF34495E)),
                 ),
                 pw.SizedBox(height: 3),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                   children: [
-                    pw.Text('reachus@bitbytetech.org', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF267ABF))),
-                    pw.Text('www.bitbytetech.org', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF267ABF))),
-                    pw.Text('+91 99437 43136 – WhatsApp Only.', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF52677A))),
+                    pw.Text('reachus@bitbytetech.org', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF1769AA))),
+                    pw.Text('www.bitbytetech.org', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF1769AA))),
+                    pw.Text('+91 99437 43136 – WhatsApp Only.', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF34495E))),
                   ],
                 ),
                 pw.SizedBox(height: 3),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                   children: [
-                    pw.Text('Internal Document', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF52677A))),
-                    pw.Text('Confidential', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF52677A))),
-                    pw.Text('All rights reserved.  Page ${context.pageNumber} of ${context.pagesCount}', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF52677A))),
+                    pw.Text('Internal Document', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF34495E))),
+                    pw.Text('Confidential', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF34495E))),
+                    pw.Text('All rights reserved.  Page ${context.pageNumber} of ${context.pagesCount}', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF34495E))),
                   ],
                 ),
               ],
@@ -1154,9 +1159,8 @@ class _ClientVisitServiceSelectionPreviewScreenState
             pw.TableHelper.fromTextArray(
               headers: const [
                 '#',
-                'Service',
-                'Package',
-                'Unit / Frequency',
+                'Service / Package',
+                'Delivery details',
                 'Base (INR)',
                 'GST 18%',
                 'Total (INR)',
@@ -1170,8 +1174,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
                   final serviceGst = (basePrice * .18).round();
                   return [
                     '${index + 1}',
-                    service.name,
-                    clientVisitPackageNames[selection.packageIndex],
+                    '${service.name}\n${clientVisitPackageNames[selection.packageIndex]} package',
                     '${service.unit} / ${service.frequency}',
                     _formatInvoiceAmount(basePrice),
                     _formatInvoiceAmount(serviceGst),
@@ -1185,19 +1188,18 @@ class _ClientVisitServiceSelectionPreviewScreenState
               headerStyle: pw.TextStyle(
                 color: PdfColors.white,
                 fontWeight: pw.FontWeight.bold,
-                fontSize: 9,
+                fontSize: 10,
               ),
-              cellStyle: const pw.TextStyle(fontSize: 8.5),
-              cellPadding: const pw.EdgeInsets.all(7),
+              cellStyle: const pw.TextStyle(fontSize: 9.5),
+              cellPadding: const pw.EdgeInsets.all(8),
               border: pw.TableBorder.all(color: PdfColors.grey300, width: .5),
               columnWidths: const {
                 0: pw.FlexColumnWidth(.35),
-                1: pw.FlexColumnWidth(2.05),
-                2: pw.FlexColumnWidth(.8),
-                3: pw.FlexColumnWidth(1.25),
-                4: pw.FlexColumnWidth(.75),
-                5: pw.FlexColumnWidth(.7),
-                6: pw.FlexColumnWidth(.85),
+                1: pw.FlexColumnWidth(2.45),
+                2: pw.FlexColumnWidth(1.35),
+                3: pw.FlexColumnWidth(.86),
+                4: pw.FlexColumnWidth(.78),
+                5: pw.FlexColumnWidth(.95),
               },
             ),
             pw.SizedBox(height: 16),
