@@ -945,12 +945,56 @@ class _ClientVisitServiceSelectionPreviewScreenState
       final now = DateTime.now();
       final invoiceNumber =
           'BBT-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.millisecondsSinceEpoch.toString().substring(8)}';
+      pw.MemoryImage? logo;
+      try {
+        final logoData = await rootBundle.load('assets/logo.png');
+        logo = pw.MemoryImage(logoData.buffer.asUint8List());
+      } catch (_) {
+        // Keep invoice generation available even when the optional logo is absent.
+      }
+      pw.MemoryImage? watermark;
+      try {
+        final watermarkData = await rootBundle.load('assets/invoice_watermark.png');
+        watermark = pw.MemoryImage(watermarkData.buffer.asUint8List());
+      } catch (_) {
+        // Fall back to the header logo watermark when the dedicated asset is absent.
+      }
       final document = pw.Document();
       document.addPage(
         pw.MultiPage(
-          pageTheme: const pw.PageTheme(
+          pageTheme: pw.PageTheme(
             pageFormat: PdfPageFormat.a4,
             margin: pw.EdgeInsets.all(30),
+            buildBackground: (_) => (watermark ?? logo) == null
+                ? pw.SizedBox()
+                : pw.Center(
+                    child: pw.Opacity(
+                      opacity: .075,
+                      child: pw.Image(watermark ?? logo!, width: 310, height: 310),
+                    ),
+                  ),
+            buildFooter: (context) => pw.Container(
+              margin: const pw.EdgeInsets.only(top: 12),
+              padding: const pw.EdgeInsets.only(top: 6),
+              decoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  top: pw.BorderSide(color: PdfColors.grey300, width: .5),
+                ),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Bit Byte Technologies • Service Selection Invoice',
+                    style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+                  ),
+                  pw.Text(
+                    'Page ${context.pageNumber} of ${context.pagesCount}',
+                    style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+                  ),
+                ],
+              ),
+            ),
           ),
           build: (_) => [
             pw.Container(
@@ -983,28 +1027,75 @@ class _ClientVisitServiceSelectionPreviewScreenState
                       ),
                     ],
                   ),
-                  pw.Text(
-                    'INVOICE',
-                    style: pw.TextStyle(
-                      color: const PdfColor.fromInt(0xFF50C8FF),
-                      fontSize: 19,
-                      fontWeight: pw.FontWeight.bold,
+                  pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.Text(
+                        'INVOICE',
+                        style: pw.TextStyle(
+                          color: const PdfColor.fromInt(0xFF50C8FF),
+                          fontSize: 19,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      if (logo != null) ...[
+                        pw.SizedBox(width: 12),
+                        pw.Container(
+                          width: 52,
+                          height: 52,
+                          padding: const pw.EdgeInsets.all(3),
+                          decoration: pw.BoxDecoration(
+                            color: PdfColors.white,
+                            borderRadius: pw.BorderRadius.circular(6),
+                          ),
+                          child: pw.Image(logo, fit: pw.BoxFit.contain),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 18),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: const PdfColor.fromInt(0xFFF4F8FC),
+                borderRadius: pw.BorderRadius.circular(6),
+              ),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('INVOICE DETAILS', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF1687FF), fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 5),
+                        pw.Text('Invoice no: $invoiceNumber', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 3),
+                        pw.Text('Date: ${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}', style: const pw.TextStyle(fontSize: 9)),
+                      ],
+                    ),
+                  ),
+                  pw.Container(width: .7, height: 44, color: PdfColors.grey300),
+                  pw.SizedBox(width: 16),
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text('PACKAGE', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF1687FF), fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 5),
+                        pw.Text(packageName, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                        pw.SizedBox(height: 3),
+                        pw.Text('${acceptedServices.length} selected services', style: const pw.TextStyle(fontSize: 9)),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-            pw.SizedBox(height: 22),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('Invoice no: $invoiceNumber'),
-                pw.Text('Date: ${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}'),
-              ],
-            ),
-            pw.SizedBox(height: 7),
-            pw.Text('Selected package: $packageName', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 18),
             pw.TableHelper.fromTextArray(
               headers: const ['#', 'Service', 'Unit / Frequency', 'Amount (INR)'],
               data: List<List<String>>.generate(
