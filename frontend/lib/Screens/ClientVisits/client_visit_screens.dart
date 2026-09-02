@@ -984,8 +984,8 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 ? pw.SizedBox()
                 : pw.Center(
                     child: pw.Opacity(
-                      opacity: .075,
-                      child: pw.Image(watermark ?? logo!, width: 310, height: 310),
+                      opacity: .16,
+                      child: pw.Image(watermark ?? logo!, width: 410, height: 410),
                     ),
                   ),
           ),
