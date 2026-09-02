@@ -986,14 +986,14 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 ? pw.SizedBox()
                 : pw.Center(
                     child: pw.Opacity(
-                      opacity: .26,
+                      opacity: .12,
                       child: pw.Image(watermark ?? logo!, width: 390, height: 390),
                     ),
                   ),
           ),
           footer: (context) => pw.Container(
             margin: const pw.EdgeInsets.only(top: 12),
-            padding: const pw.EdgeInsets.only(top: 6),
+            padding: const pw.EdgeInsets.only(top: 8),
             decoration: const pw.BoxDecoration(
               border: pw.Border(
                 top: pw.BorderSide(color: PdfColors.grey300, width: .5),
@@ -1003,24 +1003,24 @@ class _ClientVisitServiceSelectionPreviewScreenState
               children: [
                 pw.Text(
                   '2nd Floor - West Wing, Raja Complex, Opp: Sago Serve, Omalur main road, Salem-636302, TN-India.',
-                  style: pw.TextStyle(fontSize: 7.2, color: PdfColors.grey600),
+                  style: pw.TextStyle(fontSize: 8.5, color: const PdfColor.fromInt(0xFF52677A)),
                 ),
                 pw.SizedBox(height: 3),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                   children: [
-                    pw.Text('reachus@bitbytetech.org', style: pw.TextStyle(fontSize: 7, color: PdfColors.blue)),
-                    pw.Text('www.bitbytetech.org', style: pw.TextStyle(fontSize: 7, color: PdfColors.blue)),
-                    pw.Text('+91 99437 43136 – WhatsApp Only.', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                    pw.Text('reachus@bitbytetech.org', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF267ABF))),
+                    pw.Text('www.bitbytetech.org', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF267ABF))),
+                    pw.Text('+91 99437 43136 – WhatsApp Only.', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF52677A))),
                   ],
                 ),
                 pw.SizedBox(height: 3),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                   children: [
-                    pw.Text('Internal Document', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
-                    pw.Text('Confidential', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
-                    pw.Text('All rights reserved.  Page ${context.pageNumber} of ${context.pagesCount}', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                    pw.Text('Internal Document', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF52677A))),
+                    pw.Text('Confidential', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF52677A))),
+                    pw.Text('All rights reserved.  Page ${context.pageNumber} of ${context.pagesCount}', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF52677A))),
                   ],
                 ),
               ],
@@ -1090,6 +1090,28 @@ class _ClientVisitServiceSelectionPreviewScreenState
               ),
             ),
             pw.SizedBox(height: 18),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'TAX INVOICE',
+                  style: pw.TextStyle(
+                    fontSize: 15,
+                    color: const PdfColor.fromInt(0xFF0B5FA5),
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.Text(
+                  'SERVICE SELECTION & PRICING',
+                  style: pw.TextStyle(
+                    fontSize: 8,
+                    color: PdfColors.grey700,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 7),
             pw.Container(
               padding: const pw.EdgeInsets.all(12),
               decoration: pw.BoxDecoration(
@@ -1151,9 +1173,9 @@ class _ClientVisitServiceSelectionPreviewScreenState
                     service.name,
                     clientVisitPackageNames[selection.packageIndex],
                     '${service.unit} / ${service.frequency}',
-                    basePrice.toString(),
-                    serviceGst.toString(),
-                    (basePrice + serviceGst).toString(),
+                    _formatInvoiceAmount(basePrice),
+                    _formatInvoiceAmount(serviceGst),
+                    _formatInvoiceAmount(basePrice + serviceGst),
                   ];
                 },
               ),
@@ -1189,24 +1211,56 @@ class _ClientVisitServiceSelectionPreviewScreenState
                   borderRadius: pw.BorderRadius.circular(5),
                 ),
                 child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
-                    _invoiceTotalRow('Subtotal', 'INR $total'),
+                    pw.Text(
+                      'PAYMENT SUMMARY',
+                      style: pw.TextStyle(
+                        fontSize: 8,
+                        color: const PdfColor.fromInt(0xFF0B5FA5),
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.SizedBox(height: 8),
+                    _invoiceTotalRow('Subtotal', 'INR ${_formatInvoiceAmount(total)}'),
                     pw.SizedBox(height: 6),
-                    _invoiceTotalRow('GST (18%)', 'INR $gst'),
+                    _invoiceTotalRow('GST (18%)', 'INR ${_formatInvoiceAmount(gst)}'),
                     pw.Divider(color: PdfColors.blueGrey, height: 16),
                     _invoiceTotalRow(
                       'Grand total',
-                      'INR $grandTotal',
+                      'INR ${_formatInvoiceAmount(grandTotal)}',
                       bold: true,
                     ),
                   ],
                 ),
               ),
             ),
-            pw.SizedBox(height: 20),
-            pw.Text(
-              'GST at 18% is included in the grand total. This invoice is generated from the client service selection.',
-              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+            pw.SizedBox(height: 22),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Expanded(
+                  child: pw.Text(
+                    'Terms: GST at 18% is included in the grand total. This is a computer-generated service selection invoice.',
+                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                  ),
+                ),
+                pw.SizedBox(width: 24),
+                pw.Container(
+                  width: 145,
+                  padding: const pw.EdgeInsets.only(top: 24),
+                  decoration: const pw.BoxDecoration(
+                    border: pw.Border(
+                      top: pw.BorderSide(color: PdfColors.grey500, width: .5),
+                    ),
+                  ),
+                  child: pw.Text(
+                    'Authorised Signatory',
+                    textAlign: pw.TextAlign.center,
+                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1271,6 +1325,16 @@ class _ClientVisitServiceSelectionPreviewScreenState
           ),
         ],
       );
+
+  String _formatInvoiceAmount(int amount) {
+    final digits = amount.toString();
+    final buffer = StringBuffer();
+    for (var index = 0; index < digits.length; index++) {
+      if (index > 0 && (digits.length - index) % 3 == 0) buffer.write(',');
+      buffer.write(digits[index]);
+    }
+    return buffer.toString();
+  }
 
   Widget _reviewPill(IconData icon, String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
