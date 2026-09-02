@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
@@ -1067,6 +1068,15 @@ class _ClientVisitServiceSelectionPreviewScreenState
       await shareFile.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
       setState(() => _invoiceFilePath = shareFile.path);
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ClientVisitInvoicePreviewScreen(
+            invoiceBytes: bytes,
+            fileName: fileName,
+          ),
+        ),
+      );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1268,6 +1278,33 @@ class _ClientVisitServiceSelectionPreviewScreenState
       ),
     );
   }
+}
+
+class ClientVisitInvoicePreviewScreen extends StatelessWidget {
+  final List<int> invoiceBytes;
+  final String fileName;
+
+  const ClientVisitInvoicePreviewScreen({
+    super.key,
+    required this.invoiceBytes,
+    required this.fileName,
+  });
+
+  @override
+  Widget build(BuildContext context) => ClientVisitTheme(
+    child: Scaffold(
+      appBar: AppBar(title: const Text('Invoice Preview'), centerTitle: true),
+      body: PdfPreview(
+        build: (_) async => invoiceBytes,
+        canChangeOrientation: false,
+        canChangePageFormat: false,
+        pdfFileName: fileName,
+        allowPrinting: true,
+        allowSharing: true,
+        loadingWidget: const Center(child: CircularProgressIndicator()),
+      ),
+    ),
+  );
 }
 
 class _ClientVisitStatusListScreen extends StatefulWidget {
