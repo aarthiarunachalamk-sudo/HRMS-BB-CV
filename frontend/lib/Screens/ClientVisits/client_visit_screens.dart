@@ -397,165 +397,12 @@ class _ClientVisitDashboardScreenState
   }
 }
 
-class ClientVisitServicesScreen extends StatelessWidget {
+class ClientVisitServicesScreen extends StatefulWidget {
   const ClientVisitServicesScreen({super.key});
 
   @override
-  Widget build(BuildContext context) => ClientVisitTheme(
-    child: Scaffold(
-      appBar: AppBar(title: const Text('Services'), centerTitle: true),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF0568D8), Color(0xFF00A7C7)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: ClientVisitColors.blue.withAlpha(45),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 34),
-                SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bit Byte Services',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 19,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Digital solutions built to move client ideas forward.',
-                        style: TextStyle(
-                          color: Color(0xFFDDF5FF),
-                          fontSize: 12,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Explore our expertise',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Tap any service to see capabilities and outcomes.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: ThemeConfig.getTextMuted(context),
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...clientVisitServiceCatalog.map(
-            (service) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: EmployeeCard(
-                padding: EdgeInsets.zero,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          ClientVisitServiceDetailScreen(service: service),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: _serviceColor(service.module).withAlpha(24),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(
-                            _serviceIcon(service.module),
-                            color: _serviceColor(service.module),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                service.module.toUpperCase(),
-                                style: TextStyle(
-                                  color: _serviceColor(service.module),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: .7,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                service.name,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                service.description,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: ThemeConfig.getTextMuted(context),
-                                      height: 1.35,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 14),
-                          child: Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            size: 15,
-                            color: _serviceColor(service.module),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
+  State<ClientVisitServicesScreen> createState() =>
+      _ClientVisitServicesScreenState();
 
   static Color _serviceColor(String module) => switch (module) {
     'Digital Marketing' => const Color(0xFFFF8A1F),
@@ -580,10 +427,171 @@ class ClientVisitServicesScreen extends StatelessWidget {
   };
 }
 
+class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+  final Set<String> _selectedServiceIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: clientVisitPackageNames.length, vsync: this)
+      ..addListener(() {
+        if (!_tabController.indexIsChanging) setState(() {});
+      });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _toggleService(String id, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedServiceIds.add(id);
+      } else {
+        _selectedServiceIds.remove(id);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final packageIndex = _tabController.index;
+    final packageName = clientVisitPackageNames[packageIndex];
+    return ClientVisitTheme(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Services'),
+          centerTitle: true,
+          bottom: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabs: clientVisitPackageNames.map((name) => Tab(text: name)).toList(),
+          ),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0568D8), Color(0xFF00A7C7)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 34),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('$packageName package', style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 4),
+                        const Text('Choose the services your client needs. You can select more than one.', style: TextStyle(color: Color(0xFFDDF5FF), fontSize: 12, height: 1.35)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text('Available in $packageName', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            Text('Tap a card for full details. Use the check box to add it to the preview.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context))),
+            const SizedBox(height: 12),
+            ...clientVisitServiceCatalog.map((service) => _serviceCard(service, packageIndex)),
+          ],
+        ),
+        bottomNavigationBar: SafeArea(
+          minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: FilledButton.icon(
+            onPressed: _selectedServiceIds.isEmpty
+                ? null
+                : () async {
+                    final reviewedSelections = await Navigator.of(context)
+                        .push<Set<String>>(
+                          MaterialPageRoute(
+                            builder: (_) => ClientVisitServiceSelectionPreviewScreen(
+                              selectedServices: clientVisitServiceCatalog
+                                  .where((service) => _selectedServiceIds.contains(service.id))
+                                  .toList(),
+                              packageIndex: packageIndex,
+                            ),
+                          ),
+                        );
+                    if (!mounted || reviewedSelections == null) return;
+                    setState(() {
+                      _selectedServiceIds
+                        ..clear()
+                        ..addAll(reviewedSelections);
+                    });
+                  },
+            icon: const Icon(Icons.visibility_rounded),
+            label: Text('Preview selected services (${_selectedServiceIds.length})'),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _serviceCard(ClientVisitServiceItem service, int packageIndex) {
+    final color = ClientVisitServicesScreen._serviceColor(service.module);
+    final selected = _selectedServiceIds.contains(service.id);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: EmployeeCard(
+        padding: EdgeInsets.zero,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ClientVisitServiceDetailScreen(service: service, selectedPackageIndex: packageIndex))),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withAlpha(24), borderRadius: BorderRadius.circular(14)), child: Icon(ClientVisitServicesScreen._serviceIcon(service.module), color: color)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(service.module.toUpperCase(), style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: .7)),
+                      const SizedBox(height: 3),
+                      Text(service.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Text(service.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context), height: 1.35)),
+                      const SizedBox(height: 9),
+                      Text('₹${service.prices[packageIndex]}  •  ${service.payable}', style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w900)),
+                    ],
+                  ),
+                ),
+                Checkbox(value: selected, activeColor: color, onChanged: (value) => _toggleService(service.id, value ?? false)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class ClientVisitServiceDetailScreen extends StatelessWidget {
   final ClientVisitServiceItem service;
+  final int? selectedPackageIndex;
 
-  const ClientVisitServiceDetailScreen({super.key, required this.service});
+  const ClientVisitServiceDetailScreen({
+    super.key,
+    required this.service,
+    this.selectedPackageIndex,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -664,9 +672,11 @@ class ClientVisitServiceDetailScreen extends StatelessWidget {
                 children: [
                   Icon(Icons.info_outline_rounded, color: color),
                   const SizedBox(width: 10),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Select this service when creating a new client visit request.',
+                      selectedPackageIndex == null
+                          ? 'Review the package pricing before choosing this service.'
+                          : '${clientVisitPackageNames[selectedPackageIndex!]} price is highlighted below.',
                       style: TextStyle(fontSize: 12, height: 1.35),
                     ),
                   ),
@@ -721,18 +731,20 @@ class ClientVisitServiceDetailScreen extends StatelessWidget {
         const SizedBox(height: 12),
         ...List.generate(
           clientVisitPackageNames.length,
-          (index) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Expanded(child: Text(clientVisitPackageNames[index])),
-                Text(
-                  '₹${service.prices[index]}',
-                  style: TextStyle(color: color, fontWeight: FontWeight.w900),
-                ),
-              ],
-            ),
-          ),
+          (index) {
+            final highlighted = index == selectedPackageIndex;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(color: highlighted ? color.withAlpha(18) : Colors.transparent, borderRadius: BorderRadius.circular(9)),
+              child: Row(
+                children: [
+                  Expanded(child: Text(clientVisitPackageNames[index], style: TextStyle(fontWeight: highlighted ? FontWeight.w900 : FontWeight.w500))),
+                  Text('₹${service.prices[index]}', style: TextStyle(color: color, fontWeight: FontWeight.w900)),
+                ],
+              ),
+            );
+          },
         ),
         Text(
           'Prices are exclusive of GST.',
@@ -757,6 +769,136 @@ class ClientVisitServiceDetailScreen extends StatelessWidget {
       ],
     ),
   );
+}
+
+class ClientVisitServiceSelectionPreviewScreen extends StatefulWidget {
+  final List<ClientVisitServiceItem> selectedServices;
+  final int packageIndex;
+
+  const ClientVisitServiceSelectionPreviewScreen({
+    super.key,
+    required this.selectedServices,
+    required this.packageIndex,
+  });
+
+  @override
+  State<ClientVisitServiceSelectionPreviewScreen> createState() =>
+      _ClientVisitServiceSelectionPreviewScreenState();
+}
+
+class _ClientVisitServiceSelectionPreviewScreenState
+    extends State<ClientVisitServiceSelectionPreviewScreen> {
+  late final Set<String> _acceptedServiceIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _acceptedServiceIds = widget.selectedServices
+        .map((service) => service.id)
+        .toSet();
+  }
+
+  void _setAccepted(String serviceId, bool accepted) {
+    setState(() {
+      if (accepted) {
+        _acceptedServiceIds.add(serviceId);
+      } else {
+        _acceptedServiceIds.remove(serviceId);
+      }
+    });
+  }
+
+  void _returnToServices() =>
+      Navigator.of(context).pop(Set<String>.from(_acceptedServiceIds));
+
+  @override
+  Widget build(BuildContext context) {
+    final packageName = clientVisitPackageNames[widget.packageIndex];
+    final acceptedServices = widget.selectedServices
+        .where((service) => _acceptedServiceIds.contains(service.id))
+        .toList();
+    final total = acceptedServices.fold<int>(
+      0,
+      (sum, service) => sum + service.prices[widget.packageIndex],
+    );
+    return ClientVisitTheme(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Final Service Check'), centerTitle: true),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 112),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(color: ClientVisitColors.blue.withAlpha(18), borderRadius: BorderRadius.circular(18), border: Border.all(color: ClientVisitColors.blue.withAlpha(70))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('$packageName package', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 5),
+                Text('Accept or reject each service before sharing this selection with the client.', style: TextStyle(color: ThemeConfig.getTextMuted(context), height: 1.35)),
+                const SizedBox(height: 14),
+                Row(children: [const Expanded(child: Text('Estimated total', style: TextStyle(fontWeight: FontWeight.w800))), Text('₹$total', style: const TextStyle(color: ClientVisitColors.blue, fontSize: 18, fontWeight: FontWeight.w900))]),
+                const SizedBox(height: 4),
+                Text('Prices are exclusive of GST.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context))),
+              ]),
+            ),
+            const SizedBox(height: 18),
+            ...widget.selectedServices.map((service) {
+              final color = ClientVisitServicesScreen._serviceColor(service.module);
+              final accepted = _acceptedServiceIds.contains(service.id);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: EmployeeCard(
+                  child: Opacity(
+                    opacity: accepted ? 1 : .55,
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(ClientVisitServicesScreen._serviceIcon(service.module), color: color),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(service.name, style: TextStyle(fontWeight: FontWeight.w900, decoration: accepted ? null : TextDecoration.lineThrough)),
+                      const SizedBox(height: 3),
+                      Text(service.description, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context), height: 1.35)),
+                      const SizedBox(height: 8),
+                      Text('${service.unit} • ${service.frequency}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context))),
+                    ])),
+                    IconButton(
+                      tooltip: accepted ? 'Reject service' : 'Accept service',
+                      onPressed: () => _setAccepted(service.id, !accepted),
+                      icon: Icon(accepted ? Icons.check_circle_rounded : Icons.cancel_outlined, color: accepted ? const Color(0xFF12B981) : const Color(0xFFD93A4A)),
+                    ),
+                    const SizedBox(width: 4),
+                    Text('₹${service.prices[widget.packageIndex]}', style: TextStyle(color: color, fontWeight: FontWeight.w900)),
+                  ]),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+        bottomNavigationBar: SafeArea(
+          minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _returnToServices,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add another service'),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: _acceptedServiceIds.isEmpty
+                    ? null
+                    : _returnToServices,
+                icon: const Icon(Icons.check_circle_rounded),
+                label: Text(
+                  'Confirm ${_acceptedServiceIds.length} service${_acceptedServiceIds.length == 1 ? '' : 's'}',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ClientVisitStatusListScreen extends StatefulWidget {
