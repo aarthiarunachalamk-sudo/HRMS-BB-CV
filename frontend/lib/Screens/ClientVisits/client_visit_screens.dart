@@ -437,7 +437,7 @@ class ClientVisitServicesScreen extends StatefulWidget {
 class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  final Set<String> _selectedServiceIds = <String>{};
+  final Map<String, int> _selectedServicePackageIndexes = <String, int>{};
 
   @override
   void initState() {
@@ -454,12 +454,12 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
     super.dispose();
   }
 
-  void _toggleService(String id, bool selected) {
+  void _toggleService(String id, int packageIndex, bool selected) {
     setState(() {
       if (selected) {
-        _selectedServiceIds.add(id);
+        _selectedServicePackageIndexes[id] = packageIndex;
       } else {
-        _selectedServiceIds.remove(id);
+        _selectedServicePackageIndexes.remove(id);
       }
     });
   }
@@ -541,7 +541,7 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(color: Colors.white.withAlpha(28), borderRadius: BorderRadius.circular(20)),
-                            child: Text('${_selectedServiceIds.length} services in your shortlist', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                            child: Text('${_selectedServicePackageIndexes.length} services in your shortlist', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
                           ),
                         ],
                       ),
@@ -561,29 +561,29 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
         bottomNavigationBar: SafeArea(
           minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: FilledButton.icon(
-            onPressed: _selectedServiceIds.isEmpty
+            onPressed: _selectedServicePackageIndexes.isEmpty
                 ? null
                 : () async {
                     final reviewedSelections = await Navigator.of(context)
-                        .push<Set<String>>(
+                        .push<Map<String, int>>(
                           MaterialPageRoute(
                             builder: (_) => ClientVisitServiceSelectionPreviewScreen(
                               selectedServices: clientVisitServiceCatalog
-                                  .where((service) => _selectedServiceIds.contains(service.id))
+                                  .where((service) => _selectedServicePackageIndexes.containsKey(service.id))
+                                  .map((service) => ClientVisitSelectedService(service: service, packageIndex: _selectedServicePackageIndexes[service.id]!))
                                   .toList(),
-                              packageIndex: packageIndex,
                             ),
                           ),
                         );
                     if (!mounted || reviewedSelections == null) return;
                     setState(() {
-                      _selectedServiceIds
+                      _selectedServicePackageIndexes
                         ..clear()
                         ..addAll(reviewedSelections);
                     });
                   },
             icon: const Icon(Icons.visibility_rounded),
-            label: Text('Preview selected services (${_selectedServiceIds.length})'),
+            label: Text('Preview selected services (${_selectedServicePackageIndexes.length})'),
           ),
         ),
       ),
@@ -592,7 +592,7 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
 
   Widget _serviceCard(ClientVisitServiceItem service, int packageIndex) {
     final color = ClientVisitServicesScreen._serviceColor(service.module);
-    final selected = _selectedServiceIds.contains(service.id);
+    final selected = _selectedServicePackageIndexes[service.id] == packageIndex;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: EmployeeCard(
@@ -639,7 +639,7 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => _toggleService(service.id, !selected),
+                  onTap: () => _toggleService(service.id, packageIndex, !selected),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     width: 36,
@@ -868,14 +868,22 @@ class ClientVisitServiceDetailScreen extends StatelessWidget {
   );
 }
 
-class ClientVisitServiceSelectionPreviewScreen extends StatefulWidget {
-  final List<ClientVisitServiceItem> selectedServices;
+class ClientVisitSelectedService {
+  final ClientVisitServiceItem service;
   final int packageIndex;
+
+  const ClientVisitSelectedService({
+    required this.service,
+    required this.packageIndex,
+  });
+}
+
+class ClientVisitServiceSelectionPreviewScreen extends StatefulWidget {
+  final List<ClientVisitSelectedService> selectedServices;
 
   const ClientVisitServiceSelectionPreviewScreen({
     super.key,
     required this.selectedServices,
-    required this.packageIndex,
   });
 
   @override
@@ -894,7 +902,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
   void initState() {
     super.initState();
     _acceptedServiceIds = widget.selectedServices
-        .map((service) => service.id)
+        .map((selection) => selection.service.id)
         .toSet();
   }
 
@@ -908,8 +916,13 @@ class _ClientVisitServiceSelectionPreviewScreenState
     });
   }
 
-  void _returnToServices() =>
-      Navigator.of(context).pop(Set<String>.from(_acceptedServiceIds));
+  void _returnToServices() => Navigator.of(context).pop(
+    <String, int>{
+      for (final selection in widget.selectedServices)
+        if (_acceptedServiceIds.contains(selection.service.id))
+          selection.service.id: selection.packageIndex,
+    },
+  );
 
   Future<void> _shareInvoicePdf() async {
     final invoiceFilePath = _invoiceFilePath;
@@ -930,17 +943,19 @@ class _ClientVisitServiceSelectionPreviewScreenState
   }
 
   Future<void> _generateInvoicePdf(
-    List<ClientVisitServiceItem> acceptedServices,
+    List<ClientVisitSelectedService> acceptedServices,
   ) async {
     if (acceptedServices.isEmpty || _generatingInvoice) return;
     setState(() => _generatingInvoice = true);
     try {
-      final packageName = clientVisitPackageNames[widget.packageIndex];
       final total = acceptedServices.fold<int>(
         0,
-        (sum, service) => sum + service.prices[widget.packageIndex],
+        (sum, selection) => sum + selection.service.prices[selection.packageIndex],
       );
-      final gst = (total * .18).round();
+      final gst = acceptedServices.fold<int>(
+        0,
+        (sum, selection) => sum + (selection.service.prices[selection.packageIndex] * .18).round(),
+      );
       final grandTotal = total + gst;
       final now = DateTime.now();
       final invoiceNumber =
@@ -1086,7 +1101,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
                       children: [
                         pw.Text('PACKAGE', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF1687FF), fontWeight: pw.FontWeight.bold)),
                         pw.SizedBox(height: 5),
-                        pw.Text(packageName, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                        pw.Text('Mixed package selection', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
                         pw.SizedBox(height: 3),
                         pw.Text('${acceptedServices.length} selected services', style: const pw.TextStyle(fontSize: 9)),
                       ],
@@ -1097,16 +1112,30 @@ class _ClientVisitServiceSelectionPreviewScreenState
             ),
             pw.SizedBox(height: 18),
             pw.TableHelper.fromTextArray(
-              headers: const ['#', 'Service', 'Unit / Frequency', 'Amount (INR)'],
+              headers: const [
+                '#',
+                'Service',
+                'Package',
+                'Unit / Frequency',
+                'Base (INR)',
+                'GST 18%',
+                'Total (INR)',
+              ],
               data: List<List<String>>.generate(
                 acceptedServices.length,
                 (index) {
-                  final service = acceptedServices[index];
+                  final selection = acceptedServices[index];
+                  final service = selection.service;
+                  final basePrice = service.prices[selection.packageIndex];
+                  final serviceGst = (basePrice * .18).round();
                   return [
                     '${index + 1}',
                     service.name,
+                    clientVisitPackageNames[selection.packageIndex],
                     '${service.unit} / ${service.frequency}',
-                    service.prices[widget.packageIndex].toString(),
+                    basePrice.toString(),
+                    serviceGst.toString(),
+                    (basePrice + serviceGst).toString(),
                   ];
                 },
               ),
@@ -1123,9 +1152,12 @@ class _ClientVisitServiceSelectionPreviewScreenState
               border: pw.TableBorder.all(color: PdfColors.grey300, width: .5),
               columnWidths: const {
                 0: pw.FlexColumnWidth(.35),
-                1: pw.FlexColumnWidth(2.3),
-                2: pw.FlexColumnWidth(1.5),
-                3: pw.FlexColumnWidth(1),
+                1: pw.FlexColumnWidth(2.05),
+                2: pw.FlexColumnWidth(.8),
+                3: pw.FlexColumnWidth(1.25),
+                4: pw.FlexColumnWidth(.75),
+                5: pw.FlexColumnWidth(.7),
+                6: pw.FlexColumnWidth(.85),
               },
             ),
             pw.SizedBox(height: 16),
@@ -1241,15 +1273,17 @@ class _ClientVisitServiceSelectionPreviewScreenState
 
   @override
   Widget build(BuildContext context) {
-    final packageName = clientVisitPackageNames[widget.packageIndex];
     final acceptedServices = widget.selectedServices
-        .where((service) => _acceptedServiceIds.contains(service.id))
+        .where((selection) => _acceptedServiceIds.contains(selection.service.id))
         .toList();
     final total = acceptedServices.fold<int>(
       0,
-      (sum, service) => sum + service.prices[widget.packageIndex],
+      (sum, selection) => sum + selection.service.prices[selection.packageIndex],
     );
-    final gst = (total * .18).round();
+    final gst = acceptedServices.fold<int>(
+      0,
+      (sum, selection) => sum + (selection.service.prices[selection.packageIndex] * .18).round(),
+    );
     final grandTotal = total + gst;
     return ClientVisitTheme(
       child: Scaffold(
@@ -1272,7 +1306,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 border: Border.all(color: ClientVisitColors.blue.withAlpha(90)),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('$packageName package', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                const Text('Custom service selection', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 5),
                 Text('Accept or reject each service before sharing this selection with the client.', style: TextStyle(color: ThemeConfig.getTextMuted(context), height: 1.35)),
                 const SizedBox(height: 14),
@@ -1293,7 +1327,8 @@ class _ClientVisitServiceSelectionPreviewScreenState
               ]),
             ),
             const SizedBox(height: 18),
-            ...widget.selectedServices.map((service) {
+            ...widget.selectedServices.map((selection) {
+              final service = selection.service;
               final color = ClientVisitServicesScreen._serviceColor(service.module);
               final accepted = _acceptedServiceIds.contains(service.id);
               return Padding(
@@ -1310,6 +1345,12 @@ class _ClientVisitServiceSelectionPreviewScreenState
                       Text(service.description, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context), height: 1.35)),
                       const SizedBox(height: 8),
                       Text('${service.unit} • ${service.frequency}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context))),
+                      const SizedBox(height: 6),
+                      _reviewPill(
+                        Icons.workspace_premium_rounded,
+                        clientVisitPackageNames[selection.packageIndex],
+                        color,
+                      ),
                     ])),
                     const SizedBox(width: 10),
                     SizedBox(
@@ -1318,7 +1359,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            '₹${service.prices[widget.packageIndex]}',
+                            '₹${service.prices[selection.packageIndex]}',
                             style: TextStyle(color: color, fontWeight: FontWeight.w900),
                           ),
                           const SizedBox(height: 12),
