@@ -528,7 +528,6 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                   ],
                 ),
               ]),
-              ),
             ),
             const SizedBox(height: 20),
             Text('Services in $packageName', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
