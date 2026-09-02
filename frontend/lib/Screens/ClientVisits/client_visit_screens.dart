@@ -475,8 +475,22 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
           bottom: TabBar(
             controller: _tabController,
             isScrollable: true,
-            indicatorSize: TabBarIndicatorSize.label,
-            indicatorWeight: 3,
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicatorPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 18),
+            indicator: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1687FF), Color(0xFF00B7D7)],
+              ),
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: ClientVisitColors.blue.withAlpha(75),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             labelStyle: const TextStyle(fontWeight: FontWeight.w900),
             unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
             tabs: clientVisitPackageNames.map((name) => Tab(text: name)).toList(),
@@ -597,6 +611,23 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                       Text(service.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context), height: 1.35)),
                       const SizedBox(height: 9),
                       Text('₹${service.prices[packageIndex]}  •  ${service.payable}', style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          _serviceMetaChip(
+                            Icons.schedule_rounded,
+                            service.frequency,
+                            color,
+                          ),
+                          _serviceMetaChip(
+                            Icons.inventory_2_outlined,
+                            service.unit,
+                            color,
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -621,6 +652,25 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
       ),
     );
   }
+
+  Widget _serviceMetaChip(IconData icon, String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withAlpha(15),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800),
+        ),
+      ],
+    ),
+  );
 }
 
 class ClientVisitServiceDetailScreen extends StatelessWidget {
