@@ -969,7 +969,9 @@ class _ClientVisitServiceSelectionPreviewScreenState
       }
       pw.MemoryImage? watermark;
       try {
-        final watermarkData = await rootBundle.load('assets/invoice_watermark.png');
+        final watermarkData = await rootBundle.load(
+          'assets/invoice_watermark_transparent.png',
+        );
         watermark = pw.MemoryImage(watermarkData.buffer.asUint8List());
       } catch (_) {
         // Fall back to the header logo watermark when the dedicated asset is absent.
@@ -984,88 +986,104 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 ? pw.SizedBox()
                 : pw.Center(
                     child: pw.Opacity(
-                      opacity: .16,
-                      child: pw.Image(watermark ?? logo!, width: 410, height: 410),
+                      opacity: .26,
+                      child: pw.Image(watermark ?? logo!, width: 390, height: 390),
                     ),
                   ),
           ),
           footer: (context) => pw.Container(
-              margin: const pw.EdgeInsets.only(top: 12),
-              padding: const pw.EdgeInsets.only(top: 6),
-              decoration: const pw.BoxDecoration(
-                border: pw.Border(
-                  top: pw.BorderSide(color: PdfColors.grey300, width: .5),
-                ),
-              ),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Bit Byte Technologies • Service Selection Invoice',
-                    style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
-                  ),
-                  pw.Text(
-                    'Page ${context.pageNumber} of ${context.pagesCount}',
-                    style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
-                  ),
-                ],
+            margin: const pw.EdgeInsets.only(top: 12),
+            padding: const pw.EdgeInsets.only(top: 6),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                top: pw.BorderSide(color: PdfColors.grey300, width: .5),
               ),
             ),
+            child: pw.Column(
+              children: [
+                const pw.Text(
+                  '2nd Floor - West Wing, Raja Complex, Opp: Sago Serve, Omalur main road, Salem-636302, TN-India.',
+                  style: pw.TextStyle(fontSize: 7.2, color: PdfColors.grey600),
+                ),
+                pw.SizedBox(height: 3),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                  children: [
+                    const pw.Text('reachus@bitbytetech.org', style: pw.TextStyle(fontSize: 7, color: PdfColors.blue)),
+                    const pw.Text('www.bitbytetech.org', style: pw.TextStyle(fontSize: 7, color: PdfColors.blue)),
+                    const pw.Text('+91 99437 43136 – WhatsApp Only.', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                  ],
+                ),
+                pw.SizedBox(height: 3),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                  children: [
+                    const pw.Text('Internal Document', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                    const pw.Text('Confidential', style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                    pw.Text('All rights reserved.  Page ${context.pageNumber} of ${context.pagesCount}', style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600)),
+                  ],
+                ),
+              ],
+            ),
+          ),
           build: (_) => [
             pw.Container(
-              padding: const pw.EdgeInsets.all(18),
+              padding: const pw.EdgeInsets.fromLTRB(12, 8, 12, 10),
               decoration: pw.BoxDecoration(
-                color: const PdfColor.fromInt(0xFF0B1B35),
-                borderRadius: pw.BorderRadius.circular(8),
+                border: pw.Border.all(
+                  color: const PdfColor.fromInt(0xFF8EBCE7),
+                  width: .7,
+                ),
+                borderRadius: pw.BorderRadius.circular(4),
               ),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              child: pw.Column(
                 children: [
-                  pw.Column(
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text(
-                        'BIT BYTE TECHNOLOGIES',
-                        style: pw.TextStyle(
-                          color: PdfColors.white,
-                          fontSize: 17,
-                          fontWeight: pw.FontWeight.bold,
+                      pw.Expanded(
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.center,
+                          children: [
+                            pw.Text(
+                              'Bit Byte Technologies',
+                              style: pw.TextStyle(
+                                fontSize: 17,
+                                fontWeight: pw.FontWeight.bold,
+                                decoration: pw.TextDecoration.underline,
+                              ),
+                            ),
+                            pw.SizedBox(height: 3),
+                            pw.Text(
+                              '2nd Floor - West Wing, Raja Complex,',
+                              style: const pw.TextStyle(fontSize: 9),
+                            ),
+                            pw.Text(
+                              'opp. to: Sago Serve Factory, Omalur main road, Salem - 636302, Tamil Nadu, India.',
+                              style: const pw.TextStyle(fontSize: 8.5),
+                            ),
+                          ],
                         ),
                       ),
-                      pw.SizedBox(height: 5),
-                      pw.Text(
-                        'Service selection invoice',
-                        style: const pw.TextStyle(
-                          color: PdfColors.white,
-                          fontSize: 9,
-                        ),
-                      ),
-                    ],
-                  ),
-                  pw.Row(
-                    crossAxisAlignment: pw.CrossAxisAlignment.center,
-                    children: [
-                      pw.Text(
-                        'INVOICE',
-                        style: pw.TextStyle(
-                          color: const PdfColor.fromInt(0xFF50C8FF),
-                          fontSize: 19,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      if (logo != null) ...[
-                        pw.SizedBox(width: 12),
+                      if (logo != null)
                         pw.Container(
-                          width: 52,
-                          height: 52,
-                          padding: const pw.EdgeInsets.all(3),
-                          decoration: pw.BoxDecoration(
-                            color: PdfColors.white,
-                            borderRadius: pw.BorderRadius.circular(6),
-                          ),
+                          width: 48,
+                          height: 48,
+                          margin: const pw.EdgeInsets.only(left: 10),
                           child: pw.Image(logo, fit: pw.BoxFit.contain),
                         ),
-                      ],
+                    ],
+                  ),
+                  pw.SizedBox(height: 5),
+                  pw.Container(height: 2.5, color: const PdfColor.fromInt(0xFF4D8AC8)),
+                  pw.SizedBox(height: 7),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                    children: [
+                      pw.Text('reachus@bitbytetech.org', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.blue)),
+                      pw.Text('www.bitbytetech.org', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.blue)),
+                      const pw.Text('+91 99437 43136 (WhatsApp Only)', style: pw.TextStyle(fontSize: 8.5)),
                     ],
                   ),
                 ],

@@ -91,6 +91,7 @@ flutter:
   assets:
     - assets/logo.png
     - assets/invoice_watermark.png
+    - assets/invoice_watermark_transparent.png
     - assets/videos/SplashScreen.mp4
 
 flutter_launcher_icons:
