@@ -457,6 +457,12 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
     });
   }
 
+  Widget _serviceOrb(double size, Color color) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
+
   @override
   Widget build(BuildContext context) {
     final packageIndex = _tabController.index;
@@ -469,6 +475,10 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
           bottom: TabBar(
             controller: _tabController,
             isScrollable: true,
+            indicatorSize: TabBarIndicatorSize.label,
+            indicatorWeight: 3,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w900),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
             tabs: clientVisitPackageNames.map((name) => Tab(text: name)).toList(),
           ),
         ),
@@ -484,26 +494,44 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 34),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('$packageName package', style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 4),
-                        const Text('Choose the services your client needs. You can select more than one.', style: TextStyle(color: Color(0xFFDDF5FF), fontSize: 12, height: 1.35)),
-                      ],
-                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: ClientVisitColors.blue.withAlpha(55),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
                   ),
                 ],
               ),
+              child: Stack(children: [
+                Positioned(right: -26, top: -42, child: _serviceOrb(106, Colors.white.withAlpha(24))),
+                Positioned(right: 43, bottom: -34, child: _serviceOrb(70, Colors.white.withAlpha(18))),
+                Row(
+                  children: [
+                    const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 34),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('$packageName package', style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
+                          const SizedBox(height: 4),
+                          const Text('Choose the services your client needs. You can select more than one.', style: TextStyle(color: Color(0xFFDDF5FF), fontSize: 12, height: 1.35)),
+                          const SizedBox(height: 13),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(color: Colors.white.withAlpha(28), borderRadius: BorderRadius.circular(20)),
+                            child: Text('${_selectedServiceIds.length} services in your shortlist', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ]),
+              ),
             ),
             const SizedBox(height: 20),
-            Text('Available in $packageName', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            Text('Services in $packageName', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 4),
             Text('Tap a card for full details. Use the check box to add it to the preview.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context))),
             const SizedBox(height: 12),
@@ -573,7 +601,20 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                     ],
                   ),
                 ),
-                Checkbox(value: selected, activeColor: color, onChanged: (value) => _toggleService(service.id, value ?? false)),
+                GestureDetector(
+                  onTap: () => _toggleService(service.id, !selected),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: selected ? color : color.withAlpha(18),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withAlpha(selected ? 255 : 80)),
+                    ),
+                    child: Icon(selected ? Icons.check_rounded : Icons.add_rounded, color: selected ? Colors.white : color, size: 20),
+                  ),
+                ),
               ],
             ),
           ),
@@ -811,6 +852,23 @@ class _ClientVisitServiceSelectionPreviewScreenState
   void _returnToServices() =>
       Navigator.of(context).pop(Set<String>.from(_acceptedServiceIds));
 
+  Widget _reviewPill(IconData icon, String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: color.withAlpha(18),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withAlpha(80)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w900)),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final packageName = clientVisitPackageNames[widget.packageIndex];
@@ -829,11 +887,31 @@ class _ClientVisitServiceSelectionPreviewScreenState
           children: [
             Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(color: ClientVisitColors.blue.withAlpha(18), borderRadius: BorderRadius.circular(18), border: Border.all(color: ClientVisitColors.blue.withAlpha(70))),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    ClientVisitColors.blue.withAlpha(42),
+                    const Color(0xFF00A7C7).withAlpha(24),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: ClientVisitColors.blue.withAlpha(90)),
+              ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('$packageName package', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 5),
                 Text('Accept or reject each service before sharing this selection with the client.', style: TextStyle(color: ThemeConfig.getTextMuted(context), height: 1.35)),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _reviewPill(Icons.check_circle_rounded, '${acceptedServices.length} accepted', const Color(0xFF12B981)),
+                    _reviewPill(Icons.pending_actions_rounded, '${widget.selectedServices.length - acceptedServices.length} rejected', const Color(0xFFD93A4A)),
+                  ],
+                ),
                 const SizedBox(height: 14),
                 Row(children: [const Expanded(child: Text('Estimated total', style: TextStyle(fontWeight: FontWeight.w800))), Text('₹$total', style: const TextStyle(color: ClientVisitColors.blue, fontSize: 18, fontWeight: FontWeight.w900))]),
                 const SizedBox(height: 4),
