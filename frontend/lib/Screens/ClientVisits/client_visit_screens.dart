@@ -1,7 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -878,7 +883,10 @@ class ClientVisitServiceSelectionPreviewScreen extends StatefulWidget {
 
 class _ClientVisitServiceSelectionPreviewScreenState
     extends State<ClientVisitServiceSelectionPreviewScreen> {
+  static const _filesChannel = MethodChannel('hrms/files');
   late final Set<String> _acceptedServiceIds;
+  bool _generatingInvoice = false;
+  String? _invoiceFilePath;
 
   @override
   void initState() {
@@ -900,6 +908,184 @@ class _ClientVisitServiceSelectionPreviewScreenState
 
   void _returnToServices() =>
       Navigator.of(context).pop(Set<String>.from(_acceptedServiceIds));
+
+  Future<void> _shareInvoicePdf() async {
+    final invoiceFilePath = _invoiceFilePath;
+    if (invoiceFilePath == null) return;
+    try {
+      await Share.shareXFiles(
+        [XFile(invoiceFilePath)],
+        text: 'Please find the Bit Byte service selection invoice attached.',
+        subject: 'Bit Byte service invoice',
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not share invoice PDF: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _generateInvoicePdf(
+    List<ClientVisitServiceItem> acceptedServices,
+  ) async {
+    if (acceptedServices.isEmpty || _generatingInvoice) return;
+    setState(() => _generatingInvoice = true);
+    try {
+      final packageName = clientVisitPackageNames[widget.packageIndex];
+      final total = acceptedServices.fold<int>(
+        0,
+        (sum, service) => sum + service.prices[widget.packageIndex],
+      );
+      final now = DateTime.now();
+      final invoiceNumber =
+          'BBT-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.millisecondsSinceEpoch.toString().substring(8)}';
+      final document = pw.Document();
+      document.addPage(
+        pw.MultiPage(
+          pageTheme: const pw.PageTheme(
+            pageFormat: PdfPageFormat.a4,
+            margin: pw.EdgeInsets.all(30),
+          ),
+          build: (_) => [
+            pw.Container(
+              padding: const pw.EdgeInsets.all(18),
+              decoration: pw.BoxDecoration(
+                color: const PdfColor.fromInt(0xFF0B1B35),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'BIT BYTE TECHNOLOGIES',
+                        style: pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 17,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 5),
+                      pw.Text(
+                        'Service selection invoice',
+                        style: const pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ),
+                  pw.Text(
+                    'INVOICE',
+                    style: pw.TextStyle(
+                      color: const PdfColor.fromInt(0xFF50C8FF),
+                      fontSize: 19,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 22),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('Invoice no: $invoiceNumber'),
+                pw.Text('Date: ${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}'),
+              ],
+            ),
+            pw.SizedBox(height: 7),
+            pw.Text('Selected package: $packageName', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 20),
+            pw.TableHelper.fromTextArray(
+              headers: const ['#', 'Service', 'Unit / Frequency', 'Amount (INR)'],
+              data: List<List<String>>.generate(
+                acceptedServices.length,
+                (index) {
+                  final service = acceptedServices[index];
+                  return [
+                    '${index + 1}',
+                    service.name,
+                    '${service.unit} / ${service.frequency}',
+                    service.prices[widget.packageIndex].toString(),
+                  ];
+                },
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFF1687FF),
+              ),
+              headerStyle: pw.TextStyle(
+                color: PdfColors.white,
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 9,
+              ),
+              cellStyle: const pw.TextStyle(fontSize: 8.5),
+              cellPadding: const pw.EdgeInsets.all(7),
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: .5),
+              columnWidths: const {
+                0: pw.FlexColumnWidth(.35),
+                1: pw.FlexColumnWidth(2.3),
+                2: pw.FlexColumnWidth(1.5),
+                3: pw.FlexColumnWidth(1),
+              },
+            ),
+            pw.SizedBox(height: 16),
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: pw.BoxDecoration(
+                  color: const PdfColor.fromInt(0xFFE8F4FF),
+                  borderRadius: pw.BorderRadius.circular(5),
+                ),
+                child: pw.Text(
+                  'TOTAL  INR $total',
+                  style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+                ),
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.Text(
+              'Prices are exclusive of GST. This invoice is generated from the client service selection.',
+              style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+            ),
+          ],
+        ),
+      );
+      final fileName = 'BitByte_Invoice_$invoiceNumber.pdf';
+      final bytes = await document.save();
+      final savedUri = await _filesChannel.invokeMethod<String>(
+        'saveToDownloads',
+        {'fileName': fileName, 'mimeType': 'application/pdf', 'bytes': bytes},
+      );
+      final temporaryDirectory = await getTemporaryDirectory();
+      final shareFile = File('${temporaryDirectory.path}${Platform.pathSeparator}$fileName');
+      await shareFile.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      setState(() => _invoiceFilePath = shareFile.path);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            savedUri == null || savedUri.isEmpty
+                ? 'Invoice PDF generated in Downloads.'
+                : 'Invoice PDF saved successfully.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not generate invoice PDF: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _generatingInvoice = false);
+    }
+  }
 
   Widget _reviewPill(IconData icon, String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1005,6 +1191,28 @@ class _ClientVisitServiceSelectionPreviewScreenState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              OutlinedButton.icon(
+                onPressed: _acceptedServiceIds.isEmpty || _generatingInvoice
+                    ? null
+                    : () => _generateInvoicePdf(acceptedServices),
+                icon: _generatingInvoice
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.picture_as_pdf_rounded),
+                label: Text(
+                  _generatingInvoice ? 'Generating invoice PDF...' : 'Generate invoice PDF',
+                ),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: _invoiceFilePath == null ? null : _shareInvoicePdf,
+                icon: const Icon(Icons.share_rounded),
+                label: const Text('Share invoice via WhatsApp or apps'),
+              ),
+              const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: _returnToServices,
                 icon: const Icon(Icons.add_rounded),
