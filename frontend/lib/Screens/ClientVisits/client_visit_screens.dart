@@ -1236,33 +1236,6 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 ),
               ),
             ),
-            pw.SizedBox(height: 22),
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
-              children: [
-                pw.Expanded(
-                  child: pw.Text(
-                    'Terms: GST at 18% is included in the grand total. This is a computer-generated service selection invoice.',
-                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-                  ),
-                ),
-                pw.SizedBox(width: 24),
-                pw.Container(
-                  width: 145,
-                  padding: const pw.EdgeInsets.only(top: 24),
-                  decoration: const pw.BoxDecoration(
-                    border: pw.Border(
-                      top: pw.BorderSide(color: PdfColors.grey500, width: .5),
-                    ),
-                  ),
-                  child: pw.Text(
-                    'Authorised Signatory',
-                    textAlign: pw.TextAlign.center,
-                    style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       );
