@@ -1507,10 +1507,37 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 ),
               ),
             ),
-            pw.SizedBox(height: 22),
-            _invoiceServiceGroupTable('ONE TIME SERVICES', oneTimeServices),
+            pw.SizedBox(height: 24),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              decoration: pw.BoxDecoration(
+                color: const PdfColor.fromInt(0xFF0B5FA5),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Text(
+                'FREQUENCY ROUTINE OF THE SERVICES',
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(
+                  color: PdfColors.white,
+                  fontSize: 12,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+            pw.SizedBox(height: 14),
+            ..._invoiceServiceGroupWidgets(
+              'ONE TIME SERVICES',
+              oneTimeServices,
+            ),
             pw.SizedBox(height: 18),
-            _invoiceServiceGroupTable('MONTHLY SERVICES', monthlyServices),
+            ..._invoiceServiceGroupWidgets(
+              'ROUTINE SERVICES (MONTHLY)',
+              monthlyServices,
+            ),
           ],
         ),
       );
@@ -1539,12 +1566,22 @@ class _ClientVisitServiceSelectionPreviewScreenState
     }
   }
 
-  pw.Widget _invoiceServiceGroupTable(
+  List<pw.Widget> _invoiceServiceGroupWidgets(
     String title,
     List<ClientVisitSelectedService> services,
-  ) => pw.Column(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
+  ) {
+    final baseTotal = services.fold<int>(
+      0,
+      (sum, selection) =>
+          sum + selection.service.prices[selection.packageIndex],
+    );
+    final gstTotal = services.fold<int>(
+      0,
+      (sum, selection) =>
+          sum +
+          (selection.service.prices[selection.packageIndex] * .18).round(),
+    );
+    return [
       pw.Container(
         width: double.infinity,
         padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -1615,8 +1652,47 @@ class _ClientVisitServiceSelectionPreviewScreenState
             5: pw.FlexColumnWidth(.95),
           },
         ),
-    ],
-  );
+      pw.SizedBox(height: 7),
+      pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Container(
+          width: 280,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: pw.BoxDecoration(
+            color: const PdfColor.fromInt(0xFFF3F8FC),
+            border: pw.Border.all(
+              color: const PdfColor.fromInt(0xFF8EBCE7),
+              width: .7,
+            ),
+            borderRadius: pw.BorderRadius.circular(4),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Expanded(
+                child: pw.Text(
+                  '$title TOTAL (INCL. GST)',
+                  style: pw.TextStyle(
+                    color: const PdfColor.fromInt(0xFF0B5FA5),
+                    fontSize: 8.5,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+              pw.SizedBox(width: 8),
+              pw.Text(
+                'INR ${_formatInvoiceAmount(baseTotal + gstTotal)}',
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
+  }
 
   pw.Widget _invoiceTotalRow(String label, String value, {bool bold = false}) =>
       pw.Row(
