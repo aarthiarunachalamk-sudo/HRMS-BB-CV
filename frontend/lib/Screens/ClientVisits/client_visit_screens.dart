@@ -1115,6 +1115,18 @@ class _ClientVisitServiceSelectionPreviewScreenState
             (selection.service.prices[selection.packageIndex] * .18).round(),
       );
       final grandTotal = total + gst;
+      final oneTimeServices = acceptedServices
+          .where(
+            (selection) =>
+                selection.service.payable.trim().toLowerCase() == 'one time',
+          )
+          .toList();
+      final monthlyServices = acceptedServices
+          .where(
+            (selection) =>
+                selection.service.payable.trim().toLowerCase() == 'monthly',
+          )
+          .toList();
       final now = DateTime.now();
       final invoiceNumber =
           'BBT-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.millisecondsSinceEpoch.toString().substring(8)}';
@@ -1193,10 +1205,10 @@ class _ClientVisitServiceSelectionPreviewScreenState
                       ),
                     ),
                     pw.Text(
-                      '+91 99437 43136 – WhatsApp Only.',
+                      '+91 99437 43136 (WhatsApp Only).',
                       style: pw.TextStyle(
                         fontSize: 9,
-                        color: const PdfColor.fromInt(0xFF34495E),
+                        color: const PdfColor.fromInt(0xFF1769AA),
                       ),
                     ),
                   ],
@@ -1305,7 +1317,10 @@ class _ClientVisitServiceSelectionPreviewScreenState
                       ),
                       pw.Text(
                         '+91 99437 43136 (WhatsApp Only)',
-                        style: pw.TextStyle(fontSize: 8.5),
+                        style: const pw.TextStyle(
+                          fontSize: 8.5,
+                          color: PdfColors.blue,
+                        ),
                       ),
                     ],
                   ),
@@ -1492,6 +1507,10 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 ),
               ),
             ),
+            pw.SizedBox(height: 22),
+            _invoiceServiceGroupTable('ONE TIME SERVICES', oneTimeServices),
+            pw.SizedBox(height: 18),
+            _invoiceServiceGroupTable('MONTHLY SERVICES', monthlyServices),
           ],
         ),
       );
@@ -1519,6 +1538,85 @@ class _ClientVisitServiceSelectionPreviewScreenState
       if (mounted) setState(() => _generatingInvoice = false);
     }
   }
+
+  pw.Widget _invoiceServiceGroupTable(
+    String title,
+    List<ClientVisitSelectedService> services,
+  ) => pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Container(
+        width: double.infinity,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFE8F4FF)),
+        child: pw.Text(
+          title,
+          style: pw.TextStyle(
+            color: const PdfColor.fromInt(0xFF0B5FA5),
+            fontSize: 11,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+      ),
+      pw.SizedBox(height: 6),
+      if (services.isEmpty)
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300, width: .5),
+          ),
+          child: pw.Text(
+            'No ${title.toLowerCase()} selected.',
+            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+          ),
+        )
+      else
+        pw.TableHelper.fromTextArray(
+          headers: const [
+            '#',
+            'Service / Package',
+            'Delivery details',
+            'Base (INR)',
+            'GST 18%',
+            'Total (INR)',
+          ],
+          data: List<List<String>>.generate(services.length, (index) {
+            final selection = services[index];
+            final service = selection.service;
+            final basePrice = service.prices[selection.packageIndex];
+            final serviceGst = (basePrice * .18).round();
+            return [
+              '${index + 1}',
+              '${service.name}\n${clientVisitPackageNames[selection.packageIndex]} package',
+              '${service.unit} / ${service.frequency}',
+              _formatInvoiceAmount(basePrice),
+              _formatInvoiceAmount(serviceGst),
+              _formatInvoiceAmount(basePrice + serviceGst),
+            ];
+          }),
+          headerDecoration: const pw.BoxDecoration(
+            color: PdfColor.fromInt(0xFF1687FF),
+          ),
+          headerStyle: pw.TextStyle(
+            color: PdfColors.white,
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 9,
+          ),
+          cellStyle: const pw.TextStyle(fontSize: 8.5),
+          cellPadding: const pw.EdgeInsets.all(7),
+          border: pw.TableBorder.all(color: PdfColors.grey300, width: .5),
+          columnWidths: const {
+            0: pw.FlexColumnWidth(.35),
+            1: pw.FlexColumnWidth(2.45),
+            2: pw.FlexColumnWidth(1.35),
+            3: pw.FlexColumnWidth(.86),
+            4: pw.FlexColumnWidth(.78),
+            5: pw.FlexColumnWidth(.95),
+          },
+        ),
+    ],
+  );
 
   pw.Widget _invoiceTotalRow(String label, String value, {bool bold = false}) =>
       pw.Row(
@@ -2070,8 +2168,67 @@ class ClientVisitInvoicePreviewScreen extends StatefulWidget {
 class _ClientVisitInvoicePreviewScreenState
     extends State<ClientVisitInvoicePreviewScreen> {
   static const _filesChannel = MethodChannel('hrms/files');
+  final TransformationController _pdfZoomController =
+      TransformationController();
   bool _downloading = false;
   bool _downloaded = false;
+  bool _zoomEnabled = false;
+
+  @override
+  void dispose() {
+    _pdfZoomController.dispose();
+    super.dispose();
+  }
+
+  void _setZoomEnabled(bool enabled) {
+    setState(() {
+      _zoomEnabled = enabled;
+      if (!enabled) _pdfZoomController.value = Matrix4.identity();
+    });
+  }
+
+  void _changeZoom(double factor) {
+    if (!_zoomEnabled) _setZoomEnabled(true);
+    final currentScale = _pdfZoomController.value.getMaxScaleOnAxis();
+    final nextScale = (currentScale * factor).clamp(.75, 5.0).toDouble();
+    _pdfZoomController.value = Matrix4.diagonal3Values(nextScale, nextScale, 1);
+  }
+
+  Widget _pdfPage(PdfPreviewPageData page) => Container(
+    margin: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+    decoration: const BoxDecoration(
+      color: Colors.white,
+      boxShadow: [BoxShadow(offset: Offset(0, 3), blurRadius: 5)],
+    ),
+    child: AspectRatio(
+      aspectRatio: page.aspectRatio,
+      child: Image(image: page.image, fit: BoxFit.cover),
+    ),
+  );
+
+  Widget _pdfPages(BuildContext context, List<PdfPreviewPageData> pages) {
+    if (!_zoomEnabled) {
+      return ListView.builder(
+        itemCount: pages.length,
+        itemBuilder: (_, index) => _pdfPage(pages[index]),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) => InteractiveViewer(
+        transformationController: _pdfZoomController,
+        constrained: false,
+        minScale: .75,
+        maxScale: 5,
+        boundaryMargin: const EdgeInsets.all(100),
+        panEnabled: true,
+        scaleEnabled: true,
+        child: SizedBox(
+          width: constraints.maxWidth,
+          child: Column(children: pages.map(_pdfPage).toList()),
+        ),
+      ),
+    );
+  }
 
   Future<void> _share() async {
     try {
@@ -2135,13 +2292,32 @@ class _ClientVisitInvoicePreviewScreenState
           ),
         ],
       ),
-      body: PdfPreview(
+      body: PdfPreview.builder(
         build: (_) async => widget.invoiceBytes,
+        pagesBuilder: _pdfPages,
         canChangeOrientation: false,
         canChangePageFormat: false,
+        canDebug: false,
         pdfFileName: widget.fileName,
         allowPrinting: true,
         allowSharing: false,
+        dpi: 144,
+        actions: [
+          IconButton(
+            tooltip: 'Zoom out',
+            onPressed: () => _changeZoom(.8),
+            icon: const Icon(Icons.zoom_out_rounded),
+          ),
+          IconButton(
+            tooltip: 'Zoom in',
+            onPressed: () => _changeZoom(1.25),
+            icon: const Icon(Icons.zoom_in_rounded),
+          ),
+          Tooltip(
+            message: _zoomEnabled ? 'Disable zoom mode' : 'Enable zoom mode',
+            child: Switch(value: _zoomEnabled, onChanged: _setZoomEnabled),
+          ),
+        ],
         loadingWidget: const Center(child: CircularProgressIndicator()),
       ),
       bottomNavigationBar: SafeArea(
