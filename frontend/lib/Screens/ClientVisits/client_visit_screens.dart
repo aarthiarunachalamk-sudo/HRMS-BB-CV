@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -163,8 +162,11 @@ class _ClientVisitDashboardScreenState
 
   Future<void> _openServices() async {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ClientVisitServicesScreen()),
+      MaterialPageRoute(
+        builder: (_) => ClientVisitServicesScreen(userId: widget.userId),
+      ),
     );
+    await _loadDownloads();
   }
 
   Future<void> _openStatusList(
@@ -405,7 +407,9 @@ class _ClientVisitDashboardScreenState
 }
 
 class ClientVisitServicesScreen extends StatefulWidget {
-  const ClientVisitServicesScreen({super.key});
+  final String userId;
+
+  const ClientVisitServicesScreen({super.key, required this.userId});
 
   @override
   State<ClientVisitServicesScreen> createState() =>
@@ -442,10 +446,11 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: clientVisitPackageNames.length, vsync: this)
-      ..addListener(() {
-        if (!_tabController.indexIsChanging) setState(() {});
-      });
+    _tabController =
+        TabController(length: clientVisitPackageNames.length, vsync: this)
+          ..addListener(() {
+            if (!_tabController.indexIsChanging) setState(() {});
+          });
   }
 
   @override
@@ -479,11 +484,26 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
         appBar: AppBar(
           title: const Text('Services'),
           centerTitle: true,
+          actions: [
+            IconButton(
+              tooltip: 'Invoice history',
+              icon: const Icon(Icons.history_rounded),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      ClientVisitDownloadedFilesScreen(userId: widget.userId),
+                ),
+              ),
+            ),
+          ],
           bottom: TabBar(
             controller: _tabController,
             isScrollable: true,
             indicatorSize: TabBarIndicatorSize.tab,
-            indicatorPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            indicatorPadding: const EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: 8,
+            ),
             labelPadding: const EdgeInsets.symmetric(horizontal: 18),
             indicator: BoxDecoration(
               gradient: const LinearGradient(
@@ -500,7 +520,9 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
             ),
             labelStyle: const TextStyle(fontWeight: FontWeight.w900),
             unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
-            tabs: clientVisitPackageNames.map((name) => Tab(text: name)).toList(),
+            tabs: clientVisitPackageNames
+                .map((name) => Tab(text: name))
+                .toList(),
           ),
         ),
         body: ListView(
@@ -523,39 +545,92 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                   ),
                 ],
               ),
-              child: Stack(children: [
-                Positioned(right: -26, top: -42, child: _serviceOrb(106, Colors.white.withAlpha(24))),
-                Positioned(right: 43, bottom: -34, child: _serviceOrb(70, Colors.white.withAlpha(18))),
-                Row(
-                  children: [
-                    const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 34),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('$packageName package', style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
-                          const SizedBox(height: 4),
-                          const Text('Choose the services your client needs. You can select more than one.', style: TextStyle(color: Color(0xFFDDF5FF), fontSize: 12, height: 1.35)),
-                          const SizedBox(height: 13),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(color: Colors.white.withAlpha(28), borderRadius: BorderRadius.circular(20)),
-                            child: Text('${_selectedServicePackageIndexes.length} services in your shortlist', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
-                          ),
-                        ],
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -26,
+                    top: -42,
+                    child: _serviceOrb(106, Colors.white.withAlpha(24)),
+                  ),
+                  Positioned(
+                    right: 43,
+                    bottom: -34,
+                    child: _serviceOrb(70, Colors.white.withAlpha(18)),
+                  ),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: Colors.white,
+                        size: 34,
                       ),
-                    ),
-                  ],
-                ),
-              ]),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$packageName package',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Choose the services your client needs. You can select more than one.',
+                              style: TextStyle(
+                                color: Color(0xFFDDF5FF),
+                                fontSize: 12,
+                                height: 1.35,
+                              ),
+                            ),
+                            const SizedBox(height: 13),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withAlpha(28),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                '${_selectedServicePackageIndexes.length} services in your shortlist',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 20),
-            Text('Services in $packageName', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            Text(
+              'Services in $packageName',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 4),
-            Text('Tap a card for full details. Use the check box to add it to the preview.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context))),
+            Text(
+              'Tap a card for full details. Use the check box to add it to the preview.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: ThemeConfig.getTextMuted(context),
+              ),
+            ),
             const SizedBox(height: 12),
-            ...clientVisitServiceCatalog.map((service) => _serviceCard(service, packageIndex)),
+            ...clientVisitServiceCatalog.map(
+              (service) => _serviceCard(service, packageIndex),
+            ),
           ],
         ),
         bottomNavigationBar: SafeArea(
@@ -567,12 +642,25 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                     final reviewedSelections = await Navigator.of(context)
                         .push<Map<String, int>>(
                           MaterialPageRoute(
-                            builder: (_) => ClientVisitServiceSelectionPreviewScreen(
-                              selectedServices: clientVisitServiceCatalog
-                                  .where((service) => _selectedServicePackageIndexes.containsKey(service.id))
-                                  .map((service) => ClientVisitSelectedService(service: service, packageIndex: _selectedServicePackageIndexes[service.id]!))
-                                  .toList(),
-                            ),
+                            builder: (_) =>
+                                ClientVisitServiceSelectionPreviewScreen(
+                                  userId: widget.userId,
+                                  selectedServices: clientVisitServiceCatalog
+                                      .where(
+                                        (service) =>
+                                            _selectedServicePackageIndexes
+                                                .containsKey(service.id),
+                                      )
+                                      .map(
+                                        (service) => ClientVisitSelectedService(
+                                          service: service,
+                                          packageIndex:
+                                              _selectedServicePackageIndexes[service
+                                                  .id]!,
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
                           ),
                         );
                     if (!mounted || reviewedSelections == null) return;
@@ -583,7 +671,9 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                     });
                   },
             icon: const Icon(Icons.visibility_rounded),
-            label: Text('Preview selected services (${_selectedServicePackageIndexes.length})'),
+            label: Text(
+              'Preview selected services (${_selectedServicePackageIndexes.length})',
+            ),
           ),
         ),
       ),
@@ -599,25 +689,72 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
         padding: EdgeInsets.zero,
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ClientVisitServiceDetailScreen(service: service, selectedPackageIndex: packageIndex))),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ClientVisitServiceDetailScreen(
+                service: service,
+                selectedPackageIndex: packageIndex,
+              ),
+            ),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withAlpha(24), borderRadius: BorderRadius.circular(14)), child: Icon(ClientVisitServicesScreen._serviceIcon(service.module), color: color)),
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: color.withAlpha(24),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    ClientVisitServicesScreen._serviceIcon(service.module),
+                    color: color,
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(service.module.toUpperCase(), style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: .7)),
+                      Text(
+                        service.module.toUpperCase(),
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: .7,
+                        ),
+                      ),
                       const SizedBox(height: 3),
-                      Text(service.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                      Text(
+                        service.name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                       const SizedBox(height: 4),
-                      Text(service.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context), height: 1.35)),
+                      Text(
+                        service.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: ThemeConfig.getTextMuted(context),
+                          height: 1.35,
+                        ),
+                      ),
                       const SizedBox(height: 9),
-                      Text('₹${service.prices[packageIndex]}  •  ${service.payable}', style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w900)),
+                      Text(
+                        '₹${service.prices[packageIndex]}  •  ${service.payable}',
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 6,
@@ -639,7 +776,8 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => _toggleService(service.id, packageIndex, !selected),
+                  onTap: () =>
+                      _toggleService(service.id, packageIndex, !selected),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
                     width: 36,
@@ -647,9 +785,15 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                     decoration: BoxDecoration(
                       color: selected ? color : color.withAlpha(18),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: color.withAlpha(selected ? 255 : 80)),
+                      border: Border.all(
+                        color: color.withAlpha(selected ? 255 : 80),
+                      ),
                     ),
-                    child: Icon(selected ? Icons.check_rounded : Icons.add_rounded, color: selected ? Colors.white : color, size: 20),
+                    child: Icon(
+                      selected ? Icons.check_rounded : Icons.add_rounded,
+                      color: selected ? Colors.white : color,
+                      size: 20,
+                    ),
                   ),
                 ),
               ],
@@ -660,24 +804,29 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
     );
   }
 
-  Widget _serviceMetaChip(IconData icon, String label, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-    decoration: BoxDecoration(
-      color: color.withAlpha(15),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 12, color: color),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800),
+  Widget _serviceMetaChip(IconData icon, String label, Color color) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withAlpha(15),
+          borderRadius: BorderRadius.circular(8),
         ),
-      ],
-    ),
-  );
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class ClientVisitServiceDetailScreen extends StatelessWidget {
@@ -826,23 +975,35 @@ class ClientVisitServiceDetailScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        ...List.generate(
-          clientVisitPackageNames.length,
-          (index) {
-            final highlighted = index == selectedPackageIndex;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(color: highlighted ? color.withAlpha(18) : Colors.transparent, borderRadius: BorderRadius.circular(9)),
-              child: Row(
-                children: [
-                  Expanded(child: Text(clientVisitPackageNames[index], style: TextStyle(fontWeight: highlighted ? FontWeight.w900 : FontWeight.w500))),
-                  Text('₹${service.prices[index]}', style: TextStyle(color: color, fontWeight: FontWeight.w900)),
-                ],
-              ),
-            );
-          },
-        ),
+        ...List.generate(clientVisitPackageNames.length, (index) {
+          final highlighted = index == selectedPackageIndex;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: highlighted ? color.withAlpha(18) : Colors.transparent,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    clientVisitPackageNames[index],
+                    style: TextStyle(
+                      fontWeight: highlighted
+                          ? FontWeight.w900
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Text(
+                  '₹${service.prices[index]}',
+                  style: TextStyle(color: color, fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+          );
+        }),
         Text(
           'Prices are exclusive of GST.',
           style: Theme.of(context).textTheme.bodySmall,
@@ -878,11 +1039,27 @@ class ClientVisitSelectedService {
   });
 }
 
+class ClientVisitGeneratedInvoice {
+  final Uint8List bytes;
+  final String fileName;
+  final String invoiceNumber;
+  final String shareFilePath;
+
+  const ClientVisitGeneratedInvoice({
+    required this.bytes,
+    required this.fileName,
+    required this.invoiceNumber,
+    required this.shareFilePath,
+  });
+}
+
 class ClientVisitServiceSelectionPreviewScreen extends StatefulWidget {
+  final String userId;
   final List<ClientVisitSelectedService> selectedServices;
 
   const ClientVisitServiceSelectionPreviewScreen({
     super.key,
+    required this.userId,
     required this.selectedServices,
   });
 
@@ -893,10 +1070,8 @@ class ClientVisitServiceSelectionPreviewScreen extends StatefulWidget {
 
 class _ClientVisitServiceSelectionPreviewScreenState
     extends State<ClientVisitServiceSelectionPreviewScreen> {
-  static const _filesChannel = MethodChannel('hrms/files');
   late final Set<String> _acceptedServiceIds;
   bool _generatingInvoice = false;
-  String? _invoiceFilePath;
 
   @override
   void initState() {
@@ -916,45 +1091,28 @@ class _ClientVisitServiceSelectionPreviewScreenState
     });
   }
 
-  void _returnToServices() => Navigator.of(context).pop(
-    <String, int>{
-      for (final selection in widget.selectedServices)
-        if (_acceptedServiceIds.contains(selection.service.id))
-          selection.service.id: selection.packageIndex,
-    },
-  );
+  void _returnToServices() => Navigator.of(context).pop(<String, int>{
+    for (final selection in widget.selectedServices)
+      if (_acceptedServiceIds.contains(selection.service.id))
+        selection.service.id: selection.packageIndex,
+  });
 
-  Future<void> _shareInvoicePdf() async {
-    final invoiceFilePath = _invoiceFilePath;
-    if (invoiceFilePath == null) return;
-    try {
-      await Share.shareXFiles(
-        [XFile(invoiceFilePath)],
-        text: 'Please find the Bit Byte service selection invoice attached.',
-        subject: 'Bit Byte service invoice',
-      );
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share invoice PDF: $error')),
-        );
-      }
-    }
-  }
-
-  Future<void> _generateInvoicePdf(
+  Future<ClientVisitGeneratedInvoice?> _generateInvoicePdf(
     List<ClientVisitSelectedService> acceptedServices,
   ) async {
-    if (acceptedServices.isEmpty || _generatingInvoice) return;
+    if (acceptedServices.isEmpty || _generatingInvoice) return null;
     setState(() => _generatingInvoice = true);
     try {
       final total = acceptedServices.fold<int>(
         0,
-        (sum, selection) => sum + selection.service.prices[selection.packageIndex],
+        (sum, selection) =>
+            sum + selection.service.prices[selection.packageIndex],
       );
       final gst = acceptedServices.fold<int>(
         0,
-        (sum, selection) => sum + (selection.service.prices[selection.packageIndex] * .18).round(),
+        (sum, selection) =>
+            sum +
+            (selection.service.prices[selection.packageIndex] * .18).round(),
       );
       final grandTotal = total + gst;
       final now = DateTime.now();
@@ -987,7 +1145,11 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 : pw.Center(
                     child: pw.Opacity(
                       opacity: .12,
-                      child: pw.Image(watermark ?? logo!, width: 390, height: 390),
+                      child: pw.Image(
+                        watermark ?? logo!,
+                        width: 390,
+                        height: 390,
+                      ),
                     ),
                   ),
           ),
@@ -1007,24 +1169,63 @@ class _ClientVisitServiceSelectionPreviewScreenState
               children: [
                 pw.Text(
                   '2nd Floor - West Wing, Raja Complex, Opp: Sago Serve, Omalur main road, Salem-636302, TN-India.',
-                  style: pw.TextStyle(fontSize: 10, color: const PdfColor.fromInt(0xFF34495E)),
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    color: const PdfColor.fromInt(0xFF34495E),
+                  ),
                 ),
                 pw.SizedBox(height: 3),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                   children: [
-                    pw.Text('reachus@bitbytetech.org', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF1769AA))),
-                    pw.Text('www.bitbytetech.org', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF1769AA))),
-                    pw.Text('+91 99437 43136 – WhatsApp Only.', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF34495E))),
+                    pw.Text(
+                      'reachus@bitbytetech.org',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        color: const PdfColor.fromInt(0xFF1769AA),
+                      ),
+                    ),
+                    pw.Text(
+                      'www.bitbytetech.org',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        color: const PdfColor.fromInt(0xFF1769AA),
+                      ),
+                    ),
+                    pw.Text(
+                      '+91 99437 43136 – WhatsApp Only.',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        color: const PdfColor.fromInt(0xFF34495E),
+                      ),
+                    ),
                   ],
                 ),
                 pw.SizedBox(height: 3),
                 pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                   children: [
-                    pw.Text('Internal Document', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF34495E))),
-                    pw.Text('Confidential', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF34495E))),
-                    pw.Text('All rights reserved.  Page ${context.pageNumber} of ${context.pagesCount}', style: pw.TextStyle(fontSize: 9, color: const PdfColor.fromInt(0xFF34495E))),
+                    pw.Text(
+                      'Internal Document',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        color: const PdfColor.fromInt(0xFF34495E),
+                      ),
+                    ),
+                    pw.Text(
+                      'Confidential',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        color: const PdfColor.fromInt(0xFF34495E),
+                      ),
+                    ),
+                    pw.Text(
+                      'All rights reserved.  Page ${context.pageNumber} of ${context.pagesCount}',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        color: const PdfColor.fromInt(0xFF34495E),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -1080,14 +1281,32 @@ class _ClientVisitServiceSelectionPreviewScreenState
                     ],
                   ),
                   pw.SizedBox(height: 5),
-                  pw.Container(height: 2.5, color: const PdfColor.fromInt(0xFF4D8AC8)),
+                  pw.Container(
+                    height: 2.5,
+                    color: const PdfColor.fromInt(0xFF4D8AC8),
+                  ),
                   pw.SizedBox(height: 7),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                     children: [
-                      pw.Text('reachus@bitbytetech.org', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.blue)),
-                      pw.Text('www.bitbytetech.org', style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.blue)),
-                      pw.Text('+91 99437 43136 (WhatsApp Only)', style: pw.TextStyle(fontSize: 8.5)),
+                      pw.Text(
+                        'reachus@bitbytetech.org',
+                        style: const pw.TextStyle(
+                          fontSize: 8.5,
+                          color: PdfColors.blue,
+                        ),
+                      ),
+                      pw.Text(
+                        'www.bitbytetech.org',
+                        style: const pw.TextStyle(
+                          fontSize: 8.5,
+                          color: PdfColors.blue,
+                        ),
+                      ),
+                      pw.Text(
+                        '+91 99437 43136 (WhatsApp Only)',
+                        style: pw.TextStyle(fontSize: 8.5),
+                      ),
                     ],
                   ),
                 ],
@@ -1129,11 +1348,27 @@ class _ClientVisitServiceSelectionPreviewScreenState
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('INVOICE DETAILS', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF1687FF), fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          'INVOICE DETAILS',
+                          style: pw.TextStyle(
+                            fontSize: 8,
+                            color: const PdfColor.fromInt(0xFF1687FF),
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                         pw.SizedBox(height: 5),
-                        pw.Text('Invoice no: $invoiceNumber', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          'Invoice no: $invoiceNumber',
+                          style: pw.TextStyle(
+                            fontSize: 9,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                         pw.SizedBox(height: 3),
-                        pw.Text('Date: ${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}', style: const pw.TextStyle(fontSize: 9)),
+                        pw.Text(
+                          'Date: ${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}',
+                          style: const pw.TextStyle(fontSize: 9),
+                        ),
                       ],
                     ),
                   ),
@@ -1143,11 +1378,27 @@ class _ClientVisitServiceSelectionPreviewScreenState
                     child: pw.Column(
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
-                        pw.Text('PACKAGE', style: pw.TextStyle(fontSize: 8, color: const PdfColor.fromInt(0xFF1687FF), fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          'PACKAGE',
+                          style: pw.TextStyle(
+                            fontSize: 8,
+                            color: const PdfColor.fromInt(0xFF1687FF),
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                         pw.SizedBox(height: 5),
-                        pw.Text('Mixed package selection', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                        pw.Text(
+                          'Mixed package selection',
+                          style: pw.TextStyle(
+                            fontSize: 12,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
                         pw.SizedBox(height: 3),
-                        pw.Text('${acceptedServices.length} selected services', style: const pw.TextStyle(fontSize: 9)),
+                        pw.Text(
+                          '${acceptedServices.length} selected services',
+                          style: const pw.TextStyle(fontSize: 9),
+                        ),
                       ],
                     ),
                   ),
@@ -1164,23 +1415,22 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 'GST 18%',
                 'Total (INR)',
               ],
-              data: List<List<String>>.generate(
-                acceptedServices.length,
-                (index) {
-                  final selection = acceptedServices[index];
-                  final service = selection.service;
-                  final basePrice = service.prices[selection.packageIndex];
-                  final serviceGst = (basePrice * .18).round();
-                  return [
-                    '${index + 1}',
-                    '${service.name}\n${clientVisitPackageNames[selection.packageIndex]} package',
-                    '${service.unit} / ${service.frequency}',
-                    _formatInvoiceAmount(basePrice),
-                    _formatInvoiceAmount(serviceGst),
-                    _formatInvoiceAmount(basePrice + serviceGst),
-                  ];
-                },
-              ),
+              data: List<List<String>>.generate(acceptedServices.length, (
+                index,
+              ) {
+                final selection = acceptedServices[index];
+                final service = selection.service;
+                final basePrice = service.prices[selection.packageIndex];
+                final serviceGst = (basePrice * .18).round();
+                return [
+                  '${index + 1}',
+                  '${service.name}\n${clientVisitPackageNames[selection.packageIndex]} package',
+                  '${service.unit} / ${service.frequency}',
+                  _formatInvoiceAmount(basePrice),
+                  _formatInvoiceAmount(serviceGst),
+                  _formatInvoiceAmount(basePrice + serviceGst),
+                ];
+              }),
               headerDecoration: const pw.BoxDecoration(
                 color: PdfColor.fromInt(0xFF1687FF),
               ),
@@ -1223,9 +1473,15 @@ class _ClientVisitServiceSelectionPreviewScreenState
                       ),
                     ),
                     pw.SizedBox(height: 8),
-                    _invoiceTotalRow('Subtotal', 'INR ${_formatInvoiceAmount(total)}'),
+                    _invoiceTotalRow(
+                      'Subtotal',
+                      'INR ${_formatInvoiceAmount(total)}',
+                    ),
                     pw.SizedBox(height: 6),
-                    _invoiceTotalRow('GST (18%)', 'INR ${_formatInvoiceAmount(gst)}'),
+                    _invoiceTotalRow(
+                      'GST (18%)',
+                      'INR ${_formatInvoiceAmount(gst)}',
+                    ),
                     pw.Divider(color: PdfColors.blueGrey, height: 16),
                     _invoiceTotalRow(
                       'Grand total',
@@ -1241,32 +1497,16 @@ class _ClientVisitServiceSelectionPreviewScreenState
       );
       final fileName = 'BitByte_Invoice_$invoiceNumber.pdf';
       final bytes = await document.save();
-      final savedUri = await _filesChannel.invokeMethod<String>(
-        'saveToDownloads',
-        {'fileName': fileName, 'mimeType': 'application/pdf', 'bytes': bytes},
-      );
       final temporaryDirectory = await getTemporaryDirectory();
-      final shareFile = File('${temporaryDirectory.path}${Platform.pathSeparator}$fileName');
-      await shareFile.writeAsBytes(bytes, flush: true);
-      if (!mounted) return;
-      setState(() => _invoiceFilePath = shareFile.path);
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ClientVisitInvoicePreviewScreen(
-            invoiceBytes: bytes,
-            fileName: fileName,
-          ),
-        ),
+      final shareFile = File(
+        '${temporaryDirectory.path}${Platform.pathSeparator}$fileName',
       );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            savedUri == null || savedUri.isEmpty
-                ? 'Invoice PDF generated in Downloads.'
-                : 'Invoice PDF saved successfully.',
-          ),
-        ),
+      await shareFile.writeAsBytes(bytes, flush: true);
+      return ClientVisitGeneratedInvoice(
+        bytes: bytes,
+        fileName: fileName,
+        invoiceNumber: invoiceNumber,
+        shareFilePath: shareFile.path,
       );
     } catch (error) {
       if (mounted) {
@@ -1274,6 +1514,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
           SnackBar(content: Text('Could not generate invoice PDF: $error')),
         );
       }
+      return null;
     } finally {
       if (mounted) setState(() => _generatingInvoice = false);
     }
@@ -1322,7 +1563,14 @@ class _ClientVisitServiceSelectionPreviewScreenState
       children: [
         Icon(icon, size: 15, color: color),
         const SizedBox(width: 5),
-        Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w900)),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
       ],
     ),
   );
@@ -1330,20 +1578,28 @@ class _ClientVisitServiceSelectionPreviewScreenState
   @override
   Widget build(BuildContext context) {
     final acceptedServices = widget.selectedServices
-        .where((selection) => _acceptedServiceIds.contains(selection.service.id))
+        .where(
+          (selection) => _acceptedServiceIds.contains(selection.service.id),
+        )
         .toList();
     final total = acceptedServices.fold<int>(
       0,
-      (sum, selection) => sum + selection.service.prices[selection.packageIndex],
+      (sum, selection) =>
+          sum + selection.service.prices[selection.packageIndex],
     );
     final gst = acceptedServices.fold<int>(
       0,
-      (sum, selection) => sum + (selection.service.prices[selection.packageIndex] * .18).round(),
+      (sum, selection) =>
+          sum +
+          (selection.service.prices[selection.packageIndex] * .18).round(),
     );
     final grandTotal = total + gst;
     return ClientVisitTheme(
       child: Scaffold(
-        appBar: AppBar(title: const Text('Final Service Check'), centerTitle: true),
+        appBar: AppBar(
+          title: const Text('Final Service Check'),
+          centerTitle: true,
+        ),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 112),
           children: [
@@ -1361,81 +1617,193 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: ClientVisitColors.blue.withAlpha(90)),
               ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Custom service selection', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
-                const SizedBox(height: 5),
-                Text('Accept or reject each service before sharing this selection with the client.', style: TextStyle(color: ThemeConfig.getTextMuted(context), height: 1.35)),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _reviewPill(Icons.check_circle_rounded, '${acceptedServices.length} accepted', const Color(0xFF12B981)),
-                    _reviewPill(Icons.pending_actions_rounded, '${widget.selectedServices.length - acceptedServices.length} rejected', const Color(0xFFD93A4A)),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Row(children: [const Expanded(child: Text('Subtotal', style: TextStyle(fontWeight: FontWeight.w800))), Text('₹$total', style: const TextStyle(color: ClientVisitColors.blue, fontSize: 16, fontWeight: FontWeight.w900))]),
-                const SizedBox(height: 4),
-                Row(children: [Expanded(child: Text('GST (18%)', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context)))), Text('₹$gst', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context)))]),
-                const Divider(height: 16),
-                Row(children: [const Expanded(child: Text('Grand total', style: TextStyle(fontWeight: FontWeight.w900))), Text('₹$grandTotal', style: const TextStyle(color: ClientVisitColors.blue, fontSize: 18, fontWeight: FontWeight.w900))]),
-              ]),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Custom service selection',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Accept or reject each service before sharing this selection with the client.',
+                    style: TextStyle(
+                      color: ThemeConfig.getTextMuted(context),
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _reviewPill(
+                        Icons.check_circle_rounded,
+                        '${acceptedServices.length} accepted',
+                        const Color(0xFF12B981),
+                      ),
+                      _reviewPill(
+                        Icons.pending_actions_rounded,
+                        '${widget.selectedServices.length - acceptedServices.length} rejected',
+                        const Color(0xFFD93A4A),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Subtotal',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      Text(
+                        '₹$total',
+                        style: const TextStyle(
+                          color: ClientVisitColors.blue,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'GST (18%)',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: ThemeConfig.getTextMuted(context),
+                              ),
+                        ),
+                      ),
+                      Text(
+                        '₹$gst',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: ThemeConfig.getTextMuted(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Grand total',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      Text(
+                        '₹$grandTotal',
+                        style: const TextStyle(
+                          color: ClientVisitColors.blue,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 18),
             ...widget.selectedServices.map((selection) {
               final service = selection.service;
-              final color = ClientVisitServicesScreen._serviceColor(service.module);
+              final color = ClientVisitServicesScreen._serviceColor(
+                service.module,
+              );
               final accepted = _acceptedServiceIds.contains(service.id);
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: EmployeeCard(
                   child: Opacity(
                     opacity: accepted ? 1 : .55,
-                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Icon(ClientVisitServicesScreen._serviceIcon(service.module), color: color),
-                    const SizedBox(width: 12),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(service.name, style: TextStyle(fontWeight: FontWeight.w900, decoration: accepted ? null : TextDecoration.lineThrough)),
-                      const SizedBox(height: 3),
-                      Text(service.description, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context), height: 1.35)),
-                      const SizedBox(height: 8),
-                      Text('${service.unit} • ${service.frequency}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: ThemeConfig.getTextMuted(context))),
-                      const SizedBox(height: 6),
-                      _reviewPill(
-                        Icons.workspace_premium_rounded,
-                        clientVisitPackageNames[selection.packageIndex],
-                        color,
-                      ),
-                    ])),
-                    const SizedBox(width: 10),
-                    SizedBox(
-                      width: 82,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '₹${service.prices[selection.packageIndex]}',
-                            style: TextStyle(color: color, fontWeight: FontWeight.w900),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          ClientVisitServicesScreen._serviceIcon(
+                            service.module,
                           ),
-                          const SizedBox(height: 12),
-                          InkWell(
-                            borderRadius: BorderRadius.circular(22),
-                            onTap: () => _setAccepted(service.id, !accepted),
-                            child: Icon(
-                              accepted
-                                  ? Icons.check_circle_rounded
-                                  : Icons.cancel_outlined,
-                              color: accepted
-                                  ? const Color(0xFF12B981)
-                                  : const Color(0xFFD93A4A),
-                              size: 36,
-                            ),
+                          color: color,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                service.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  decoration: accepted
+                                      ? null
+                                      : TextDecoration.lineThrough,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                service.description,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: ThemeConfig.getTextMuted(context),
+                                      height: 1.35,
+                                    ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${service.unit} • ${service.frequency}',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: ThemeConfig.getTextMuted(context),
+                                    ),
+                              ),
+                              const SizedBox(height: 6),
+                              _reviewPill(
+                                Icons.workspace_premium_rounded,
+                                clientVisitPackageNames[selection.packageIndex],
+                                color,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 82,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '₹${service.prices[selection.packageIndex]}',
+                                style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(22),
+                                onTap: () =>
+                                    _setAccepted(service.id, !accepted),
+                                child: Icon(
+                                  accepted
+                                      ? Icons.check_circle_rounded
+                                      : Icons.cancel_outlined,
+                                  color: accepted
+                                      ? const Color(0xFF12B981)
+                                      : const Color(0xFFD93A4A),
+                                  size: 36,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ]),
                   ),
                 ),
               );
@@ -1450,36 +1818,6 @@ class _ClientVisitServiceSelectionPreviewScreenState
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: _acceptedServiceIds.isEmpty || _generatingInvoice
-                      ? null
-                      : () => _generateInvoicePdf(acceptedServices),
-                  icon: _generatingInvoice
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.picture_as_pdf_rounded),
-                  label: Text(
-                    _generatingInvoice
-                        ? 'Generating invoice PDF...'
-                        : 'Generate invoice PDF',
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _invoiceFilePath == null ? null : _shareInvoicePdf,
-                  icon: const Icon(Icons.share_rounded),
-                  label: const Text('Share invoice via WhatsApp or apps'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
                   onPressed: _returnToServices,
                   icon: const Icon(Icons.add_rounded),
                   label: const Text('Add another service'),
@@ -1491,7 +1829,17 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 child: FilledButton.icon(
                   onPressed: _acceptedServiceIds.isEmpty
                       ? null
-                      : _returnToServices,
+                      : () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                ClientVisitInvoiceConfirmationScreen(
+                                  userId: widget.userId,
+                                  selectedServices: acceptedServices,
+                                  onGenerate: () =>
+                                      _generateInvoicePdf(acceptedServices),
+                                ),
+                          ),
+                        ),
                   icon: const Icon(Icons.check_circle_rounded),
                   label: Text(
                     'Confirm ${_acceptedServiceIds.length} service${_acceptedServiceIds.length == 1 ? '' : 's'}',
@@ -1506,28 +1854,327 @@ class _ClientVisitServiceSelectionPreviewScreenState
   }
 }
 
-class ClientVisitInvoicePreviewScreen extends StatelessWidget {
+class ClientVisitInvoiceConfirmationScreen extends StatefulWidget {
+  final String userId;
+  final List<ClientVisitSelectedService> selectedServices;
+  final Future<ClientVisitGeneratedInvoice?> Function() onGenerate;
+
+  const ClientVisitInvoiceConfirmationScreen({
+    super.key,
+    required this.userId,
+    required this.selectedServices,
+    required this.onGenerate,
+  });
+
+  @override
+  State<ClientVisitInvoiceConfirmationScreen> createState() =>
+      _ClientVisitInvoiceConfirmationScreenState();
+}
+
+class _ClientVisitInvoiceConfirmationScreenState
+    extends State<ClientVisitInvoiceConfirmationScreen> {
+  bool _generating = false;
+
+  Future<void> _generate() async {
+    if (_generating) return;
+    setState(() => _generating = true);
+    try {
+      final invoice = await widget.onGenerate();
+      if (!mounted || invoice == null) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ClientVisitInvoicePreviewScreen(
+            userId: widget.userId,
+            invoiceBytes: invoice.bytes,
+            fileName: invoice.fileName,
+            invoiceNumber: invoice.invoiceNumber,
+            shareFilePath: invoice.shareFilePath,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _generating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final subtotal = widget.selectedServices.fold<int>(
+      0,
+      (sum, item) => sum + item.service.prices[item.packageIndex],
+    );
+    final gst = widget.selectedServices.fold<int>(
+      0,
+      (sum, item) =>
+          sum + (item.service.prices[item.packageIndex] * .18).round(),
+    );
+    return ClientVisitTheme(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Confirmed Services'),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              tooltip: 'Invoice history',
+              icon: const Icon(Icons.history_rounded),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      ClientVisitDownloadedFilesScreen(userId: widget.userId),
+                ),
+              ),
+            ),
+          ],
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+          children: [
+            EmployeeCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Invoice summary',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 12),
+                  _amountRow(
+                    'Confirmed services',
+                    '${widget.selectedServices.length}',
+                  ),
+                  _amountRow('Subtotal', '₹$subtotal'),
+                  _amountRow('GST (18%)', '₹$gst'),
+                  const Divider(height: 20),
+                  _amountRow('Grand total', '₹${subtotal + gst}', total: true),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            ...widget.selectedServices.map((selection) {
+              final service = selection.service;
+              final color = ClientVisitServicesScreen._serviceColor(
+                service.module,
+              );
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: EmployeeCard(
+                  child: Row(
+                    children: [
+                      Icon(
+                        ClientVisitServicesScreen._serviceIcon(service.module),
+                        color: color,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              service.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${clientVisitPackageNames[selection.packageIndex]} package',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '₹${service.prices[selection.packageIndex]}',
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+        bottomNavigationBar: SafeArea(
+          minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _generating ? null : _generate,
+              icon: _generating
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.picture_as_pdf_rounded),
+              label: Text(
+                _generating ? 'Generating invoice...' : 'Generate invoice',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _amountRow(String label, String value, {bool total = false}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontWeight: total ? FontWeight.w900 : FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                color: total ? ClientVisitColors.blue : null,
+                fontSize: total ? 18 : 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class ClientVisitInvoicePreviewScreen extends StatefulWidget {
+  final String userId;
   final Uint8List invoiceBytes;
   final String fileName;
+  final String invoiceNumber;
+  final String shareFilePath;
 
   const ClientVisitInvoicePreviewScreen({
     super.key,
+    required this.userId,
     required this.invoiceBytes,
     required this.fileName,
+    required this.invoiceNumber,
+    required this.shareFilePath,
   });
+
+  @override
+  State<ClientVisitInvoicePreviewScreen> createState() =>
+      _ClientVisitInvoicePreviewScreenState();
+}
+
+class _ClientVisitInvoicePreviewScreenState
+    extends State<ClientVisitInvoicePreviewScreen> {
+  static const _filesChannel = MethodChannel('hrms/files');
+  bool _downloading = false;
+  bool _downloaded = false;
+
+  Future<void> _share() async {
+    try {
+      await Share.shareXFiles(
+        [XFile(widget.shareFilePath)],
+        text: 'Please find the Bit Byte service invoice attached.',
+        subject: 'Bit Byte service invoice',
+      );
+    } catch (error) {
+      if (mounted) _message('Could not share invoice PDF: $error');
+    }
+  }
+
+  Future<void> _download() async {
+    if (_downloading) return;
+    setState(() => _downloading = true);
+    try {
+      final uri = await _filesChannel.invokeMethod<String>('saveToDownloads', {
+        'fileName': widget.fileName,
+        'mimeType': 'application/pdf',
+        'bytes': widget.invoiceBytes,
+      });
+      await ClientVisitDownloads.save(
+        userId: widget.userId,
+        visitId: 0,
+        visitReference: widget.invoiceNumber,
+        clientName: 'Service invoice',
+        fileName: widget.fileName,
+        uri: uri ?? 'Downloads/BBT-HRMS/${widget.fileName}',
+      );
+      if (!mounted) return;
+      setState(() => _downloaded = true);
+      _message('Invoice saved in Downloads/BBT-HRMS.');
+    } catch (error) {
+      if (mounted) _message('Could not download invoice PDF: $error');
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  void _message(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
 
   @override
   Widget build(BuildContext context) => ClientVisitTheme(
     child: Scaffold(
-      appBar: AppBar(title: const Text('Invoice Preview'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('Invoice'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'Invoice history',
+            icon: const Icon(Icons.history_rounded),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    ClientVisitDownloadedFilesScreen(userId: widget.userId),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: PdfPreview(
-        build: (_) async => invoiceBytes,
+        build: (_) async => widget.invoiceBytes,
         canChangeOrientation: false,
         canChangePageFormat: false,
-        pdfFileName: fileName,
+        pdfFileName: widget.fileName,
         allowPrinting: true,
-        allowSharing: true,
+        allowSharing: false,
         loadingWidget: const Center(child: CircularProgressIndicator()),
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _share,
+                icon: const Icon(Icons.share_rounded),
+                label: const Text('Share'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: _downloading || _downloaded ? null : _download,
+                icon: _downloading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        _downloaded
+                            ? Icons.check_rounded
+                            : Icons.download_rounded,
+                      ),
+                label: Text(_downloaded ? 'Downloaded' : 'Download PDF'),
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );

@@ -48,7 +48,7 @@ class ClientVisitDownloads {
       'client_name': clientName,
       'file_name': fileName,
       'uri': uri,
-      'display_path': 'Downloads/HRMS-ERP/$fileName',
+      'display_path': 'Downloads/BBT-HRMS/$fileName',
       'mime_type': 'application/pdf',
       'downloaded_at': now.toIso8601String(),
     });
@@ -153,7 +153,7 @@ class _ClientVisitDownloadedFilesScreenState
                     Icon(Icons.folder_open_rounded, size: 48),
                     SizedBox(height: 12),
                     Text(
-                      'No downloaded client visit documents yet.',
+                      'No downloaded invoices or client visit documents yet.',
                       textAlign: TextAlign.center,
                     ),
                     SizedBox(height: 6),
