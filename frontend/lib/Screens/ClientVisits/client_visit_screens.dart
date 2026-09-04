@@ -1150,27 +1150,6 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                     ],
                   ),
                 ),
-                GestureDetector(
-                  onTap: () =>
-                      _toggleService(service.id, packageIndex, !selected),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: selected ? color : color.withAlpha(18),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: color.withAlpha(selected ? 255 : 80),
-                      ),
-                    ),
-                    child: Icon(
-                      selected ? Icons.check_rounded : Icons.add_rounded,
-                      color: selected ? Colors.white : color,
-                      size: 20,
-                    ),
-                  ),
-                ),
               ],
             ),
           ),
