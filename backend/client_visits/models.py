@@ -106,6 +106,8 @@ class ClientServiceDetails(models.Model):
     client_name = models.CharField(max_length=160)
     client_email = models.EmailField(max_length=254)
     client_mobile = models.CharField(max_length=20)
+    client_gst = models.CharField(max_length=15, blank=True)
+    client_address = models.CharField(max_length=500, blank=True)
     client_details = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)

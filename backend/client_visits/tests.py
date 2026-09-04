@@ -34,6 +34,8 @@ class ClientServiceDetailsApiTests(APITestCase):
             'client_name': 'Example Client',
             'client_email': 'client@example.com',
             'client_mobile': '+91 98765 43210',
+            'client_gst': '33ABCDE1234F1Z5',
+            'client_address': '42 Example Road, Chennai',
             'client_details': 'Needs a mobile application and support.',
         }
 
@@ -45,6 +47,7 @@ class ClientServiceDetailsApiTests(APITestCase):
 
         self.assertEqual(created.status_code, 201)
         self.assertEqual(created.data['client_detail']['title'], 'Client details')
+        self.assertEqual(created.data['client_detail']['client_gst'], '33ABCDE1234F1Z5')
         self.assertTrue(
             ClientServiceDetails.objects.filter(
                 created_by_user_id=self.employee.user_id,
@@ -63,6 +66,10 @@ class ClientServiceDetailsApiTests(APITestCase):
             history.data['client_details'][0]['client_mobile'],
             '+91 98765 43210',
         )
+        self.assertEqual(
+            history.data['client_details'][0]['client_address'],
+            '42 Example Road, Chennai',
+        )
 
     def test_client_details_reject_invalid_email(self):
         response = self.client.post(
@@ -72,6 +79,7 @@ class ClientServiceDetailsApiTests(APITestCase):
                 'client_name': 'Example Client',
                 'client_email': 'invalid',
                 'client_mobile': '9876543210',
+                'client_address': 'Chennai',
                 'client_details': 'Website enquiry.',
             },
             format='json',
@@ -88,6 +96,7 @@ class ClientServiceDetailsApiTests(APITestCase):
                 'client_name': 'A',
                 'client_email': 'client@example.com',
                 'client_mobile': '123',
+                'client_address': 'x',
                 'client_details': 'x',
             },
             format='json',

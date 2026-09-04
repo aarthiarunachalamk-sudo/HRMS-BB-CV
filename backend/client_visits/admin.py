@@ -7,8 +7,8 @@ from .models import (
 
 @admin.register(ClientServiceDetails)
 class ClientServiceDetailsAdmin(admin.ModelAdmin):
-    list_display = ('client_name', 'client_email', 'client_mobile', 'created_by_user_id', 'created_at')
-    search_fields = ('client_name', 'client_email', 'client_mobile', 'created_by_user_id')
+    list_display = ('client_name', 'client_email', 'client_mobile', 'client_gst', 'created_by_user_id', 'created_at')
+    search_fields = ('client_name', 'client_email', 'client_mobile', 'client_gst', 'client_address', 'created_by_user_id')
     readonly_fields = ('created_at', 'updated_at')
 
 

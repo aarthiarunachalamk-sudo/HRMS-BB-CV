@@ -89,6 +89,8 @@ class ClientVisitService {
     required String clientName,
     required String clientEmail,
     required String clientMobile,
+    required String clientGst,
+    required String clientAddress,
     required String clientDetails,
   }) async {
     late final http.Response response;
@@ -102,6 +104,8 @@ class ClientVisitService {
               'client_name': clientName,
               'client_email': clientEmail,
               'client_mobile': clientMobile,
+              'client_gst': clientGst,
+              'client_address': clientAddress,
               'client_details': clientDetails,
             }),
           )

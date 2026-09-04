@@ -113,6 +113,8 @@ class _ClientVisitDownloadedFilesScreenState
           clientName: '${pending['client_name'] ?? ''}',
           clientEmail: '${pending['client_email'] ?? ''}',
           clientMobile: '${pending['client_mobile'] ?? ''}',
+          clientGst: '${pending['client_gst'] ?? ''}',
+          clientAddress: '${pending['client_address'] ?? ''}',
           clientDetails: '${pending['client_details'] ?? ''}',
         );
         clientDetails.insert(0, saved);
@@ -268,6 +270,9 @@ class _ClientVisitDownloadedFilesScreenState
                                   clientName,
                                   '${file['client_email'] ?? ''}',
                                   '${file['client_mobile'] ?? ''}',
+                                  if ('${file['client_gst'] ?? ''}'.isNotEmpty)
+                                    'GSTIN: ${file['client_gst']}',
+                                  '${file['client_address'] ?? ''}',
                                   '${file['client_details'] ?? ''}',
                                   _date('${file['created_at'] ?? ''}'),
                                 ].where((line) => line.isNotEmpty).join('\n')
@@ -276,7 +281,7 @@ class _ClientVisitDownloadedFilesScreenState
                                   _date('${file['downloaded_at'] ?? ''}'),
                                   '${file['display_path'] ?? ''}',
                                 ].join('\n'),
-                          maxLines: isClientDetails ? 6 : 3,
+                          maxLines: isClientDetails ? 8 : 3,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),

@@ -53,6 +53,8 @@ def _client_details_payload(item):
         'client_name': item.client_name,
         'client_email': item.client_email,
         'client_mobile': item.client_mobile,
+        'client_gst': item.client_gst,
+        'client_address': item.client_address,
         'client_details': item.client_details,
         'created_at': item.created_at.isoformat(),
         'updated_at': item.updated_at.isoformat(),
@@ -87,9 +89,11 @@ def client_service_details(request):
     client_name = str(request.data.get('client_name') or '').strip()
     client_email = str(request.data.get('client_email') or '').strip().lower()
     client_mobile = str(request.data.get('client_mobile') or '').strip()
+    client_gst = str(request.data.get('client_gst') or '').strip().upper()
+    client_address = str(request.data.get('client_address') or '').strip()
     details = str(request.data.get('client_details') or '').strip()
-    if not all((client_name, client_email, client_mobile, details)):
-        return _error('Client name, email, mobile number and details are required.')
+    if not all((client_name, client_email, client_mobile, client_address, details)):
+        return _error('Client name, email, mobile number, address and details are required.')
     if len(client_name) < 2 or len(client_name) > 160:
         return _error('Client name must contain between 2 and 160 characters.')
     if len(client_email) > 254:
@@ -103,6 +107,10 @@ def client_service_details(request):
     mobile_digits = re.sub(r'\D', '', client_mobile)
     if len(mobile_digits) < 7 or len(mobile_digits) > 15:
         return _error('Enter a valid client mobile number.')
+    if client_gst and not re.fullmatch(r'\d{2}[A-Z]{5}\d{4}[A-Z]\d[Z][A-Z\d]', client_gst):
+        return _error('Enter a valid 15-character GSTIN, or leave it blank.')
+    if len(client_address) < 3 or len(client_address) > 500:
+        return _error('Client address must contain between 3 and 500 characters.')
     if len(details) < 3 or len(details) > 2000:
         return _error('Client details must contain between 3 and 2000 characters.')
 
@@ -111,6 +119,8 @@ def client_service_details(request):
         client_name=client_name,
         client_email=client_email,
         client_mobile=client_mobile,
+        client_gst=client_gst,
+        client_address=client_address,
         client_details=details,
     )
     return Response({

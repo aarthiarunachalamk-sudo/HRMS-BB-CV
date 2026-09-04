@@ -424,6 +424,8 @@ class _ClientVisitClientDetailsScreenState
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _mobileController = TextEditingController();
+  final _gstController = TextEditingController();
+  final _addressController = TextEditingController();
   final _detailsController = TextEditingController();
   bool _saving = false;
 
@@ -432,6 +434,8 @@ class _ClientVisitClientDetailsScreenState
     _nameController.dispose();
     _emailController.dispose();
     _mobileController.dispose();
+    _gstController.dispose();
+    _addressController.dispose();
     _detailsController.dispose();
     super.dispose();
   }
@@ -481,12 +485,34 @@ class _ClientVisitClientDetailsScreenState
     return null;
   }
 
-  Future<void> _openServices({bool syncPending = false}) =>
+  String? _gstValidator(String? value) {
+    final gst = value!.trim().toUpperCase();
+    if (gst.isEmpty) return null;
+    if (!RegExp(r'^\d{2}[A-Z]{5}\d{4}[A-Z]\d[Z][A-Z\d]$').hasMatch(gst)) {
+      return 'Enter a valid 15-character GSTIN or leave it blank.';
+    }
+    return null;
+  }
+
+  String? _addressValidator(String? value) {
+    final requiredError = _required(value, 'Client address');
+    if (requiredError != null) return requiredError;
+    final address = value!.trim();
+    if (address.length < 3) return 'Client address must have at least 3 characters.';
+    if (address.length > 500) return 'Client address is too long.';
+    return null;
+  }
+
+  Future<void> _openServices({
+    bool syncPending = false,
+    required Map<String, dynamic> clientDetails,
+  }) =>
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => ClientVisitServicesScreen(
             userId: widget.userId,
             clientDetailsSyncPending: syncPending,
+            clientDetails: clientDetails,
           ),
         ),
       );
@@ -497,7 +523,17 @@ class _ClientVisitClientDetailsScreenState
     final clientName = _nameController.text.trim();
     final clientEmail = _emailController.text.trim().toLowerCase();
     final clientMobile = _mobileController.text.trim();
+    final clientGst = _gstController.text.trim().toUpperCase();
+    final clientAddress = _addressController.text.trim();
     final clientDetails = _detailsController.text.trim();
+    final invoiceClient = <String, dynamic>{
+      'client_name': clientName,
+      'client_email': clientEmail,
+      'client_mobile': clientMobile,
+      'client_gst': clientGst,
+      'client_address': clientAddress,
+      'client_details': clientDetails,
+    };
     setState(() => _saving = true);
     try {
       await _service.saveClientDetails(
@@ -505,20 +541,27 @@ class _ClientVisitClientDetailsScreenState
         clientName: clientName,
         clientEmail: clientEmail,
         clientMobile: clientMobile,
+        clientGst: clientGst,
+        clientAddress: clientAddress,
         clientDetails: clientDetails,
       );
       if (!mounted) return;
-      await _openServices();
+      await _openServices(clientDetails: invoiceClient);
     } on ClientDetailsApiUnavailableException {
       await ClientServiceDetailsCache.savePending(
         userId: widget.userId,
         clientName: clientName,
         clientEmail: clientEmail,
         clientMobile: clientMobile,
+        clientGst: clientGst,
+        clientAddress: clientAddress,
         clientDetails: clientDetails,
       );
       if (!mounted) return;
-      await _openServices(syncPending: true);
+      await _openServices(
+        syncPending: true,
+        clientDetails: invoiceClient,
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -653,6 +696,30 @@ class _ClientVisitClientDetailsScreenState
                 validator: _mobileValidator,
               ),
               _field(
+                controller: _gstController,
+                label: 'GSTIN (optional)',
+                icon: Icons.receipt_long_outlined,
+                maxLength: 15,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+                  TextInputFormatter.withFunction(
+                    (oldValue, newValue) => newValue.copyWith(
+                      text: newValue.text.toUpperCase(),
+                      selection: newValue.selection,
+                    ),
+                  ),
+                ],
+                validator: _gstValidator,
+              ),
+              _field(
+                controller: _addressController,
+                label: 'Client address',
+                icon: Icons.location_on_outlined,
+                maxLines: 3,
+                maxLength: 500,
+                validator: _addressValidator,
+              ),
+              _field(
                 controller: _detailsController,
                 label: 'Client details',
                 icon: Icons.description_outlined,
@@ -688,11 +755,13 @@ class _ClientVisitClientDetailsScreenState
 class ClientVisitServicesScreen extends StatefulWidget {
   final String userId;
   final bool clientDetailsSyncPending;
+  final Map<String, dynamic> clientDetails;
 
   const ClientVisitServicesScreen({
     super.key,
     required this.userId,
     this.clientDetailsSyncPending = false,
+    this.clientDetails = const <String, dynamic>{},
   });
 
   @override
@@ -942,6 +1011,7 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                             builder: (_) =>
                                 ClientVisitServiceSelectionPreviewScreen(
                                   userId: widget.userId,
+                                  clientDetails: widget.clientDetails,
                                   selectedServices: clientVisitServiceCatalog
                                       .where(
                                         (service) =>
@@ -1352,11 +1422,13 @@ class ClientVisitGeneratedInvoice {
 
 class ClientVisitServiceSelectionPreviewScreen extends StatefulWidget {
   final String userId;
+  final Map<String, dynamic> clientDetails;
   final List<ClientVisitSelectedService> selectedServices;
 
   const ClientVisitServiceSelectionPreviewScreen({
     super.key,
     required this.userId,
+    required this.clientDetails,
     required this.selectedServices,
   });
 
@@ -1425,6 +1497,14 @@ class _ClientVisitServiceSelectionPreviewScreenState
           )
           .toList();
       final now = DateTime.now();
+      final clientName = '${widget.clientDetails['client_name'] ?? ''}'.trim();
+      final clientEmail = '${widget.clientDetails['client_email'] ?? ''}'.trim();
+      final clientMobile = '${widget.clientDetails['client_mobile'] ?? ''}'.trim();
+      final clientGst = '${widget.clientDetails['client_gst'] ?? ''}'.trim();
+      final clientAddress =
+          '${widget.clientDetails['client_address'] ?? ''}'.trim();
+      final clientNotes =
+          '${widget.clientDetails['client_details'] ?? ''}'.trim();
       final invoiceNumber =
           'BBT-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.millisecondsSinceEpoch.toString().substring(8)}';
       pw.MemoryImage? logo;
@@ -1714,6 +1794,66 @@ class _ClientVisitServiceSelectionPreviewScreenState
                       ],
                     ),
                   ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 18),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300, width: .7),
+                borderRadius: pw.BorderRadius.circular(6),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'BILL TO',
+                    style: pw.TextStyle(
+                      fontSize: 8,
+                      color: const PdfColor.fromInt(0xFF1687FF),
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.SizedBox(height: 5),
+                  pw.Text(
+                    clientName.isEmpty ? 'Client' : clientName,
+                    style: pw.TextStyle(
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  if (clientAddress.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(clientAddress, style: const pw.TextStyle(fontSize: 9)),
+                  ],
+                  if (clientEmail.isNotEmpty || clientMobile.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      [clientEmail, clientMobile]
+                          .where((value) => value.isNotEmpty)
+                          .join('  |  '),
+                      style: const pw.TextStyle(fontSize: 9),
+                    ),
+                  ],
+                  if (clientGst.isNotEmpty) ...[
+                    pw.SizedBox(height: 3),
+                    pw.Text(
+                      'GSTIN: $clientGst',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                  if (clientNotes.isNotEmpty) ...[
+                    pw.SizedBox(height: 5),
+                    pw.Text(
+                      'Client requirements: $clientNotes',
+                      style: const pw.TextStyle(fontSize: 8.5),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -2306,6 +2446,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
                                 ClientVisitInvoiceConfirmationScreen(
                                   userId: widget.userId,
                                   selectedServices: acceptedServices,
+                                  clientDetails: widget.clientDetails,
                                   onGenerate: () =>
                                       _generateInvoicePdf(acceptedServices),
                                 ),
@@ -2328,12 +2469,14 @@ class _ClientVisitServiceSelectionPreviewScreenState
 class ClientVisitInvoiceConfirmationScreen extends StatefulWidget {
   final String userId;
   final List<ClientVisitSelectedService> selectedServices;
+  final Map<String, dynamic> clientDetails;
   final Future<ClientVisitGeneratedInvoice?> Function() onGenerate;
 
   const ClientVisitInvoiceConfirmationScreen({
     super.key,
     required this.userId,
     required this.selectedServices,
+    required this.clientDetails,
     required this.onGenerate,
   });
 

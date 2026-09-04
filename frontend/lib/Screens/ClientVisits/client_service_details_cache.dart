@@ -16,6 +16,8 @@ class ClientServiceDetailsCache {
     required String clientName,
     required String clientEmail,
     required String clientMobile,
+    required String clientGst,
+    required String clientAddress,
     required String clientDetails,
   }) async {
     final items = await _loadAll();
@@ -27,6 +29,8 @@ class ClientServiceDetailsCache {
       'client_name': clientName,
       'client_email': clientEmail,
       'client_mobile': clientMobile,
+      'client_gst': clientGst,
+      'client_address': clientAddress,
       'client_details': clientDetails,
       'created_at': now.toIso8601String(),
       'sync_pending': true,
