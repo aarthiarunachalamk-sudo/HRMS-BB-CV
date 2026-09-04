@@ -14,6 +14,13 @@ class ClientDetailsApiUnavailableException implements Exception {
 }
 
 class ClientVisitService {
+  // A mobile connection should not leave a screen blocked for over a minute.
+  // Thirty seconds still covers Render's normal cold-start window, while the
+  // single retry handles a transient gateway response without compounding it.
+  static const _requestTimeout = Duration(seconds: 30);
+  static const _retryDelay = Duration(seconds: 2);
+  static final http.Client _client = http.Client();
+
   static final Uri _base = ApiConfig.uri('/client-visits/');
 
   static Uri get _clientDetailsUri =>
@@ -21,20 +28,20 @@ class ClientVisitService {
 
   Future<http.Response> _getWithRenderRetry(Uri uri) async {
     Object? lastError;
-    for (var attempt = 0; attempt < 3; attempt++) {
+    for (var attempt = 0; attempt < 2; attempt++) {
       try {
-        final response = await http
+        final response = await _client
             .get(uri)
-            .timeout(const Duration(seconds: 65));
-        if (!{502, 503, 504}.contains(response.statusCode) || attempt == 2) {
+            .timeout(_requestTimeout);
+        if (!{502, 503, 504}.contains(response.statusCode) || attempt == 1) {
           return response;
         }
         lastError = Exception('Server returned ${response.statusCode}.');
       } catch (error) {
         lastError = error;
-        if (attempt == 2) rethrow;
+        if (attempt == 1) rethrow;
       }
-      await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+      await Future<void>.delayed(_retryDelay);
     }
     throw Exception('Client Visit server is unavailable: $lastError');
   }
@@ -86,7 +93,7 @@ class ClientVisitService {
   }) async {
     late final http.Response response;
     try {
-      response = await http
+      response = await _client
           .post(
             _clientDetailsUri,
             headers: {'Content-Type': 'application/json'},
@@ -98,7 +105,7 @@ class ClientVisitService {
               'client_details': clientDetails,
             }),
           )
-          .timeout(const Duration(seconds: 65));
+          .timeout(_requestTimeout);
     } on TimeoutException {
       throw const ClientDetailsApiUnavailableException();
     } on http.ClientException {
@@ -155,11 +162,11 @@ class ClientVisitService {
   }
 
   Future<ClientVisit> create(String userId, Map<String, dynamic> fields) async {
-    final response = await http.post(
+    final response = await _client.post(
       _base,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'user_id': userId, ...fields}),
-    );
+    ).timeout(_requestTimeout);
     return ClientVisit.fromJson(
       Map<String, dynamic>.from(_body(response)['visit'] as Map),
     );
@@ -171,11 +178,11 @@ class ClientVisitService {
     String action,
     Map<String, dynamic> fields,
   ) async {
-    final response = await http.post(
+    final response = await _client.post(
       Uri.parse('$_base$id/$action/'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'user_id': userId, ...fields}),
-    );
+    ).timeout(_requestTimeout);
     return ClientVisit.fromJson(
       Map<String, dynamic>.from(_body(response)['visit'] as Map),
     );
