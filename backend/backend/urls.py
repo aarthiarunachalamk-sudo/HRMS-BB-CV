@@ -21,7 +21,11 @@ def home(request):
 
 def health(request):
     """Lightweight health-check endpoint used by the keep-alive ping."""
-    return JsonResponse({"status": "ok", "ts": int(time.time())})
+    return JsonResponse({
+        "status": "ok",
+        "release": "client-details-2026-09-04",
+        "ts": int(time.time()),
+    })
 
 
 urlpatterns = [
