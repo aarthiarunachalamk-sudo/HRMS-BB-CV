@@ -2813,10 +2813,6 @@ class _ClientVisitInvoicePreviewScreenState
             onPressed: () => _changeZoom(1.25),
             icon: const Icon(Icons.zoom_in_rounded),
           ),
-          Tooltip(
-            message: _zoomEnabled ? 'Disable zoom mode' : 'Enable zoom mode',
-            child: Switch(value: _zoomEnabled, onChanged: _setZoomEnabled),
-          ),
         ],
         loadingWidget: const Center(child: CircularProgressIndicator()),
       ),
