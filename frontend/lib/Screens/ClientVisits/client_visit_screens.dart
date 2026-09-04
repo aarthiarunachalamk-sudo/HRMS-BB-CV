@@ -1057,14 +1057,7 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
         padding: EdgeInsets.zero,
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ClientVisitServiceDetailScreen(
-                service: service,
-                selectedPackageIndex: packageIndex,
-              ),
-            ),
-          ),
+          onTap: () => _toggleService(service.id, packageIndex, !selected),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
@@ -1097,11 +1090,25 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                         ),
                       ),
                       const SizedBox(height: 3),
-                      Text(
-                        service.name,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
+                      InkWell(
+                        borderRadius: BorderRadius.circular(4),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ClientVisitServiceDetailScreen(
+                              service: service,
+                              selectedPackageIndex: packageIndex,
+                            ),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Text(
+                            service.name,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 4),
