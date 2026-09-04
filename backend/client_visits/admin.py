@@ -1,8 +1,15 @@
 from django.contrib import admin
 from .models import (
-    ClientVisit, ClientVisitJourney, JourneyLocationPoint, JourneyStop,
+    ClientServiceDetails, ClientVisit, ClientVisitJourney, JourneyLocationPoint, JourneyStop,
     VisitAttachment, VisitExpense,
 )
+
+
+@admin.register(ClientServiceDetails)
+class ClientServiceDetailsAdmin(admin.ModelAdmin):
+    list_display = ('client_name', 'client_email', 'client_mobile', 'created_by_user_id', 'created_at')
+    search_fields = ('client_name', 'client_email', 'client_mobile', 'created_by_user_id')
+    readonly_fields = ('created_at', 'updated_at')
 
 
 class VisitAttachmentInline(admin.TabularInline):

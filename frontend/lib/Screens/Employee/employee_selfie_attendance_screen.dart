@@ -53,6 +53,7 @@ class _EmployeeSelfieAttendanceScreenState
     with WidgetsBindingObserver {
   CameraController? _cameraController;
   Future<void>? _initializeControllerFuture;
+  Future<void>? _cameraStartupFuture;
   final Geocoding _geocoding = Geocoding();
 
   String? _capturedPath;
@@ -100,10 +101,28 @@ class _EmployeeSelfieAttendanceScreenState
   // Camera setup
   // ---------------------------------------------------------------------
 
-  Future<void> _initCamera() async {
-    if (_position == null || _cameraController != null) return;
+  Future<void> _initCamera() {
+    final startup = _cameraStartupFuture;
+    if (startup != null) return startup;
+    if (_cameraController != null) {
+      return _initializeControllerFuture ?? Future<void>.value();
+    }
+
+    late final Future<void> task;
+    task = _startCamera().whenComplete(() {
+      if (identical(_cameraStartupFuture, task)) {
+        _cameraStartupFuture = null;
+      }
+    });
+    _cameraStartupFuture = task;
+    return task;
+  }
+
+  Future<void> _startCamera() async {
+    CameraController? controller;
     try {
       final cameras = await availableCameras();
+      if (!mounted) return;
       if (cameras.isEmpty) {
         if (mounted) {
           setState(() => _error = 'No camera found on this device.');
@@ -123,7 +142,7 @@ class _EmployeeSelfieAttendanceScreenState
         return;
       }
       final frontCamera = frontCameras.first;
-      final controller = CameraController(
+      controller = CameraController(
         frontCamera,
         ResolutionPreset.medium,
         enableAudio: false,
@@ -133,10 +152,21 @@ class _EmployeeSelfieAttendanceScreenState
       _initializeControllerFuture = controller.initialize();
       await _initializeControllerFuture;
       if (mounted) setState(() {});
-    } catch (_) {
+    } catch (error) {
+      if (identical(_cameraController, controller)) {
+        _cameraController = null;
+        _initializeControllerFuture = null;
+      }
+      await controller?.dispose();
+      debugPrint('Unable to initialize attendance camera: $error');
       if (mounted) {
+        final permissionDenied =
+            error is CameraException &&
+            error.code.toLowerCase().contains('accessdenied');
         setState(
-          () => _error = 'Camera permission is required for selfie attendance.',
+          () => _error = permissionDenied
+              ? 'Camera permission is required for selfie attendance.'
+              : 'Unable to open the front camera. Please retry.',
         );
       }
     }
@@ -187,6 +217,11 @@ class _EmployeeSelfieAttendanceScreenState
         return;
       }
 
+      // Camera discovery and initialization can take a few seconds on some
+      // Android devices. Run it alongside GPS acquisition instead of waiting
+      // for GPS and reverse geocoding to finish first.
+      unawaited(_initCamera());
+
       // --- Fast path: reuse a recent last-known position ---
       // This avoids re-acquiring GPS from scratch when the user already has a
       // fresh fix (e.g. returning from the settings screen).
@@ -204,7 +239,7 @@ class _EmployeeSelfieAttendanceScreenState
               _error = null;
             });
           }
-          await _loadAddress(lastKnown);
+          unawaited(_loadAddress(lastKnown));
           await _initCamera();
           return;
         }
@@ -218,7 +253,7 @@ class _EmployeeSelfieAttendanceScreenState
         _loadingLocation = false;
         _error = null;
       });
-      await _loadAddress(position);
+      unawaited(_loadAddress(position));
       await _initCamera();
     } on _GpsCaptureException catch (error) {
       if (mounted) {
@@ -273,8 +308,8 @@ class _EmployeeSelfieAttendanceScreenState
         }
         // Some platform builds may return a null timestamp; treat that as fresh.
         final age = candidate.timestamp == null
-          ? Duration.zero
-          : DateTime.now().difference(candidate.timestamp!).abs();
+            ? Duration.zero
+            : DateTime.now().difference(candidate.timestamp!).abs();
         if (age > _maximumGpsAge || candidate.accuracy <= 0) return;
         if (bestPosition == null ||
             candidate.accuracy < bestPosition!.accuracy) {

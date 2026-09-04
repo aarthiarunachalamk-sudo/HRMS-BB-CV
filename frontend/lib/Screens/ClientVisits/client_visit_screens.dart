@@ -163,7 +163,7 @@ class _ClientVisitDashboardScreenState
   Future<void> _openServices() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ClientVisitServicesScreen(userId: widget.userId),
+        builder: (_) => ClientVisitClientDetailsScreen(userId: widget.userId),
       ),
     );
     await _loadDownloads();
@@ -404,6 +404,237 @@ class _ClientVisitDashboardScreenState
       ),
     );
   }
+}
+
+class ClientVisitClientDetailsScreen extends StatefulWidget {
+  final String userId;
+
+  const ClientVisitClientDetailsScreen({super.key, required this.userId});
+
+  @override
+  State<ClientVisitClientDetailsScreen> createState() =>
+      _ClientVisitClientDetailsScreenState();
+}
+
+class _ClientVisitClientDetailsScreenState
+    extends State<ClientVisitClientDetailsScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _service = ClientVisitService();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _mobileController = TextEditingController();
+  final _detailsController = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _mobileController.dispose();
+    _detailsController.dispose();
+    super.dispose();
+  }
+
+  String? _required(String? value, String label) {
+    if ((value ?? '').trim().isEmpty) return '$label is required.';
+    return null;
+  }
+
+  String? _emailValidator(String? value) {
+    final requiredError = _required(value, 'Client email ID');
+    if (requiredError != null) return requiredError;
+    final email = value!.trim();
+    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+      return 'Enter a valid client email ID.';
+    }
+    return null;
+  }
+
+  String? _mobileValidator(String? value) {
+    final requiredError = _required(value, 'Client mobile number');
+    if (requiredError != null) return requiredError;
+    final digits = value!.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 7 || digits.length > 15) {
+      return 'Enter a valid client mobile number.';
+    }
+    return null;
+  }
+
+  Future<void> _saveAndContinue() async {
+    if (_saving || !_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      await _service.saveClientDetails(
+        widget.userId,
+        clientName: _nameController.text.trim(),
+        clientEmail: _emailController.text.trim(),
+        clientMobile: _mobileController.text.trim(),
+        clientDetails: _detailsController.text.trim(),
+      );
+      if (!mounted) return;
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => ClientVisitServicesScreen(userId: widget.userId),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$error'.replaceFirst('Exception: ', '')),
+          backgroundColor: const Color(0xFFB42318),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _field({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required String? Function(String?) validator,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+    List<TextInputFormatter>? inputFormatters,
+  }) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      validator: validator,
+      inputFormatters: inputFormatters,
+      textInputAction: maxLines > 1
+          ? TextInputAction.newline
+          : TextInputAction.next,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        alignLabelWithHint: maxLines > 1,
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => ClientVisitTheme(
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Client Details'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'History',
+            icon: const Icon(Icons.history_rounded),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    ClientVisitDownloadedFilesScreen(userId: widget.userId),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0568D8), Color(0xFF00A7C7)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.person_search_rounded,
+                      color: Colors.white,
+                      size: 34,
+                    ),
+                    SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Client details',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Enter the client information before choosing services.',
+                            style: TextStyle(color: Color(0xFFDDF5FF)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              _field(
+                controller: _nameController,
+                label: 'Client name',
+                icon: Icons.person_outline_rounded,
+                validator: (value) => _required(value, 'Client name'),
+              ),
+              _field(
+                controller: _emailController,
+                label: 'Client email ID',
+                icon: Icons.email_outlined,
+                keyboardType: TextInputType.emailAddress,
+                validator: _emailValidator,
+              ),
+              _field(
+                controller: _mobileController,
+                label: 'Client mobile number',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s()]')),
+                ],
+                validator: _mobileValidator,
+              ),
+              _field(
+                controller: _detailsController,
+                label: 'Client details',
+                icon: Icons.description_outlined,
+                maxLines: 5,
+                validator: (value) => _required(value, 'Client details'),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 54,
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _saveAndContinue,
+                  icon: _saving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.arrow_forward_rounded),
+                  label: Text(
+                    _saving ? 'Saving...' : 'Save & Continue to Services',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class ClientVisitServicesScreen extends StatefulWidget {

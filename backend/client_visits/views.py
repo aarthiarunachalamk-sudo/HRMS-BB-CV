@@ -7,7 +7,8 @@ import secrets
 
 from cloudinary.exceptions import Error as CloudinaryError
 from django.db import transaction
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.core.validators import validate_email
 from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
@@ -24,6 +25,7 @@ from hrms.push_notifications import send_mobile_push
 from hrms.views import _passport_photo_for_email
 from .models import (
     ClientVisit,
+    ClientServiceDetails,
     ClientVisitTrackingLink,
     VisitAttachment,
     VisitExpense,
@@ -44,6 +46,19 @@ EDITABLE_FIELDS = (
 )
 
 
+def _client_details_payload(item):
+    return {
+        'id': item.id,
+        'title': 'Client details',
+        'client_name': item.client_name,
+        'client_email': item.client_email,
+        'client_mobile': item.client_mobile,
+        'client_details': item.client_details,
+        'created_at': item.created_at.isoformat(),
+        'updated_at': item.updated_at.isoformat(),
+    }
+
+
 def _actor(request):
     user_id = str(request.data.get('user_id') or request.query_params.get('user_id') or '').strip()
     user = User.objects.filter(user_id=user_id, is_active=True).first()
@@ -52,6 +67,49 @@ def _actor(request):
 
 def _error(message, status=400):
     return Response({'success': False, 'message': message}, status=status)
+
+
+@api_view(['GET', 'POST'])
+def client_service_details(request):
+    user_id, user = _actor(request)
+    if not user:
+        return _error('A valid active user is required.', status=403)
+
+    if request.method == 'GET':
+        records = ClientServiceDetails.objects.filter(
+            created_by_user_id=user_id,
+        )[:100]
+        return Response({
+            'success': True,
+            'client_details': [_client_details_payload(item) for item in records],
+        })
+
+    client_name = str(request.data.get('client_name') or '').strip()
+    client_email = str(request.data.get('client_email') or '').strip().lower()
+    client_mobile = str(request.data.get('client_mobile') or '').strip()
+    details = str(request.data.get('client_details') or '').strip()
+    if not all((client_name, client_email, client_mobile, details)):
+        return _error('Client name, email, mobile number and details are required.')
+    try:
+        validate_email(client_email)
+    except ValidationError:
+        return _error('Enter a valid client email address.')
+    mobile_digits = re.sub(r'\D', '', client_mobile)
+    if len(mobile_digits) < 7 or len(mobile_digits) > 15:
+        return _error('Enter a valid client mobile number.')
+
+    record = ClientServiceDetails.objects.create(
+        created_by_user_id=user_id,
+        client_name=client_name,
+        client_email=client_email,
+        client_mobile=client_mobile,
+        client_details=details,
+    )
+    return Response({
+        'success': True,
+        'message': 'Client details saved successfully.',
+        'client_detail': _client_details_payload(record),
+    }, status=201)
 
 
 def _is_camera_image(upload):

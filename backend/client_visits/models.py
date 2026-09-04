@@ -101,6 +101,24 @@ class ClientVisit(models.Model):
         return super().save(*args, **kwargs)
 
 
+class ClientServiceDetails(models.Model):
+    created_by_user_id = models.CharField(max_length=20, db_index=True)
+    client_name = models.CharField(max_length=160)
+    client_email = models.EmailField(max_length=254)
+    client_mobile = models.CharField(max_length=20)
+    client_details = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        verbose_name = 'Client details'
+        verbose_name_plural = 'Client details'
+
+    def __str__(self):
+        return f'{self.client_name} ({self.client_mobile})'
+
+
 class VisitAttachment(models.Model):
     CATEGORY_CHOICES = [
         ('check_in', 'Check-in selfie (legacy)'),

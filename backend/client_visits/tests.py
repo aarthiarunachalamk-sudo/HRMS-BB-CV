@@ -12,8 +12,73 @@ from rest_framework.test import APITestCase
 from PIL import Image
 
 from hrms.models import AppNotification, User
-from .models import ClientVisit, ClientVisitTrackingLink, VisitAttachment
+from .models import (
+    ClientServiceDetails,
+    ClientVisit,
+    ClientVisitTrackingLink,
+    VisitAttachment,
+)
 from .storage import client_visit_storage_config
+
+
+class ClientServiceDetailsApiTests(APITestCase):
+    def setUp(self):
+        self.employee = User.objects.create_user(
+            'client-details@example.com',
+            role='employee',
+        )
+
+    def test_client_details_are_saved_and_returned_in_history(self):
+        payload = {
+            'user_id': self.employee.user_id,
+            'client_name': 'Example Client',
+            'client_email': 'client@example.com',
+            'client_mobile': '+91 98765 43210',
+            'client_details': 'Needs a mobile application and support.',
+        }
+
+        created = self.client.post(
+            '/api/client-visits/client-details/',
+            payload,
+            format='json',
+        )
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(created.data['client_detail']['title'], 'Client details')
+        self.assertTrue(
+            ClientServiceDetails.objects.filter(
+                created_by_user_id=self.employee.user_id,
+                client_email='client@example.com',
+            ).exists(),
+        )
+
+        history = self.client.get(
+            '/api/client-visits/client-details/',
+            {'user_id': self.employee.user_id},
+        )
+
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual(len(history.data['client_details']), 1)
+        self.assertEqual(
+            history.data['client_details'][0]['client_mobile'],
+            '+91 98765 43210',
+        )
+
+    def test_client_details_reject_invalid_email(self):
+        response = self.client.post(
+            '/api/client-visits/client-details/',
+            {
+                'user_id': self.employee.user_id,
+                'client_name': 'Example Client',
+                'client_email': 'invalid',
+                'client_mobile': '9876543210',
+                'client_details': 'Website enquiry.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('valid client email', response.data['message'])
 
 
 @override_settings(CLIENT_VISIT_CLOUDINARY_STORAGE={

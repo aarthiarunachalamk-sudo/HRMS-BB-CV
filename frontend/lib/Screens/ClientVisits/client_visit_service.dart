@@ -7,6 +7,9 @@ import 'client_visit_models.dart';
 class ClientVisitService {
   static final Uri _base = ApiConfig.uri('/client-visits/');
 
+  static Uri get _clientDetailsUri =>
+      ApiConfig.uri('/client-visits/client-details/');
+
   Future<http.Response> _getWithRenderRetry(Uri uri) async {
     Object? lastError;
     for (var attempt = 0; attempt < 3; attempt++) {
@@ -62,6 +65,39 @@ class ClientVisitService {
           return value;
         })
         .where((item) => '${item['employee_id'] ?? ''}'.trim().isNotEmpty)
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> saveClientDetails(
+    String userId, {
+    required String clientName,
+    required String clientEmail,
+    required String clientMobile,
+    required String clientDetails,
+  }) async {
+    final response = await http
+        .post(
+          _clientDetailsUri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'user_id': userId,
+            'client_name': clientName,
+            'client_email': clientEmail,
+            'client_mobile': clientMobile,
+            'client_details': clientDetails,
+          }),
+        )
+        .timeout(const Duration(seconds: 65));
+    return Map<String, dynamic>.from(_body(response)['client_detail'] as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchClientDetails(String userId) async {
+    final response = await _getWithRenderRetry(
+      _clientDetailsUri.replace(queryParameters: {'user_id': userId}),
+    );
+    return (_body(response)['client_details'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
         .toList();
   }
 

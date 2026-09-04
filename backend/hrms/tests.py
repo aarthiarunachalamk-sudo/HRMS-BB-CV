@@ -403,11 +403,22 @@ class SharedAdminEmailLoginTests(SimpleTestCase):
             format='json',
         )
         users = [self._user('BBADM0001', False), self._user('BBADM0002', True)]
+        employee_accounts = Mock()
+        employee_accounts.values.return_value.first.return_value = None
+        refresh_token = Mock(access_token='access-token')
 
         with patch.object(views.User.objects, 'filter', return_value=users), patch.object(
             views.EmployeeAccount.objects,
-            'get',
-            side_effect=views.EmployeeAccount.DoesNotExist,
+            'filter',
+            return_value=employee_accounts,
+        ), patch.object(
+            views,
+            '_passport_photo_for_email',
+            return_value='',
+        ), patch.object(
+            views.RefreshToken,
+            'for_user',
+            return_value=refresh_token,
         ), patch.object(views, 'ensure_leadership_employee_account', return_value=None):
             response = views.login_view(request)
 

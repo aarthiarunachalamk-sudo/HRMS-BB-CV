@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'client_visit_service.dart';
 import 'client_visit_theme.dart';
 
 class ClientVisitDownloads {
@@ -99,7 +100,30 @@ class _ClientVisitDownloadedFilesScreenState
 
   Future<void> _load() async {
     final files = await ClientVisitDownloads.load(widget.userId);
-    if (mounted) setState(() => _files = files);
+    var clientDetails = <Map<String, dynamic>>[];
+    try {
+      clientDetails = await ClientVisitService().fetchClientDetails(
+        widget.userId,
+      );
+    } catch (_) {
+      // Keep locally downloaded documents available while the API is offline.
+    }
+    final items =
+        <Map<String, dynamic>>[
+          ...clientDetails.map(
+            (item) => <String, dynamic>{
+              ...item,
+              'entry_type': 'client_details',
+              'downloaded_at': item['created_at'],
+            },
+          ),
+          ...files,
+        ]..sort(
+          (a, b) => '${b['downloaded_at'] ?? ''}'.compareTo(
+            '${a['downloaded_at'] ?? ''}',
+          ),
+        );
+    if (mounted) setState(() => _files = items);
   }
 
   Future<void> _open(Map<String, dynamic> file) async {
@@ -153,7 +177,7 @@ class _ClientVisitDownloadedFilesScreenState
                     Icon(Icons.folder_open_rounded, size: 48),
                     SizedBox(height: 12),
                     Text(
-                      'No downloaded invoices or client visit documents yet.',
+                      'No client details or downloaded documents yet.',
                       textAlign: TextAlign.center,
                     ),
                     SizedBox(height: 6),
@@ -174,11 +198,13 @@ class _ClientVisitDownloadedFilesScreenState
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final file = files[index];
+                  final isClientDetails =
+                      file['entry_type'] == 'client_details';
                   final clientName = '${file['client_name'] ?? 'Client'}';
                   final reference = '${file['visit_reference'] ?? ''}';
                   return Card(
                     child: ListTile(
-                      onTap: () => _open(file),
+                      onTap: isClientDetails ? null : () => _open(file),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 8,
@@ -187,18 +213,24 @@ class _ClientVisitDownloadedFilesScreenState
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: const Color(
-                            0xFFEF4444,
-                          ).withValues(alpha: 0.12),
+                          color:
+                              (isClientDetails
+                                      ? const Color(0xFF1687FF)
+                                      : const Color(0xFFEF4444))
+                                  .withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(
-                          Icons.picture_as_pdf_rounded,
-                          color: Color(0xFFEF4444),
+                        child: Icon(
+                          isClientDetails
+                              ? Icons.contact_page_rounded
+                              : Icons.picture_as_pdf_rounded,
+                          color: isClientDetails
+                              ? const Color(0xFF1687FF)
+                              : const Color(0xFFEF4444),
                         ),
                       ),
                       title: Text(
-                        clientName,
+                        isClientDetails ? 'Client details' : clientName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w800),
@@ -206,16 +238,26 @@ class _ClientVisitDownloadedFilesScreenState
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 5),
                         child: Text(
-                          [
-                            if (reference.isNotEmpty) reference,
-                            _date('${file['downloaded_at'] ?? ''}'),
-                            '${file['display_path'] ?? ''}',
-                          ].join('\n'),
-                          maxLines: 3,
+                          isClientDetails
+                              ? [
+                                  clientName,
+                                  '${file['client_email'] ?? ''}',
+                                  '${file['client_mobile'] ?? ''}',
+                                  '${file['client_details'] ?? ''}',
+                                  _date('${file['created_at'] ?? ''}'),
+                                ].where((line) => line.isNotEmpty).join('\n')
+                              : [
+                                  if (reference.isNotEmpty) reference,
+                                  _date('${file['downloaded_at'] ?? ''}'),
+                                  '${file['display_path'] ?? ''}',
+                                ].join('\n'),
+                          maxLines: isClientDetails ? 6 : 3,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      trailing: const Icon(Icons.open_in_new_rounded),
+                      trailing: isClientDetails
+                          ? null
+                          : const Icon(Icons.open_in_new_rounded),
                     ),
                   );
                 },
@@ -226,7 +268,7 @@ class _ClientVisitDownloadedFilesScreenState
     return ClientVisitTheme(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Downloaded Documents'),
+          title: const Text('History'),
           centerTitle: true,
           actions: [
             IconButton(

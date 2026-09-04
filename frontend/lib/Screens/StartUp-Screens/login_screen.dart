@@ -29,6 +29,16 @@ import 'package:hrms_mobileapp_bitbyte/widgets/meeting_notification_gate.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/mandatory_profile_photo_gate.dart';
 import 'package:hrms_mobileapp_bitbyte/Services/push_notification_service.dart';
 
+class _LoginNetworkException implements Exception {
+  const _LoginNetworkException();
+}
+
+class _LoginResponseException implements Exception {
+  final String message;
+
+  const _LoginResponseException(this.message);
+}
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -51,6 +61,31 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _restoreRememberedCredentials();
+    // Render may spin the API down while it is idle. Start waking it as soon as
+    // the login screen opens so that delay overlaps with the user entering
+    // their credentials. Warm-up uses an isolated connection so it can never
+    // interfere with the real login request.
+    unawaited(_warmUpLoginServer());
+  }
+
+  Future<void> _warmUpLoginServer() async {
+    final urls = <Uri>[
+      ApiConfig.uri('/health/'),
+      if (ApiConfig.usesPrivateNetworkAddress) ApiConfig.publicUri('/health/'),
+    ];
+    for (final url in urls) {
+      final client = http.Client();
+      try {
+        final response = await client
+            .get(url)
+            .timeout(const Duration(seconds: 20));
+        if (response.statusCode >= 200 && response.statusCode < 500) return;
+      } catch (_) {
+        // Login will report a connection problem if the actual request fails.
+      } finally {
+        client.close();
+      }
+    }
   }
 
   Future<void> _restoreRememberedCredentials() async {
@@ -70,17 +105,17 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _updateRememberedCredentials() async {
+  Future<void> _updateRememberedCredentials({
+    required String userId,
+    required String password,
+    required bool rememberMe,
+  }) async {
     try {
-      if (_rememberMe) {
-        await _secureStorage.write(
-          key: _rememberedUserKey,
-          value: _employeeCodeController.text.trim(),
-        );
-        await _secureStorage.write(
-          key: _rememberedPasswordKey,
-          value: _passwordController.text,
-        );
+      if (rememberMe) {
+        await Future.wait([
+          _secureStorage.write(key: _rememberedUserKey, value: userId),
+          _secureStorage.write(key: _rememberedPasswordKey, value: password),
+        ]);
       } else {
         await Future.wait([
           _secureStorage.delete(key: _rememberedUserKey),
@@ -204,10 +239,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_isLoggingIn) return;
 
+    final loginId = _employeeCodeController.text.trim();
+    final password = _passwordController.text;
+    final rememberMe = _rememberMe;
     setState(() => _isLoggingIn = true);
 
     try {
-      final data = await _loginRequest();
+      final data = await _loginRequest(loginId: loginId, password: password);
       if (!mounted) return;
 
       if (data['success'] == true) {
@@ -217,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
             MaterialPageRoute(
               builder: (_) => ChangePasswordScreen(
                 employeeId: data['user_id'] ?? '',
-                otc: _passwordController.text,
+                otc: password,
               ),
             ),
             (route) => false,
@@ -227,12 +265,26 @@ class _LoginScreenState extends State<LoginScreen> {
         final accessToken = '${data['access_token'] ?? ''}';
         final refreshToken = '${data['refresh_token'] ?? ''}';
         if (accessToken.isNotEmpty && refreshToken.isNotEmpty) {
-          await AuthSession.saveTokens(
-            accessToken: accessToken,
-            refreshToken: refreshToken,
-          );
+          try {
+            await AuthSession.saveTokens(
+              accessToken: accessToken,
+              refreshToken: refreshToken,
+            );
+          } catch (error) {
+            // JWT storage is additive for protected journey APIs. A device
+            // storage issue must not turn a valid login into a network error.
+            debugPrint('Unable to persist login tokens: $error');
+          }
         }
-        await _updateRememberedCredentials();
+        // Remembering credentials is optional and must not delay opening the
+        // dashboard after authentication and token persistence have succeeded.
+        unawaited(
+          _updateRememberedCredentials(
+            userId: loginId,
+            password: password,
+            rememberMe: rememberMe,
+          ),
+        );
         if (!mounted) return;
         final role = _normalizeRole(data['role']);
         final sessionUserId = '${data['user_id'] ?? ''}';
@@ -371,48 +423,91 @@ class _LoginScreenState extends State<LoginScreen> {
           SnackBar(content: Text(data['message'] ?? 'Login failed')),
         );
       }
-    } on TimeoutException {
+    } on _LoginNetworkException {
       if (!mounted) return;
       _showServerUnavailable();
-    } on http.ClientException {
+    } on _LoginResponseException catch (error) {
       if (!mounted) return;
-      _showServerUnavailable();
-    } catch (_) {
+      _showLoginError(error.message);
+    } catch (error) {
+      debugPrint('Unexpected login error: $error');
       if (!mounted) return;
-      _showServerUnavailable();
+      _showLoginError('Login could not be completed. Please try again.');
     } finally {
       if (mounted) setState(() => _isLoggingIn = false);
     }
   }
 
-  Future<Map<String, dynamic>> _loginRequest() async {
-    final payload = {
-      'email': _employeeCodeController.text.trim(),
-      'password': _passwordController.text,
-    };
+  Future<Map<String, dynamic>> _loginRequest({
+    required String loginId,
+    required String password,
+  }) async {
+    final payload = {'email': loginId, 'password': password};
     final urls = <Uri>[
       ApiConfig.uri('/login/'),
       if (ApiConfig.usesPrivateNetworkAddress) ApiConfig.publicUri('/login/'),
     ];
 
-    Object? lastError;
+    Object? lastNetworkError;
     for (final url in urls) {
-      try {
-        final response = await http
-            .post(
-              url,
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode(payload),
-            )
-            .timeout(const Duration(seconds: 65)); // allow Render cold-start
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map) return Map<String, dynamic>.from(decoded);
-        lastError = 'Invalid response from $url';
-      } catch (error) {
-        lastError = error;
+      for (var attempt = 0; attempt < 2; attempt++) {
+        final client = http.Client();
+        try {
+          final response = await client
+              .post(
+                url,
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode(payload),
+              )
+              .timeout(const Duration(seconds: 65)); // allow Render cold-start
+          if (response.statusCode >= 500) {
+            lastNetworkError = 'HTTP ${response.statusCode} from $url';
+            if (attempt == 0) {
+              await Future<void>.delayed(const Duration(milliseconds: 700));
+              continue;
+            }
+            break;
+          }
+          dynamic decoded;
+          try {
+            decoded = jsonDecode(response.body);
+          } on FormatException {
+            throw const _LoginResponseException(
+              'The server returned an invalid response. Please try again.',
+            );
+          }
+          if (decoded is Map) return Map<String, dynamic>.from(decoded);
+          throw const _LoginResponseException(
+            'The server returned an invalid response. Please try again.',
+          );
+        } on TimeoutException catch (error) {
+          lastNetworkError = error;
+          break;
+        } on http.ClientException catch (error) {
+          lastNetworkError = error;
+          if (attempt == 0) {
+            await Future<void>.delayed(const Duration(milliseconds: 700));
+            continue;
+          }
+          break;
+        } finally {
+          client.close();
+        }
       }
     }
-    throw Exception(lastError ?? 'Unable to reach login API');
+    debugPrint('Login network request failed: $lastNetworkError');
+    throw const _LoginNetworkException();
+  }
+
+  void _showLoginError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFFB42318),
+        duration: const Duration(seconds: 6),
+      ),
+    );
   }
 
   void _showServerUnavailable() {
@@ -568,7 +663,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                             _rememberMe = value ?? false;
                                           });
                                           if (!_rememberMe) {
-                                            _updateRememberedCredentials();
+                                            unawaited(
+                                              _updateRememberedCredentials(
+                                                userId: '',
+                                                password: '',
+                                                rememberMe: false,
+                                              ),
+                                            );
                                           }
                                         },
                                       ),

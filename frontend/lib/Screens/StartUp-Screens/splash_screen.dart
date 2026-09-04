@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:video_player/video_player.dart';
 
 import 'onboarding_screen.dart';
@@ -21,26 +23,41 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
+    // Wake the hosted API while the splash animation is playing. This hides
+    // most of a Render cold start before the user reaches the login form.
+    unawaited(_warmUpBackend());
     _startupTimer = Timer(const Duration(seconds: 4), _goNext);
     _controller = VideoPlayerController.asset('assets/videos/SplashScreen.mp4')
-      ..initialize().then((_) {
-        if (!mounted || _navigated) return;
-        setState(() {});
-        final duration = _controller.value.duration;
-        if (duration > Duration.zero) {
-          _startupTimer?.cancel();
-          _fallbackTimer = Timer(
-            duration + const Duration(milliseconds: 700),
-            _goNext,
-          );
-        } else {
-          _fallbackTimer = Timer(const Duration(seconds: 10), _goNext);
-        }
-        _controller.play();
-      }).catchError((_) {
-        _goNext();
-      });
+      ..initialize()
+          .then((_) {
+            if (!mounted || _navigated) return;
+            setState(() {});
+            final duration = _controller.value.duration;
+            if (duration > Duration.zero) {
+              _startupTimer?.cancel();
+              _fallbackTimer = Timer(
+                duration + const Duration(milliseconds: 700),
+                _goNext,
+              );
+            } else {
+              _fallbackTimer = Timer(const Duration(seconds: 10), _goNext);
+            }
+            _controller.play();
+          })
+          .catchError((_) {
+            _goNext();
+          });
     _controller.addListener(_handleVideoProgress);
+  }
+
+  Future<void> _warmUpBackend() async {
+    try {
+      await http
+          .get(ApiConfig.uri('/health/'))
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      // The login screen performs its own retry and displays any real error.
+    }
   }
 
   void _handleVideoProgress() {
@@ -50,7 +67,9 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
     final duration = _controller.value.duration;
-    if (duration > Duration.zero && _controller.value.position >= duration - const Duration(milliseconds: 120)) {
+    if (duration > Duration.zero &&
+        _controller.value.position >=
+            duration - const Duration(milliseconds: 120)) {
       _goNext();
     }
   }
@@ -62,7 +81,8 @@ class _SplashScreenState extends State<SplashScreen> {
     _fallbackTimer?.cancel();
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => const OnboardingScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const OnboardingScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -113,10 +133,7 @@ class _SplashFallback extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFF071426),
-            Color(0xFF02050A),
-          ],
+          colors: [Color(0xFF071426), Color(0xFF02050A)],
         ),
       ),
       child: Center(

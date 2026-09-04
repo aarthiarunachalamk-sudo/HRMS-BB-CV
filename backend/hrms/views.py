@@ -5,7 +5,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.cache import cache
 from django.db.models import Count, Q, Sum
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, close_old_connections, transaction
 from django.apps import apps
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
@@ -52,6 +52,15 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from PIL import Image, UnidentifiedImageError
 
+
+def _provision_login_employee_account(user):
+    """Run legacy account provisioning without leaking a thread DB connection."""
+    close_old_connections()
+    try:
+        ensure_leadership_employee_account(user)
+    finally:
+        close_old_connections()
+
 @api_view(['POST'])
 def login_view(request):
     serializer = LoginSerializer(data=request.data)
@@ -84,19 +93,21 @@ def login_view(request):
             except Exception:
                 pass
 
-            # Defer heavy account provisioning to a background thread
-            # so it doesn't block the login response
-            import threading
-            threading.Thread(
-                target=ensure_leadership_employee_account,
-                args=(user,),
-                daemon=True,
-            ).start()
-
             # Resolve employee_id without waiting for provisioning
             from .models import EmployeeAccount as EA
             ea = EA.objects.filter(user=user).values('employee_id').first()
             employee_id = ea['employee_id'] if ea else user.user_id
+
+            # Only legacy leadership users without an employee account need
+            # provisioning. Close the raw thread's database connection when it
+            # finishes so repeated logins cannot exhaust the DB connection pool.
+            if ea is None:
+                import threading
+                threading.Thread(
+                    target=_provision_login_employee_account,
+                    args=(user,),
+                    daemon=True,
+                ).start()
 
             requested_role = str(
                 serializer.validated_data.get('selected_role')
