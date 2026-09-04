@@ -1500,7 +1500,6 @@ class _ClientVisitServiceSelectionPreviewScreenState
       final clientName = '${widget.clientDetails['client_name'] ?? ''}'.trim();
       final clientEmail = '${widget.clientDetails['client_email'] ?? ''}'.trim();
       final clientMobile = '${widget.clientDetails['client_mobile'] ?? ''}'.trim();
-      final clientGst = '${widget.clientDetails['client_gst'] ?? ''}'.trim();
       final clientAddress =
           '${widget.clientDetails['client_address'] ?? ''}'.trim();
       final clientNotes =
@@ -1656,6 +1655,14 @@ class _ClientVisitServiceSelectionPreviewScreenState
                             pw.Text(
                               'opp. to: Sago Serve Factory, Omalur main road, Salem - 636302, Tamil Nadu, India.',
                               style: const pw.TextStyle(fontSize: 8.5),
+                            ),
+                            pw.SizedBox(height: 3),
+                            pw.Text(
+                              'GST No: 33BLNPN5359J1ZL',
+                              style: pw.TextStyle(
+                                fontSize: 9,
+                                fontWeight: pw.FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
@@ -1837,16 +1844,6 @@ class _ClientVisitServiceSelectionPreviewScreenState
                       style: const pw.TextStyle(fontSize: 9),
                     ),
                   ],
-                  if (clientGst.isNotEmpty) ...[
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      'GSTIN: $clientGst',
-                      style: pw.TextStyle(
-                        fontSize: 9,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ],
                   if (clientNotes.isNotEmpty) ...[
                     pw.SizedBox(height: 5),
                     pw.Text(
@@ -1944,7 +1941,7 @@ class _ClientVisitServiceSelectionPreviewScreenState
                 ),
               ),
             ),
-            pw.SizedBox(height: 24),
+            pw.NewPage(),
             pw.Container(
               width: double.infinity,
               padding: const pw.EdgeInsets.symmetric(
