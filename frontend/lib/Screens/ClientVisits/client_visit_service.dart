@@ -1,8 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'client_visit_models.dart';
+
+class ClientDetailsApiUnavailableException implements Exception {
+  const ClientDetailsApiUnavailableException();
+
+  @override
+  String toString() =>
+      'Client Details server update is pending. Your details will be saved on this device and synced automatically.';
+}
 
 class ClientVisitService {
   static final Uri _base = ApiConfig.uri('/client-visits/');
@@ -75,19 +84,30 @@ class ClientVisitService {
     required String clientMobile,
     required String clientDetails,
   }) async {
-    final response = await http
-        .post(
-          _clientDetailsUri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'user_id': userId,
-            'client_name': clientName,
-            'client_email': clientEmail,
-            'client_mobile': clientMobile,
-            'client_details': clientDetails,
-          }),
-        )
-        .timeout(const Duration(seconds: 65));
+    late final http.Response response;
+    try {
+      response = await http
+          .post(
+            _clientDetailsUri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'user_id': userId,
+              'client_name': clientName,
+              'client_email': clientEmail,
+              'client_mobile': clientMobile,
+              'client_details': clientDetails,
+            }),
+          )
+          .timeout(const Duration(seconds: 65));
+    } on TimeoutException {
+      throw const ClientDetailsApiUnavailableException();
+    } on http.ClientException {
+      throw const ClientDetailsApiUnavailableException();
+    }
+    if (response.statusCode == 404 ||
+        {502, 503, 504}.contains(response.statusCode)) {
+      throw const ClientDetailsApiUnavailableException();
+    }
     return Map<String, dynamic>.from(_body(response)['client_detail'] as Map);
   }
 

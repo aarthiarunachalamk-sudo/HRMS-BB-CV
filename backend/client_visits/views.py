@@ -90,13 +90,21 @@ def client_service_details(request):
     details = str(request.data.get('client_details') or '').strip()
     if not all((client_name, client_email, client_mobile, details)):
         return _error('Client name, email, mobile number and details are required.')
+    if len(client_name) < 2 or len(client_name) > 160:
+        return _error('Client name must contain between 2 and 160 characters.')
+    if len(client_email) > 254:
+        return _error('Client email address is too long.')
     try:
         validate_email(client_email)
     except ValidationError:
         return _error('Enter a valid client email address.')
+    if len(client_mobile) > 20:
+        return _error('Client mobile number is too long.')
     mobile_digits = re.sub(r'\D', '', client_mobile)
     if len(mobile_digits) < 7 or len(mobile_digits) > 15:
         return _error('Enter a valid client mobile number.')
+    if len(details) < 3 or len(details) > 2000:
+        return _error('Client details must contain between 3 and 2000 characters.')
 
     record = ClientServiceDetails.objects.create(
         created_by_user_id=user_id,

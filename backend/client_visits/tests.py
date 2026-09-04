@@ -80,6 +80,22 @@ class ClientServiceDetailsApiTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('valid client email', response.data['message'])
 
+    def test_client_details_require_valid_name_mobile_and_details(self):
+        response = self.client.post(
+            '/api/client-visits/client-details/',
+            {
+                'user_id': self.employee.user_id,
+                'client_name': 'A',
+                'client_email': 'client@example.com',
+                'client_mobile': '123',
+                'client_details': 'x',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Client name', response.data['message'])
+
 
 @override_settings(CLIENT_VISIT_CLOUDINARY_STORAGE={
     'cloud_name': 'client-visits-test-cloud',

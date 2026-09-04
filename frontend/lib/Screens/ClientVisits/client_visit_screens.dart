@@ -14,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import '../Employee/employee_shared.dart';
+import 'client_service_details_cache.dart';
 import 'client_visit_models.dart';
 import 'client_visit_service_catalog.dart';
 import 'client_visit_service.dart';
@@ -440,6 +441,15 @@ class _ClientVisitClientDetailsScreenState
     return null;
   }
 
+  String? _nameValidator(String? value) {
+    final requiredError = _required(value, 'Client name');
+    if (requiredError != null) return requiredError;
+    final name = value!.trim();
+    if (name.length < 2) return 'Client name must have at least 2 characters.';
+    if (name.length > 160) return 'Client name is too long.';
+    return null;
+  }
+
   String? _emailValidator(String? value) {
     final requiredError = _required(value, 'Client email ID');
     if (requiredError != null) return requiredError;
@@ -460,23 +470,55 @@ class _ClientVisitClientDetailsScreenState
     return null;
   }
 
+  String? _detailsValidator(String? value) {
+    final requiredError = _required(value, 'Client details');
+    if (requiredError != null) return requiredError;
+    final details = value!.trim();
+    if (details.length < 3) {
+      return 'Client details must have at least 3 characters.';
+    }
+    if (details.length > 2000) return 'Client details is too long.';
+    return null;
+  }
+
+  Future<void> _openServices({bool syncPending = false}) =>
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => ClientVisitServicesScreen(
+            userId: widget.userId,
+            clientDetailsSyncPending: syncPending,
+          ),
+        ),
+      );
+
   Future<void> _saveAndContinue() async {
     if (_saving || !_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    final clientName = _nameController.text.trim();
+    final clientEmail = _emailController.text.trim().toLowerCase();
+    final clientMobile = _mobileController.text.trim();
+    final clientDetails = _detailsController.text.trim();
     setState(() => _saving = true);
     try {
       await _service.saveClientDetails(
         widget.userId,
-        clientName: _nameController.text.trim(),
-        clientEmail: _emailController.text.trim(),
-        clientMobile: _mobileController.text.trim(),
-        clientDetails: _detailsController.text.trim(),
+        clientName: clientName,
+        clientEmail: clientEmail,
+        clientMobile: clientMobile,
+        clientDetails: clientDetails,
       );
       if (!mounted) return;
-      await Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => ClientVisitServicesScreen(userId: widget.userId),
-        ),
+      await _openServices();
+    } on ClientDetailsApiUnavailableException {
+      await ClientServiceDetailsCache.savePending(
+        userId: widget.userId,
+        clientName: clientName,
+        clientEmail: clientEmail,
+        clientMobile: clientMobile,
+        clientDetails: clientDetails,
       );
+      if (!mounted) return;
+      await _openServices(syncPending: true);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -498,6 +540,7 @@ class _ClientVisitClientDetailsScreenState
     TextInputType? keyboardType,
     int maxLines = 1,
     List<TextInputFormatter>? inputFormatters,
+    int? maxLength,
   }) => Padding(
     padding: const EdgeInsets.only(bottom: 16),
     child: TextFormField(
@@ -506,6 +549,8 @@ class _ClientVisitClientDetailsScreenState
       maxLines: maxLines,
       validator: validator,
       inputFormatters: inputFormatters,
+      maxLength: maxLength,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       textInputAction: maxLines > 1
           ? TextInputAction.newline
           : TextInputAction.next,
@@ -586,13 +631,15 @@ class _ClientVisitClientDetailsScreenState
                 controller: _nameController,
                 label: 'Client name',
                 icon: Icons.person_outline_rounded,
-                validator: (value) => _required(value, 'Client name'),
+                maxLength: 160,
+                validator: _nameValidator,
               ),
               _field(
                 controller: _emailController,
                 label: 'Client email ID',
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
+                maxLength: 254,
                 validator: _emailValidator,
               ),
               _field(
@@ -610,7 +657,8 @@ class _ClientVisitClientDetailsScreenState
                 label: 'Client details',
                 icon: Icons.description_outlined,
                 maxLines: 5,
-                validator: (value) => _required(value, 'Client details'),
+                maxLength: 2000,
+                validator: _detailsValidator,
               ),
               const SizedBox(height: 8),
               SizedBox(
@@ -639,8 +687,13 @@ class _ClientVisitClientDetailsScreenState
 
 class ClientVisitServicesScreen extends StatefulWidget {
   final String userId;
+  final bool clientDetailsSyncPending;
 
-  const ClientVisitServicesScreen({super.key, required this.userId});
+  const ClientVisitServicesScreen({
+    super.key,
+    required this.userId,
+    this.clientDetailsSyncPending = false,
+  });
 
   @override
   State<ClientVisitServicesScreen> createState() =>
@@ -682,6 +735,19 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
           ..addListener(() {
             if (!_tabController.indexIsChanging) setState(() {});
           });
+    if (widget.clientDetailsSyncPending) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Client details saved on this device. Backend sync is pending.',
+            ),
+            backgroundColor: Color(0xFFB26A00),
+          ),
+        );
+      });
+    }
   }
 
   @override

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'client_service_details_cache.dart';
 import 'client_visit_service.dart';
 import 'client_visit_theme.dart';
 
@@ -100,16 +101,38 @@ class _ClientVisitDownloadedFilesScreenState
 
   Future<void> _load() async {
     final files = await ClientVisitDownloads.load(widget.userId);
+    final pendingDetails = await ClientServiceDetailsCache.load(widget.userId);
     var clientDetails = <Map<String, dynamic>>[];
+    final unsyncedDetails = [...pendingDetails];
     try {
-      clientDetails = await ClientVisitService().fetchClientDetails(
-        widget.userId,
-      );
+      final service = ClientVisitService();
+      clientDetails = await service.fetchClientDetails(widget.userId);
+      for (final pending in pendingDetails) {
+        final saved = await service.saveClientDetails(
+          widget.userId,
+          clientName: '${pending['client_name'] ?? ''}',
+          clientEmail: '${pending['client_email'] ?? ''}',
+          clientMobile: '${pending['client_mobile'] ?? ''}',
+          clientDetails: '${pending['client_details'] ?? ''}',
+        );
+        clientDetails.insert(0, saved);
+        await ClientServiceDetailsCache.remove(pending['id']);
+        unsyncedDetails.removeWhere(
+          (item) => '${item['id']}' == '${pending['id']}',
+        );
+      }
     } catch (_) {
-      // Keep locally downloaded documents available while the API is offline.
+      // Pending records stay visible and retry on the next History refresh.
     }
     final items =
         <Map<String, dynamic>>[
+          ...unsyncedDetails.map(
+            (item) => <String, dynamic>{
+              ...item,
+              'entry_type': 'client_details',
+              'downloaded_at': item['created_at'],
+            },
+          ),
           ...clientDetails.map(
             (item) => <String, dynamic>{
               ...item,
@@ -240,6 +263,8 @@ class _ClientVisitDownloadedFilesScreenState
                         child: Text(
                           isClientDetails
                               ? [
+                                  if (file['sync_pending'] == true)
+                                    'Pending backend sync',
                                   clientName,
                                   '${file['client_email'] ?? ''}',
                                   '${file['client_mobile'] ?? ''}',
