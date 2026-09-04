@@ -102,11 +102,9 @@ def client_service_details(request):
         validate_email(client_email)
     except ValidationError:
         return _error('Enter a valid client email address.')
-    if len(client_mobile) > 20:
-        return _error('Client mobile number is too long.')
     mobile_digits = re.sub(r'\D', '', client_mobile)
-    if len(mobile_digits) < 7 or len(mobile_digits) > 15:
-        return _error('Enter a valid client mobile number.')
+    if len(mobile_digits) != 10:
+        return _error('Enter exactly 10 digits for the client mobile number.')
     if client_gst and not re.fullmatch(r'\d{2}[A-Z]{5}\d{4}[A-Z]\d[Z][A-Z\d]', client_gst):
         return _error('Enter a valid 15-character GSTIN, or leave it blank.')
     if len(client_address) < 3 or len(client_address) > 500:

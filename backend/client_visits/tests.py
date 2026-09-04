@@ -33,7 +33,7 @@ class ClientServiceDetailsApiTests(APITestCase):
             'user_id': self.employee.user_id,
             'client_name': 'Example Client',
             'client_email': 'client@example.com',
-            'client_mobile': '+91 98765 43210',
+            'client_mobile': '9876543210',
             'client_gst': '33ABCDE1234F1Z5',
             'client_address': '42 Example Road, Chennai',
             'client_details': 'Needs a mobile application and support.',
@@ -64,7 +64,7 @@ class ClientServiceDetailsApiTests(APITestCase):
         self.assertEqual(len(history.data['client_details']), 1)
         self.assertEqual(
             history.data['client_details'][0]['client_mobile'],
-            '+91 98765 43210',
+            '9876543210',
         )
         self.assertEqual(
             history.data['client_details'][0]['client_address'],

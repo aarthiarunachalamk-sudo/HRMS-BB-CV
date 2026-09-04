@@ -468,8 +468,8 @@ class _ClientVisitClientDetailsScreenState
     final requiredError = _required(value, 'Client mobile number');
     if (requiredError != null) return requiredError;
     final digits = value!.replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 7 || digits.length > 15) {
-      return 'Enter a valid client mobile number.';
+    if (digits.length != 10) {
+      return 'Enter exactly 10 digits for the client mobile number.';
     }
     return null;
   }
@@ -691,7 +691,8 @@ class _ClientVisitClientDetailsScreenState
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+\-\s()]')),
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
                 ],
                 validator: _mobileValidator,
               ),
