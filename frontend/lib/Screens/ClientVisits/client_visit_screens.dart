@@ -989,7 +989,7 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
             ),
             const SizedBox(height: 4),
             Text(
-              'Tap a card for full details. Use the check box to add it to the preview.',
+              'Tap a card or its marker to select or deselect. Tap the service name for details.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: ThemeConfig.getTextMuted(context),
               ),
@@ -1148,6 +1148,29 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                         ],
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Semantics(
+                  selected: selected,
+                  child: IconButton(
+                    tooltip: selected
+                        ? 'Deselect ${service.name}'
+                        : 'Select ${service.name}',
+                    onPressed: () =>
+                        _toggleService(service.id, packageIndex, !selected),
+                    style: IconButton.styleFrom(
+                      backgroundColor: selected
+                          ? const Color(0xFF1687FF)
+                          : ThemeConfig.getTextMuted(context).withAlpha(24),
+                      foregroundColor: selected
+                          ? Colors.white
+                          : ThemeConfig.getTextMuted(context),
+                      minimumSize: const Size(48, 48),
+                    ),
+                    icon: Icon(
+                      selected ? Icons.check_rounded : Icons.close_rounded,
+                    ),
                   ),
                 ),
               ],
@@ -2512,6 +2535,13 @@ class _ClientVisitInvoiceConfirmationScreenState
           title: const Text('Confirmed Services'),
           centerTitle: true,
           actions: [
+            TextButton.icon(
+              onPressed: _generating
+                  ? null
+                  : () => Navigator.of(context).popUntil((route) => route.isFirst),
+              icon: const Icon(Icons.exit_to_app_rounded),
+              label: const Text('Exit'),
+            ),
             IconButton(
               tooltip: 'Invoice history',
               icon: const Icon(Icons.history_rounded),
@@ -2780,6 +2810,13 @@ class _ClientVisitInvoicePreviewScreenState
         title: const Text('Invoice'),
         centerTitle: true,
         actions: [
+          TextButton.icon(
+            onPressed: _downloading
+                ? null
+                : () => Navigator.of(context).popUntil((route) => route.isFirst),
+            icon: const Icon(Icons.exit_to_app_rounded),
+            label: const Text('Exit'),
+          ),
           IconButton(
             tooltip: 'Invoice history',
             icon: const Icon(Icons.history_rounded),
@@ -2908,7 +2945,7 @@ class _ClientVisitStatusListScreenState
   bool _isHistoryVisit(ClientVisit visit) {
     if (!const {'completed', 'rejected'}.contains(visit.status)) return false;
     final role = widget.viewerRole.trim().toLowerCase();
-    if (const {'hr', 'ceo', 'md', 'superadmin'}.contains(role)) return true;
+    if (const {'admin', 'hr', 'ceo', 'md', 'superadmin'}.contains(role)) return true;
     return visit.employeeUserId == widget.userId ||
         visit.managerUserId == widget.userId;
   }
@@ -2954,6 +2991,7 @@ class _ClientVisitStatusListScreenState
   List<Widget> _historySections(List<ClientVisit> visits) {
     final role = widget.viewerRole.trim().toLowerCase();
     final organizationHistory = const {
+      'admin',
       'hr',
       'ceo',
       'md',

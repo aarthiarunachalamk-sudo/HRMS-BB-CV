@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../ClientVisits/client_visit_screens.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'admin_palette.dart';
 import 'admin_service.dart';
@@ -181,6 +182,25 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
           const SizedBox(height: 14),
           const AdminSectionTitle('Quick Actions'),
+          AdminCard(
+            child: ListTile(
+              leading: Icon(Icons.route_rounded, color: c.primary),
+              title: const Text('Client Visits'),
+              subtitle: const Text('Live tracking, history and visit details'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ClientVisitModuleScreen(
+                    userId: widget.userId,
+                    roleLabel: 'Admin',
+                    requesterRole: 'admin',
+                    readOnlyMode: true,
+                    allowCreate: false,
+                  ),
+                ),
+              ),
+            ),
+          ),
 
           // ── Quick actions (admin-owned only) ─────────────────
           GridView.count(

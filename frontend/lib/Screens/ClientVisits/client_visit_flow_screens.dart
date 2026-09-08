@@ -5082,7 +5082,12 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
 
     final isActive =
         visit.status == 'travelling' || visit.status == 'in_progress';
-    final canViewLiveTracking = widget.viewerRole.trim().toLowerCase() == 'tl';
+    final canViewLiveTracking = const {
+      'admin',
+      'ceo',
+      'hr',
+      'tl',
+    }.contains(widget.viewerRole.trim().toLowerCase());
     final hasRoute =
         visit.travelRoute.isNotEmpty ||
         (visit.officeCheckOutLatitude != null &&
@@ -5121,7 +5126,7 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
           color: const Color(0xFF64748B),
           title: 'Visit In Progress',
           child: const Text(
-            'Live tracking is available to the assigned Team Lead. The full '
+            'Live tracking is available to Admin, CEO, HR and the assigned Team Lead. The full '
             'route, evidence and downloadable report will be available here '
             'after the visit is completed.',
           ),

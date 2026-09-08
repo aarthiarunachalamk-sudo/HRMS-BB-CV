@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../ClientVisits/client_visit_screens.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_greeting.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 
@@ -139,6 +140,25 @@ class CeoHomeScreen extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         title('Quick Actions', 15),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.route_rounded, color: CeoColors.cyan),
+            title: const Text('Client Visits'),
+            subtitle: const Text('Live tracking, history and visit details'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ClientVisitModuleScreen(
+                  userId: userId,
+                  roleLabel: 'CEO',
+                  requesterRole: 'ceo',
+                  readOnlyMode: true,
+                  allowCreate: false,
+                ),
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 10),
         Row(
           children: [
