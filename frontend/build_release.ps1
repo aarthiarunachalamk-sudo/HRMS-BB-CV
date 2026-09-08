@@ -57,6 +57,7 @@ try {
     }
 
     & flutter build apk --release --split-per-abi `
+        --android-skip-build-dependency-validation `
         --build-name $customVersionName `
         --build-number $buildNumber
 
