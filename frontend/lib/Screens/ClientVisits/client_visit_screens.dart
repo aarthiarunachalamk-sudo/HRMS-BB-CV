@@ -989,7 +989,7 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
             ),
             const SizedBox(height: 4),
             Text(
-              'Tap a card or its marker to select or deselect. Tap the service name for details.',
+              'Tap a card or its checkbox to select or deselect. Tap the service name for details.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: ThemeConfig.getTextMuted(context),
               ),
@@ -1151,27 +1151,18 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
                   ),
                 ),
                 const SizedBox(width: 8),
-                Semantics(
-                  selected: selected,
-                  child: IconButton(
-                    tooltip: selected
-                        ? 'Deselect ${service.name}'
-                        : 'Select ${service.name}',
-                    onPressed: () =>
-                        _toggleService(service.id, packageIndex, !selected),
-                    style: IconButton.styleFrom(
-                      backgroundColor: selected
-                          ? const Color(0xFF1687FF)
-                          : ThemeConfig.getTextMuted(context).withAlpha(24),
-                      foregroundColor: selected
-                          ? Colors.white
-                          : ThemeConfig.getTextMuted(context),
-                      minimumSize: const Size(48, 48),
-                    ),
-                    icon: Icon(
-                      selected ? Icons.check_rounded : Icons.close_rounded,
-                    ),
+                Checkbox(
+                  value: selected,
+                  semanticLabel: service.name,
+                  activeColor: const Color(0xFF1687FF),
+                  checkColor: Colors.white,
+                  side: BorderSide(
+                    color: ThemeConfig.getTextMuted(context),
+                    width: 2,
                   ),
+                  materialTapTargetSize: MaterialTapTargetSize.padded,
+                  onChanged: (value) =>
+                      _toggleService(service.id, packageIndex, value ?? false),
                 ),
               ],
             ),
