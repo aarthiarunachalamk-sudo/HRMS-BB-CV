@@ -290,7 +290,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
               padding: EdgeInsets.all(16),
               child: Text('Early checkout approval is pending. Your request has already been sent to TL and HR.'),
             )
-          else _PendingCard(
+          else if (!attendanceCompleted) _PendingCard(
             action: nextAction,
             checkOut: checkOut,
             attendanceCompleted: attendanceCompleted,
