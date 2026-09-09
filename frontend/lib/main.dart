@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/backend/login_warmup.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -9,6 +12,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/ClientJourneys/journey_tracker.da
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  unawaited(LoginWarmup.start());
   JourneyTracker.initialize();
   await _initializeFirebase();
   runApp(const MyApp());

@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/auth_session.dart';
+import 'package:hrms_mobileapp_bitbyte/backend/login_warmup.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:convert';
@@ -62,35 +63,8 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _restoreRememberedCredentials();
-    // Render may spin the API down while it is idle. Start waking it as soon as
-    // the login screen opens so that delay overlaps with the user entering
-    // their credentials. Reuse the connection for login to avoid another
-    // TCP/TLS handshake after the user presses Sign In.
-    unawaited(_warmUpLoginServer());
-  }
-
-  Future<void> _warmUpLoginServer() async {
-    final urls = <Uri>[
-      ApiConfig.uri('/health/'),
-      if (ApiConfig.usesPrivateNetworkAddress) ApiConfig.publicUri('/health/'),
-    ];
-    for (final url in urls) {
-      try {
-        final response = await _loginClient
-            .get(url)
-            .timeout(
-              Duration(
-                seconds:
-                    ApiConfig.usesPrivateNetworkAddress && url == urls.first
-                    ? 1
-                    : 20,
-              ),
-            );
-        if (response.statusCode >= 200 && response.statusCode < 500) return;
-      } catch (_) {
-        // Login will report a connection problem if the actual request fails.
-      }
-    }
+    // Reuse the startup warmup; retry here if an earlier probe failed.
+    unawaited(LoginWarmup.start());
   }
 
   Future<void> _restoreRememberedCredentials() async {
