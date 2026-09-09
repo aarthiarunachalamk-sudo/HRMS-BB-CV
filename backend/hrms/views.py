@@ -4,7 +4,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.cache import cache
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, OuterRef, Q, Subquery, Sum
 from django.db import IntegrityError, close_old_connections, transaction
 from django.apps import apps
 from django.core.validators import validate_email
@@ -30,6 +30,7 @@ from sendgrid.helpers.mail import Attachment, Disposition, FileContent, FileName
 from .models import EmployeeAccount
 from .leadership_employees import ensure_leadership_employee_account
 from .role_permissions import permissions_for_role
+from .login_timing import measure_login
 from .meeting_providers import (
     MeetingProviderConfigurationError,
     MeetingProviderCreationError,
@@ -62,6 +63,7 @@ def _provision_login_employee_account(user):
         close_old_connections()
 
 @api_view(['POST'])
+@measure_login
 def login_view(request):
     serializer = LoginSerializer(data=request.data)
     if serializer.is_valid():
@@ -71,6 +73,15 @@ def login_view(request):
             User.objects.filter(
                 Q(email__iexact=login_id) | Q(user_id__iexact=login_id),
                 is_active=True,
+            ).annotate(
+                login_employee_id=Subquery(
+                    EmployeeAccount.objects.filter(user_id=OuterRef('pk'))
+                    .order_by('pk').values('employee_id')[:1]
+                ),
+                login_otc=Subquery(
+                    EmployeeAccount.objects.filter(employee_email=OuterRef('email'))
+                    .order_by('pk').values('otc')[:1]
+                ),
             )
         )
         matching_users = [user for user in candidates if user.check_password(password)]
@@ -78,30 +89,20 @@ def login_view(request):
             user = matching_users[0]
 
             # OTC check FIRST — fast path, avoids heavy account provisioning
-            try:
-                from .models import EmployeeAccount
-                emp_account_check = EmployeeAccount.objects.filter(
-                    employee_email=user.email
-                ).values('otc').first()
-                if emp_account_check and emp_account_check['otc'] == password:
-                    return Response({
-                        'success': True,
-                        'requires_password_change': True,
-                        'user_id': user.user_id,
-                        'email': user.email,
-                    })
-            except Exception:
-                pass
-
+            if user.login_otc == password:
+                return Response({
+                    'success': True,
+                    'requires_password_change': True,
+                    'user_id': user.user_id,
+                    'email': user.email,
+                })
             # Resolve employee_id without waiting for provisioning
-            from .models import EmployeeAccount as EA
-            ea = EA.objects.filter(user=user).values('employee_id').first()
-            employee_id = ea['employee_id'] if ea else user.user_id
+            employee_id = user.login_employee_id or user.user_id
 
             # Only legacy leadership users without an employee account need
             # provisioning. Close the raw thread's database connection when it
             # finishes so repeated logins cannot exhaust the DB connection pool.
-            if ea is None:
+            if user.login_employee_id is None:
                 import threading
                 threading.Thread(
                     target=_provision_login_employee_account,
@@ -116,12 +117,12 @@ def login_view(request):
             ).strip().lower()
             login_role = (
                 'employee'
-                if requested_role == 'employee' and ea is not None
+                if requested_role == 'employee' and user.login_employee_id is not None
                 else user.role
             )
 
             # Resolve photo ONCE, reuse result
-            photo_url = _passport_photo_for_email(user.email)
+            photo_url = _passport_photo_for_email(user.email, known_user=user)
             refresh = RefreshToken.for_user(user)
 
             return Response({
@@ -1089,10 +1090,12 @@ def _user_brief(user_id):
     return f'{name} ({user.user_id})'
 
 
-def _passport_photo_for_email(email):
+def _passport_photo_for_email(email, *, known_user=None):
     if not email:
         return ''
-    user = User.objects.filter(email__iexact=email).exclude(profile_photo='').first()
+    user = known_user if known_user is not None and known_user.profile_photo else (
+        User.objects.filter(email__iexact=email).exclude(profile_photo='').first()
+    )
     if user and user.profile_photo:
         try:
             return user.profile_photo.url

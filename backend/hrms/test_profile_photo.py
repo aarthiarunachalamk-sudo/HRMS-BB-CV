@@ -69,6 +69,39 @@ class ProfilePhotoFlowTests(TestCase):
             employment_type='full_time',
         )
 
+    def test_login_reuses_account_and_photo_without_extra_queries(self):
+        self.user.profile_photo = 'profiles/login-photo'
+        self.user.save(update_fields=['profile_photo'])
+        # One account lookup plus the required refresh-token revocation record.
+        with self.assertNumQueries(2):
+            response = self.client.post('/api/login/', {
+                'email': self.user.user_id,
+                'password': 'Password1!',
+            }, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['employee_id'], 'BBEMP00999')
+        self.assertFalse(response.data['requires_profile_photo'])
+        self.assertIn('access_token', response.data)
+        self.assertIn('login;dur=', response['Server-Timing'])
+
+    def test_login_still_requires_otc_password_change(self):
+        EmployeeAccount.objects.filter(user=self.user).update(otc='Password1!')
+        with self.assertNumQueries(1):
+            response = self.client.post('/api/login/', {
+                'email': self.user.email,
+                'password': 'Password1!',
+            }, format='json')
+        self.assertTrue(response.data['requires_password_change'])
+        self.assertNotIn('access_token', response.data)
+
+    def test_login_rejects_wrong_password(self):
+        response = self.client.post('/api/login/', {
+            'email': self.user.user_id,
+            'password': 'incorrect',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(response.data['success'])
+
     def test_profile_load_accepts_employee_id_for_linked_login_user(self):
         response = self.client.get(
             '/api/profile/',

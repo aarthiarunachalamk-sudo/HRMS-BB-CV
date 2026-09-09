@@ -455,6 +455,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       : 65,
                 ),
               ); // Public backend may still need a cold start.
+          debugPrint('Login server timing: ${response.headers['server-timing'] ?? 'unavailable'}');
           if (response.statusCode >= 500) {
             lastNetworkError = 'HTTP ${response.statusCode} from $url';
             if (attempt == 0) {
