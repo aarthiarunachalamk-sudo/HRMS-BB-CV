@@ -879,8 +879,12 @@ def _attendance_calculation(check_in, check_out=None, offset_minutes=None):
 
     late_minutes = max(0, int((local_check_in - grace_end).total_seconds() // 60))
     working_seconds = 0
+    credited_seconds = 0
     if local_check_out and local_check_out > local_check_in:
         net_duration = local_check_out - local_check_in
+        # Display actual attendance duration, independent of late entry,
+        # permission, and the scheduled lunch/payroll policy.
+        working_seconds = max(0, int(net_duration.total_seconds()))
         # Subtract actual lunch overlap before rounding, including each day
         # when a recorded interval crosses midnight.
         while lunch_start < local_check_out:
@@ -889,11 +893,12 @@ def _attendance_calculation(check_in, check_out=None, offset_minutes=None):
                 net_duration -= overlap
             lunch_start += timedelta(days=1)
             lunch_end += timedelta(days=1)
-        working_seconds = max(0, int(net_duration.total_seconds()))
+        credited_seconds = max(0, int(net_duration.total_seconds()))
     working_minutes = working_seconds // 60
 
-    overtime_minutes = max(0, working_minutes - FULL_DAY_MINUTES)
-    if local_check_out and working_minutes < HALF_DAY_MINUTES:
+    credited_minutes = credited_seconds // 60
+    overtime_minutes = max(0, credited_minutes - FULL_DAY_MINUTES)
+    if local_check_out and credited_minutes < HALF_DAY_MINUTES:
         attendance_status = 'Half Day'
     elif late_minutes > 0:
         attendance_status = 'Late Entry'

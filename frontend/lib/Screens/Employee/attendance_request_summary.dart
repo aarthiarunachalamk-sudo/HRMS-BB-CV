@@ -42,25 +42,7 @@ Map<String, dynamic> attendanceRequestSummary(
     approximate = match[3] == null;
   }
   if (capturedAt.isBefore(start)) return result;
-  var duration = capturedAt.difference(start);
-  var lunchStart = DateTime(start.year, start.month, start.day, 13);
-  while (lunchStart.isBefore(capturedAt)) {
-    final lunchEnd = DateTime(
-      lunchStart.year,
-      lunchStart.month,
-      lunchStart.day,
-      14,
-    );
-    final from = start.isAfter(lunchStart) ? start : lunchStart;
-    final to = capturedAt.isBefore(lunchEnd) ? capturedAt : lunchEnd;
-    if (to.isAfter(from)) duration -= to.difference(from);
-    lunchStart = DateTime(
-      lunchStart.year,
-      lunchStart.month,
-      lunchStart.day + 1,
-      13,
-    );
-  }
+  final duration = capturedAt.difference(start);
   final seconds = duration.inSeconds;
   String two(int value) => value.toString().padLeft(2, '0');
   result['working_hours'] =

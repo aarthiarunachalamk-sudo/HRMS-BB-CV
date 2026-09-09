@@ -33,8 +33,8 @@ class AttendanceCheckoutPolicyTests(TestCase):
         }, format='multipart')
         self.assertEqual(response.status_code, 202)
         self.assertTrue(response.data['permission_required'])
-        self.assertEqual(response.data['working_hours'], '00h 10m 37s')
-        self.assertEqual(response.data['working_seconds'], 637)
+        self.assertEqual(response.data['working_hours'], '00h 10m 42s')
+        self.assertEqual(response.data['working_seconds'], 642)
         self.assertEqual(response.data['requested_check_out_time'], '01:00 PM')
         self.assertEqual(response.data['check_out'], '--:--')
         self.assertEqual(response.data['status'], 'Late Entry')
@@ -65,13 +65,13 @@ class AttendanceCheckoutPolicyTests(TestCase):
             'selfie': SimpleUploadedFile('checkout.jpg', b'photo', content_type='image/jpeg'),
         }, format='multipart')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['working_hours'], '08h 01m 35s')
-        self.assertEqual(response.data['working_seconds'], 28895)
+        self.assertEqual(response.data['working_hours'], '09h 01m 35s')
+        self.assertEqual(response.data['working_seconds'], 32495)
         record.refresh_from_db()
         self.assertEqual(record.check_out, check_out)
         self.assertTrue(record.check_out_selfie.name)
         self.assertTrue(response.data['check_out_selfie'])
-        self.assertEqual(record.working_hours, '08h 01m 35s')
+        self.assertEqual(record.working_hours, '09h 01m 35s')
 
     def test_checkout_without_checkin_does_not_invent_working_hours(self):
         response = self.client.post('/api/employee/check-out/', {
