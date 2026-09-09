@@ -280,7 +280,9 @@ class _ClientVisitDashboardScreenState
             )
           : _monitoringScreen(
               visit,
-              canVerify: widget.allowVerification && canReview,
+              canVerify: widget.allowVerification && canReview &&
+                  (widget.requesterRole.trim().toLowerCase() != 'tl' ||
+                      visit.managerUserId == widget.userId),
             );
     } else {
       screen = _employeeFlowScreen(visit);
@@ -2936,7 +2938,7 @@ class _ClientVisitStatusListScreenState
   bool _isHistoryVisit(ClientVisit visit) {
     if (!const {'completed', 'rejected'}.contains(visit.status)) return false;
     final role = widget.viewerRole.trim().toLowerCase();
-    if (const {'admin', 'hr', 'ceo', 'md', 'superadmin'}.contains(role)) return true;
+    if (const {'admin', 'hr', 'ceo', 'tl', 'md', 'superadmin'}.contains(role)) return true;
     return visit.employeeUserId == widget.userId ||
         visit.managerUserId == widget.userId;
   }
@@ -2982,6 +2984,7 @@ class _ClientVisitStatusListScreenState
   List<Widget> _historySections(List<ClientVisit> visits) {
     final role = widget.viewerRole.trim().toLowerCase();
     final organizationHistory = const {
+      'tl',
       'admin',
       'hr',
       'ceo',
@@ -3144,6 +3147,7 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
     if (!const {'completed', 'rejected'}.contains(visit.status)) return false;
     final role = widget.viewerRole.trim().toLowerCase();
     if (const {
+      'tl',
       'hr',
       'admin',
       'superadmin',

@@ -56,6 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isLoggingIn = false;
+  final http.Client _loginClient = http.Client();
 
   @override
   void initState() {
@@ -63,8 +64,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _restoreRememberedCredentials();
     // Render may spin the API down while it is idle. Start waking it as soon as
     // the login screen opens so that delay overlaps with the user entering
-    // their credentials. Warm-up uses an isolated connection so it can never
-    // interfere with the real login request.
+    // their credentials. Reuse the connection for login to avoid another
+    // TCP/TLS handshake after the user presses Sign In.
     unawaited(_warmUpLoginServer());
   }
 
@@ -74,16 +75,20 @@ class _LoginScreenState extends State<LoginScreen> {
       if (ApiConfig.usesPrivateNetworkAddress) ApiConfig.publicUri('/health/'),
     ];
     for (final url in urls) {
-      final client = http.Client();
       try {
-        final response = await client
+        final response = await _loginClient
             .get(url)
-            .timeout(const Duration(seconds: 20));
+            .timeout(
+              Duration(
+                seconds:
+                    ApiConfig.usesPrivateNetworkAddress && url == urls.first
+                    ? 1
+                    : 20,
+              ),
+            );
         if (response.statusCode >= 200 && response.statusCode < 500) return;
       } catch (_) {
         // Login will report a connection problem if the actual request fails.
-      } finally {
-        client.close();
       }
     }
   }
@@ -222,6 +227,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _loginClient.close();
     _employeeCodeController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -451,15 +457,21 @@ class _LoginScreenState extends State<LoginScreen> {
     Object? lastNetworkError;
     for (final url in urls) {
       for (var attempt = 0; attempt < 2; attempt++) {
-        final client = http.Client();
         try {
-          final response = await client
+          final response = await _loginClient
               .post(
                 url,
                 headers: {'Content-Type': 'application/json'},
                 body: jsonEncode(payload),
               )
-              .timeout(const Duration(seconds: 65)); // allow Render cold-start
+              .timeout(
+                Duration(
+                  seconds:
+                      ApiConfig.usesPrivateNetworkAddress && url == urls.first
+                      ? 1
+                      : 65,
+                ),
+              ); // Public backend may still need a cold start.
           if (response.statusCode >= 500) {
             lastNetworkError = 'HTTP ${response.statusCode} from $url';
             if (attempt == 0) {
@@ -490,8 +502,6 @@ class _LoginScreenState extends State<LoginScreen> {
             continue;
           }
           break;
-        } finally {
-          client.close();
         }
       }
     }

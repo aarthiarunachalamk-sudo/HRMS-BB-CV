@@ -1108,7 +1108,9 @@ def _passport_photo_for_email(email):
         registration = account.registration if account else None
     if not registration:
         return ''
-    return EmployeeRegistrationSerializer(registration).data.get('doc_passport_photo') or ''
+    # Login needs only the photo URL. Serializing the entire registration also
+    # builds every document URL and resolves unrelated serializer fields.
+    return EmployeeRegistrationSerializer().get_doc_passport_photo(registration) or ''
 
 
 def _profile_photo_for_employee_id(employee_id):

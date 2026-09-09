@@ -22,6 +22,48 @@ from .storage import client_visit_storage_config
 
 
 class ClientServiceDetailsApiTests(APITestCase):
+    def test_requested_roles_can_read_other_employees_client_details(self):
+        record = ClientServiceDetails.objects.create(
+            created_by_user_id='another-employee',
+            client_name='Shared Client',
+            client_details='Mobile application services',
+        )
+        for role in ('ceo', 'tl', 'hr', 'admin', 'employee', 'manager'):
+            with self.subTest(role=role):
+                viewer = User.objects.create_user(f'viewer-{role}@example.com', role=role)
+                response = self.client.get('/api/client-visits/client-details/', {
+                    'user_id': viewer.user_id,
+                })
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    [item['id'] for item in response.data['client_details']],
+                    [record.id] if role in {'ceo', 'tl', 'hr', 'admin'} else [],
+                )
+
+    def test_tl_can_read_unassigned_history_without_new_write_access(self):
+        viewer = User.objects.create_user('history-tl@example.com', role='tl')
+        visit = ClientVisit.objects.create(
+            employee_user_id=self.employee.user_id,
+            manager_user_id='other-manager',
+            client_name='History Client',
+            scheduled_date=timezone.localdate(),
+            scheduled_time=timezone.localtime().time(),
+            status='completed',
+        )
+        for status in ('completed', 'rejected', 'pending'):
+            with self.subTest(status=status):
+                visit.status = status
+                visit.save(update_fields=['status'])
+                response = self.client.get('/api/client-visits/', {'user_id': viewer.user_id})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(len(response.data['visits']), 0 if status == 'pending' else 1)
+                detail = self.client.get(f'/api/client-visits/{visit.id}/', {'user_id': viewer.user_id})
+                self.assertEqual(detail.status_code, 403 if status == 'pending' else 200)
+                edit = self.client.patch(f'/api/client-visits/{visit.id}/', {
+                    'user_id': viewer.user_id, 'client_name': 'Changed',
+                }, format='json')
+                self.assertEqual(edit.status_code, 403)
+
     def setUp(self):
         self.employee = User.objects.create_user(
             'client-details@example.com',

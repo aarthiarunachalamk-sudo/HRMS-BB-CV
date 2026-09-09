@@ -34,6 +34,7 @@ from .storage import upload_client_visit_file
 
 
 SUPERVISOR_ROLES = {'manager', 'tl', 'hr', 'admin', 'superadmin'}
+CLIENT_DETAILS_VIEWER_ROLES = {'ceo', 'tl', 'hr', 'admin'}
 COMPLETION_HISTORY_ROLES = {'hr', 'ceo', 'md', 'superadmin'}
 SELF_APPROVING_VISIT_ROLES = {'admin', 'superadmin', 'ceo', 'md', 'director'}
 DAILY_VISIT_LIMIT = 5   # maximum visits any employee may schedule on a single date
@@ -78,9 +79,10 @@ def client_service_details(request):
         return _error('A valid active user is required.', status=403)
 
     if request.method == 'GET':
-        records = ClientServiceDetails.objects.filter(
-            created_by_user_id=user_id,
-        )[:100]
+        records = ClientServiceDetails.objects.all()
+        if user.role not in CLIENT_DETAILS_VIEWER_ROLES:
+            records = records.filter(created_by_user_id=user_id)
+        records = records[:100]
         return Response({
             'success': True,
             'client_details': [_client_details_payload(item) for item in records],
@@ -428,8 +430,10 @@ def _notify_visit_completed(visit):
         )
 
 
-def _can_view(visit, user_id, user):
+def _can_view(visit, user_id, user, *, include_history=False):
     if visit.employee_user_id == user_id or visit.manager_user_id == user_id:
+        return True
+    if include_history and user and user.role == 'tl' and visit.status in {'completed', 'rejected'}:
         return True
     return bool(user and user.role in {'hr', 'admin', 'superadmin', 'ceo', 'md', 'director'})
 
@@ -578,9 +582,10 @@ def visit_list_create(request):
             if employee:
                 queryset = queryset.filter(employee_user_id=employee)
         elif user.role in {'manager', 'tl'}:
-            queryset = queryset.filter(
-                Q(manager_user_id=user_id) | Q(employee_user_id=user_id)
-            )
+            visible = Q(manager_user_id=user_id) | Q(employee_user_id=user_id)
+            if user.role == 'tl':
+                visible |= Q(status__in=['completed', 'rejected'])
+            queryset = queryset.filter(visible)
         else:
             queryset = queryset.filter(employee_user_id=user_id)
         status_filter = str(request.query_params.get('status') or '').strip()
@@ -674,7 +679,7 @@ def visit_list_create(request):
 def visit_detail(request, pk):
     user_id, user = _actor(request)
     visit = get_object_or_404(ClientVisit.objects.prefetch_related('attachments', 'expenses'), pk=pk)
-    if not user or not _can_view(visit, user_id, user):
+    if not user or not _can_view(visit, user_id, user, include_history=request.method == 'GET'):
         return _error('You cannot access this visit.', 403)
     if request.method == 'GET':
         return Response({
