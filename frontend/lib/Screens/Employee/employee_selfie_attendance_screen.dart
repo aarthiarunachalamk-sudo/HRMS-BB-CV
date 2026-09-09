@@ -420,8 +420,10 @@ class _EmployeeSelfieAttendanceScreenState
 
     try {
       final rawFile = await readyController.takePicture();
+      final capturedAt = DateTime.now();
       final watermarkedPath = await _burnWatermark(
         rawFile.path,
+        capturedAt: capturedAt,
         flipHorizontally:
             readyController.description.lensDirection ==
             CameraLensDirection.front,
@@ -431,7 +433,7 @@ class _EmployeeSelfieAttendanceScreenState
         _capturedPath = watermarkedPath;
         _processingCapture = false;
       });
-      await _submit(watermarkedPath);
+      await _submit(watermarkedPath, capturedAt);
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -444,6 +446,7 @@ class _EmployeeSelfieAttendanceScreenState
 
   Future<String> _burnWatermark(
     String rawPath, {
+    required DateTime capturedAt,
     required bool flipHorizontally,
   }) async {
     final bytes = await File(rawPath).readAsBytes();
@@ -462,7 +465,7 @@ class _EmployeeSelfieAttendanceScreenState
     final watermarked = _drawWatermark(
       decoded,
       _position,
-      DateTime.now(),
+      capturedAt,
       _gpsAddress,
     );
 
@@ -704,7 +707,7 @@ class _EmployeeSelfieAttendanceScreenState
   // Submit
   // ---------------------------------------------------------------------
 
-  Future<void> _submit(String selfiePath) async {
+  Future<void> _submit(String selfiePath, DateTime capturedAt) async {
     var position = _position;
     if (position == null) {
       await _loadLocation();
@@ -713,7 +716,7 @@ class _EmployeeSelfieAttendanceScreenState
     if (position == null) return;
 
     setState(() => _submitting = true);
-    final mobileTime = DateTime.now();
+    final mobileTime = capturedAt;
     final policyStatus = _isCheckIn ? _statusForCheckIn(mobileTime) : null;
     final payload = {
       'selfie_path': selfiePath,

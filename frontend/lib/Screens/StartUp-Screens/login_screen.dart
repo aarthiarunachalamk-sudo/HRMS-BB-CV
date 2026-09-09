@@ -249,9 +249,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text;
     final rememberMe = _rememberMe;
     setState(() => _isLoggingIn = true);
+    final loginTimer = Stopwatch()..start();
 
     try {
       final data = await _loginRequest(loginId: loginId, password: password);
+      debugPrint('Login API response: ${loginTimer.elapsedMilliseconds} ms');
       if (!mounted) return;
 
       if (data['success'] == true) {
@@ -271,19 +273,21 @@ class _LoginScreenState extends State<LoginScreen> {
         final accessToken = '${data['access_token'] ?? ''}';
         final refreshToken = '${data['refresh_token'] ?? ''}';
         if (accessToken.isNotEmpty && refreshToken.isNotEmpty) {
-          try {
-            await AuthSession.saveTokens(
+          // saveTokens publishes the session synchronously. Dashboard requests
+          // can authenticate immediately while secure persistence completes.
+          unawaited(
+            AuthSession.saveTokens(
               accessToken: accessToken,
               refreshToken: refreshToken,
-            );
-          } catch (error) {
-            // JWT storage is additive for protected journey APIs. A device
-            // storage issue must not turn a valid login into a network error.
-            debugPrint('Unable to persist login tokens: $error');
-          }
+            ).catchError((Object error) {
+              // JWT storage is additive for protected journey APIs. A device
+              // storage issue must not turn a valid login into a network error.
+              debugPrint('Unable to persist login tokens: $error');
+            }),
+          );
         }
         // Remembering credentials is optional and must not delay opening the
-        // dashboard after authentication and token persistence have succeeded.
+        // dashboard after authentication has succeeded.
         unawaited(
           _updateRememberedCredentials(
             userId: loginId,
@@ -424,6 +428,11 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           (route) => false,
         );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          debugPrint(
+            'Login dashboard frame: ${loginTimer.elapsedMilliseconds} ms',
+          );
+        });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Login failed')),

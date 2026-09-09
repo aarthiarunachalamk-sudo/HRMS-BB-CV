@@ -19,6 +19,51 @@ from .employee_views import _format_time, _leave_balance_payload
 
 
 class AttendanceCheckoutPolicyTests(TestCase):
+    def test_selfie_checkout_saves_exact_duration_and_photo(self):
+        check_in = datetime(2026, 7, 27, 9, 0, 35, tzinfo=IST)
+        check_out = datetime(2026, 7, 27, 18, 2, 10, tzinfo=IST)
+        record = self._open_attendance(check_in)
+        response = self.client.post('/api/employee/check-out/', {
+            'user_id': self.employee_id,
+            'mobile_timestamp': check_out.isoformat(),
+            'timezone_offset_minutes': 330,
+            **self.gps,
+            'selfie': SimpleUploadedFile('checkout.jpg', b'photo', content_type='image/jpeg'),
+        }, format='multipart')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['working_hours'], '08h 01m 35s')
+        self.assertEqual(response.data['working_seconds'], 28895)
+        record.refresh_from_db()
+        self.assertEqual(record.check_out, check_out)
+        self.assertTrue(record.check_out_selfie.name)
+        self.assertTrue(response.data['check_out_selfie'])
+        self.assertEqual(record.working_hours, '08h 01m 35s')
+
+    def test_checkout_without_checkin_does_not_invent_working_hours(self):
+        response = self.client.post('/api/employee/check-out/', {
+            'user_id': self.employee_id,
+            'mobile_timestamp': datetime(2026, 7, 27, 18, tzinfo=IST).isoformat(),
+            'timezone_offset_minutes': 330,
+            **self.gps,
+            'selfie': SimpleUploadedFile('checkout.jpg', b'photo', content_type='image/jpeg'),
+        }, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(EmployeeAttendanceRecord.objects.filter(employee_id=self.employee_id).exists())
+
+    def test_checkout_before_checkin_is_rejected(self):
+        now = datetime(2026, 7, 27, 18, tzinfo=IST)
+        record = self._open_attendance(now + timedelta(minutes=1))
+        response = self.client.post('/api/employee/check-out/', {
+            'user_id': self.employee_id,
+            'mobile_timestamp': now.isoformat(),
+            'timezone_offset_minutes': 330,
+            **self.gps,
+            'selfie': SimpleUploadedFile('checkout.jpg', b'photo', content_type='image/jpeg'),
+        }, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        record.refresh_from_db()
+        self.assertIsNone(record.check_out)
+
     employee_id = 'EMP-POLICY-01'
     gps = {
         'latitude': '11.6643251',

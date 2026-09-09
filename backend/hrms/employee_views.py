@@ -816,6 +816,11 @@ def _format_minutes(minutes):
     return f'{hours:02d}h {remainder:02d}m'
 
 
+def _format_seconds(seconds):
+    minutes, seconds = divmod(max(0, int(seconds)), 60)
+    return f'{_format_minutes(minutes)} {seconds:02d}s'
+
+
 def _local_attendance_time(value, offset_minutes=None):
     if not value:
         return None
@@ -839,6 +844,7 @@ def _attendance_calculation(check_in, check_out=None, offset_minutes=None):
         return {
             'status': 'Not Marked',
             'working_minutes': 0,
+            'working_seconds': 0,
             'working_hours': '--',
             'late_minutes': 0,
             'late_entry': '--',
@@ -851,7 +857,6 @@ def _attendance_calculation(check_in, check_out=None, offset_minutes=None):
             'grace_time': f'{GRACE_MINUTES} min',
         }
 
-    work_date = local_check_in.date()
     shift_start = local_check_in.replace(
         hour=SHIFT_START_HOUR,
         minute=0,
@@ -873,19 +878,19 @@ def _attendance_calculation(check_in, check_out=None, offset_minutes=None):
     )
 
     late_minutes = max(0, int((local_check_in - grace_end).total_seconds() // 60))
-    working_minutes = 0
+    working_seconds = 0
     if local_check_out and local_check_out > local_check_in:
-        gross_minutes = int((local_check_out - local_check_in).total_seconds() // 60)
-        lunch_minutes = _overlap_minutes(
-            local_check_in,
-            local_check_out,
-            lunch_start,
-            lunch_end,
-        )
-        working_minutes = max(0, gross_minutes - lunch_minutes)
-
-    if local_check_in.date() != work_date:
-        working_minutes = 0
+        net_duration = local_check_out - local_check_in
+        # Subtract actual lunch overlap before rounding, including each day
+        # when a recorded interval crosses midnight.
+        while lunch_start < local_check_out:
+            overlap = min(local_check_out, lunch_end) - max(local_check_in, lunch_start)
+            if overlap > timedelta(0):
+                net_duration -= overlap
+            lunch_start += timedelta(days=1)
+            lunch_end += timedelta(days=1)
+        working_seconds = max(0, int(net_duration.total_seconds()))
+    working_minutes = working_seconds // 60
 
     overtime_minutes = max(0, working_minutes - FULL_DAY_MINUTES)
     if local_check_out and working_minutes < HALF_DAY_MINUTES:
@@ -898,7 +903,8 @@ def _attendance_calculation(check_in, check_out=None, offset_minutes=None):
     return {
         'status': attendance_status,
         'working_minutes': working_minutes,
-        'working_hours': _format_minutes(working_minutes) if local_check_out else '--',
+        'working_seconds': working_seconds,
+        'working_hours': _format_seconds(working_seconds) if local_check_out else '--',
         'late_minutes': late_minutes,
         'late_entry': _format_minutes(late_minutes),
         'overtime_minutes': overtime_minutes,
@@ -932,6 +938,9 @@ def _attendance_payload(record, request=None):
             'check_in': '--:--',
             'check_out': '--:--',
             'working_hours': '--',
+            'working_seconds': 0,
+            'check_in_timestamp': None,
+            'check_out_timestamp': None,
             'late_entry': '--',
             'late_minutes': 0,
             'overtime': '00h 00m',
@@ -967,6 +976,9 @@ def _attendance_payload(record, request=None):
         'checkout_source': record.checkout_source,
         'is_auto_checkout': record.is_auto_checkout,
         'working_hours': calc['working_hours'] if record.check_out else record.working_hours or '--',
+        'working_seconds': calc['working_seconds'],
+        'check_in_timestamp': record.check_in.isoformat() if record.check_in else None,
+        'check_out_timestamp': record.check_out.isoformat() if record.check_out else None,
         'late_entry': calc['late_entry'],
         'late_minutes': calc['late_minutes'],
         'overtime': calc['overtime'],
@@ -1598,17 +1610,27 @@ def employee_check_out_view(request):
         )
 
     now, offset_minutes = _mobile_time(request)
-    record, _ = EmployeeAttendanceRecord.objects.get_or_create(
+    record = EmployeeAttendanceRecord.objects.filter(
         employee_id=employee_id,
         attendance_date=now.date(),
-        defaults={'status': 'Present'},
-    )
+    ).first()
+    if record is None or record.check_in is None:
+        return Response(
+            {'success': False, 'message': 'Check in before checking out.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     if record.check_out:
         return Response({
             'success': True,
             'message': 'Check-out has already been recorded.',
             **_attendance_payload(record, request),
         })
+
+    if now < record.check_in:
+        return Response(
+            {'success': False, 'message': 'Check-out time cannot be before check-in. Check your device clock.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     approved_leave = _approved_leave_for_day(employee_id, now.date())
     afternoon_half_day = bool(
@@ -1667,9 +1689,6 @@ def employee_check_out_view(request):
                 'message': 'Early check-out permission was sent to TL and HR for approval.',
                 **_attendance_payload(record, request),
             }, status=status.HTTP_202_ACCEPTED)
-    if not record.check_in:
-        record.check_in = now.replace(hour=SHIFT_START_HOUR, minute=0, second=0, microsecond=0)
-        record.check_in_timezone_offset_minutes = offset_minutes
     calc = _attendance_calculation(record.check_in, now, offset_minutes)
     record.status = calc['status']
     record.check_out = now
