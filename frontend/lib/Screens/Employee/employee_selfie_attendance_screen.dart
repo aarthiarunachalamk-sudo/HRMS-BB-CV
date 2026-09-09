@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'attendance_request_summary.dart';
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -737,7 +738,7 @@ class _EmployeeSelfieAttendanceScreenState
           ? await widget.service.checkIn(widget.userId, payload)
           : await widget.service.checkOut(widget.userId, payload);
       if (!mounted) return;
-      final normalized = Map<String, dynamic>.from(result);
+      final normalized = attendanceRequestSummary(result, capturedAt);
       if (policyStatus != null) {
         normalized['status'] = normalized['status'] ?? policyStatus;
       }
@@ -1089,7 +1090,11 @@ class _EmployeeSelfieAttendanceScreenState
           if (!_isCheckIn) ...[
             const SizedBox(height: 24),
             Text(
-              permissionRequired ? 'Working Hours at Request' : 'Working Hours',
+              permissionRequired
+                  ? (result['working_hours_approximate'] == true
+                      ? 'Working Hours at Request (approx.)'
+                      : 'Working Hours at Request')
+                  : 'Working Hours',
               style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
             const SizedBox(height: 6),
