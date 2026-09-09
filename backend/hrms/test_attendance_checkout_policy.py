@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone as datetime_timezone
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -15,10 +16,43 @@ from .models import (
     EmployeeRegistration,
     User,
 )
-from .employee_views import _format_time, _leave_balance_payload
+from .employee_views import _attendance_payload, _format_time, _leave_balance_payload
 
 
 class AttendanceCheckoutPolicyTests(TestCase):
+    def test_pending_permission_displays_worked_duration_without_checkout(self):
+        check_in = datetime(2026, 9, 9, 12, 49, 23, tzinfo=IST)
+        request_time = datetime(2026, 9, 9, 13, 0, 5, tzinfo=IST)
+        record = self._open_attendance(check_in)
+        response = self.client.post('/api/employee/check-out/', {
+            'user_id': self.employee_id,
+            'mobile_timestamp': request_time.isoformat(),
+            'timezone_offset_minutes': 330,
+            **self.gps,
+            'selfie': SimpleUploadedFile('checkout.jpg', b'photo', content_type='image/jpeg'),
+        }, format='multipart')
+        self.assertEqual(response.status_code, 202)
+        self.assertTrue(response.data['permission_required'])
+        self.assertEqual(response.data['working_hours'], '00h 10m 37s')
+        self.assertEqual(response.data['working_seconds'], 637)
+        self.assertEqual(response.data['requested_check_out_time'], '01:00 PM')
+        self.assertEqual(response.data['check_out'], '--:--')
+        self.assertEqual(response.data['status'], 'Late Entry')
+        record.refresh_from_db()
+        self.assertIsNone(record.check_out)
+        self.assertEqual(record.working_hours, '')
+
+    def test_open_attendance_shows_duration_at_refresh_without_changing_status(self):
+        check_in = datetime(2026, 9, 9, 12, 49, 23, tzinfo=IST)
+        record = self._open_attendance(check_in)
+        with patch('hrms.employee_views.timezone.now', return_value=check_in + timedelta(minutes=5, seconds=7)):
+            payload = _attendance_payload(record)
+        self.assertEqual(payload['working_hours'], '00h 05m 07s')
+        self.assertEqual(payload['status'], 'Late Entry')
+        self.assertIsNone(payload['check_out_timestamp'])
+        with patch('hrms.employee_views.timezone.now', return_value=check_in + timedelta(days=1)):
+            self.assertEqual(_attendance_payload(record)['working_hours'], '--')
+
     def test_selfie_checkout_saves_exact_duration_and_photo(self):
         check_in = datetime(2026, 7, 27, 9, 0, 35, tzinfo=IST)
         check_out = datetime(2026, 7, 27, 18, 2, 10, tzinfo=IST)

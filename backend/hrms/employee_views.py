@@ -929,7 +929,7 @@ def _file_url(request, field):
     return request.build_absolute_uri(url) if request else url
 
 
-def _attendance_payload(record, request=None):
+def _attendance_payload(record, request=None, *, as_of=None):
     if record is None:
         empty_calc = _attendance_calculation(None)
         return {
@@ -967,6 +967,17 @@ def _attendance_payload(record, request=None):
         if record.check_out_timezone_offset_minutes is not None
         else record.check_in_timezone_offset_minutes,
     )
+    duration_calc = calc
+    measured_at = record.check_out
+    if record.check_in and not record.check_out:
+        current = as_of or timezone.now()
+        local_current = _local_attendance_time(current, record.check_in_timezone_offset_minutes)
+        # Old, unclosed records must not accumulate working time indefinitely.
+        if local_current.date() == record.attendance_date:
+            measured_at = current
+            duration_calc = _attendance_calculation(
+                record.check_in, current, record.check_in_timezone_offset_minutes,
+            )
     return {
         'id': record.id,
         'date': record.attendance_date.isoformat(),
@@ -975,14 +986,15 @@ def _attendance_payload(record, request=None):
         'check_out': _format_time(record.check_out, record.check_out_timezone_offset_minutes),
         'checkout_source': record.checkout_source,
         'is_auto_checkout': record.is_auto_checkout,
-        'working_hours': calc['working_hours'] if record.check_out else record.working_hours or '--',
-        'working_seconds': calc['working_seconds'],
+        'working_hours': duration_calc['working_hours'],
+        'working_seconds': duration_calc['working_seconds'],
+        'working_hours_as_of': measured_at.isoformat() if measured_at else None,
         'check_in_timestamp': record.check_in.isoformat() if record.check_in else None,
         'check_out_timestamp': record.check_out.isoformat() if record.check_out else None,
         'late_entry': calc['late_entry'],
         'late_minutes': calc['late_minutes'],
-        'overtime': calc['overtime'],
-        'overtime_minutes': calc['overtime_minutes'],
+        'overtime': duration_calc['overtime'],
+        'overtime_minutes': duration_calc['overtime_minutes'],
         'regular_hours': calc['regular_hours'],
         'shift_time': calc['shift_time'],
         'lunch_time': calc['lunch_time'],
@@ -1687,7 +1699,8 @@ def employee_check_out_view(request):
                 'permission_status': permission.status,
                 'permission_id': permission.id,
                 'message': 'Early check-out permission was sent to TL and HR for approval.',
-                **_attendance_payload(record, request),
+                **_attendance_payload(record, request, as_of=now),
+                'requested_check_out_time': _format_time(now, offset_minutes),
             }, status=status.HTTP_202_ACCEPTED)
     calc = _attendance_calculation(record.check_in, now, offset_minutes)
     record.status = calc['status']

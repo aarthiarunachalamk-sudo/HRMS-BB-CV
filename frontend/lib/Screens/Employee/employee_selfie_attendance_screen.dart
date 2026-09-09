@@ -1001,7 +1001,9 @@ class _EmployeeSelfieAttendanceScreenState
   Widget _successBody() {
     final result = _result!;
     final permissionRequired = result['permission_required'] == true;
-    final time = _isCheckIn
+    final time = permissionRequired
+        ? '${result['requested_check_out_time'] ?? '--:--'}'
+        : _isCheckIn
         ? '${result['check_in'] ?? '--:--'}'
         : '${result['check_out'] ?? '--:--'}';
     final date = '${result['date'] ?? '17 Jun 2026, Monday'}';
@@ -1086,9 +1088,9 @@ class _EmployeeSelfieAttendanceScreenState
           ),
           if (!_isCheckIn) ...[
             const SizedBox(height: 24),
-            const Text(
-              'Working Hours',
-              style: TextStyle(fontSize: 12, color: Colors.white70),
+            Text(
+              permissionRequired ? 'Working Hours at Request' : 'Working Hours',
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
             const SizedBox(height: 6),
             Text(
