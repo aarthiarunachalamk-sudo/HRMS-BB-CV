@@ -41,6 +41,14 @@ class AttendanceCheckoutPolicyTests(TestCase):
         record.refresh_from_db()
         self.assertIsNone(record.check_out)
         self.assertEqual(record.working_hours, '')
+        with patch('hrms.employee_views.timezone.now', return_value=request_time):
+            refreshed = _attendance_payload(record)
+            self.assertTrue(refreshed['permission_required'])
+            self.assertEqual(refreshed['permission_status'], 'pending')
+            AttendanceRegularizationRequest.objects.filter(
+                employee_id=self.employee_id, request_type='early_checkout',
+            ).update(status='approved')
+            self.assertFalse(_attendance_payload(record)['permission_required'])
 
     def test_open_attendance_shows_duration_at_refresh_without_changing_status(self):
         check_in = datetime(2026, 9, 9, 12, 49, 23, tzinfo=IST)

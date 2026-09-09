@@ -973,18 +973,31 @@ def _attendance_payload(record, request=None, *, as_of=None):
         else record.check_in_timezone_offset_minutes,
     )
     duration_calc = calc
+    permission_pending = False
     measured_at = record.check_out
     if record.check_in and not record.check_out:
         current = as_of or timezone.now()
         local_current = _local_attendance_time(current, record.check_in_timezone_offset_minutes)
         # Old, unclosed records must not accumulate working time indefinitely.
         if local_current.date() == record.attendance_date:
+            if _is_before_checkout_cutoff(local_current):
+                permissions = AttendanceRegularizationRequest.objects.filter(
+                    employee_id=record.employee_id,
+                    attendance_date=record.attendance_date,
+                    request_type='early_checkout',
+                )
+                permission_pending = (
+                    permissions.filter(status='pending').exists()
+                    and not permissions.filter(status='approved').exists()
+                )
             measured_at = current
             duration_calc = _attendance_calculation(
                 record.check_in, current, record.check_in_timezone_offset_minutes,
             )
     return {
         'id': record.id,
+        'permission_required': permission_pending,
+        'permission_status': 'pending' if permission_pending else '',
         'date': record.attendance_date.isoformat(),
         'status': calc['status'] if record.check_in else record.status,
         'check_in': _format_time(record.check_in, record.check_in_timezone_offset_minutes),

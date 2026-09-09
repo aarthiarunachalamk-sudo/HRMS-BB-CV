@@ -70,8 +70,18 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
         ),
       ),
     );
+    if (!mounted) return;
+    if (result != null) widget.onAttendanceMarked(result);
+    // System Back may return no route result even after a successful upload.
+    // Always reconcile the screen with the persisted attendance.
+    try {
+      final latest = await widget.service.fetchDashboard(widget.userId, '');
+      if (!mounted) return;
+      widget.onAttendanceMarked(latest.attendance);
+    } catch (_) {
+      // Retain the returned result if refreshing is temporarily unavailable.
+    }
     if (!mounted || result == null) return;
-    widget.onAttendanceMarked(result);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${result['message'] ?? 'Attendance marked'}')),
     );
@@ -86,6 +96,9 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
     final checkOut = '${attendance['check_out'] ?? '--:--'}';
     final hasCheckIn = _hasAttendanceTime(checkIn);
     final attendanceCompleted = _isAttendanceCompleted(attendance, checkOut);
+    final approvalPending = !attendanceCompleted &&
+        attendance['permission_required'] == true &&
+        attendance['permission_status'] == 'pending';
     final workingHours = attendanceCompleted
         ? _displayWorkingHours(attendance, checkIn, checkOut)
         : '${attendance['working_hours'] ?? '--'}';
@@ -104,6 +117,8 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
         : EmployeeAttendanceAction.checkOut;
     final primaryButtonLabel = attendanceCompleted
         ? 'Attendance Completed'
+        : approvalPending
+        ? 'Approval Pending'
         : needsCheckIn
         ? 'Check In'
         : 'Check Out';
@@ -250,7 +265,7 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
                   borderRadius: BorderRadius.circular(7),
                 ),
               ),
-              onPressed: attendanceCompleted
+              onPressed: attendanceCompleted || approvalPending
                   ? null
                   : () => _openSelfieAttendance(nextAction),
               child: Text(primaryButtonLabel),
@@ -270,7 +285,12 @@ class _EmployeeAttendanceScreenState extends State<EmployeeAttendanceScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          _PendingCard(
+          if (approvalPending)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Early checkout approval is pending. Your request has already been sent to TL and HR.'),
+            )
+          else _PendingCard(
             action: nextAction,
             checkOut: checkOut,
             attendanceCompleted: attendanceCompleted,

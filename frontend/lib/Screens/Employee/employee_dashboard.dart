@@ -208,6 +208,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
   void _updateAttendance(Map<String, dynamic> result) {
     final attendance = Map<String, dynamic>.from(_data.attendance);
     attendance.addAll({
+      if (result.containsKey('permission_required'))
+        'permission_required': result['permission_required'],
+      if (result.containsKey('permission_status'))
+        'permission_status': result['permission_status'],
       if (result['status'] != null) 'status': result['status'],
       if (result['date'] != null) 'date': result['date'],
       if (result['check_in'] != null) 'check_in': result['check_in'],

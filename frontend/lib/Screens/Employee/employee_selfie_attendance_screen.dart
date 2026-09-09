@@ -791,6 +791,7 @@ class _EmployeeSelfieAttendanceScreenState
         backgroundColor: bg,
         elevation: 0,
         title: AppBarLogoTitle(title: _successTitle),
+        leading: BackButton(onPressed: _finish),
       ),
       body: SafeArea(child: _result == null ? _captureBody() : _successBody()),
     );
