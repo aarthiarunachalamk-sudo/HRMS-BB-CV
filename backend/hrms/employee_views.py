@@ -1591,7 +1591,13 @@ def employee_check_in_view(request):
         attendance_date=now.date(),
         defaults={'status': 'Present'},
     )
-    record.check_in = record.check_in or now
+    if record.check_in:
+        return Response({
+            'success': True,
+            'message': 'Attendance already completed.' if record.check_out else 'Check-in has already been recorded.',
+            **_attendance_payload(record, request),
+        })
+    record.check_in = now
     record.work_mode = work_mode
     record.check_in_timezone_offset_minutes = offset_minutes
     calc = _attendance_calculation(record.check_in, None, offset_minutes)

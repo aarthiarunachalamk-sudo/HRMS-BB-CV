@@ -20,6 +20,33 @@ from .employee_views import _attendance_payload, _format_time, _leave_balance_pa
 
 
 class AttendanceCheckoutPolicyTests(TestCase):
+    def test_repeated_checkin_preserves_original_attendance(self):
+        start = datetime(2026, 7, 27, 9, tzinfo=IST)
+        for completed in (False, True):
+            with self.subTest(completed=completed):
+                record = self._open_attendance(start) if not completed else record
+                record.work_mode = 'office'
+                record.check_in_timezone_offset_minutes = 330
+                record.check_in_address = 'Original location'
+                record.check_out = start.replace(hour=18) if completed else None
+                record.save()
+                with patch('hrms.employee_views._notify_employee_presence') as notify:
+                    response = self.client.post('/api/employee/check-in/', {
+                        'user_id': self.employee_id,
+                        'mobile_timestamp': start.replace(hour=19).isoformat(),
+                        'timezone_offset_minutes': 330,
+                        'work_mode': 'work_from_home',
+                        **self.gps,
+                        'selfie': SimpleUploadedFile('repeat.jpg', b'photo', content_type='image/jpeg'),
+                    }, format='multipart')
+                self.assertEqual(response.status_code, 200)
+                notify.assert_not_called()
+                record.refresh_from_db()
+                self.assertEqual(record.check_in, start)
+                self.assertEqual(record.work_mode, 'office')
+                self.assertEqual(record.check_in_address, 'Original location')
+                self.assertEqual(bool(record.check_out), completed)
+
     def test_pending_permission_displays_worked_duration_without_checkout(self):
         check_in = datetime(2026, 9, 9, 12, 49, 23, tzinfo=IST)
         request_time = datetime(2026, 9, 9, 13, 0, 5, tzinfo=IST)

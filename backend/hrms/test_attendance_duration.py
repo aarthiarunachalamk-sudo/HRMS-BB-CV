@@ -9,6 +9,24 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 
 class AttendanceDurationTests(SimpleTestCase):
+    def test_regular_day_and_overtime_use_lunch_adjusted_credit(self):
+        start = datetime(2026, 9, 9, 9, tzinfo=IST)
+        for hour, minute, elapsed, overtime in (
+            (17, 30, '08h 30m 00s', 0),
+            (18, 0, '09h 00m 00s', 0),
+            (18, 30, '09h 30m 00s', 30),
+        ):
+            with self.subTest(checkout=(hour, minute)):
+                result = _attendance_calculation(start, start.replace(hour=hour, minute=minute), 330)
+                self.assertEqual(result['working_hours'], elapsed)
+                self.assertEqual(result['overtime_minutes'], overtime)
+
+    def test_grace_period_and_late_entry(self):
+        for hour, minute, expected_late in ((9, 0, 0), (9, 10, 0), (9, 11, 1), (12, 49, 219)):
+            with self.subTest(checkin=(hour, minute)):
+                start = datetime(2026, 9, 9, hour, minute, tzinfo=IST)
+                self.assertEqual(_attendance_calculation(start, offset_minutes=330)['late_minutes'], expected_late)
+
     def test_late_checkin_1239_to_checkout_1317_is_38_minutes(self):
         start = datetime(2026, 9, 9, 12, 39, tzinfo=IST)
         end = datetime(2026, 9, 9, 13, 17, tzinfo=IST)
