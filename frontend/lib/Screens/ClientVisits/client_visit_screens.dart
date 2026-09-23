@@ -3865,7 +3865,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                           value: service.id,
                           child: Text(
                             '${service.module} • ${service.name}',
-                            overflow: TextOverflow.ellipsis,
+                            softWrap: true,
+                            maxLines: 2,
+                            overflow: TextOverflow.visible,
                           ),
                         ),
                       )

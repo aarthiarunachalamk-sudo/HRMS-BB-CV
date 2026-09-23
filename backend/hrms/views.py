@@ -1093,9 +1093,9 @@ def _user_brief(user_id):
 def _passport_photo_for_email(email, *, known_user=None):
     if not email:
         return ''
-    user = known_user if known_user is not None and known_user.profile_photo else (
-        User.objects.filter(email__iexact=email).exclude(profile_photo='').first()
-    )
+    user = known_user
+    if user is None:
+        user = User.objects.filter(email__iexact=email).exclude(profile_photo='').first()
     if user and user.profile_photo:
         try:
             return user.profile_photo.url

@@ -1,8 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
+import 'package:hrms_mobileapp_bitbyte/backend/login_warmup.dart';
 import 'package:video_player/video_player.dart';
 
 import 'onboarding_screen.dart';
@@ -25,7 +24,7 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     // Wake the hosted API while the splash animation is playing. This hides
     // most of a Render cold start before the user reaches the login form.
-    unawaited(_warmUpBackend());
+    unawaited(LoginWarmup.start());
     _startupTimer = Timer(const Duration(seconds: 4), _goNext);
     _controller = VideoPlayerController.asset('assets/videos/SplashScreen.mp4')
       ..initialize()
@@ -48,16 +47,6 @@ class _SplashScreenState extends State<SplashScreen> {
             _goNext();
           });
     _controller.addListener(_handleVideoProgress);
-  }
-
-  Future<void> _warmUpBackend() async {
-    try {
-      await http
-          .get(ApiConfig.uri('/health/'))
-          .timeout(const Duration(seconds: 20));
-    } catch (_) {
-      // The login screen performs its own retry and displays any real error.
-    }
   }
 
   void _handleVideoProgress() {
