@@ -14,6 +14,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/theme_config.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/app_bar_logo.dart';
 import '../Employee/employee_shared.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as ll;
+import 'dart:convert';
+import 'package:url_launcher/url_launcher.dart';
 import 'client_service_details_cache.dart';
 import 'client_visit_models.dart';
 import 'client_visit_service_catalog.dart';
@@ -3327,6 +3331,10 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   final _purpose = TextEditingController();
   final _notes = TextEditingController();
   final _manager = TextEditingController();
+  ({double lat, double lng})? _selectedCoords;
+  bool _locating = false;
+  bool _resolvingUrl = false;
+  final MapController _mapController = MapController();
   DateTime _date = DateTime.now();
   TimeOfDay _time = TimeOfDay.now();
   String _travelMode = 'car';
@@ -3378,6 +3386,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
 
   @override
   void dispose() {
+    _mapController.dispose();
     for (final value in [
       _client,
       _contact,
@@ -3391,6 +3400,319 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       value.dispose();
     }
     super.dispose();
+  }
+
+  void _onLocationInputChanged(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      setState(() => _selectedCoords = null);
+      return;
+    }
+    final direct = _parseCoords(trimmed);
+    if (direct != null) {
+      setState(() => _selectedCoords = direct);
+      try {
+        _mapController.move(ll.LatLng(direct.lat, direct.lng), 15);
+      } catch (_) {}
+      return;
+    }
+    final url = _mapsUrl(trimmed);
+    if (url != null) {
+      _resolveUrlAsync(url);
+    }
+  }
+
+  Future<void> _resolveUrlAsync(String url) async {
+    if (_resolvingUrl) return;
+    setState(() => _resolvingUrl = true);
+    try {
+      final resolved = await _resolveShortUrl(url);
+      if (resolved != null && mounted) {
+        setState(() => _selectedCoords = resolved);
+        try {
+          _mapController.move(ll.LatLng(resolved.lat, resolved.lng), 15);
+        } catch (_) {}
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _resolvingUrl = false);
+    }
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() => _locating = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) _snack(context, 'Location permission is required.');
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final coords = (lat: pos.latitude, lng: pos.longitude);
+      if (!mounted) return;
+      setState(() {
+        _selectedCoords = coords;
+        _locationCoords.text =
+            '${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)}';
+      });
+      try {
+        _mapController.move(ll.LatLng(coords.lat, coords.lng), 16);
+      } catch (_) {}
+      if (mounted) _snack(context, 'Location set to current GPS coordinates.');
+    } catch (e) {
+      if (mounted) _snack(context, 'Could not get current location: $e');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _locateFromAddress() async {
+    final addr = _address.text.trim();
+    if (addr.isEmpty) {
+      _snack(context, 'Please enter a client address first.');
+      return;
+    }
+    setState(() => _locating = true);
+    try {
+      final query = Uri.encodeComponent(
+        addr.contains('India') ? addr : '$addr, India',
+      );
+      final resp = await http.get(
+        Uri.parse(
+          'https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=1&countrycodes=in',
+        ),
+        headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (resp.statusCode == 200) {
+        final list = jsonDecode(resp.body) as List?;
+        if (list != null && list.isNotEmpty) {
+          final first = list.first as Map<String, dynamic>;
+          final lat = double.tryParse('${first['lat']}');
+          final lon = double.tryParse('${first['lon']}');
+          if (lat != null && lon != null && mounted) {
+            final coords = (lat: lat, lng: lon);
+            setState(() {
+              _selectedCoords = coords;
+              _locationCoords.text =
+                  '${lat.toStringAsFixed(6)}, ${lon.toStringAsFixed(6)}';
+            });
+            try {
+              _mapController.move(ll.LatLng(lat, lon), 15);
+            } catch (_) {}
+            _snack(context, 'Location found from address.');
+            return;
+          }
+        }
+      }
+      if (mounted) _snack(context, 'Could not find coordinates for this address.');
+    } catch (e) {
+      if (mounted) _snack(context, 'Geocoding failed: $e');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  void _onMapTap(ll.LatLng point) {
+    final coords = (lat: point.latitude, lng: point.longitude);
+    setState(() {
+      _selectedCoords = coords;
+      _locationCoords.text =
+          '${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}';
+    });
+    try {
+      _mapController.move(point, _mapController.camera.zoom);
+    } catch (_) {}
+  }
+
+  Future<void> _openInMaps() async {
+    if (_selectedCoords == null) return;
+    final url = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${_selectedCoords!.lat},${_selectedCoords!.lng}',
+    );
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) _snack(context, 'Could not open maps: $e');
+    }
+  }
+
+  Widget _buildMapSection() {
+    final center = _selectedCoords != null
+        ? ll.LatLng(_selectedCoords!.lat, _selectedCoords!.lng)
+        : const ll.LatLng(11.6643, 78.1460);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _locating ? null : _useCurrentLocation,
+              icon: _locating
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location_rounded, size: 16),
+              label: const Text('Current GPS', style: TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: _locating ? null : _locateFromAddress,
+              icon: const Icon(Icons.search_rounded, size: 16),
+              label: const Text('From address', style: TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            if (_selectedCoords != null)
+              OutlinedButton.icon(
+                onPressed: _openInMaps,
+                icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                label: const Text('Open Maps', style: TextStyle(fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          height: 200,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _selectedCoords != null
+                  ? const Color(0xFF00E5FF).withOpacity(0.5)
+                  : Colors.white24,
+              width: _selectedCoords != null ? 1.5 : 1,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: center,
+                  initialZoom: _selectedCoords != null ? 15 : 12,
+                  onTap: (tapPosition, point) => _onMapTap(point),
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all,
+                  ),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.bitbyte.hrms',
+                    maxNativeZoom: 19,
+                  ),
+                  if (_selectedCoords != null)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: ll.LatLng(
+                            _selectedCoords!.lat,
+                            _selectedCoords!.lng,
+                          ),
+                          width: 44,
+                          height: 44,
+                          child: const Icon(
+                            Icons.location_on,
+                            color: Colors.redAccent,
+                            size: 42,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black54,
+                                blurRadius: 6,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+              Positioned(
+                top: 8,
+                left: 8,
+                right: 8,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D1B2A).withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _selectedCoords != null
+                            ? Icons.check_circle_rounded
+                            : Icons.touch_app_rounded,
+                        size: 15,
+                        color: _selectedCoords != null
+                            ? const Color(0xFF00E5FF)
+                            : Colors.amberAccent,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _selectedCoords != null
+                              ? '📍 ${_selectedCoords!.lat.toStringAsFixed(5)}, ${_selectedCoords!.lng.toStringAsFixed(5)} • Tap to adjust'
+                              : 'Tap anywhere on the map to pin client location',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: FloatingActionButton.small(
+                  heroTag: 'visit_create_map_gps',
+                  backgroundColor: const Color(0xFF0D1B2A).withOpacity(0.9),
+                  foregroundColor: const Color(0xFF00E5FF),
+                  onPressed: _useCurrentLocation,
+                  child: const Icon(Icons.my_location_rounded, size: 18),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   String? _required(String? value) =>
@@ -3498,8 +3820,11 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     String url,
   ) async {
     try {
-      final extractedUrl = _mapsUrl(url);
+      var extractedUrl = _mapsUrl(url);
       if (extractedUrl == null) return null;
+      if (extractedUrl.contains('s.app.goo.gl')) {
+        extractedUrl = extractedUrl.replaceFirst('s.app.goo.gl', 'maps.app.goo.gl');
+      }
       // Follow the redirect chain (up to 5 hops) without downloading the body
       String current = extractedUrl;
       for (int i = 0; i < 5; i++) {
@@ -3540,10 +3865,20 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   }
 
   static String? _mapsUrl(String text) {
+    var raw = text.trim();
+    if (raw.isEmpty) return null;
+    if (!raw.startsWith('http://') && !raw.startsWith('https://')) {
+      if (raw.contains('goo.gl') ||
+          raw.contains('google.com/maps') ||
+          raw.contains('maps.google')) {
+        raw = 'https://$raw';
+      }
+    }
+    raw = raw.replaceFirst('s.app.goo.gl', 'maps.app.goo.gl');
     final match = RegExp(
-      r'https?://(?:(?:maps\.app\.goo\.gl|goo\.gl/maps)(?:/|\?|$)|(?:www\.)?google\.[a-z.]+/maps(?:/|\?|$)|maps\.google\.[a-z.]+(?:/|\?|$))[^\s]*',
+      r'https?://(?:(?:[a-z0-9-]+\.)*(?:goo\.gl|google\.[a-z.]+|google-maps)(?:/|\?|$))[^\s]*',
       caseSensitive: false,
-    ).firstMatch(text.trim());
+    ).firstMatch(raw);
     return match?.group(0)?.replaceAll(RegExp(r'[),.;]+$'), '');
   }
 
@@ -3561,8 +3896,8 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     setState(() => _saving = true);
     try {
       final rawLocation = _locationCoords.text.trim();
-      // Resolve coordinates: parse directly, or follow short URL redirect
-      var coords = _parseCoords(rawLocation);
+      // Resolve coordinates: use pinned map coords, parse directly, or follow short URL redirect
+      var coords = _selectedCoords ?? _parseCoords(rawLocation);
       if (coords == null && _mapsUrl(rawLocation) != null) {
         coords = await _resolveShortUrl(rawLocation);
       }
@@ -3763,19 +4098,38 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   validator: _validateCoords,
                   decoration: InputDecoration(
                     labelText: 'Client location (paste from WhatsApp / Maps)',
-                    hintText: 'https://maps.app.goo.gl/...',
-                    helperText: 'Paste a Google Maps share link or coordinates',
+                    hintText: 'https://maps.app.goo.gl/... or 11.6864, 78.1204',
+                    helperText: 'Paste Google Maps link, coordinates, or tap map below',
                     helperMaxLines: 2,
-                    suffixIcon: _locationCoords.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () =>
-                                setState(() => _locationCoords.clear()),
+                    prefixIcon: const Icon(Icons.location_on_outlined, color: Color(0xFF00E5FF)),
+                    suffixIcon: _resolvingUrl
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
                           )
-                        : const Icon(Icons.my_location_rounded),
+                        : (_locationCoords.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() {
+                                    _locationCoords.clear();
+                                    _selectedCoords = null;
+                                  });
+                                },
+                              )
+                            : IconButton(
+                                icon: const Icon(Icons.my_location_rounded),
+                                tooltip: 'Use current GPS location',
+                                onPressed: _useCurrentLocation,
+                              )),
                   ),
-                  onChanged: (_) => setState(() {}),
+                  onChanged: _onLocationInputChanged,
                 ),
+                _buildMapSection(),
               ],
             ),
             const SizedBox(height: 12),
@@ -3858,16 +4212,28 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Service',
                     hintText: 'Select the client service',
+                    prefixIcon: Icon(Icons.miscellaneous_services_rounded, color: Color(0xFF00E5FF)),
                   ),
-                  items: clientVisitServiceCatalog
+                  items: coreVisitServiceOptions
                       .map(
                         (service) => DropdownMenuItem<String>(
                           value: service.id,
-                          child: Text(
-                            '${service.module} • ${service.name}',
-                            softWrap: true,
-                            maxLines: 2,
-                            overflow: TextOverflow.visible,
+                          child: Row(
+                            children: [
+                              Icon(
+                                service.icon,
+                                size: 20,
+                                color: const Color(0xFF00E5FF),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  service.name,
+                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       )

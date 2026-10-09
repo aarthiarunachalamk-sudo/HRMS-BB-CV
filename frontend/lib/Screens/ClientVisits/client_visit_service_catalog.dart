@@ -1,3 +1,57 @@
+import 'package:flutter/material.dart';
+
+class CoreVisitServiceOption {
+  final String id;
+  final String name;
+  final IconData icon;
+
+  const CoreVisitServiceOption({
+    required this.id,
+    required this.name,
+    required this.icon,
+  });
+}
+
+/// The six core client visit services shown in the Visit Request form (Image 2):
+/// 1. Web App Development
+/// 2. Personal Branding
+/// 3. Digital Marketing
+/// 4. Business Analytics
+/// 5. Imagination to Reality
+/// 6. Real-Time Sales Data Driven Solutions
+const coreVisitServiceOptions = <CoreVisitServiceOption>[
+  CoreVisitServiceOption(
+    id: 'web_app_development',
+    name: 'Web App Development',
+    icon: Icons.code_rounded,
+  ),
+  CoreVisitServiceOption(
+    id: 'personal_branding',
+    name: 'Personal Branding',
+    icon: Icons.fingerprint_rounded,
+  ),
+  CoreVisitServiceOption(
+    id: 'digital_marketing',
+    name: 'Digital Marketing',
+    icon: Icons.campaign_rounded,
+  ),
+  CoreVisitServiceOption(
+    id: 'business_analytics',
+    name: 'Business Analytics',
+    icon: Icons.trending_up_rounded,
+  ),
+  CoreVisitServiceOption(
+    id: 'imagination_to_reality',
+    name: 'Imagination to Reality',
+    icon: Icons.auto_awesome_rounded,
+  ),
+  CoreVisitServiceOption(
+    id: 'real_time_sales_data_driven_solutions',
+    name: 'Real-Time Sales Data Driven Solutions',
+    icon: Icons.sensors_rounded,
+  ),
+];
+
 class ClientVisitServiceItem {
   final String id;
   final String module;
@@ -554,4 +608,15 @@ ClientVisitServiceItem? clientVisitServiceById(String id) {
     if (service.id == id) return service;
   }
   return null;
+}
+
+String clientVisitServiceDisplayName(String? id) {
+  if (id == null || id.isEmpty) return '';
+  for (final option in coreVisitServiceOptions) {
+    if (option.id == id) return option.name;
+  }
+  for (final service in clientVisitServiceCatalog) {
+    if (service.id == id) return service.name;
+  }
+  return id.replaceAll('_', ' ');
 }

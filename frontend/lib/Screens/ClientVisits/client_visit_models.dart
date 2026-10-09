@@ -133,7 +133,10 @@ class ClientVisit {
       serviceName:
           backendServiceName.isNotEmpty && backendServiceName != serviceType
           ? backendServiceName
-          : service?.name ?? backendServiceName,
+          : (service?.name ??
+              (clientVisitServiceDisplayName(serviceType).isNotEmpty
+                  ? clientVisitServiceDisplayName(serviceType)
+                  : backendServiceName)),
       purpose: '${json['purpose'] ?? ''}',
       notes: '${json['notes'] ?? ''}',
       status: '${json['status'] ?? 'draft'}',
