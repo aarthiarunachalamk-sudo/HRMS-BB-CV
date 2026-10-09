@@ -30,7 +30,7 @@ def health(request):
 
 urlpatterns = [
     path("", home, name="home"),
-    path("api/health/", health, name="health"),
+    path("health/", health, name="health"),
     path("admin/", admin.site.urls),
     path("api/", include("hrms.urls")),
     path("api/client-visits/", include("client_visits.urls")),

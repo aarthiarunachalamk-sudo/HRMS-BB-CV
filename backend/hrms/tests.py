@@ -392,6 +392,8 @@ class SharedAdminEmailLoginTests(SimpleTestCase):
             email='office@bitbyte.test',
             role='admin',
             first_name=user_id,
+            login_otc=None,
+            login_employee_id=user_id,
         )
         user.check_password.return_value = password_matches
         return user
@@ -403,15 +405,11 @@ class SharedAdminEmailLoginTests(SimpleTestCase):
             format='json',
         )
         users = [self._user('BBADM0001', False), self._user('BBADM0002', True)]
-        employee_accounts = Mock()
-        employee_accounts.values.return_value.first.return_value = None
+        queryset = Mock()
+        queryset.annotate.return_value = users
         refresh_token = Mock(access_token='access-token')
 
-        with patch.object(views.User.objects, 'filter', return_value=users), patch.object(
-            views.EmployeeAccount.objects,
-            'filter',
-            return_value=employee_accounts,
-        ), patch.object(
+        with patch.object(views.User.objects, 'filter', return_value=queryset), patch.object(
             views,
             '_passport_photo_for_email',
             return_value='',
@@ -432,8 +430,10 @@ class SharedAdminEmailLoginTests(SimpleTestCase):
             format='json',
         )
         users = [self._user('BBADM0001', True), self._user('BBADM0002', True)]
+        queryset = Mock()
+        queryset.annotate.return_value = users
 
-        with patch.object(views.User.objects, 'filter', return_value=users):
+        with patch.object(views.User.objects, 'filter', return_value=queryset):
             response = views.login_view(request)
 
         self.assertEqual(response.status_code, 409)
