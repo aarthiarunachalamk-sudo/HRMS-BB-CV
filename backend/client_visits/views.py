@@ -36,8 +36,8 @@ from .storage import upload_client_visit_file
 
 SUPERVISOR_ROLES = {'manager', 'tl', 'hr', 'admin', 'superadmin'}
 CLIENT_DETAILS_VIEWER_ROLES = {'ceo', 'tl', 'hr', 'admin'}
-COMPLETION_HISTORY_ROLES = {'hr', 'ceo', 'md', 'superadmin'}
-SELF_APPROVING_VISIT_ROLES = {'admin', 'superadmin', 'ceo', 'md', 'director'}
+COMPLETION_HISTORY_ROLES = {'hr', 'ceo', 'md', 'superadmin', 'ed', 'director'}
+SELF_APPROVING_VISIT_ROLES = {'admin', 'superadmin', 'hr', 'tl', 'md', 'ed', 'ceo', 'director'}
 DAILY_VISIT_LIMIT = 5   # maximum visits any employee may schedule on a single date
 logger = logging.getLogger(__name__)
 SERVICE_TYPES = {value for value, _ in ClientVisit.SERVICE_CHOICES}
@@ -265,14 +265,12 @@ def _safe_notify_hr_approval_required(visit, tl_user):
         )
 def _resolve_reporting_manager(value, *, requester=None):
     raw = str(value or '').strip()
+    requester_role = requester.role.strip().lower() if requester else ''
+    if requester_role in SELF_APPROVING_VISIT_ROLES:
+        return None, ''
     if not raw:
         return None, ''
-    if requester and requester.role == 'tl':
-        approver_roles = {'hr'}
-    elif requester and requester.role == 'hr':
-        approver_roles = {'ceo'}
-    else:
-        approver_roles = {'manager', 'tl', 'hr'}
+    approver_roles = {'tl', 'manager'}
     supervisors = User.objects.filter(
         role__in=approver_roles,
         is_active=True,
@@ -293,11 +291,7 @@ def _resolve_reporting_manager(value, *, requester=None):
         return name_matches[0], ''
     if len(name_matches) > 1:
         return None, 'More than one approver has this name. Select the approver user ID.'
-    if requester and requester.role == 'tl':
-        return None, 'HR approver was not found. Select a valid HR approver.'
-    if requester and requester.role == 'hr':
-        return None, 'CEO approver was not found. Select a valid CEO approver.'
-    return None, 'TL/HR approver was not found. Select a valid approver.'
+    return None, 'Team Lead (TL) approver was not found. Select a valid TL approver.'
 
 
 def _normalize_contact_phone(value):
@@ -315,14 +309,11 @@ def visit_approvers(request):
     _, user = _actor(request)
     if not user:
         return _error('An active user_id is required.', 401)
+    if user.role.lower() in SELF_APPROVING_VISIT_ROLES:
+        return Response({'success': True, 'approvers': []})
     approvers = []
-    role_order = {'tl': 0, 'hr': 1, 'ceo': 2}
-    if user.role == 'tl':
-        approver_roles = {'hr'}
-    elif user.role == 'hr':
-        approver_roles = {'ceo'}
-    else:
-        approver_roles = {'tl', 'hr'}
+    role_order = {'tl': 0, 'manager': 1}
+    approver_roles = {'tl', 'manager'}
     queryset = User.objects.filter(
         role__in=approver_roles,
         is_active=True,
@@ -335,11 +326,10 @@ def visit_approvers(request):
             'role': approver.role,
             'role_label': {
                 'tl': 'Team Lead',
-                'hr': 'HR',
-                'ceo': 'CEO',
-            }[approver.role],
+                'manager': 'Manager',
+            }.get(approver.role, approver.role.upper()),
         })
-    approvers.sort(key=lambda item: (role_order[item['role']], item['label'].casefold()))
+    approvers.sort(key=lambda item: (role_order.get(item['role'], 99), item['label'].casefold()))
     return Response({'success': True, 'approvers': approvers})
 
 
@@ -436,7 +426,7 @@ def _can_view(visit, user_id, user, *, include_history=False):
         return True
     if include_history and user and user.role == 'tl' and visit.status in {'completed', 'rejected'}:
         return True
-    return bool(user and user.role in {'hr', 'admin', 'superadmin', 'ceo', 'md', 'director'})
+    return bool(user and user.role in {'hr', 'admin', 'superadmin', 'ceo', 'md', 'director', 'ed'})
 
 
 def _attachment_payload(item):
@@ -578,7 +568,7 @@ def visit_list_create(request):
         return _error('An active user_id is required.', 401)
     if request.method == 'GET':
         queryset = ClientVisit.objects.prefetch_related('attachments', 'expenses')
-        if user.role in {'hr', 'admin', 'superadmin', 'ceo', 'md', 'director'}:
+        if user.role in {'hr', 'admin', 'superadmin', 'ceo', 'md', 'director', 'ed'}:
             employee = request.query_params.get('employee_user_id')
             if employee:
                 queryset = queryset.filter(employee_user_id=employee)
@@ -745,64 +735,41 @@ def visit_detail(request, pk):
 def visit_approval(request, pk):
     user_id, user = _actor(request)
     visit = get_object_or_404(ClientVisit, pk=pk)
-    approval_roles = SUPERVISOR_ROLES | {'ceo'}
-    if not user or user.role not in approval_roles:
-        return _error('Manager, TL, HR, CEO or Admin access is required.', 403)
-    requester = User.objects.filter(user_id=visit.employee_user_id).only('role').first()
-    requester_role = requester.role if requester else ''
-    required_approver_role = {'tl': 'hr', 'hr': 'ceo'}.get(requester_role)
-    if required_approver_role and (
-        user.role != required_approver_role or visit.manager_user_id != user_id
-    ):
-        return _error(
-            f'{required_approver_role.upper()} approval is required for this visit.',
-            403,
-        )
-    if not required_approver_role and user.role == 'ceo':
-        return _error('CEO approval applies only to HR client visits.', 403)
-    if not required_approver_role and user.role in {'manager', 'tl'} and visit.manager_user_id != user_id:
+    if not user or user.role not in SUPERVISOR_ROLES:
+        return _error('Team Lead or Manager access is required.', 403)
+    if user.role in {'ceo', 'md', 'director', 'ed'}:
+        return _error('Leadership roles cannot approve client visits.', 403)
+    if user.role == 'hr':
+        return _error('Only Team Lead can approve employee client visits.', 403)
+    if user.role in {'manager', 'tl'} and visit.manager_user_id and visit.manager_user_id != user_id:
         return _error('This visit is not assigned to you.', 403)
-    if visit.tl_approved_by and user.role != 'hr':
-        return _error('Final HR approval is required for this visit.', 403)
-    if (
-        not required_approver_role
-        and user.role == 'hr'
-        and not visit.tl_approved_by
-        and visit.manager_user_id != user_id
-    ):
-        return _error('TL approval is required before HR approval.', 409)
     if visit.status != 'pending':
         return _error('Only pending visits can be reviewed.', 409)
     action = str(request.data.get('action') or '').lower()
     if action not in {'approve', 'reject', 'changes'}:
         return _error('Action must be approve, reject, or changes.')
     comment = str(request.data.get('comment') or '').strip()
-    is_employee_tl_stage = (
-        not required_approver_role and user.role in {'manager', 'tl'}
-    )
-    if is_employee_tl_stage and action == 'approve':
-        if visit.tl_approved_by:
-            return _error('TL approval is already recorded.', 409)
-        visit.status = 'pending'
-        visit.tl_approval_comment = comment
-        visit.tl_approved_by = user_id
-        visit.tl_approved_at = timezone.now()
-        visit.save()
-        _safe_notify_hr_approval_required(visit, user)
-        return Response({
-            'success': True,
-            'message': 'TL approved. Waiting for final HR approval.',
-            'visit': _visit_payload(visit),
-        })
 
-    visit.status = 'approved' if action == 'approve' else 'rejected'
-    visit.approval_comment = comment
-    visit.approved_by = user_id
-    visit.approved_at = timezone.now()
-    visit.save()
+    if action == 'approve':
+        visit.status = 'approved'
+        visit.approval_comment = comment
+        visit.approved_by = user_id
+        visit.approved_at = timezone.now()
+        if user.role in {'tl', 'manager'}:
+            visit.tl_approved_by = user_id
+            visit.tl_approved_at = timezone.now()
+            visit.tl_approval_comment = comment
+        visit.save()
+    else:
+        visit.status = 'rejected'
+        visit.approval_comment = comment
+        visit.approved_by = user_id
+        visit.approved_at = timezone.now()
+        visit.save()
+
     actor_label = {
-        'hr': 'HR', 'ceo': 'CEO', 'tl': 'TL', 'manager': 'Manager',
-        'admin': 'Admin', 'superadmin': 'Super Admin',
+        'tl': 'Team Lead', 'manager': 'Manager', 'hr': 'HR',
+        'admin': 'Admin', 'superadmin': 'Super Admin', 'ceo': 'CEO', 'md': 'MD',
     }.get(user.role, user.role.upper())
     message = 'Visit approved.' if action == 'approve' else 'Visit returned for changes.'
     notification_message = (

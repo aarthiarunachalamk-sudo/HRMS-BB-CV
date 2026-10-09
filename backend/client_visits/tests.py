@@ -194,7 +194,11 @@ class ClientVisitApiTests(APITestCase):
         )
 
         self.assertEqual(tl_approval.status_code, 200)
-        self.assertEqual(tl_approval.data['visit']['status'], 'pending')
+        self.assertEqual(tl_approval.data['visit']['status'], 'approved')
+        self.assertEqual(
+            tl_approval.data['visit']['approved_by'],
+            self.manager.user_id,
+        )
         self.assertEqual(
             tl_approval.data['visit']['tl_approved_by'],
             self.manager.user_id,
@@ -204,28 +208,10 @@ class ClientVisitApiTests(APITestCase):
             'TL approved this visit.',
         )
         self.assertTrue(AppNotification.objects.filter(
-            recipient_role='hr',
-            title='Client Visit HR Approval Required',
+            recipient_user_id=self.employee.user_id,
+            title='Team Lead Approved Client Visit',
             reference_id=str(visit_id),
         ).exists())
-
-        hr_approval = self.client.post(
-            f'/api/client-visits/{visit_id}/approval/',
-            {
-                'user_id': hr.user_id,
-                'action': 'approve',
-                'comment': 'Final HR approval.',
-            },
-            format='json',
-        )
-
-        self.assertEqual(hr_approval.status_code, 200)
-        self.assertEqual(hr_approval.data['visit']['status'], 'approved')
-        self.assertEqual(hr_approval.data['visit']['approved_by'], hr.user_id)
-        self.assertEqual(
-            hr_approval.data['visit']['tl_approved_by'],
-            self.manager.user_id,
-        )
 
     @patch('client_visits.storage.cloudinary.config')
     def test_client_visit_cloudinary_must_differ_from_primary_account(self, config):
@@ -248,7 +234,7 @@ class ClientVisitApiTests(APITestCase):
     def test_unknown_reporting_tl_returns_a_json_validation_error(self):
         response = self._create(manager_user_id='Not A Real Team Lead')
         self.assertEqual(response.status_code, 400)
-        self.assertIn('TL/HR approver was not found', response.data['message'])
+        self.assertIn('Team Lead (TL) approver was not found', response.data['message'])
 
     def test_client_visit_approver_list_contains_tl_and_hr(self):
         hr = User.objects.create_user('visit-approver-list-hr@example.com', role='hr')
@@ -260,24 +246,15 @@ class ClientVisitApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         by_id = {item['employee_id']: item for item in response.data['approvers']}
         self.assertEqual(by_id[self.manager.user_id]['role'], 'tl')
-        self.assertEqual(by_id[hr.user_id]['role'], 'hr')
-
-        created = self._create(manager_user_id=hr.user_id)
-        self.assertEqual(created.status_code, 201)
-        self.assertEqual(created.data['visit']['manager_user_id'], hr.user_id)
+        self.assertNotIn(hr.user_id, by_id)
 
     def test_team_lead_can_submit_a_new_visit_to_hr(self):
         requester = User.objects.create_user(
             'client-visit-requester-tl@example.com',
             role='tl',
         )
-        hr = User.objects.create_user(
-            'client-visit-submit-hr@example.com',
-            role='hr',
-        )
         response = self.client.post('/api/client-visits/', {
             'user_id': requester.user_id,
-            'manager_user_id': hr.user_id,
             'client_name': 'Silks Client',
             'contact_person': 'Nandhini',
             'contact_phone': '9876543210',
@@ -292,67 +269,8 @@ class ClientVisitApiTests(APITestCase):
         }, format='json')
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['visit']['employee_user_id'], requester.user_id)
-        self.assertEqual(response.data['visit']['manager_user_id'], hr.user_id)
-        self.assertTrue(AppNotification.objects.filter(
-            recipient_user_id=hr.user_id,
-            module='client_visit',
-            reference_id=str(response.data['visit']['id']),
-        ).exists())
-        hr_dashboard = self.client.get('/api/hr/dashboard/', {
-            'user_id': hr.user_id,
-        })
-        self.assertEqual(hr_dashboard.status_code, 200)
-        self.assertTrue(any(
-            item['module'] == 'client_visit'
-            and item['reference_id'] == str(response.data['visit']['id'])
-            for item in hr_dashboard.data['notifications']
-        ))
-        visit_id = response.data['visit']['id']
-        tl_approval = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
-            'user_id': self.manager.user_id,
-            'action': 'approve',
-            'comment': 'A TL must not approve another TL request.',
-        }, format='json')
-        self.assertEqual(tl_approval.status_code, 403)
-
-        hr_approval = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
-            'user_id': hr.user_id,
-            'action': 'approve',
-            'comment': 'Approved by HR.',
-        }, format='json')
-        self.assertEqual(hr_approval.status_code, 200)
-        self.assertEqual(hr_approval.data['visit']['status'], 'approved')
-        self.assertEqual(hr_approval.data['visit']['approved_by'], hr.user_id)
-        self.assertEqual(hr_approval.data['visit']['approved_by_role'], 'hr')
-        self.assertEqual(
-            hr_approval.data['visit']['approved_by_name'],
-            hr.email,
-        )
-        tl_notification = AppNotification.objects.filter(
-            recipient_user_id=requester.user_id,
-            module='client_visit',
-            reference_id=str(visit_id),
-            title='HR Approved Client Visit',
-            is_read=False,
-        ).first()
-        self.assertIsNotNone(tl_notification)
-        tl_dashboard = self.client.get('/api/tl/dashboard/', {
-            'user_id': requester.user_id,
-        })
-        self.assertEqual(tl_dashboard.status_code, 200)
-        self.assertIn(
-            tl_notification.id,
-            {item['id'] for item in tl_dashboard.data['notifications']},
-        )
-        shared_notifications = self.client.get('/api/notifications/', {
-            'user_id': requester.user_id,
-            'role': 'tl',
-        })
-        self.assertEqual(shared_notifications.status_code, 200)
-        self.assertIn(
-            tl_notification.id,
-            {item['id'] for item in shared_notifications.data['notifications']},
-        )
+        self.assertEqual(response.data['visit']['status'], 'approved')
+        self.assertEqual(response.data['visit']['approved_by'], requester.user_id)
         listing = self.client.get('/api/client-visits/', {
             'user_id': requester.user_id,
         })
@@ -361,49 +279,17 @@ class ClientVisitApiTests(APITestCase):
             response.data['visit']['id'],
             {item['id'] for item in listing.data['visits']},
         )
-        listed_visit = next(
-            item for item in listing.data['visits']
-            if item['id'] == response.data['visit']['id']
-        )
-        self.assertEqual(listed_visit['approved_by_role'], 'hr')
-        self.assertEqual(listed_visit['approved_by_name'], hr.email)
 
     def test_team_lead_sees_only_hr_approvers_and_cannot_assign_a_tl(self):
         requester = User.objects.create_user(
             'client-visit-requester-tl-filter@example.com',
             role='tl',
         )
-        hr = User.objects.create_user(
-            'client-visit-hr-filter@example.com',
-            role='hr',
-        )
         approvers = self.client.get('/api/client-visits/approvers/', {
             'user_id': requester.user_id,
         })
         self.assertEqual(approvers.status_code, 200)
-        self.assertEqual(
-            {item['employee_id'] for item in approvers.data['approvers']},
-            {hr.user_id},
-        )
-
-        response = self.client.post('/api/client-visits/', {
-            'user_id': requester.user_id,
-            'manager_user_id': self.manager.user_id,
-            'client_name': 'Kumarapa Silks',
-            'contact_person': 'Bhanu',
-            'contact_phone': '9572646433',
-            'address': 'Omalur',
-            'scheduled_date': '2026-08-10',
-            'scheduled_time': '13:00',
-            'purpose': 'Client project discussion',
-            'submit': True,
-        }, format='json')
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('HR approver was not found', response.data['message'])
-        self.assertFalse(ClientVisit.objects.filter(
-            employee_user_id=requester.user_id,
-            client_name='Kumarapa Silks',
-        ).exists())
+        self.assertEqual(approvers.data['approvers'], [])
 
     @patch(
         'client_visits.views.send_mobile_push',
@@ -411,16 +297,16 @@ class ClientVisitApiTests(APITestCase):
     )
     def test_hr_approval_notification_survives_push_failure(self, _push):
         requester = User.objects.create_user(
+            'client-visit-push-failure-emp@example.com',
+            role='employee',
+        )
+        tl = User.objects.create_user(
             'client-visit-push-failure-tl@example.com',
             role='tl',
         )
-        hr = User.objects.create_user(
-            'client-visit-push-failure-hr@example.com',
-            role='hr',
-        )
         created = self.client.post('/api/client-visits/', {
             'user_id': requester.user_id,
-            'manager_user_id': hr.user_id,
+            'manager_user_id': tl.user_id,
             'client_name': 'Push Safe Client',
             'contact_person': 'Nandhini',
             'contact_phone': '9876543210',
@@ -436,9 +322,9 @@ class ClientVisitApiTests(APITestCase):
         approved = self.client.post(
             f'/api/client-visits/{visit_id}/approval/',
             {
-                'user_id': hr.user_id,
+                'user_id': tl.user_id,
                 'action': 'approve',
-                'comment': 'Approved by HR.',
+                'comment': 'Approved by TL.',
             },
             format='json',
         )
@@ -447,7 +333,7 @@ class ClientVisitApiTests(APITestCase):
             recipient_user_id=requester.user_id,
             module='client_visit',
             reference_id=str(visit_id),
-            title='HR Approved Client Visit',
+            title='Team Lead Approved Client Visit',
             push_sent=False,
         ).exists())
 
@@ -456,73 +342,11 @@ class ClientVisitApiTests(APITestCase):
             'client-visit-requester-hr@example.com',
             role='hr',
         )
-        ceo = User.objects.create_user(
-            'client-visit-approver-ceo@example.com',
-            role='ceo',
-        )
-        other_hr = User.objects.create_user(
-            'client-visit-non-approver-hr@example.com',
-            role='hr',
-        )
         approvers = self.client.get('/api/client-visits/approvers/', {
             'user_id': requester.user_id,
         })
         self.assertEqual(approvers.status_code, 200)
-        self.assertEqual(
-            {item['employee_id'] for item in approvers.data['approvers']},
-            {ceo.user_id},
-        )
-
-        created = self.client.post('/api/client-visits/', {
-            'user_id': requester.user_id,
-            'manager_user_id': ceo.user_id,
-            'client_name': 'HR Client Visit',
-            'contact_person': 'Bhanu',
-            'contact_phone': '9572646433',
-            'address': 'Omalur',
-            'scheduled_date': '2026-08-10',
-            'scheduled_time': '13:00',
-            'purpose': 'Client project discussion',
-            'submit': True,
-        }, format='json')
-        self.assertEqual(created.status_code, 201)
-        visit_id = created.data['visit']['id']
-        self.assertTrue(AppNotification.objects.filter(
-            recipient_user_id=ceo.user_id,
-            module='client_visit',
-            reference_id=str(visit_id),
-            title='Client Visit Approval Required',
-        ).exists())
-        self.assertFalse(AppNotification.objects.filter(
-            recipient_role='ceo',
-            module='client_visit',
-            reference_id=str(visit_id),
-        ).exists())
-        ceo_notifications = self.client.get('/api/ceo/notifications/', {
-            'user_id': ceo.user_id,
-        })
-        self.assertEqual(ceo_notifications.status_code, 200)
-        self.assertTrue(any(
-            item['module'] == 'client_visit'
-            and item['reference_id'] == str(visit_id)
-            for item in ceo_notifications.data['notifications']
-        ))
-
-        hr_approval = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
-            'user_id': other_hr.user_id,
-            'action': 'approve',
-        }, format='json')
-        self.assertEqual(hr_approval.status_code, 403)
-        self.assertIn('CEO approval is required', hr_approval.data['message'])
-
-        ceo_approval = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
-            'user_id': ceo.user_id,
-            'action': 'approve',
-            'comment': 'Approved by CEO.',
-        }, format='json')
-        self.assertEqual(ceo_approval.status_code, 200)
-        self.assertEqual(ceo_approval.data['visit']['status'], 'approved')
-        self.assertEqual(ceo_approval.data['visit']['approved_by'], ceo.user_id)
+        self.assertEqual(approvers.data['approvers'], [])
 
     def test_contact_mobile_number_is_validated_and_normalized(self):
         invalid = self.client.post('/api/client-visits/', {
@@ -665,19 +489,12 @@ class ClientVisitApiTests(APITestCase):
             'user_id': self.manager.user_id, 'action': 'approve', 'comment': 'Proceed.',
         }, format='json')
         self.assertEqual(tl_approved.status_code, 200)
-        self.assertEqual(tl_approved.data['visit']['status'], 'pending')
+        self.assertEqual(tl_approved.data['visit']['status'], 'approved')
         self.assertTrue(AppNotification.objects.filter(
             recipient_user_id=self.employee.user_id,
-            title='TL Approved Client Visit',
+            title='Team Lead Approved Client Visit',
             reference_id=str(visit_id),
         ).exists())
-
-        hr = User.objects.create_user('workflow-hr-approver@example.com', role='hr')
-        approved = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
-            'user_id': hr.user_id, 'action': 'approve', 'comment': 'Final HR approval.',
-        }, format='json')
-        self.assertEqual(approved.status_code, 200)
-        self.assertEqual(approved.data['visit']['status'], 'approved')
 
         travelling = self.client.post(f'/api/client-visits/{visit_id}/start-travel/', {
             'user_id': self.employee.user_id, 'latitude': 13.0827, 'longitude': 80.2707,
@@ -930,7 +747,7 @@ class ClientVisitApiTests(APITestCase):
             'comment': 'Attempted final HR approval.',
         }, format='json')
 
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 403)
         visit = ClientVisit.objects.get(pk=visit_id)
         self.assertEqual(visit.status, 'pending')
         self.assertEqual(visit.tl_approved_by, '')
