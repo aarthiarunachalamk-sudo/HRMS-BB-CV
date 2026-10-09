@@ -10,8 +10,15 @@ def client_visit_storage_config():
     missing = [key for key in required if not str(config.get(key) or '').strip()]
     if missing:
         raise ImproperlyConfigured(
-            'Client Visit Cloudinary storage is not configured. '
+            'Dedicated Client Visit Cloudinary storage is not configured. '
             f"Missing: {', '.join(missing)}."
+        )
+    primary_cloud = getattr(cloudinary.config(), 'cloud_name', None) or str(
+        getattr(settings, 'CLOUDINARY_STORAGE', {}).get('CLOUD_NAME', '') or ''
+    ).strip()
+    if primary_cloud and config['cloud_name'] == primary_cloud:
+        raise ImproperlyConfigured(
+            'Dedicated Client Visit Cloudinary storage must use a different cloud name from the primary account.'
         )
     config['folder'] = str(config.get('folder') or 'hrms-client-visits').strip('/')
     return config

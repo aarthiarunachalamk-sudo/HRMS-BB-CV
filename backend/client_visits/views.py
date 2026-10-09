@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
@@ -6,7 +7,7 @@ import re
 import secrets
 
 from cloudinary.exceptions import Error as CloudinaryError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.validators import validate_email
 from django.db.models import Q, Sum
@@ -665,10 +666,20 @@ def visit_list_create(request):
                 400,
             )
 
+    visit.service_type = str(request.data.get('service_type') or getattr(visit, 'service_type', '') or '').strip()
     try:
         visit.save()
     except (ValueError, TypeError) as exc:
         return _error(f'Invalid visit data: {exc}')
+    except ValidationError as exc:
+        message = exc.messages[0] if hasattr(exc, 'messages') and exc.messages else str(exc)
+        return _error(f'Validation error: {message}')
+    except IntegrityError as exc:
+        logger.exception('Integrity error saving Client Visit: %s', exc)
+        return _error(f'Unable to save visit request due to database constraint: {exc}', status=400)
+    except Exception as exc:
+        logger.exception('Failed to save Client Visit: %s', exc)
+        return _error(f'Unable to save visit request: {exc}', status=400)
     if visit.status == 'pending':
         _safe_notify_visit_submitted(visit)
     return Response({'success': True, 'message': 'Visit request created.', 'visit': _visit_payload(visit)}, status=201)

@@ -316,9 +316,21 @@ class ClientVisitService {
     try {
       body = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
     } catch (_) {
+      final titleMatch = RegExp(r'<title>(.*?)</title>', caseSensitive: false)
+          .firstMatch(response.body);
+      final rawTitle = titleMatch
+          ?.group(1)
+          ?.replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      final pageTitle =
+          rawTitle != null && !rawTitle.toLowerCase().contains('server error')
+              ? rawTitle
+              : null;
       if (response.statusCode >= 500) {
         throw Exception(
-          'Client Visit server error (${response.statusCode}). Please try again.',
+          pageTitle != null
+              ? 'Client Visit server error (${response.statusCode}): $pageTitle. Please try again.'
+              : 'Client Visit server error (${response.statusCode}). Please try again.',
         );
       }
       throw Exception(

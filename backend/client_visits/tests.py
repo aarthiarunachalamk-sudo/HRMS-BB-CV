@@ -661,21 +661,23 @@ class ClientVisitApiTests(APITestCase):
                 for item in notifications.data['notifications']
             ))
 
-        approved = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
+        tl_approved = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
             'user_id': self.manager.user_id, 'action': 'approve', 'comment': 'Proceed.',
         }, format='json')
-        self.assertEqual(approved.status_code, 200)
-        self.assertEqual(approved.data['visit']['status'], 'approved')
+        self.assertEqual(tl_approved.status_code, 200)
+        self.assertEqual(tl_approved.data['visit']['status'], 'pending')
         self.assertTrue(AppNotification.objects.filter(
             recipient_user_id=self.employee.user_id,
             title='TL Approved Client Visit',
             reference_id=str(visit_id),
         ).exists())
-        self.assertTrue(AppNotification.objects.filter(
-            recipient_role='ceo',
-            title='TL Approved Client Visit',
-            reference_id=str(visit_id),
-        ).exists())
+
+        hr = User.objects.create_user('workflow-hr-approver@example.com', role='hr')
+        approved = self.client.post(f'/api/client-visits/{visit_id}/approval/', {
+            'user_id': hr.user_id, 'action': 'approve', 'comment': 'Final HR approval.',
+        }, format='json')
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.data['visit']['status'], 'approved')
 
         travelling = self.client.post(f'/api/client-visits/{visit_id}/start-travel/', {
             'user_id': self.employee.user_id, 'latitude': 13.0827, 'longitude': 80.2707,
