@@ -737,7 +737,13 @@ def visit_list_create(request):
                 400,
             )
 
-    visit.service_type = str(request.data.get('service_type') or getattr(visit, 'service_type', '') or '').strip()
+    raw_st = str(request.data.get('service_type') or getattr(visit, 'service_type', '') or '').strip()
+    if not raw_st or raw_st not in SERVICE_TYPES:
+        raw_st = 'web_app_development' if getattr(visit, 'team', '') == 'development' else 'digital_marketing'
+    visit.service_type = raw_st
+    req_st = str(request.data.get('requirement_status') or request.data.get('client_status') or '').strip().lower()
+    if req_st:
+        visit.requirement_status = req_st.replace(' ', '_').replace('-', '_')
     try:
         visit.save()
     except (ValueError, TypeError) as exc:
