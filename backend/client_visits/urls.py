@@ -19,4 +19,5 @@ urlpatterns = [
     path('<int:pk>/verify/', views.visit_verify, name='client_visit_verify'),
     path('<int:pk>/attachments/', views.visit_attachment, name='client_visit_attachment'),
     path('<int:pk>/expenses/', views.visit_expense, name='client_visit_expense'),
+    path('<int:pk>/requirement-status/', views.visit_requirement_status, name='client_visit_requirement_status'),
 ]

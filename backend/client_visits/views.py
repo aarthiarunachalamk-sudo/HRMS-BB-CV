@@ -10,7 +10,7 @@ from cloudinary.exceptions import Error as CloudinaryError
 from django.db import IntegrityError, transaction
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.validators import validate_email
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
@@ -45,6 +45,8 @@ EDITABLE_FIELDS = (
     'client_name', 'contact_person', 'contact_phone', 'address', 'latitude',
     'longitude', 'scheduled_date', 'scheduled_time', 'duration_minutes',
     'travel_mode', 'service_type', 'purpose', 'notes', 'manager_user_id',
+    'industry', 'client_email', 'location', 'creative_studio_services',
+    'team', 'requirement_status', 'attendees', 'checklist', 'outcome', 'follow_up',
 )
 
 
@@ -438,15 +440,18 @@ def _attachment_payload(item):
     }
 
 
-def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
+def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None, user_lookup=None, photo_lookup=None):
     approver = None
-    if item.approved_by and approver_lookup is not None:
-        approver = approver_lookup.get(item.approved_by)
-    elif detailed and item.approved_by:
-        approver = User.objects.filter(
-            user_id=item.approved_by,
-            is_active=True,
-        ).only('role', 'first_name', 'last_name', 'email').first()
+    if item.approved_by:
+        if approver_lookup is not None and item.approved_by in approver_lookup:
+            approver = approver_lookup.get(item.approved_by)
+        elif user_lookup is not None and item.approved_by in user_lookup:
+            approver = user_lookup.get(item.approved_by)
+        elif detailed:
+            approver = User.objects.filter(
+                user_id=item.approved_by,
+                is_active=True,
+            ).only('role', 'first_name', 'last_name', 'email').first()
     approver_name = ''
     approver_role = ''
     if approver:
@@ -454,10 +459,15 @@ def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
         approver_role = approver.role
     tl_approver = None
     if item.tl_approved_by:
-        tl_approver = User.objects.filter(
-            user_id=item.tl_approved_by,
-            is_active=True,
-        ).only('role', 'first_name', 'last_name', 'email').first()
+        if user_lookup is not None and item.tl_approved_by in user_lookup:
+            tl_approver = user_lookup.get(item.tl_approved_by)
+        elif approver_lookup is not None and item.tl_approved_by in approver_lookup:
+            tl_approver = approver_lookup.get(item.tl_approved_by)
+        elif detailed:
+            tl_approver = User.objects.filter(
+                user_id=item.tl_approved_by,
+                is_active=True,
+            ).only('role', 'first_name', 'last_name', 'email').first()
     tl_approved_by_name = ''
     tl_approved_by_role = ''
     if tl_approver:
@@ -466,21 +476,39 @@ def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
             or tl_approver.email
         )
         tl_approved_by_role = tl_approver.role
-    # Resolve employee profile photo (best-effort, fails silently)
-    try:
-        emp_user = User.objects.filter(user_id=item.employee_user_id, is_active=True).only('email').first()
-        employee_photo_url = _passport_photo_for_email(emp_user.email) if emp_user else ''
-    except Exception:
-        employee_photo_url = ''
+    # Resolve employee profile photo (best-effort, cached)
+    employee_photo_url = ''
+    if photo_lookup is not None and item.employee_user_id in photo_lookup:
+        employee_photo_url = photo_lookup.get(item.employee_user_id) or ''
+    elif detailed:
+        try:
+            emp_user = None
+            if user_lookup is not None and item.employee_user_id in user_lookup:
+                emp_user = user_lookup[item.employee_user_id]
+            else:
+                emp_user = User.objects.filter(user_id=item.employee_user_id, is_active=True).only('email').first()
+            employee_photo_url = _passport_photo_for_email(emp_user.email) if emp_user else ''
+        except Exception:
+            employee_photo_url = ''
     # Active GPS samples are operational data for the travelling employee and
     # their TL. Leadership receives the retained route after completion as part
     # of the auditable/downloadable visit history.
-    include_route = (
-        viewer is None
-        or item.status == 'completed'
-        or item.employee_user_id == viewer.user_id
-        or viewer.role == 'tl'
-    )
+    # In list view (detailed=False), omit travel_route to keep JSON payload fast and light.
+    if detailed:
+        include_route = (
+            viewer is None
+            or item.status == 'completed'
+            or item.employee_user_id == viewer.user_id
+            or viewer.role == 'tl'
+        )
+        travel_route = item.travel_route if include_route else []
+    else:
+        travel_route = []
+    # Calculate expenses from already prefetched collection without firing N+1 SQL queries
+    try:
+        expense_total = sum(float(exp.amount) for exp in item.expenses.all())
+    except Exception:
+        expense_total = 0.0
     payload = {
         'id': item.id, 'visit_id': item.visit_id, 'employee_user_id': item.employee_user_id,
         'employee_name': item.employee_name, 'employee_photo_url': employee_photo_url,
@@ -512,16 +540,22 @@ def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None):
         'reached_client_at': item.reached_client_at.isoformat() if item.reached_client_at else None,
         'reached_client_latitude': float(item.reached_client_latitude) if item.reached_client_latitude is not None else None,
         'reached_client_longitude': float(item.reached_client_longitude) if item.reached_client_longitude is not None else None,
-        'travel_route': item.travel_route if include_route else [],
+        'travel_route': travel_route,
         'start_odometer': float(item.start_odometer) if item.start_odometer is not None else None,
         'check_in_at': item.check_in_at.isoformat() if item.check_in_at else None,
         'check_out_at': item.check_out_at.isoformat() if item.check_out_at else None,
         'outcome': item.outcome, 'follow_up': item.follow_up,
         'attendees': item.attendees, 'checklist': item.checklist,
         'return_mode': item.return_mode,
+        'industry': getattr(item, 'industry', '') or '',
+        'client_email': getattr(item, 'client_email', '') or '',
+        'location': getattr(item, 'location', '') or '',
+        'team': getattr(item, 'team', '') or '',
+        'requirement_status': getattr(item, 'requirement_status', '') or '',
+        'creative_studio_services': getattr(item, 'creative_studio_services', []) or [],
         'manager_verified_by': item.manager_verified_by,
         'manager_verified_at': item.manager_verified_at.isoformat() if item.manager_verified_at else None,
-        'expense_total': float(item.expenses.aggregate(total=Sum('amount'))['total'] or 0),
+        'expense_total': expense_total,
         'created_at': item.created_at.isoformat(), 'updated_at': item.updated_at.isoformat(),
     }
     if detailed:
@@ -582,28 +616,62 @@ def visit_list_create(request):
         status_filter = str(request.query_params.get('status') or '').strip()
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        team_filter = str(request.query_params.get('team') or '').strip().lower()
+        if team_filter:
+            queryset = queryset.filter(team=team_filter)
+        req_status_filter = str(request.query_params.get('requirement_status') or request.query_params.get('client_status') or '').strip().lower()
+        if req_status_filter:
+            queryset = queryset.filter(requirement_status__iexact=req_status_filter)
         items = list(queryset[:100])
-        approver_ids = {item.approved_by for item in items if item.approved_by}
-        approver_lookup = {
+        all_user_ids = set()
+        for item in items:
+            if item.approved_by:
+                all_user_ids.add(item.approved_by)
+            if item.tl_approved_by:
+                all_user_ids.add(item.tl_approved_by)
+            if item.employee_user_id:
+                all_user_ids.add(item.employee_user_id)
+
+        user_lookup = {
             value.user_id: value
             for value in User.objects.filter(
-                user_id__in=approver_ids,
+                user_id__in=all_user_ids,
                 is_active=True,
             ).only('user_id', 'role', 'first_name', 'last_name', 'email')
         }
+
+        photo_lookup = {}
+        for uid in all_user_ids:
+            u = user_lookup.get(uid)
+            if u and u.email:
+                try:
+                    photo_lookup[uid] = _passport_photo_for_email(u.email)
+                except Exception:
+                    photo_lookup[uid] = ''
+
         counts = {key: 0 for key, _ in ClientVisit.STATUS_CHOICES}
-        for value in queryset.values_list('status', flat=True):
-            counts[value] = counts.get(value, 0) + 1
+        for row in queryset.values('status').annotate(total=Count('id')):
+            st = row.get('status')
+            if st in counts:
+                counts[st] = row.get('total', 0)
+
         return Response({
             'success': True,
             'summary': counts,
             'visits': [
-                _visit_payload(item, False, approver_lookup, viewer=user)
+                _visit_payload(
+                    item,
+                    False,
+                    approver_lookup=user_lookup,
+                    viewer=user,
+                    user_lookup=user_lookup,
+                    photo_lookup=photo_lookup,
+                )
                 for item in items
             ],
         })
 
-    required = ('client_name', 'contact_person', 'contact_phone', 'address', 'scheduled_date', 'scheduled_time', 'purpose')
+    required = ('client_name', 'contact_person', 'contact_phone', 'address', 'scheduled_date', 'scheduled_time')
     missing = [field for field in required if not str(request.data.get(field) or '').strip()]
     if missing:
         return _error(f"Required fields: {', '.join(missing)}.")
@@ -626,6 +694,19 @@ def visit_list_create(request):
         employee_name=f'{user.first_name} {user.last_name}'.strip() or user.email,
     )
     _assign_fields(visit, request.data)
+    team_val = str(request.data.get('team') or '').strip().lower()
+    if team_val:
+        visit.team = team_val
+    if not visit.client_email and request.data.get('email'):
+        visit.client_email = str(request.data.get('email')).strip()
+    css = request.data.get('creative_studio_services')
+    if isinstance(css, list):
+        visit.creative_studio_services = css
+    if not visit.purpose:
+        if visit.team:
+            visit.purpose = f'{visit.team.title()} Visit'
+        else:
+            visit.purpose = str(request.data.get('service_type') or 'Client Visit')
     visit.contact_phone = contact_phone
     if reporting_manager:
         visit.manager_user_id = reporting_manager.user_id
@@ -1204,3 +1285,24 @@ def visit_expense(request, pk):
         return _error('Expense amount must be greater than zero.')
     expense = VisitExpense.objects.create(visit=visit, category=category, amount=amount, note=str(request.data.get('note') or '').strip())
     return Response({'success': True, 'message': 'Expense added.', 'expense': {'id': expense.id, 'category': expense.category, 'amount': float(expense.amount), 'note': expense.note}}, status=201)
+
+@api_view(['POST', 'PATCH'])
+def visit_requirement_status(request, pk):
+    user_id, user = _actor(request)
+    visit = get_object_or_404(ClientVisit.objects.prefetch_related('attachments', 'expenses'), pk=pk)
+    if not user or not _can_view(visit, user_id, user, include_history=True):
+        return _error('You cannot access this visit.', 403)
+    status_val = str(request.data.get('requirement_status') or request.data.get('client_status') or '').strip().lower()
+    normalized = status_val.replace(' ', '_').replace('-', '_')
+    allowed = {'', 'required', 'not_required', 'interested', 'need_to_discuss', 'future_requirement', 'already_have'}
+    if normalized not in allowed and status_val not in allowed:
+        return _error('Invalid requirement status.', 400)
+    final_status = normalized if normalized in allowed else status_val
+    visit.requirement_status = final_status
+    visit.save(update_fields=['requirement_status', 'updated_at'])
+    return Response({
+        'success': True,
+        'message': 'Requirement status updated successfully.',
+        'visit': _visit_payload(visit, detailed=True, viewer=user),
+    })
+
