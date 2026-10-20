@@ -28,12 +28,16 @@ class TLDashboard extends StatefulWidget {
   final String email;
   final String firstName;
   final String userId;
+  final String? role;
+  final String? department;
 
   const TLDashboard({
     super.key,
     required this.email,
     required this.firstName,
     required this.userId,
+    this.role,
+    this.department,
   });
 
   @override
@@ -49,6 +53,24 @@ class _TLDashboardState extends State<TLDashboard> with WidgetsBindingObserver {
   Map<String, dynamic> _selected = {};
   File? _profileImage;
   Timer? _notificationRefreshTimer;
+
+  bool get _isTlDm {
+    final r = (widget.role ?? '').trim().toLowerCase();
+    final d = (widget.department ?? '').trim().toLowerCase();
+    final e = widget.email.trim().toLowerCase();
+    return r == 'tl-dm' ||
+        r == 'tl_dm' ||
+        r == 'tldm' ||
+        r == 'marketing' ||
+        r == 'tl_marketing' ||
+        r == 'tl-marketing' ||
+        d.contains('marketing') ||
+        d.contains('dm') ||
+        e.contains('marketing') ||
+        e.contains('dm');
+  }
+
+  String get _effectiveRequesterRole => _isTlDm ? 'tl-dm' : 'tl';
 
   @override
   void initState() {
@@ -123,6 +145,8 @@ class _TLDashboardState extends State<TLDashboard> with WidgetsBindingObserver {
               email: widget.email,
               firstName: widget.firstName,
               userId: widget.userId,
+              role: widget.role,
+              department: widget.department,
             ),
           ),
         ),
@@ -178,6 +202,7 @@ class _TLDashboardState extends State<TLDashboard> with WidgetsBindingObserver {
                 error: snapshot.error,
                 retry: _refreshDashboard,
                 onChanged: _refreshDashboard,
+                isTlDm: _isTlDm,
               ),
               _Team(data: data, open: (item) => _openDetail(18, item)),
               _Tasks(
@@ -250,7 +275,13 @@ class _TLDashboardState extends State<TLDashboard> with WidgetsBindingObserver {
               ClientVisitDashboardScreen(
                 userId: widget.userId,
                 reviewerMode: true,
-                requesterRole: 'tl',
+                readOnlyMode: true,
+                allowCreate: false,
+                assignedApprovalsOnly: false,
+                requesterRole: _effectiveRequesterRole,
+                roleLabel: _isTlDm
+                    ? 'TL-DM · Client Visits'
+                    : 'Team Lead · Client Visits',
               ),
             ];
             return Scaffold(
@@ -268,9 +299,11 @@ class _TLDashboardState extends State<TLDashboard> with WidgetsBindingObserver {
                     MaterialPageRoute(
                       builder: (_) => ClientVisitModuleScreen(
                         userId: widget.userId,
-                        roleLabel: 'Team Lead · Create & Approve',
+                        roleLabel: _isTlDm
+                            ? 'TL-DM · Client Visits'
+                            : 'Team Lead · Create & Approve',
                         reviewerMode: true,
-                        requesterRole: 'tl',
+                        requesterRole: _effectiveRequesterRole,
                       ),
                     ),
                   );
@@ -358,6 +391,7 @@ class _Dashboard extends StatelessWidget {
   final Object? error;
   final VoidCallback retry;
   final VoidCallback onChanged;
+  final bool isTlDm;
 
   const _Dashboard({
     required this.data,
@@ -371,6 +405,7 @@ class _Dashboard extends StatelessWidget {
     required this.error,
     required this.retry,
     required this.onChanged,
+    this.isTlDm = false,
   });
 
   @override
@@ -565,14 +600,19 @@ class _Dashboard extends StatelessWidget {
               onTap: () => open(12),
             ),
             _DashboardQuickAction(
-              icon: Icons.add_location_alt_rounded,
-              label: 'Client Visits',
+              icon: Icons.timeline_rounded,
+              label: 'Live Timeline',
               color: c.purple,
               onTap: () => open(20),
             ),
           ],
         ),
         const SizedBox(height: 14),
+        _LiveTimelineDashboardCard(
+          onTap: () => open(20),
+          isTlDm: isTlDm,
+        ),
+        const SizedBox(height: 4),
         if (meetings.isNotEmpty) ...[
           _Section(
             title: 'Meetings',
@@ -617,6 +657,125 @@ class _Dashboard extends StatelessWidget {
               '${tlText(data, 'on_track')} employee(s) on track by task completion',
         ),
       ],
+    );
+  }
+}
+
+class _LiveTimelineDashboardCard extends StatelessWidget {
+  final VoidCallback onTap;
+  final bool isTlDm;
+
+  const _LiveTimelineDashboardCard({required this.onTap, this.isTlDm = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TlPalette.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF1A73E8).withAlpha(c.isDark ? 45 : 22),
+            const Color(0xFF00E5FF).withAlpha(c.isDark ? 30 : 15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF00E5FF).withAlpha(c.isDark ? 80 : 50),
+          width: 1.2,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A73E8),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF1A73E8).withAlpha(80),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.timeline_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            isTlDm ? 'TL-DM Live Google Timeline' : 'Live Google Timeline',
+                            style: TextStyle(
+                              color: c.text,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withAlpha(30),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: const Color(0xFF10B981),
+                                width: 0.8,
+                              ),
+                            ),
+                            child: const Text(
+                              'LIVE',
+                              style: TextStyle(
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF10B981),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Track client visits & field route progress live',
+                        style: TextStyle(
+                          color: c.muted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: Color(0xFF00E5FF),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

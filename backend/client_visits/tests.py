@@ -834,3 +834,55 @@ class ClientVisitApiTests(APITestCase):
             and item['title'] == 'Client Visit Completed - History Ready'
             for item in notifications.data['notifications']
         ))
+
+
+    def test_requirement_status_update_and_filtering(self):
+        employee = User.objects.create(
+            user_id='EMP_REQ_01',
+            first_name='Req',
+            last_name='Tester',
+            email='req_tester@bitbyte.com',
+            role='employee',
+            is_active=True,
+        )
+        visit = ClientVisit.objects.create(
+            employee_user_id=employee.user_id,
+            employee_name='Req Tester',
+            client_name='Acme Requirement Corp',
+            contact_person='John Doe',
+            contact_phone='9876543210',
+            address='Coimbatore',
+            scheduled_date=timezone.localdate(),
+            scheduled_time=timezone.localtime().time(),
+            purpose='Requirement status testing',
+            status='approved',
+        )
+
+        # Update requirement status to 'interested'
+        url = f'/api/client-visits/{visit.id}/requirement-status/'
+        response = self.client.post(
+            url,
+            {'user_id': employee.user_id, 'requirement_status': 'interested'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['visit']['requirement_status'], 'interested')
+        visit.refresh_from_db()
+        self.assertEqual(visit.requirement_status, 'interested')
+
+        # Test filter by requirement_status
+        filter_res = self.client.get(
+            '/api/client-visits/',
+            {'user_id': employee.user_id, 'requirement_status': 'interested'},
+        )
+        self.assertEqual(filter_res.status_code, 200)
+        self.assertTrue(any(v['id'] == visit.id for v in filter_res.data['visits']))
+
+        # Filter by different requirement_status should not return this visit
+        empty_res = self.client.get(
+            '/api/client-visits/',
+            {'user_id': employee.user_id, 'requirement_status': 'not_required'},
+        )
+        self.assertEqual(empty_res.status_code, 200)
+        self.assertFalse(any(v['id'] == visit.id for v in empty_res.data['visits']))
+

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.Bundle
 import android.provider.MediaStore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -13,6 +14,24 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 class MainActivity : FlutterActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (!isTaskRoot && intent?.hasCategory(Intent.CATEGORY_LAUNCHER) == true && Intent.ACTION_MAIN == intent?.action) {
+            finish()
+            return
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        // If the intent is simply bringing the app to the foreground from the launcher,
+        // do not forward it to Flutter's navigation channel, avoiding a route reset back to "/".
+        if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER)) {
+            setIntent(intent)
+            return
+        }
+        super.onNewIntent(intent)
+    }
+
     private val channelName = "hrms/location"
 
     private fun openExternalUrl(url: String): Boolean {

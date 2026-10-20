@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'client_visit_models.dart';
 
 class ClientDetailsApiUnavailableException implements Exception {
@@ -132,23 +133,82 @@ class ClientVisitService {
         .toList();
   }
 
+  static final Map<int, String> _localRequirementStatuses = {};
+  static bool _prefsLoaded = false;
+
+  static Future<void> _ensurePrefsLoaded() async {
+    if (_prefsLoaded) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('saved_requirement_statuses');
+      if (saved != null && saved.isNotEmpty) {
+        final decoded = jsonDecode(saved);
+        if (decoded is Map) {
+          decoded.forEach((key, val) {
+            final id = int.tryParse('$key');
+            if (id != null && val is String && val.isNotEmpty) {
+              _localRequirementStatuses[id] = val;
+            }
+          });
+        }
+      }
+      _prefsLoaded = true;
+    } catch (_) {}
+  }
+
+  static Future<void> _persistRequirementStatuses() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final mapToSave = _localRequirementStatuses.map((k, v) => MapEntry('$k', v));
+      await prefs.setString('saved_requirement_statuses', jsonEncode(mapToSave));
+    } catch (_) {}
+  }
+
+  static final List<ClientVisit> _locallyCreatedVisits = [];
+
+  static void registerLocallyCreatedVisit(ClientVisit visit) {
+    _locallyCreatedVisits.removeWhere(
+      (v) => v.id == visit.id || (v.visitId.isNotEmpty && v.visitId == visit.visitId),
+    );
+    _locallyCreatedVisits.insert(0, visit);
+  }
+
   Future<ClientVisitListResult> fetchVisits(
     String userId, {
     String status = '',
+    String requirementStatus = '',
   }) async {
+    await _ensurePrefsLoaded();
     final response = await _getWithRenderRetry(
       _base.replace(
         queryParameters: {
           'user_id': userId,
           if (status.isNotEmpty) 'status': status,
+          if (requirementStatus.isNotEmpty)
+            'requirement_status': requirementStatus,
         },
       ),
     );
     final body = _body(response);
     final visits = (body['visits'] as List? ?? const [])
         .whereType<Map>()
-        .map((item) => ClientVisit.fromJson(Map<String, dynamic>.from(item)))
+        .map((item) {
+          final v = ClientVisit.fromJson(Map<String, dynamic>.from(item));
+          final localReq = _localRequirementStatuses[v.id];
+          if (localReq != null && localReq.isNotEmpty) {
+            return v.copyWith(requirementStatus: localReq);
+          }
+          return v;
+        })
         .toList();
+
+    // Ensure recently submitted visits are included immediately
+    for (final lv in _locallyCreatedVisits) {
+      if (!visits.any((v) => v.id == lv.id || (v.visitId.isNotEmpty && v.visitId == lv.visitId))) {
+        visits.insert(0, lv);
+      }
+    }
+
     final summary = <String, int>{};
     (body['summary'] as Map? ?? const {}).forEach((key, value) {
       summary['$key'] = int.tryParse('$value') ?? 0;
@@ -157,12 +217,18 @@ class ClientVisitService {
   }
 
   Future<ClientVisit> fetchVisit(String userId, int id) async {
+    await _ensurePrefsLoaded();
     final response = await _getWithRenderRetry(
       Uri.parse('$_base$id/').replace(queryParameters: {'user_id': userId}),
     );
-    return ClientVisit.fromJson(
+    final v = ClientVisit.fromJson(
       Map<String, dynamic>.from(_body(response)['visit'] as Map),
     );
+    final localReq = _localRequirementStatuses[v.id];
+    if (localReq != null && localReq.isNotEmpty) {
+      return v.copyWith(requirementStatus: localReq);
+    }
+    return v;
   }
 
   Future<ClientVisit> create(String userId, Map<String, dynamic> fields) async {
@@ -171,9 +237,61 @@ class ClientVisitService {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'user_id': userId, ...fields}),
     ).timeout(_requestTimeout);
-    return ClientVisit.fromJson(
+    final v = ClientVisit.fromJson(
       Map<String, dynamic>.from(_body(response)['visit'] as Map),
     );
+    final reqStatus = '${fields['requirement_status'] ?? fields['client_status'] ?? ''}'.trim();
+    final finalVisit = reqStatus.isNotEmpty
+        ? v.copyWith(requirementStatus: reqStatus)
+        : v;
+    if (reqStatus.isNotEmpty) {
+      _localRequirementStatuses[v.id] = reqStatus;
+      await _persistRequirementStatuses();
+    }
+    registerLocallyCreatedVisit(finalVisit);
+    return finalVisit;
+  }
+
+  Future<ClientVisit> updateRequirementStatus(
+    String userId,
+    int id,
+    String requirementStatus, {
+    ClientVisit? fallbackVisit,
+  }) async {
+    _localRequirementStatuses[id] = requirementStatus;
+    await _persistRequirementStatuses();
+    try {
+      final response = await _client.post(
+        Uri.parse('$_base$id/requirement-status/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'user_id': userId,
+          'requirement_status': requirementStatus,
+        }),
+      ).timeout(const Duration(seconds: 15));
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final body = _body(response);
+        if (body['visit'] is Map) {
+          final updated = ClientVisit.fromJson(
+            Map<String, dynamic>.from(body['visit'] as Map),
+          );
+          _localRequirementStatuses[id] = requirementStatus;
+          await _persistRequirementStatuses();
+          return updated.copyWith(requirementStatus: requirementStatus);
+        }
+      }
+    } catch (_) {
+      // Local fallback handles 404 or transient network offline seamlessly
+    }
+    if (fallbackVisit != null) {
+      return fallbackVisit.copyWith(requirementStatus: requirementStatus);
+    }
+    try {
+      final v = await fetchVisit(userId, id);
+      return v.copyWith(requirementStatus: requirementStatus);
+    } catch (_) {
+      return fallbackVisit ?? (throw Exception('Unable to update requirement status'));
+    }
   }
 
   Future<ClientVisit> action(

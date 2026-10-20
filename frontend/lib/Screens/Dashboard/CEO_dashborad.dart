@@ -723,8 +723,9 @@ class _CeoDashboardState extends State<CeoDashboard>
         userId: widget.userId,
         reviewerMode: true,
         requesterRole: 'ceo',
-        allowCreate: true,
-        assignedApprovalsOnly: true,
+        readOnlyMode: true,
+        allowCreate: false,
+        assignedApprovalsOnly: false,
         allowVerification: false,
       ),
       _MoreView(
@@ -734,8 +735,9 @@ class _CeoDashboardState extends State<CeoDashboard>
             roleLabel: 'CEO · Client Visits',
             requesterRole: 'ceo',
             reviewerMode: true,
-            allowCreate: true,
-            assignedApprovalsOnly: true,
+            readOnlyMode: true,
+            allowCreate: false,
+            assignedApprovalsOnly: false,
             allowVerification: false,
           ),
         ),
@@ -1004,15 +1006,16 @@ class _DashboardViewState extends State<_DashboardView> {
               child: Row(
                 children: [
                   Container(
-                    width: 42,
-                    height: 42,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
-                      color: _CeoDashboardState._cyan.withAlpha(28),
+                      color: const Color(0xFF1A73E8).withAlpha(35),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
-                      Icons.add_location_alt_rounded,
+                      Icons.timeline_rounded,
                       color: _CeoDashboardState._cyan,
+                      size: 24,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1020,13 +1023,28 @@ class _DashboardViewState extends State<_DashboardView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Quick Action',
-                          style: _CeoText.mutedFor(context, 10),
+                        Row(
+                          children: [
+                            Text(
+                              'Live Google Timeline',
+                              style: _CeoText.titleFor(context, 14),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withAlpha(30),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFF10B981), width: 0.8),
+                              ),
+                              child: const Text('LIVE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF10B981))),
+                            ),
+                          ],
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          'Client Visits',
-                          style: _CeoText.titleFor(context, 13),
+                          'Track client visits & real-time travel routes',
+                          style: _CeoText.mutedFor(context, 10),
                         ),
                       ],
                     ),

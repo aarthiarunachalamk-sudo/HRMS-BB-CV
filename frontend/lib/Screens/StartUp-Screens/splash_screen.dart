@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:hrms_mobileapp_bitbyte/backend/auth_session.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/login_warmup.dart';
 import 'package:video_player/video_player.dart';
 
+import 'login_screen.dart';
 import 'onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -63,11 +65,34 @@ class _SplashScreenState extends State<SplashScreen> {
     }
   }
 
-  void _goNext() {
+  Future<void> _goNext() async {
     if (_navigated || !mounted) return;
     _navigated = true;
     _startupTimer?.cancel();
     _fallbackTimer?.cancel();
+
+    try {
+      final userData = await AuthSession.getUserData();
+      final token = await AuthSession.accessToken();
+      if (userData != null && token != null && token.isNotEmpty && mounted) {
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                LoginScreen.buildDashboardForUser(userData),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  return FadeTransition(opacity: animation, child: child);
+                },
+            transitionDuration: const Duration(milliseconds: 500),
+          ),
+        );
+        return;
+      }
+    } catch (e) {
+      debugPrint('Failed to restore saved session: $e');
+    }
+
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>

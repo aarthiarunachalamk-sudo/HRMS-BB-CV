@@ -426,8 +426,14 @@ def _notify_visit_completed(visit):
 def _can_view(visit, user_id, user, *, include_history=False):
     if visit.employee_user_id == user_id or visit.manager_user_id == user_id:
         return True
-    if include_history and user and user.role == 'tl' and visit.status in {'completed', 'rejected'}:
-        return True
+    if include_history and user and user.role == 'tl':
+        is_admin_or_dev = (
+            getattr(visit, 'team', '') == 'development' or
+            'admin' in str(visit.employee_user_id).lower() or
+            'admin' in str(visit.approved_by).lower()
+        )
+        if visit.status in {'completed', 'rejected'} or is_admin_or_dev:
+            return True
     return bool(user and user.role in {'hr', 'admin', 'superadmin', 'ceo', 'md', 'director', 'ed'})
 
 
@@ -607,7 +613,12 @@ def visit_list_create(request):
             if employee:
                 queryset = queryset.filter(employee_user_id=employee)
         elif user.role in {'manager', 'tl'}:
-            visible = Q(manager_user_id=user_id) | Q(employee_user_id=user_id)
+            admin_and_dev = (
+                Q(team='development') |
+                Q(employee_user_id__icontains='admin') |
+                Q(approved_by__icontains='admin')
+            )
+            visible = Q(manager_user_id=user_id) | Q(employee_user_id=user_id) | admin_and_dev
             if user.role == 'tl':
                 visible |= Q(status__in=['completed', 'rejected'])
             queryset = queryset.filter(visible)
@@ -738,7 +749,11 @@ def visit_list_create(request):
             )
 
     raw_st = str(request.data.get('service_type') or getattr(visit, 'service_type', '') or '').strip()
-    if not raw_st or raw_st not in SERVICE_TYPES:
+    is_valid_service = (
+        raw_st in SERVICE_TYPES or
+        bool(re.fullmatch(r'los_(?:0[1-9]|[1-3][0-9]|4[0-8])_[a-z0-9_]+', raw_st))
+    )
+    if not raw_st or not is_valid_service:
         raw_st = 'web_app_development' if getattr(visit, 'team', '') == 'development' else 'digital_marketing'
     visit.service_type = raw_st
     req_st = str(request.data.get('requirement_status') or request.data.get('client_status') or '').strip().lower()
@@ -1298,9 +1313,11 @@ def visit_requirement_status(request, pk):
     visit = get_object_or_404(ClientVisit.objects.prefetch_related('attachments', 'expenses'), pk=pk)
     if not user or not _can_view(visit, user_id, user, include_history=True):
         return _error('You cannot access this visit.', 403)
+    if user.role in {'md', 'director', 'ed', 'ceo', 'tl'}:
+        return _error('Leadership roles (MD, ED, CEO, TL) have view-only access to client visits.', 403)
     status_val = str(request.data.get('requirement_status') or request.data.get('client_status') or '').strip().lower()
     normalized = status_val.replace(' ', '_').replace('-', '_')
-    allowed = {'', 'required', 'not_required', 'interested', 'need_to_discuss', 'future_requirement', 'already_have'}
+    allowed = {'', 'required', 'not_required', 'interested', 'need_to_discuss', 'future_requirement', 'already_have', 'not_decided'}
     if normalized not in allowed and status_val not in allowed:
         return _error('Invalid requirement status.', 400)
     final_status = normalized if normalized in allowed else status_val

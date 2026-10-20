@@ -93,6 +93,13 @@ class _RoleDashboardState extends State<RoleDashboard> {
       accent: Color(0xFFEC4899),
     ),
     _RoleOption(
+      key: 'tl_dm',
+      title: 'TL - Digital Marketing',
+      subtitle: 'TL-DM',
+      icon: Icons.campaign_outlined,
+      accent: Color(0xFF00E5FF),
+    ),
+    _RoleOption(
       key: 'employee',
       title: 'Employee',
       subtitle: 'Staff Member',
@@ -166,6 +173,13 @@ class _RoleDashboardState extends State<RoleDashboard> {
       ),
       'hr' => HrDashboard(email: email, firstName: firstName, userId: userId),
       'tl' => TLDashboard(email: email, firstName: firstName, userId: userId),
+      'tl_dm' => TLDashboard(
+        email: email,
+        firstName: firstName,
+        userId: userId,
+        role: 'tl-dm',
+        department: 'digital_marketing',
+      ),
       'employee' => EmployeeDashboard(
         email: email,
         firstName: firstName,

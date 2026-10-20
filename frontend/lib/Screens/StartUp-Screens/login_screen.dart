@@ -43,6 +43,151 @@ class _LoginResponseException implements Exception {
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
+  static String normalizeRole(Object? value) {
+    return '${value ?? ''}'.trim().toLowerCase().replaceAll(
+      RegExp(r'[\s-]+'),
+      '_',
+    );
+  }
+
+  static Widget buildDashboardForUser(Map<String, dynamic> data) {
+    final role = normalizeRole(data['role']);
+    final sessionUserId = '${data['user_id'] ?? ''}';
+    final employeeId = '${data['employee_id'] ?? sessionUserId}';
+    final notificationUserId = role == 'employee'
+        ? employeeId
+        : sessionUserId;
+    unawaited(
+      PushNotificationService.instance.registerForUser(
+        notificationUserId,
+        role,
+      ),
+    );
+    Widget dashboard;
+    if (role == 'superadmin' || role == 'super_admin') {
+      dashboard = SuperAdminDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: data['user_id'] ?? '',
+      );
+    } else if (role == 'ceo') {
+      dashboard = CeoDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: data['user_id'] ?? '',
+      );
+    } else if (role == 'md') {
+      dashboard = MdDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: data['user_id'] ?? '',
+      );
+    } else if (role == 'director' ||
+        role == 'ed' ||
+        role == 'executive_director') {
+      dashboard = ExecutiveDirectorDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: data['user_id'] ?? '',
+      );
+    } else if (role == 'hr' || role == 'hr_manager') {
+      dashboard = HrDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: data['user_id'] ?? '',
+      );
+    } else if (role == 'finance') {
+      dashboard = EmployeeDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: employeeId,
+      );
+    } else if (role == 'admin' || role == 'administrator') {
+      dashboard = AdminDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: data['user_id'] ?? '',
+      );
+    } else if (role == 'it' ||
+        role == 'it_team' ||
+        role == 'it_department') {
+      dashboard = EmployeeDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: employeeId,
+      );
+    } else if (role == 'manager') {
+      dashboard = ManagerDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: data['user_id'] ?? '',
+      );
+    } else if (role == 'tl' ||
+        role == 'teamlead' ||
+        role == 'team_lead' ||
+        role == 'tl-dm' ||
+        role == 'tl_dm' ||
+        role == 'tldm' ||
+        role == 'tl_marketing') {
+      dashboard = TLDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: data['user_id'] ?? '',
+        role: role,
+        department: data['department'] ?? '',
+      );
+    } else if (role == 'marketing' || role == 'digital_marketing') {
+      final desig = '${data['designation'] ?? ''}'.toLowerCase();
+      if (desig.contains('lead') || desig.contains('tl') || desig.contains('head')) {
+        dashboard = TLDashboard(
+          email: data['email'],
+          firstName: data['first_name'] ?? '',
+          userId: data['user_id'] ?? '',
+          role: 'tl-dm',
+          department: 'digital_marketing',
+        );
+      } else {
+        dashboard = EmployeeDashboard(
+          email: data['email'],
+          firstName: data['first_name'] ?? '',
+          userId: employeeId,
+        );
+      }
+    } else if (role == 'employee') {
+      dashboard = EmployeeDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: employeeId,
+      );
+    } else {
+      dashboard = EmployeeDashboard(
+        email: data['email'],
+        firstName: data['first_name'] ?? '',
+        userId: employeeId,
+      );
+    }
+
+    dashboard = DashboardNotificationGate(
+      userId: notificationUserId,
+      role: role,
+      child: dashboard,
+    );
+
+    dashboard = MandatoryProfilePhotoGate(
+      userId: sessionUserId,
+      required: data['requires_profile_photo'] == true,
+      child: dashboard,
+    );
+
+    dashboard = LoginGreetingGate(
+      name: '${data['first_name'] ?? ''}',
+      role: role,
+      child: dashboard,
+    );
+
+    return dashboard;
+  }
+
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -62,6 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    unawaited(AuthSession.clear());
     _restoreRememberedCredentials();
     // Reuse the startup warmup; retry here if an earlier probe failed.
     unawaited(LoginWarmup.start());
@@ -260,6 +406,13 @@ class _LoginScreenState extends State<LoginScreen> {
             }),
           );
         }
+        unawaited(
+          AuthSession.saveUserData(
+            Map<String, dynamic>.from(data),
+          ).catchError((Object error) {
+            debugPrint('Unable to persist user data: $error');
+          }),
+        );
         // Remembering credentials is optional and must not delay opening the
         // dashboard after authentication has succeeded.
         unawaited(
@@ -270,123 +423,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
         if (!mounted) return;
-        final role = _normalizeRole(data['role']);
-        final sessionUserId = '${data['user_id'] ?? ''}';
-        final employeeId = '${data['employee_id'] ?? sessionUserId}';
-        final notificationUserId = role == 'employee'
-            ? employeeId
-            : sessionUserId;
-        unawaited(
-          PushNotificationService.instance.registerForUser(
-            notificationUserId,
-            role,
-          ),
-        );
-        Widget dashboard;
-        if (role == 'superadmin' || role == 'super_admin') {
-          dashboard = SuperAdminDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
-          );
-        } else if (role == 'ceo') {
-          dashboard = CeoDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
-          );
-        } else if (role == 'md') {
-          dashboard = MdDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
-          );
-        } else if (role == 'director') {
-          dashboard = ExecutiveDirectorDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
-          );
-        } else if (role == 'hr' || role == 'hr_manager') {
-          dashboard = HrDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
-          );
-        } else if (role == 'finance') {
-          // Finance uses the full Employee dashboard — same attendance, leave,
-          // payslip, tasks, notifications. No separate finance-only backend.
-          dashboard = EmployeeDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: employeeId,
-          );
-        } else if (role == 'admin' || role == 'administrator') {
-          dashboard = AdminDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
-          );
-        } else if (role == 'it' ||
-            role == 'it_team' ||
-            role == 'it_department') {
-          // IT team uses the full Employee dashboard.
-          dashboard = EmployeeDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: employeeId,
-          );
-        } else if (role == 'manager') {
-          dashboard = ManagerDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
-          );
-        } else if (role == 'marketing') {
-          // Marketing team uses the full Employee dashboard.
-          dashboard = EmployeeDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: employeeId,
-          );
-        } else if (role == 'tl' || role == 'teamlead' || role == 'team_lead') {
-          dashboard = TLDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: data['user_id'] ?? '',
-          );
-        } else if (role == 'employee') {
-          dashboard = EmployeeDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: employeeId,
-          );
-        } else {
-          // Any unknown/unmapped role gets the Employee dashboard as a safe default.
-          dashboard = EmployeeDashboard(
-            email: data['email'],
-            firstName: data['first_name'] ?? '',
-            userId: employeeId,
-          );
-        }
-
-        dashboard = DashboardNotificationGate(
-          userId: notificationUserId,
-          role: role,
-          child: dashboard,
-        );
-
-        dashboard = MandatoryProfilePhotoGate(
-          userId: sessionUserId,
-          required: data['requires_profile_photo'] == true,
-          child: dashboard,
-        );
-
-        dashboard = LoginGreetingGate(
-          name: '${data['first_name'] ?? ''}',
-          role: role,
-          child: dashboard,
-        );
+        final dashboard = LoginScreen.buildDashboardForUser(data);
 
         _employeeCodeController.clear();
         _passwordController.clear();

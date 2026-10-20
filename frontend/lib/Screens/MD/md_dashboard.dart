@@ -539,10 +539,11 @@ class _MdDashboardState extends State<MdDashboard> {
         return ClientVisitDashboardScreen(
           userId: widget.userId,
           reviewerMode: true,
-          allowCreate: true,
-          assignedApprovalsOnly: true,
+          readOnlyMode: true,
+          allowCreate: false,
+          assignedApprovalsOnly: false,
           allowVerification: false,
-          requesterRole: _isDirector ? 'director' : 'md',
+          requesterRole: _isDirector ? 'ed' : 'md',
         );
       case _MdStep.more:
         return _MdMorePage(
@@ -1041,7 +1042,12 @@ class _MdRoleDashboardContent extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _ChartCard(colors: colors),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
+        _LiveGoogleTimelineCard(
+          colors: colors,
+          onTap: () => onNavigate(_MdStep.clientVisits),
+        ),
+        const SizedBox(height: 4),
         _SectionHeader(colors: colors, title: 'Quick Actions'),
         const SizedBox(height: 12),
         Row(
@@ -1066,8 +1072,8 @@ class _MdRoleDashboardContent extends StatelessWidget {
             ),
             _ActionButton(
               colors: colors,
-              icon: Icons.add_location_alt_rounded,
-              label: 'Client Visits',
+              icon: Icons.timeline_rounded,
+              label: 'Live Timeline',
               onTap: () => onNavigate(_MdStep.clientVisits),
             ),
             _ActionButton(
@@ -1216,6 +1222,153 @@ class _EmployeeInfoPanel extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LiveGoogleTimelineCard extends StatelessWidget {
+  final _MdColors colors;
+  final VoidCallback onTap;
+
+  const _LiveGoogleTimelineCard({required this.colors, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            colors.primary.withAlpha(colors.isDark ? 50 : 25),
+            const Color(0xFF00E5FF).withAlpha(colors.isDark ? 30 : 15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF00E5FF).withAlpha(colors.isDark ? 90 : 50),
+          width: 1.2,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A73E8),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF1A73E8).withAlpha(90),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.timeline_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Live Google Timeline',
+                            style: TextStyle(
+                              color: colors.text,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withAlpha(30),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: const Color(0xFF10B981),
+                                width: 1,
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.circle,
+                                  size: 6,
+                                  color: Color(0xFF10B981),
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'LIVE',
+                                  style: TextStyle(
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF10B981),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Track client visits, routes & field travel live',
+                        style: TextStyle(
+                          color: colors.muted,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A73E8),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View Map',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 13),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

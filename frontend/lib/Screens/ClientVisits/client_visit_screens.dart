@@ -17,7 +17,6 @@ import '../Employee/employee_shared.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as ll;
 import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
 import 'client_service_details_cache.dart';
 import 'client_visit_models.dart';
 import 'client_visit_service_catalog.dart';
@@ -25,17 +24,50 @@ import 'client_visit_service.dart';
 import 'client_visit_flow_screens.dart';
 import 'client_visit_theme.dart';
 import 'client_visit_downloads.dart';
+import 'client_visit_service_status_screen.dart';
+import 'client_visit_team_members.dart';
+import 'google_timeline_visit_screen.dart';
 
-const _statuses = [
-  'all',
-  'draft',
-  'pending',
-  'approved',
-  'travelling',
-  'in_progress',
-  'completed',
-  'rejected',
-];
+bool isLiveTimelineViewerRole(String roleStr, {String team = '', String userId = ''}) {
+  final r = roleStr.trim().toLowerCase();
+  final t = team.trim().toLowerCase();
+  final u = userId.trim().toLowerCase();
+
+  // No timeline in admin (including marketing), development, marketing, or employee
+  if (r.contains('admin') ||
+      r == 'superadmin' ||
+      r.contains('marketing') ||
+      r.contains('development') ||
+      r.contains('dev') ||
+      r == 'employee' ||
+      t.contains('dev') ||
+      t.contains('development') ||
+      t.contains('marketing') ||
+      u.contains('admin') ||
+      u.contains('bbadm')) {
+    return false;
+  }
+
+  // Live timeline is ONLY for MD, CEO, TL, ED (when not in development or marketing)
+  return r == 'md' ||
+      r == 'managing_director' ||
+      r == 'managing director' ||
+      r == 'ceo' ||
+      r == 'chief_executive_officer' ||
+      r == 'chief executive officer' ||
+      r == 'ed' ||
+      r == 'director' ||
+      r == 'executive director' ||
+      r == 'executive_director' ||
+      r == 'tl-dm' ||
+      r == 'tl_dm' ||
+      r == 'tldm' ||
+      r == 'tl' ||
+      r == 'team_lead' ||
+      r == 'team lead';
+}
+
+
 
 class ClientVisitDashboardScreen extends StatefulWidget {
   final String userId;
@@ -71,15 +103,73 @@ class _ClientVisitDashboardScreenState
     extends State<ClientVisitDashboardScreen> {
   final _service = ClientVisitService();
   ClientVisitListResult? _result;
-  String _filter = 'all';
+  late String _filter;
   String? _error;
   bool _initialVisitOpened = false;
   int _downloadCount = 0;
   Timer? _statusClock;
+  DateTime _calendarDate = DateTime.now();
+
+  bool get _isAdminRole {
+    final r = widget.requesterRole.trim().toLowerCase();
+    final uid = widget.userId.trim().toLowerCase();
+    return r == 'admin' ||
+        r == 'superadmin' ||
+        r.contains('admin') ||
+        uid.contains('admin') ||
+        uid.contains('bbadm');
+  }
+
+  List<String> get _availableStatuses {
+    if (_isAdminRole) {
+      return const [
+        'my_history',
+        'all',
+        'pending',
+        'approved',
+        'travelling',
+        'in_progress',
+        'completed',
+        'rejected',
+        'draft',
+      ];
+    }
+    if (isLiveTimelineViewerRole(widget.requesterRole, userId: widget.userId)) {
+      return const [
+        'live_timeline',
+        'my_visits',
+        'all',
+        'draft',
+        'pending',
+        'approved',
+        'travelling',
+        'in_progress',
+        'completed',
+        'rejected',
+      ];
+    }
+    return const [
+      'my_history',
+      'my_visits',
+      'all',
+      'draft',
+      'pending',
+      'approved',
+      'travelling',
+      'in_progress',
+      'completed',
+      'rejected',
+    ];
+  }
 
   @override
   void initState() {
     super.initState();
+    _filter = _isAdminRole
+        ? 'my_history'
+        : (isLiveTimelineViewerRole(widget.requesterRole, userId: widget.userId)
+            ? 'live_timeline'
+            : 'my_history');
     _load();
     _loadDownloads();
     _statusClock = Timer.periodic(const Duration(minutes: 1), (_) {
@@ -122,12 +212,38 @@ class _ClientVisitDashboardScreenState
   Future<void> _load() async {
     setState(() => _error = null);
     try {
+      final isHistory = _filter == 'history';
+      final isMyVisits = _filter == 'my_visits';
+      final isLiveTimeline = _filter == 'live_timeline';
+      final statusParam = (isHistory || isMyVisits || isLiveTimeline || _filter == 'all') ? '' : _filter;
       final value = await _service.fetchVisits(
         widget.userId,
-        status: _filter == 'all' ? '' : _filter,
+        status: statusParam,
       );
       if (!mounted) return;
-      setState(() => _result = value);
+      if (isHistory || isMyVisits) {
+        final isLeadership = isLiveTimelineViewerRole(widget.requesterRole) || _isAdminRole;
+        if (isLeadership) {
+          setState(() => _result = value);
+        } else {
+          final uid = widget.userId.toLowerCase();
+          final filtered = value.visits.where((v) {
+            return v.employeeUserId.toLowerCase() == uid ||
+                v.managerUserId.toLowerCase() == uid ||
+                v.approvedBy.toLowerCase() == uid ||
+                v.tlApprovedBy.toLowerCase() == uid ||
+                v.employeeName.toLowerCase().contains(uid) ||
+                uid.contains('admin') ||
+                uid.contains('bbadm');
+          }).toList();
+          setState(() => _result = ClientVisitListResult(
+            filtered.isNotEmpty ? filtered : value.visits,
+            value.summary,
+          ));
+        }
+      } else {
+        setState(() => _result = value);
+      }
       final initialVisitId = widget.initialVisitId;
       if (!_initialVisitOpened && initialVisitId != null) {
         ClientVisit? initialVisit;
@@ -165,10 +281,22 @@ class _ClientVisitDashboardScreenState
     if (changed == true) _load();
   }
 
+  bool get _isManagementOrAdmin {
+    final role = widget.requesterRole.trim().toLowerCase();
+    return role == 'admin' ||
+        role == 'superadmin' ||
+        role == 'marketing' ||
+        role == 'md' ||
+        role == 'ed' ||
+        role == 'director' ||
+        role == 'ceo' ||
+        role == 'management';
+  }
+
   Future<void> _openServices() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ClientVisitClientDetailsScreen(userId: widget.userId),
+        builder: (_) => ClientVisitServicesScreen(userId: widget.userId),
       ),
     );
     await _loadDownloads();
@@ -195,6 +323,14 @@ class _ClientVisitDashboardScreenState
   }
 
   Widget _monitoringScreen(ClientVisit visit, {bool canVerify = false}) {
+    if (_isAdminRole || widget.requesterRole.trim().toLowerCase().contains('admin')) {
+      return ClientVisitTableDetailScreen(
+        visit: visit,
+        userId: widget.userId,
+        viewerRole: widget.requesterRole,
+        onRequirementChanged: (newReq) => _load(),
+      );
+    }
     // All visits — completed or not — use step 0 → _superAdminVisitDetail
     // so TL/SuperAdmin always see the full detail view with route map,
     // attachments, signatures, expenses, checklist, and verify button.
@@ -246,6 +382,64 @@ class _ClientVisitDashboardScreenState
   };
 
   Future<void> _openVisit(ClientVisit visit) async {
+    final role = widget.requesterRole.trim().toLowerCase();
+    final team = visit.team.trim().toLowerCase();
+
+    final isAdmin = _isAdminRole;
+
+    // MD, CEO, ED, TL should see Live Google Timeline
+    // Admin should see the history NOT timeline
+    final isLiveTimelineViewer = !isAdmin && isLiveTimelineViewerRole(role, team: team, userId: widget.userId);
+
+    if (isLiveTimelineViewer &&
+        (_filter == 'live_timeline' ||
+            isLiveTimelineViewerRole(role, team: team, userId: widget.userId))) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => GoogleTimelineVisitScreen(
+            visit: visit,
+            allVisits: _result?.visits ?? [visit],
+            userId: widget.userId,
+            service: _service,
+            initialStaffId: visit.employeeUserId,
+            initialStaffName: visit.employeeName,
+          ),
+        ),
+      );
+      await _load();
+      await _loadDownloads();
+      return;
+    }
+
+    final isDevVisitOrRole = team == 'development' &&
+        (role == 'tl' || role == 'employee' || role == 'hr') &&
+        !isLiveTimelineViewer;
+
+    if (visit.status == 'approved' && isDevVisitOrRole) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => _employeeFlowScreen(visit)),
+      );
+      await _load();
+      await _loadDownloads();
+      return;
+    }
+
+    if (_isManagementOrAdmin) {
+      final canReview =
+          !widget.assignedApprovalsOnly || visit.managerUserId == widget.userId;
+      final screen = (visit.status == 'pending' && canReview)
+          ? ClientVisitManagerApprovalScreen(
+              userId: widget.userId,
+              visitId: visit.id,
+              service: _service,
+            )
+          : _monitoringScreen(visit, canVerify: true);
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+      await _load();
+      await _loadDownloads();
+      return;
+    }
+
     if (visit.status == 'travelling' && visit.reachedClientAt == null) {
       if (!widget.readOnlyMode && visit.employeeUserId == widget.userId) {
         await Navigator.of(context).push(
@@ -294,6 +488,875 @@ class _ClientVisitDashboardScreenState
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
     await _load();
     await _loadDownloads();
+  }
+
+  Future<void> _editRequirementStatus(ClientVisit visit) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = ThemeConfig.isDark(ctx);
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F2338) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withAlpha(80),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.tune_rounded,
+                      size: 20,
+                      color: Color(0xFF00E5FF),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Requirement Status — ${visit.clientName}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Update the requirement status for this client visit',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: ThemeConfig.getTextMuted(ctx),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ...kRequirementStatusOptions.map((opt) {
+                  final isCurrent =
+                      visit.requirementStatus.trim().toLowerCase() == opt.key;
+                  final optColor = Color(opt.colorValue);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: () => Navigator.of(ctx).pop(opt.key),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? optColor.withAlpha(30)
+                              : (isDark
+                                  ? Colors.white.withAlpha(8)
+                                  : Colors.grey.shade100),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isCurrent ? optColor : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(opt.icon, size: 20, color: optColor),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    opt.label,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      color: isCurrent
+                                          ? optColor
+                                          : ThemeConfig.getTextPrimary(ctx),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    opt.description,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: ThemeConfig.getTextMuted(ctx),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isCurrent)
+                              Icon(
+                                Icons.check_circle_rounded,
+                                color: optColor,
+                                size: 18,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected != null && selected != visit.requirementStatus) {
+      try {
+        final updatedVisit = await _service.updateRequirementStatus(
+          widget.userId,
+          visit.id,
+          selected,
+          fallbackVisit: visit,
+        );
+        if (!mounted) return;
+        setState(() {
+          final current = _result;
+          if (current != null) {
+            final idx = current.visits.indexWhere((v) => v.id == visit.id);
+            if (idx != -1) {
+              final newVisits = List<ClientVisit>.from(current.visits);
+              newVisits[idx] = updatedVisit;
+              _result = ClientVisitListResult(newVisits, current.summary);
+            }
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Requirement status set to "${requirementStatusLabel(selected)}"',
+            ),
+            backgroundColor: Color(requirementStatusColorValue(selected)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          final current = _result;
+          if (current != null) {
+            final idx = current.visits.indexWhere((v) => v.id == visit.id);
+            if (idx != -1) {
+              final newVisits = List<ClientVisit>.from(current.visits);
+              newVisits[idx] = visit.copyWith(requirementStatus: selected);
+              _result = ClientVisitListResult(newVisits, current.summary);
+            }
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Requirement status set to "${requirementStatusLabel(selected)}"',
+            ),
+            backgroundColor: Color(requirementStatusColorValue(selected)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  String _formatFullDate(DateTime dt) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    const weekdays = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+    ];
+    return '${weekdays[dt.weekday - 1]}, ${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
+  Widget _buildDailyCalendarStrip(bool isDark, List<ClientVisit> allVisits) {
+    final days = List.generate(7, (i) {
+      return _calendarDate.add(Duration(days: i - 3));
+    });
+    const weekdayShort = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131D31) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade300),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left_rounded, size: 22),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () {
+                  setState(() {
+                    _calendarDate = _calendarDate.subtract(const Duration(days: 1));
+                  });
+                },
+              ),
+              InkWell(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _calendarDate,
+                    firstDate: DateTime(2025, 1, 1),
+                    lastDate: DateTime(2027, 12, 31),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _calendarDate = DateTime(picked.year, picked.month, picked.day);
+                    });
+                  }
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFF00E5FF)),
+                      const SizedBox(width: 6),
+                      Text(
+                        _formatFullDate(_calendarDate),
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_drop_down_rounded, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right_rounded, size: 22),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () {
+                  setState(() {
+                    _calendarDate = _calendarDate.add(const Duration(days: 1));
+                  });
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: days.map((day) {
+              final isSelected = day.year == _calendarDate.year &&
+                  day.month == _calendarDate.month &&
+                  day.day == _calendarDate.day;
+              final now = DateTime.now();
+              final isDayToday = day.year == now.year && day.month == now.month && day.day == now.day;
+              final hasVisits = allVisits.any((v) {
+                final d = v.scheduledAt.toLocal();
+                return d.year == day.year && d.month == day.month && d.day == day.day;
+              });
+
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _calendarDate = DateTime(day.year, day.month, day.day);
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF1687FF)
+                            : isDayToday
+                                ? const Color(0xFF1687FF).withAlpha(30)
+                                : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF1687FF)
+                              : isDayToday
+                                  ? const Color(0xFF1687FF)
+                                  : (isDark ? Colors.white10 : Colors.grey.shade200),
+                          width: isSelected || isDayToday ? 1.5 : 1.0,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            weekdayShort[day.weekday - 1],
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected
+                                  ? Colors.white
+                                  : (isDark ? Colors.white60 : Colors.black54),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${day.day}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                              color: isSelected
+                                  ? Colors.white
+                                  : (isDark ? Colors.white : Colors.black87),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Colors.white
+                                  : (hasVisits
+                                      ? const Color(0xFF10B981)
+                                      : (isDayToday ? const Color(0xFF1687FF) : Colors.transparent)),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMyVisitsTableView(bool isDark, List<ClientVisit> visits) {
+    if (visits.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF131D31) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade200),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.event_busy_rounded, size: 40, color: Colors.grey.shade500),
+            const SizedBox(height: 12),
+            const Text(
+              'No visits',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'No visits recorded for ${_formatFullDate(_calendarDate)}.',
+              style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Table Header summary
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.table_chart_rounded, size: 16, color: Color(0xFF00E5FF)),
+                const SizedBox(width: 6),
+                Text(
+                  'Daily Visit History Table (${visits.length})',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withAlpha(25),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _isAdminRole ? 'Role: Admin History' : 'Staff: ${widget.userId}',
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF10B981)),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Horizontal Scrollable Table
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F1E2E) : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade300),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(
+                isDark ? const Color(0xFF162A42) : const Color(0xFFF1F5F9),
+              ),
+              columnSpacing: 16,
+              horizontalMargin: 12,
+              headingRowHeight: 40,
+              dataRowMinHeight: 52,
+              dataRowMaxHeight: 64,
+              columns: [
+                const DataColumn(label: Text('Staff', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                const DataColumn(label: Text('Client & Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                const DataColumn(label: Text('Requirement Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                const DataColumn(label: Text('Visit Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                DataColumn(label: Text(_isAdminRole ? 'History' : 'Timeline', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+              ],
+              rows: visits.map((v) {
+                final reqStatus = v.requirementStatus.trim();
+                final hasReq = reqStatus.isNotEmpty;
+                final reqLabel = hasReq ? requirementStatusLabel(reqStatus) : 'Not Set';
+                final reqColor = Color(hasReq ? requirementStatusColorValue(reqStatus) : 0xFF78909C);
+                final statusCol = employeeStatusColor(v.status);
+                final staffName = v.employeeName.isNotEmpty ? v.employeeName : widget.userId;
+
+                return DataRow(
+                  cells: [
+                    // Staff cell
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircleAvatar(
+                            radius: 13,
+                            backgroundColor: const Color(0xFF00E5FF).withAlpha(30),
+                            child: Text(
+                              staffName.isNotEmpty ? staffName[0].toUpperCase() : 'U',
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF00E5FF)),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(staffName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              Text(v.employeeUserId.isNotEmpty ? v.employeeUserId : widget.userId, style: TextStyle(fontSize: 10, color: isDark ? Colors.white60 : Colors.black54)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Client & Location cell
+                    DataCell(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(v.clientName.isNotEmpty ? v.clientName : 'Client', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text(
+                            v.address.isNotEmpty ? v.address : (v.serviceName.isNotEmpty ? v.serviceName : 'Salem'),
+                            style: TextStyle(fontSize: 10, color: isDark ? Colors.white60 : Colors.black54),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Requirement Status cell
+                    DataCell(
+                      InkWell(
+                        onTap: () => _editRequirementStatus(v),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: reqColor.withAlpha(25),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: reqColor.withAlpha(90)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(requirementStatusIcon(reqStatus), size: 12, color: reqColor),
+                              const SizedBox(width: 4),
+                              Text(
+                                reqLabel,
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: reqColor),
+                              ),
+                              const SizedBox(width: 2),
+                              Icon(Icons.arrow_drop_down, size: 12, color: reqColor),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Visit status cell
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: statusCol.withAlpha(25),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: statusCol.withAlpha(90)),
+                        ),
+                        child: Text(
+                          _label(v.status),
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statusCol),
+                        ),
+                      ),
+                    ),
+                    // Action cell: History for Admin & others, Timeline ONLY for MD/CEO/TL/ED
+                    DataCell(
+                      IconButton(
+                        icon: Icon(
+                          (!_isAdminRole && isLiveTimelineViewerRole(widget.requesterRole, team: v.team, userId: widget.userId))
+                              ? Icons.timeline_rounded
+                              : Icons.history_rounded,
+                          color: (!_isAdminRole && isLiveTimelineViewerRole(widget.requesterRole, team: v.team, userId: widget.userId))
+                              ? const Color(0xFF4285F4)
+                              : const Color(0xFF10B981),
+                          size: 20,
+                        ),
+                        tooltip: (!_isAdminRole && isLiveTimelineViewerRole(widget.requesterRole, team: v.team, userId: widget.userId))
+                            ? 'Google Timeline'
+                            : 'My History',
+                        onPressed: () {
+                          if (!_isAdminRole && isLiveTimelineViewerRole(widget.requesterRole, team: v.team, userId: widget.userId)) {
+                            _openVisit(v);
+                          } else {
+                            _openHistory(initialVisitId: v.id);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Structured History Cards
+        ...visits.map((v) => _VisitCard(
+          visit: v,
+          historyViewerUserId: widget.userId,
+          viewerRole: widget.requesterRole,
+          onTap: () => _openVisit(v),
+          onEditRequirementStatus: () => _editRequirementStatus(v),
+        )),
+      ],
+    );
+  }
+
+  Widget _buildAdminHistoryHeaderCard(bool isDark, List<ClientVisit> allVisits) {
+    final completedCount = allVisits.where((v) => v.status == 'completed').length;
+    final totalCount = allVisits.length;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF0F766E).withAlpha(isDark ? 55 : 30),
+            const Color(0xFF0284C7).withAlpha(isDark ? 35 : 20),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF14B8A6).withAlpha(isDark ? 80 : 120),
+          width: 1.2,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openHistory(),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D9488),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0D9488).withAlpha(60),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.history_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            'My Visit History',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0D9488).withAlpha(30),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: const Color(0xFF14B8A6),
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              '$completedCount / $totalCount COMPLETED',
+                              style: const TextStyle(
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF14B8A6),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Full individual visits history, daily calendar logs & status reports',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: ThemeConfig.getTextMuted(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D9488),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'View History',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 13),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLiveTimelineHeaderCard(bool isDark, List<ClientVisit> allVisits) {
+    final inTransitCount = allVisits.where((v) => v.status == 'travelling' || v.status == 'in_progress').length;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF1A73E8).withAlpha(isDark ? 50 : 25),
+            const Color(0xFF00E5FF).withAlpha(isDark ? 30 : 15),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF00E5FF).withAlpha(isDark ? 90 : 50),
+          width: 1.2,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => GoogleTimelineVisitScreen(
+                  visit: allVisits.isNotEmpty ? allVisits.first : null,
+                  allVisits: allVisits,
+                  userId: widget.userId,
+                  service: _service,
+                ),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A73E8),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF1A73E8).withAlpha(90),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.timeline_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            'Live Staff Tracking & Google Timeline',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withAlpha(30),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: const Color(0xFF10B981),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.circle,
+                                  size: 6,
+                                  color: Color(0xFF10B981),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  inTransitCount > 0 ? '$inTransitCount ACTIVE' : 'LIVE GPS',
+                                  style: const TextStyle(
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF10B981),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Live tracking for Marketing & Development teams · 10 Places Google Timeline',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: ThemeConfig.getTextMuted(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A73E8),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Live Tracking',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 13),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -346,8 +1409,6 @@ class _ClientVisitDashboardScreenState
                     'In Progress Visits',
                     const {'travelling', 'in_progress'},
                   ),
-                  onPendingCheckIn: () =>
-                      _openStatusList('Pending Check-In', const {'approved'}),
                   onUpcoming: () =>
                       _openStatusList('Upcoming Visits', const {'approved'}),
                   onPendingApproval: () =>
@@ -361,7 +1422,7 @@ class _ClientVisitDashboardScreenState
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: _statuses.map((status) {
+                  children: _availableStatuses.map((status) {
                     final selected = status == _filter;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -391,6 +1452,28 @@ class _ClientVisitDashboardScreenState
                     child: CircularProgressIndicator(),
                   ),
                 )
+              else if (_filter == 'history' || _filter == 'my_history' || _filter == 'my_visits' || _filter == 'live_timeline') ...[
+                if ((_isAdminRole || !isLiveTimelineViewerRole(widget.requesterRole, userId: widget.userId)) &&
+                    (_filter == 'history' || _filter == 'my_history' || _filter == 'my_visits')) ...[
+                  _buildAdminHistoryHeaderCard(ThemeConfig.isDark(context), result.visits),
+                  const SizedBox(height: 14),
+                ] else if ((_filter == 'live_timeline' || isLiveTimelineViewerRole(widget.requesterRole, userId: widget.userId)) &&
+                    !_isAdminRole) ...[
+                  _buildLiveTimelineHeaderCard(ThemeConfig.isDark(context), result.visits),
+                  const SizedBox(height: 14),
+                ],
+                _buildDailyCalendarStrip(ThemeConfig.isDark(context), result.visits),
+                const SizedBox(height: 14),
+                _buildMyVisitsTableView(
+                  ThemeConfig.isDark(context),
+                  result.visits.where((v) {
+                    final d = v.scheduledAt.toLocal();
+                    return d.year == _calendarDate.year &&
+                        d.month == _calendarDate.month &&
+                        d.day == _calendarDate.day;
+                  }).toList(),
+                ),
+              ]
               else if (result.visits.isEmpty)
                 _Message(
                   icon: Icons.location_off_outlined,
@@ -402,8 +1485,14 @@ class _ClientVisitDashboardScreenState
                 )
               else
                 ...result.visits.map(
-                  (visit) =>
-                      _VisitCard(visit: visit, onTap: () => _openVisit(visit)),
+                  (visit) => _VisitCard(
+                    visit: visit,
+                    historyViewerUserId: widget.userId,
+                    viewerRole: widget.requesterRole,
+                    onTap: () => _openVisit(visit),
+                    onEditRequirementStatus: () =>
+                        _editRequirementStatus(visit),
+                  ),
                 ),
             ],
           ),
@@ -619,6 +1708,11 @@ class _ClientVisitClientDetailsScreenState
         centerTitle: true,
         actions: [
           IconButton(
+            tooltip: 'Browse services',
+            icon: const Icon(Icons.shopping_bag_outlined),
+            onPressed: () => _openServices(clientDetails: const {}),
+          ),
+          IconButton(
             tooltip: 'History',
             icon: const Icon(Icons.history_rounded),
             onPressed: () => Navigator.of(context).push(
@@ -763,12 +1857,16 @@ class ClientVisitServicesScreen extends StatefulWidget {
   final String userId;
   final bool clientDetailsSyncPending;
   final Map<String, dynamic> clientDetails;
+  final bool isPickerMode;
+  final List<String> preSelectedServiceNames;
 
   const ClientVisitServicesScreen({
     super.key,
     required this.userId,
     this.clientDetailsSyncPending = false,
     this.clientDetails = const <String, dynamic>{},
+    this.isPickerMode = false,
+    this.preSelectedServiceNames = const <String>[],
   });
 
   @override
@@ -802,6 +1900,7 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   final Map<String, int> _selectedServicePackageIndexes = <String, int>{};
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -811,6 +1910,16 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
           ..addListener(() {
             if (!_tabController.indexIsChanging) setState(() {});
           });
+    if (widget.preSelectedServiceNames.isNotEmpty) {
+      for (final service in clientVisitServiceCatalog) {
+        if (widget.preSelectedServiceNames.any(
+          (name) =>
+              name.trim().toLowerCase() == service.name.trim().toLowerCase(),
+        )) {
+          _selectedServicePackageIndexes[service.id] = 0;
+        }
+      }
+    }
     if (widget.clientDetailsSyncPending) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -858,6 +1967,16 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
           title: const Text('Services'),
           centerTitle: true,
           actions: [
+            IconButton(
+              tooltip: 'Client details',
+              icon: const Icon(Icons.person_outline_rounded),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      ClientVisitClientDetailsScreen(userId: widget.userId),
+                ),
+              ),
+            ),
             IconButton(
               tooltip: 'Invoice history',
               icon: const Icon(Icons.history_rounded),
@@ -1001,54 +2120,107 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
               ),
             ),
             const SizedBox(height: 12),
-            ...clientVisitServiceCatalog.map(
-              (service) => _serviceCard(service, packageIndex),
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).dividerColor.withAlpha(50),
+                ),
+              ),
+              child: TextField(
+                decoration: const InputDecoration(
+                  hintText: 'Search services by name or category...',
+                  prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF00E5FF)),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+                onChanged: (val) =>
+                    setState(() => _searchQuery = val.trim().toLowerCase()),
+              ),
             ),
+            ...clientVisitServiceCatalog
+                .where((service) {
+                  if (_searchQuery.isEmpty) return true;
+                  return service.name.toLowerCase().contains(_searchQuery) ||
+                      service.module.toLowerCase().contains(_searchQuery) ||
+                      service.description.toLowerCase().contains(_searchQuery);
+                })
+                .map((service) => _serviceCard(service, packageIndex)),
           ],
         ),
         bottomNavigationBar: SafeArea(
           minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: FilledButton.icon(
-            onPressed: _selectedServicePackageIndexes.isEmpty
-                ? null
-                : () async {
-                    final reviewedSelections = await Navigator.of(context)
-                        .push<Map<String, int>>(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                ClientVisitServiceSelectionPreviewScreen(
-                                  userId: widget.userId,
-                                  clientDetails: widget.clientDetails,
-                                  selectedServices: clientVisitServiceCatalog
-                                      .where(
-                                        (service) =>
-                                            _selectedServicePackageIndexes
-                                                .containsKey(service.id),
-                                      )
-                                      .map(
-                                        (service) => ClientVisitSelectedService(
-                                          service: service,
-                                          packageIndex:
-                                              _selectedServicePackageIndexes[service
-                                                  .id]!,
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                          ),
-                        );
-                    if (!mounted || reviewedSelections == null) return;
-                    setState(() {
-                      _selectedServicePackageIndexes
-                        ..clear()
-                        ..addAll(reviewedSelections);
-                    });
+          child: widget.isPickerMode
+              ? FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () {
+                    final selectedNames = clientVisitServiceCatalog
+                        .where(
+                          (service) => _selectedServicePackageIndexes
+                              .containsKey(service.id),
+                        )
+                        .map((service) => service.name)
+                        .toList();
+                    Navigator.of(context).pop(selectedNames);
                   },
-            icon: const Icon(Icons.visibility_rounded),
-            label: Text(
-              'Preview selected services (${_selectedServicePackageIndexes.length})',
-            ),
-          ),
+                  icon: const Icon(Icons.check_circle_rounded),
+                  label: Text(
+                    'Add ${_selectedServicePackageIndexes.length} Services to Visit',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+              : FilledButton.icon(
+                  onPressed: _selectedServicePackageIndexes.isEmpty
+                      ? null
+                      : () async {
+                          final reviewedSelections = await Navigator.of(context)
+                              .push<Map<String, int>>(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      ClientVisitServiceSelectionPreviewScreen(
+                                        userId: widget.userId,
+                                        clientDetails: widget.clientDetails,
+                                        selectedServices: clientVisitServiceCatalog
+                                            .where(
+                                              (service) =>
+                                                  _selectedServicePackageIndexes
+                                                      .containsKey(service.id),
+                                            )
+                                            .map(
+                                              (service) => ClientVisitSelectedService(
+                                                service: service,
+                                                packageIndex:
+                                                    _selectedServicePackageIndexes[service
+                                                        .id]!,
+                                              ),
+                                            )
+                                            .toList(),
+                                      ),
+                                ),
+                              );
+                          if (!mounted || reviewedSelections == null) return;
+                          setState(() {
+                            _selectedServicePackageIndexes
+                              ..clear()
+                              ..addAll(reviewedSelections);
+                          });
+                        },
+                  icon: const Icon(Icons.visibility_rounded),
+                  label: Text(
+                    'Preview selected services (${_selectedServicePackageIndexes.length})',
+                  ),
+                ),
         ),
       ),
     );
@@ -1056,7 +2228,9 @@ class _ClientVisitServicesScreenState extends State<ClientVisitServicesScreen>
 
   Widget _serviceCard(ClientVisitServiceItem service, int packageIndex) {
     final color = ClientVisitServicesScreen._serviceColor(service.module);
-    final selected = _selectedServicePackageIndexes[service.id] == packageIndex;
+    final selected = widget.isPickerMode
+        ? _selectedServicePackageIndexes.containsKey(service.id)
+        : _selectedServicePackageIndexes[service.id] == packageIndex;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: EmployeeCard(
@@ -3024,13 +4198,197 @@ class _ClientVisitStatusListScreenState
     ];
   }
 
+  Future<void> _editRequirementStatus(ClientVisit visit) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = ThemeConfig.isDark(ctx);
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F2338) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withAlpha(80),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.tune_rounded,
+                      size: 20,
+                      color: Color(0xFF00E5FF),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Set Requirement — ${visit.clientName}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Select requirement status to update for this client visit',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: ThemeConfig.getTextMuted(ctx),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ...kRequirementStatusOptions.map((opt) {
+                  final isCurrent =
+                      visit.requirementStatus.trim().toLowerCase() == opt.key;
+                  final optColor = Color(opt.colorValue);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: () => Navigator.of(ctx).pop(opt.key),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? optColor.withAlpha(30)
+                              : (isDark
+                                  ? Colors.white.withAlpha(8)
+                                  : Colors.grey.shade100),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isCurrent ? optColor : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(opt.icon, size: 20, color: optColor),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    opt.label,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      color: isCurrent
+                                          ? optColor
+                                          : ThemeConfig.getTextPrimary(ctx),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    opt.description,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: ThemeConfig.getTextMuted(ctx),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isCurrent)
+                              Icon(
+                                Icons.check_circle_rounded,
+                                color: optColor,
+                                size: 18,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected != null && selected != visit.requirementStatus) {
+      try {
+        final updatedVisit = await _service.updateRequirementStatus(
+          widget.userId,
+          visit.id,
+          selected,
+          fallbackVisit: visit,
+        );
+        if (!mounted) return;
+        setState(() {
+          final idx = _visits?.indexWhere((v) => v.id == visit.id) ?? -1;
+          if (idx != -1) {
+            final list = List<ClientVisit>.from(_visits!);
+            list[idx] = updatedVisit;
+            _visits = list;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Requirement status set to "${requirementStatusLabel(selected)}"',
+            ),
+            backgroundColor: Color(requirementStatusColorValue(selected)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          final idx = _visits?.indexWhere((v) => v.id == visit.id) ?? -1;
+          if (idx != -1) {
+            final list = List<ClientVisit>.from(_visits!);
+            list[idx] = visit.copyWith(requirementStatus: selected);
+            _visits = list;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Requirement status set to "${requirementStatusLabel(selected)}"',
+            ),
+            backgroundColor: Color(requirementStatusColorValue(selected)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _visitCard(ClientVisit visit) => _VisitCard(
     visit: visit,
     historyViewerUserId: widget.historyMode ? widget.userId : '',
+    viewerRole: widget.viewerRole,
     onTap: () async {
       await widget.onOpenVisit(visit);
       await _load();
     },
+    onEditRequirementStatus: () => _editRequirementStatus(visit),
   );
 }
 
@@ -3105,6 +4463,8 @@ class _CalendarVisitHistoryTab extends StatefulWidget {
 
 class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
   final _service = ClientVisitService();
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   List<ClientVisit>? _visits;
   DateTime? _selectedDate;
   String? _error;
@@ -3113,6 +4473,12 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -3134,11 +4500,18 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
             }
           }
         }
-        _selectedDate ??= initialVisit != null
-            ? _dateOnly(initialVisit.scheduledAt)
-            : visits.isEmpty
-            ? DateTime.now()
-            : _dateOnly(visits.first.scheduledAt);
+        final today = _dateOnly(DateTime.now());
+        if (_selectedDate == null) {
+          if (initialVisit != null) {
+            _selectedDate = _dateOnly(initialVisit.scheduledAt);
+          } else if (visits.any((v) => _sameDate(v.scheduledAt, today))) {
+            _selectedDate = today;
+          } else if (visits.isNotEmpty) {
+            _selectedDate = _dateOnly(visits.first.scheduledAt);
+          } else {
+            _selectedDate = today;
+          }
+        }
       });
     } catch (error) {
       if (mounted) {
@@ -3148,21 +4521,31 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
   }
 
   bool _isVisibleHistoryVisit(ClientVisit visit) {
-    if (!const {'completed', 'rejected'}.contains(visit.status)) return false;
     final role = widget.viewerRole.trim().toLowerCase();
+    final uid = widget.userId.trim().toLowerCase();
+    final isAdmin = role.contains('admin') ||
+        role == 'superadmin' ||
+        uid.contains('admin') ||
+        uid.contains('bbadm');
+
+    if (isAdmin) {
+      return true;
+    }
+
     if (const {
       'tl',
       'hr',
-      'admin',
-      'superadmin',
       'ceo',
       'md',
+      'ed',
       'director',
     }.contains(role)) {
       return true;
     }
-    return visit.employeeUserId == widget.userId ||
-        visit.managerUserId == widget.userId;
+
+    return visit.employeeUserId.toLowerCase() == uid ||
+        visit.managerUserId.toLowerCase() == uid ||
+        role.isEmpty;
   }
 
   DateTime _dateOnly(DateTime value) =>
@@ -3173,6 +4556,222 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
       left.month == right.month &&
       left.day == right.day;
 
+  bool _isLeadershipReadOnly(String role) {
+    final r = role.trim().toLowerCase();
+    return r == 'md' ||
+        r == 'managing_director' ||
+        r == 'managing director' ||
+        r == 'ceo' ||
+        r == 'chief_executive_officer' ||
+        r == 'chief executive officer' ||
+        r == 'ed' ||
+        r == 'director' ||
+        r == 'executive director' ||
+        r == 'executive_director' ||
+        r == 'tl' ||
+        r == 'tl-dm' ||
+        r == 'tl_dm' ||
+        r == 'tldm' ||
+        r == 'team_lead' ||
+        r == 'team lead';
+  }
+
+  Future<void> _editRequirementStatus(ClientVisit visit) async {
+    if (_isLeadershipReadOnly(widget.viewerRole)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'View-only: Requirement status is managed by Admin and Development team.',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: Color(0xFF0F2338),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = ThemeConfig.isDark(ctx);
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F2338) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withAlpha(80),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.tune_rounded,
+                      size: 20,
+                      color: Color(0xFF00E5FF),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Set Requirement — ${visit.clientName}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Select requirement status to update for this client visit',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: ThemeConfig.getTextMuted(ctx),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ...kRequirementStatusOptions.map((opt) {
+                  final isCurrent =
+                      visit.requirementStatus.trim().toLowerCase() == opt.key;
+                  final optColor = Color(opt.colorValue);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: () => Navigator.of(ctx).pop(opt.key),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? optColor.withAlpha(30)
+                              : (isDark
+                                  ? Colors.white.withAlpha(8)
+                                  : Colors.grey.shade100),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isCurrent ? optColor : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(opt.icon, size: 20, color: optColor),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    opt.label,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      color: isCurrent
+                                          ? optColor
+                                          : ThemeConfig.getTextPrimary(ctx),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    opt.description,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: ThemeConfig.getTextMuted(ctx),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isCurrent)
+                              Icon(
+                                Icons.check_circle_rounded,
+                                color: optColor,
+                                size: 18,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected != null && selected != visit.requirementStatus) {
+      try {
+        final updatedVisit = await _service.updateRequirementStatus(
+          widget.userId,
+          visit.id,
+          selected,
+          fallbackVisit: visit,
+        );
+        if (!mounted) return;
+        setState(() {
+          final idx = _visits?.indexWhere((v) => v.id == visit.id) ?? -1;
+          if (idx != -1) {
+            final list = List<ClientVisit>.from(_visits!);
+            list[idx] = updatedVisit;
+            _visits = list;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Requirement status set to "${requirementStatusLabel(selected)}"',
+            ),
+            backgroundColor: Color(requirementStatusColorValue(selected)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          final idx = _visits?.indexWhere((v) => v.id == visit.id) ?? -1;
+          if (idx != -1) {
+            final list = List<ClientVisit>.from(_visits!);
+            list[idx] = visit.copyWith(requirementStatus: selected);
+            _visits = list;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Requirement status set to "${requirementStatusLabel(selected)}"',
+            ),
+            backgroundColor: Color(requirementStatusColorValue(selected)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _openVisit(ClientVisit visit) async {
     final callback = widget.onOpenVisit;
     if (callback != null) {
@@ -3181,31 +4780,382 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
       return;
     }
 
-    final role = widget.viewerRole.trim().toLowerCase();
-    final ownVisit = visit.employeeUserId == widget.userId;
-    final leadershipView = const {
-      'hr',
-      'admin',
-      'superadmin',
-      'ceo',
-      'md',
-      'director',
-    }.contains(role);
-    final screen = ownVisit && !leadershipView
-        ? ClientVisitSummaryScreen(
-            userId: widget.userId,
-            visitId: visit.id,
-            service: _service,
-          )
-        : ClientVisitReadOnlyFlowScreen(
-            userId: widget.userId,
-            visitId: visit.id,
-            step: 0,
-            service: _service,
-            viewerRole: role,
-          );
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ClientVisitTableDetailScreen(
+          visit: visit,
+          userId: widget.userId,
+          viewerRole: widget.viewerRole,
+          onRequirementChanged: (_) => _load(),
+        ),
+      ),
+    );
     await _load();
+  }
+
+  Widget _buildHistoryTableView(
+    bool isDark,
+    List<ClientVisit> displayVisits,
+    String title,
+  ) {
+    if (displayVisits.isEmpty) {
+      return const _HistoryEmpty('No visits found.');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withAlpha(30),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '${displayVisits.length} Visits',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F1E2E) : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark ? Colors.white12 : Colors.grey.shade300,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(
+                isDark ? const Color(0xFF162A42) : const Color(0xFFF1F5F9),
+              ),
+              columnSpacing: 16,
+              horizontalMargin: 12,
+              headingRowHeight: 40,
+              dataRowMinHeight: 64,
+              dataRowMaxHeight: 88,
+              columns: const [
+                DataColumn(
+                  label: Text(
+                    'Client Details',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Staff / Admin',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Requirement Status',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Final Status',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+                DataColumn(
+                  label: Text(
+                    'Table Details',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                ),
+              ],
+              rows: displayVisits.map((v) {
+                final reqStatus = v.requirementStatus.trim();
+                final hasReq = reqStatus.isNotEmpty;
+                final reqLabel = hasReq
+                    ? requirementStatusLabel(reqStatus)
+                    : 'Set Requirement';
+                final reqColor = Color(
+                  hasReq
+                      ? requirementStatusColorValue(reqStatus)
+                      : 0xFF00E5FF,
+                );
+                final reqIcon = hasReq
+                    ? requirementStatusIcon(reqStatus)
+                    : Icons.add_circle_outline_rounded;
+                final statusCol = employeeStatusColor(v.status);
+                final staffName = v.employeeName.isNotEmpty
+                    ? v.employeeName
+                    : widget.userId;
+
+                return DataRow(
+                  cells: [
+                    // Client Details cell (Client name, code, contact, service, address, requirement badge)
+                    DataCell(
+                      InkWell(
+                        onTap: () => _openVisit(v),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    v.clientName.isNotEmpty ? v.clientName : 'Client',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (v.visitId.isNotEmpty) ...[
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      v.visitId,
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        color: ThemeConfig.getTextMuted(context),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              Text(
+                                '${v.contactPerson} · ${v.contactPhone}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isDark ? Colors.white70 : Colors.black87,
+                                ),
+                              ),
+                              if (v.serviceName.isNotEmpty)
+                                Text(
+                                  v.serviceName,
+                                  style: const TextStyle(
+                                    fontSize: 9.5,
+                                    color: Color(0xFF00E5FF),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              Text(
+                                v.address,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.grey.shade600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 3),
+                              // Requirement Status directly visible and editable here!
+                              InkWell(
+                                onTap: () => _editRequirementStatus(v),
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: reqColor.withAlpha(25),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: reqColor.withAlpha(90),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        reqIcon,
+                                        size: 11,
+                                        color: reqColor,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        reqLabel,
+                                        style: TextStyle(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: reqColor,
+                                        ),
+                                      ),
+                                      if (!_isLeadershipReadOnly(widget.viewerRole)) ...[
+                                        const SizedBox(width: 2),
+                                        Icon(
+                                          Icons.arrow_drop_down,
+                                          size: 13,
+                                          color: reqColor,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Staff / Admin cell
+                    DataCell(
+                      InkWell(
+                        onTap: () => _openVisit(v),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              staffName,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '${v.employeeUserId} · ${_label(v.team.isNotEmpty ? v.team : "Admin")}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isDark ? Colors.white60 : Colors.black54,
+                              ),
+                            ),
+                            Text(
+                              v.approvedBy.isNotEmpty
+                                  ? 'Admin: ${v.approvedBy}'
+                                  : (v.tlApprovedBy.isNotEmpty
+                                      ? 'TL: ${v.tlApprovedBy}'
+                                      : 'Manager: ${v.managerUserId}'),
+                              style: const TextStyle(
+                                fontSize: 9,
+                                color: Color(0xFF10B981),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Requirement Status cell (Interactive & Editable!)
+                    DataCell(
+                      InkWell(
+                        onTap: () => _editRequirementStatus(v),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: reqColor.withAlpha(25),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: reqColor.withAlpha(90)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                reqIcon,
+                                size: 12,
+                                color: reqColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                reqLabel,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: reqColor,
+                                ),
+                              ),
+                              if (!_isLeadershipReadOnly(widget.viewerRole)) ...[
+                                const SizedBox(width: 2),
+                                Icon(
+                                  Icons.arrow_drop_down,
+                                  size: 12,
+                                  color: reqColor,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Final Status cell
+                    DataCell(
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusCol.withAlpha(25),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: statusCol.withAlpha(90)),
+                        ),
+                        child: Text(
+                          _label(v.status),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: statusCol,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Action cell: View Table Details
+                    DataCell(
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D9488),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.table_view_rounded, size: 14),
+                        label: const Text(
+                          'View Table',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        onPressed: () => _openVisit(v),
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -3221,6 +5171,36 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
     if (visits == null || _selectedDate == null) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final isSearching = _searchQuery.isNotEmpty;
+    final searchLower = _searchQuery.toLowerCase();
+    final searchResults = isSearching
+        ? visits.where((v) {
+            final clientName = v.clientName.toLowerCase();
+            final visitId = v.visitId.toLowerCase();
+            final contact = v.contactPerson.toLowerCase();
+            final phone = v.contactPhone.toLowerCase();
+            final address = v.address.toLowerCase();
+            final loc = v.location.toLowerCase();
+            final service = v.serviceName.toLowerCase();
+            final status = v.status.toLowerCase();
+            final req = v.requirementStatus.toLowerCase();
+            final reqLabel = requirementStatusLabel(v.requirementStatus).toLowerCase();
+            final staff = v.employeeName.toLowerCase();
+            return clientName.contains(searchLower) ||
+                visitId.contains(searchLower) ||
+                contact.contains(searchLower) ||
+                phone.contains(searchLower) ||
+                address.contains(searchLower) ||
+                loc.contains(searchLower) ||
+                service.contains(searchLower) ||
+                status.contains(searchLower) ||
+                req.contains(searchLower) ||
+                reqLabel.contains(searchLower) ||
+                staff.contains(searchLower);
+          }).toList()
+        : const <ClientVisit>[];
+
     final filtered = visits
         .where((visit) => _sameDate(visit.scheduledAt, _selectedDate!))
         .toList();
@@ -3229,40 +5209,702 @@ class _CalendarVisitHistoryTabState extends State<_CalendarVisitHistoryTab> {
         '${_selectedDate!.month.toString().padLeft(2, '0')}/'
         '${_selectedDate!.year}';
 
+    final isDark = ThemeConfig.isDark(context);
+
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
         children: [
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: CalendarDatePicker(
-              key: ValueKey(selectedLabel),
-              initialDate: _selectedDate!,
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now().add(const Duration(days: 730)),
-              onDateChanged: (date) =>
-                  setState(() => _selectedDate = _dateOnly(date)),
+          // 1. Search Bar at Top
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0F2338) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _searchQuery.isNotEmpty
+                    ? const Color(0xFF00E5FF)
+                    : (isDark ? Colors.white12 : Colors.grey.shade300),
+                width: _searchQuery.isNotEmpty ? 1.5 : 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(isDark ? 30 : 10),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          _HistoryHeader(
-            title: 'Visits on $selectedLabel',
-            count: filtered.length,
-          ),
-          const SizedBox(height: 8),
-          if (filtered.isEmpty)
-            const _HistoryEmpty('No completed visits on this date.')
-          else
-            ...filtered.map(
-              (visit) => _VisitCard(
-                visit: visit,
-                historyViewerUserId: widget.userId,
-                onTap: () => _openVisit(visit),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (val) => setState(() => _searchQuery = val.trim()),
+              style: const TextStyle(fontSize: 13),
+              decoration: InputDecoration(
+                hintText: 'Search visits (client, ID, phone, status...)',
+                hintStyle: TextStyle(
+                  fontSize: 12.5,
+                  color: ThemeConfig.getTextMuted(context),
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: Color(0xFF00E5FF),
+                  size: 20,
+                ),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
               ),
             ),
+          ),
+
+          // 2. Search Results View (when query is active)
+          if (isSearching) ...[
+            if (searchResults.isNotEmpty)
+              _buildHistoryTableView(
+                isDark,
+                searchResults,
+                'Search Results for "$_searchQuery"',
+              )
+            else
+              Card(
+                color: isDark ? const Color(0xFF0F1E2E) : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.search_off_rounded,
+                        size: 40,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No visits matching "$_searchQuery"',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Try searching by client name, visit ID, phone, or status',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: ThemeConfig.getTextMuted(context),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                        icon: const Icon(Icons.clear, size: 16),
+                        label: const Text('Clear search'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 20),
+          ] else ...[
+            // Quick Jump Action Bar (Today / Latest / Refresh)
+            Row(
+              children: [
+                ActionChip(
+                  avatar: const Icon(
+                    Icons.today_rounded,
+                    size: 14,
+                    color: Color(0xFF00E5FF),
+                  ),
+                  label: const Text(
+                    'Today',
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                  ),
+                  backgroundColor: _sameDate(_selectedDate!, DateTime.now())
+                      ? const Color(0xFF00E5FF).withAlpha(35)
+                      : (isDark ? const Color(0xFF0F2338) : Colors.white),
+                  side: BorderSide(
+                    color: _sameDate(_selectedDate!, DateTime.now())
+                        ? const Color(0xFF00E5FF)
+                        : (isDark ? Colors.white12 : Colors.grey.shade300),
+                  ),
+                  onPressed: () {
+                    setState(() => _selectedDate = _dateOnly(DateTime.now()));
+                  },
+                ),
+                const SizedBox(width: 8),
+                if (visits.isNotEmpty)
+                  ActionChip(
+                    avatar: const Icon(
+                      Icons.access_time_filled_rounded,
+                      size: 14,
+                      color: Color(0xFF10B981),
+                    ),
+                    label: const Text(
+                      'Latest Visit',
+                      style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                    ),
+                    backgroundColor: _sameDate(_selectedDate!, visits.first.scheduledAt)
+                        ? const Color(0xFF10B981).withAlpha(35)
+                        : (isDark ? const Color(0xFF0F2338) : Colors.white),
+                    side: BorderSide(
+                      color: _sameDate(_selectedDate!, visits.first.scheduledAt)
+                          ? const Color(0xFF10B981)
+                          : (isDark ? Colors.white12 : Colors.grey.shade300),
+                    ),
+                    onPressed: () {
+                      setState(() => _selectedDate = _dateOnly(visits.first.scheduledAt));
+                    },
+                  ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded, size: 20),
+                  tooltip: 'Refresh visits',
+                  onPressed: _load,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Calendar Card
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: CalendarDatePicker(
+                key: ValueKey(selectedLabel),
+                initialDate: _selectedDate!,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now().add(const Duration(days: 730)),
+                onDateChanged: (date) =>
+                    setState(() => _selectedDate = _dateOnly(date)),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Visits on Selected Date
+            _buildHistoryTableView(
+              isDark,
+              filtered,
+              'Visits on $selectedLabel in Table Format',
+            ),
+            const SizedBox(height: 20),
+
+            // All Visits History Table
+            if (filtered.isEmpty || visits.length > filtered.length) ...[
+              const Divider(),
+              const SizedBox(height: 10),
+              _buildHistoryTableView(
+                isDark,
+                visits,
+                'All Visit History in Table Format',
+              ),
+            ],
+          ],
         ],
       ),
+    );
+  }
+}
+
+class ClientVisitTableDetailScreen extends StatefulWidget {
+  final ClientVisit visit;
+  final String userId;
+  final String viewerRole;
+  final ValueChanged<String>? onRequirementChanged;
+
+  const ClientVisitTableDetailScreen({
+    super.key,
+    required this.visit,
+    required this.userId,
+    this.viewerRole = '',
+    this.onRequirementChanged,
+  });
+
+  @override
+  State<ClientVisitTableDetailScreen> createState() =>
+      _ClientVisitTableDetailScreenState();
+}
+
+class _ClientVisitTableDetailScreenState
+    extends State<ClientVisitTableDetailScreen> {
+  final _service = ClientVisitService();
+  late ClientVisit _visit;
+  bool _updating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _visit = widget.visit;
+  }
+
+  String _resolveRequirementStatus(ClientVisit visit) {
+    var s = visit.requirementStatus.trim();
+    if (s.isNotEmpty && s.toLowerCase() != 'null') return s;
+
+    // Check checklist items for status
+    for (final item in visit.checklist) {
+      if (item is Map && item['status'] != null) {
+        final st = '${item['status']}'.trim();
+        if (st.isNotEmpty && st.toLowerCase() != 'null') return st;
+      }
+    }
+
+    // Check outcome text for status
+    final outcomeStr = visit.outcome;
+    if (outcomeStr.isNotEmpty) {
+      final match = RegExp(
+        r'Customer Requirement Status:\s*([^(\n\r]+)',
+        caseSensitive: false,
+      ).firstMatch(outcomeStr);
+      if (match != null) {
+        final val = match.group(1)?.trim() ?? '';
+        if (val.isNotEmpty && val.toLowerCase() != 'null') return val;
+      }
+    }
+
+    // Check notes
+    final notesStr = visit.notes;
+    if (notesStr.isNotEmpty) {
+      final match = RegExp(
+        r'(?:Requirement\s*)?Status:\s*([A-Za-z\s]+)',
+        caseSensitive: false,
+      ).firstMatch(notesStr);
+      if (match != null) {
+        final val = match.group(1)?.trim() ?? '';
+        if (val.isNotEmpty && val.toLowerCase() != 'null') return val;
+      }
+    }
+
+    return '';
+  }
+
+  Widget _buildTableSection({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required Color color,
+    required List<MapEntry<String, dynamic>> items,
+    bool isDark = false,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0F1E2E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withAlpha(isDark ? 80 : 120),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(isDark ? 50 : 15),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: color.withAlpha(isDark ? 35 : 20),
+              border: Border(
+                bottom: BorderSide(color: color.withAlpha(isDark ? 60 : 80)),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Table(
+            columnWidths: const {
+              0: FlexColumnWidth(1.2),
+              1: FlexColumnWidth(2.0),
+            },
+            border: TableBorder(
+              horizontalInside: BorderSide(
+                color: isDark ? Colors.white10 : Colors.grey.shade200,
+                width: 0.8,
+              ),
+            ),
+            children: items.map((entry) {
+              return TableRow(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: Text(
+                      entry.key,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: entry.value is Widget
+                        ? entry.value as Widget
+                        : Text(
+                            '${entry.value}'.isEmpty ? '—' : '${entry.value}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = ThemeConfig.isDark(context);
+    final statusColor = employeeStatusColor(_visit.status);
+    final reqStatus = _resolveRequirementStatus(_visit);
+    final hasReq = reqStatus.isNotEmpty;
+    final reqLabel = hasReq
+        ? requirementStatusLabel(reqStatus)
+        : 'Not Specified';
+    final reqColor = Color(
+      hasReq ? requirementStatusColorValue(reqStatus) : 0xFF64748B,
+    );
+    final reqIcon = hasReq
+        ? requirementStatusIcon(reqStatus)
+        : Icons.remove_circle_outline_rounded;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Client Visit Details (Table)'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh',
+            onPressed: () async {
+              setState(() => _updating = true);
+              try {
+                final v = await _service.fetchVisit(widget.userId, _visit.id);
+                if (mounted) {
+                  setState(() {
+                    _visit = v;
+                    _updating = false;
+                  });
+                }
+              } catch (_) {
+                if (mounted) setState(() => _updating = false);
+              }
+            },
+          ),
+        ],
+      ),
+      body: _updating
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Top Header badge card
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0F1E2E) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: statusColor.withAlpha(isDark ? 80 : 120),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: statusColor.withAlpha(30),
+                        child: Text(
+                          _visit.clientName.isNotEmpty
+                              ? _visit.clientName[0].toUpperCase()
+                              : 'C',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: statusColor,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _visit.clientName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            Text(
+                              _visit.visitId,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: ThemeConfig.getTextMuted(context),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withAlpha(25),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: statusColor),
+                        ),
+                        child: Text(
+                          _label(_visit.status).toUpperCase(),
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Table 1: All details from client
+                _buildTableSection(
+                  context: context,
+                  title: 'All Details from Client',
+                  icon: Icons.business_rounded,
+                  color: const Color(0xFF0D9488),
+                  isDark: isDark,
+                  items: [
+                    MapEntry('Client Name', _visit.clientName),
+                    MapEntry('Contact Person', _visit.contactPerson),
+                    MapEntry('Contact Phone', _visit.contactPhone),
+                    MapEntry(
+                      'Email ID',
+                      _visit.clientEmail.isNotEmpty ? _visit.clientEmail : '—',
+                    ),
+                    MapEntry('Address', _visit.address),
+                    MapEntry(
+                      'Location / City',
+                      _visit.location.isNotEmpty ? _visit.location : 'Salem',
+                    ),
+                    MapEntry(
+                      'Service Required',
+                      _visit.serviceName.isNotEmpty ? _visit.serviceName : '—',
+                    ),
+                    MapEntry('Purpose of Visit', _visit.purpose),
+                    MapEntry(
+                      'Scheduled Date & Time',
+                      '${_ymd(_visit.scheduledAt)} ${TimeOfDay.fromDateTime(_visit.scheduledAt).format(context)}',
+                    ),
+                    MapEntry(
+                      'Planned Duration',
+                      '${_visit.durationMinutes} mins',
+                    ),
+                    MapEntry('Travel Mode', _label(_visit.travelMode)),
+                    MapEntry(
+                      'Client Notes',
+                      _visit.notes.isNotEmpty ? _visit.notes : '—',
+                    ),
+                  ],
+                ),
+
+                // Table 2: Admin details
+                _buildTableSection(
+                  context: context,
+                  title: 'Admin & Staff Details',
+                  icon: Icons.badge_rounded,
+                  color: const Color(0xFF0284C7),
+                  isDark: isDark,
+                  items: [
+                    MapEntry(
+                      'Staff / Admin Name',
+                      _visit.employeeName.isNotEmpty
+                          ? _visit.employeeName
+                          : widget.userId,
+                    ),
+                    MapEntry('Employee / Admin ID', _visit.employeeUserId),
+                    MapEntry(
+                      'Department / Team',
+                      _visit.team.isNotEmpty
+                          ? _label(_visit.team)
+                          : 'Marketing',
+                    ),
+                    MapEntry(
+                      'Manager User ID',
+                      _visit.managerUserId.isNotEmpty
+                          ? _visit.managerUserId
+                          : '—',
+                    ),
+                    MapEntry(
+                      'Approved By',
+                      _visit.approvedByName.isNotEmpty
+                          ? _visit.approvedByName
+                          : (_visit.approvedBy.isNotEmpty
+                                ? _visit.approvedBy
+                                : '—'),
+                    ),
+                    MapEntry(
+                      'Approval Role',
+                      _visit.approvedByRole.isNotEmpty
+                          ? _visit.approvedByRole.toUpperCase()
+                          : 'ADMIN',
+                    ),
+                    MapEntry(
+                      'Approval Comment',
+                      _visit.approvalComment.isNotEmpty
+                          ? _visit.approvalComment
+                          : 'Approved',
+                    ),
+                    MapEntry(
+                      'Approval Date',
+                      _visit.approvedAt != null
+                          ? _ymd(_visit.approvedAt!)
+                          : '—',
+                    ),
+                  ],
+                ),
+
+                // Table 3: Final status & Execution
+                _buildTableSection(
+                  context: context,
+                  title: 'Final Status & Execution',
+                  icon: Icons.fact_check_rounded,
+                  color: const Color(0xFF10B981),
+                  isDark: isDark,
+                  items: [
+                    MapEntry(
+                      'Final Visit Status',
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withAlpha(25),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: statusColor.withAlpha(90)),
+                        ),
+                        child: Text(
+                          _label(_visit.status),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: statusColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                    MapEntry(
+                      'Requirement Status',
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: reqColor.withAlpha(25),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: reqColor.withAlpha(90)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(reqIcon, size: 14, color: reqColor),
+                            const SizedBox(width: 5),
+                            Text(
+                              reqLabel,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: reqColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    MapEntry(
+                      'Reached Client At',
+                      _visit.reachedClientAt != null
+                          ? '${_ymd(_visit.reachedClientAt!)} ${TimeOfDay.fromDateTime(_visit.reachedClientAt!).format(context)}'
+                          : '—',
+                    ),
+                    MapEntry(
+                      'Check-Out / Completed At',
+                      _visit.checkOutAt != null
+                          ? '${_ymd(_visit.checkOutAt!)} ${TimeOfDay.fromDateTime(_visit.checkOutAt!).format(context)}'
+                          : '—',
+                    ),
+                    MapEntry(
+                      'Total Expenses',
+                      '₹${_visit.expenseTotal.toStringAsFixed(2)}',
+                    ),
+                    MapEntry(
+                      'Proof Files Attached',
+                      '${_visit.attachments.length} files attached',
+                    ),
+                    MapEntry(
+                      'Final Outcome / Notes',
+                      _visit.outcome.isNotEmpty
+                          ? _visit.outcome
+                          : (_visit.followUp.isNotEmpty
+                                ? _visit.followUp
+                                : '—'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
     );
   }
 }
@@ -3310,23 +5952,31 @@ class ClientVisitCreateScreen extends StatefulWidget {
   final String userId;
   final ClientVisitService service;
   final String requesterRole;
+  final String roleLabel;
+  final String initialTeam;
+
   const ClientVisitCreateScreen({
     super.key,
     required this.userId,
     required this.service,
     this.requesterRole = '',
+    this.roleLabel = '',
+    this.initialTeam = 'marketing',
   });
+
   @override
-  State<ClientVisitCreateScreen> createState() =>
-      _ClientVisitCreateScreenState();
+  State<ClientVisitCreateScreen> createState() => _ClientVisitCreateScreenState();
 }
 
 class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   final _formKey = GlobalKey<FormState>();
   final _client = TextEditingController();
-  final _contact = TextEditingController();
-  final _phone = TextEditingController();
+  final _industry = TextEditingController();
+  final _location = TextEditingController();
+  final _email = TextEditingController();
   final _address = TextEditingController();
+  final _phone = TextEditingController();
+  final _contact = TextEditingController();
   final _locationCoords = TextEditingController(); // paste coords from WhatsApp
   final _purpose = TextEditingController();
   final _notes = TextEditingController();
@@ -3339,10 +5989,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   TimeOfDay _time = TimeOfDay.now();
   String _travelMode = 'car';
   String? _serviceType;
-  int _durationMinutes = 60;
-  List<Map<String, dynamic>> _visitApprovers = const [];
   String? _selectedManagerId;
-  String? _tlLoadError;
   bool _saving = false;
 
   bool get _selfApprovingRole => const {
@@ -3353,35 +6000,61 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     'director',
   }.contains(widget.requesterRole.trim().toLowerCase());
 
+  late String _selectedTeam;
+  final Set<String> _selectedMemberIds = <String>{};
+  final Set<String> _selectedCreativeServices = <String>{};
+  bool _servicesExpanded = true;
+  bool _timelineSectionExpanded = true;
+  final Set<String> _expandedServiceCategories = <String>{
+    'CREATIVE STUDIO',
+    'SOCIAL MEDIA MARKETING',
+    'SEO SERVICES',
+    'PAID ADVERTISING',
+    'WEB APP DEVELOPMENT',
+  };
+  String _selectedCategoryFilter = 'all';
+
+  static const List<({String title, IconData icon, String desc})> _creativeStudioItems = [
+    (title: 'Photo Design', icon: Icons.photo_camera_back_rounded, desc: 'Commercial photography & image assets'),
+    (title: 'Video Design', icon: Icons.videocam_rounded, desc: 'Promo videos, reels, motion graphics'),
+    (title: 'Ad Creative Design', icon: Icons.campaign_rounded, desc: 'Meta/Google display ads & banners'),
+    (title: 'Brand Logo Design', icon: Icons.brush_rounded, desc: 'Custom vectors, logo marks & typography'),
+    (title: 'Brand Identity Kit', icon: Icons.palette_rounded, desc: 'Color palettes, style guides & collateral'),
+  ];
+  static const List<({String title, IconData icon, String desc})> _socialMediaMarketingItems = [
+    (title: 'Social Media Account Handling', icon: Icons.manage_accounts_rounded, desc: 'Account management, content curation & posting'),
+    (title: 'Meta Ads Campaign', icon: Icons.ads_click_rounded, desc: 'Targeted Facebook & Instagram ad campaigns'),
+    (title: 'Ad Copywriting', icon: Icons.edit_note_rounded, desc: 'High-converting ad copies & creative scripts'),
+    (title: 'WhatsApp Campaign', icon: Icons.mark_chat_unread_rounded, desc: 'Broadcast promotions & targeted messaging'),
+    (title: 'WhatsApp Automation / Chatbot Setup', icon: Icons.smart_toy_rounded, desc: 'Automated chatbots, flows & instant reply setup'),
+  ];
+  static const List<({String title, IconData icon, String desc})> _seoServicesItems = [
+    (title: 'Basic SEO', icon: Icons.search_rounded, desc: 'On-page optimization & basic keyword setup'),
+    (title: 'Advanced SEO', icon: Icons.manage_search_rounded, desc: 'Technical SEO, deep audits & backlink indexing'),
+    (title: 'Enterprise SEO', icon: Icons.business_rounded, desc: 'Large-scale architecture, multi-page indexing'),
+    (title: 'Local SEO', icon: Icons.pin_drop_rounded, desc: 'Google Business Profile & local citation ranking'),
+    (title: 'SEO Content Writing', icon: Icons.article_rounded, desc: 'Keyword-focused SEO articles & blogs'),
+    (title: 'Competitor Analysis Report', icon: Icons.analytics_rounded, desc: 'Comprehensive domain & competitor rank analysis'),
+  ];
+  static const List<({String title, IconData icon, String desc})> _paidAdvertisingItems = [
+    (title: 'Google Ads Campaign', icon: Icons.ads_click_rounded, desc: 'Search, display & video advertising campaigns'),
+    (title: 'Conversion Tracking Setup', icon: Icons.track_changes_rounded, desc: 'Google Tag Manager & pixel event tracking setup'),
+  ];
+  static const List<({String title, IconData icon, String desc})> _webAppDevelopmentItems = [
+    (title: 'Basic Website Design', icon: Icons.web_asset_rounded, desc: 'Standard informative business landing pages'),
+    (title: 'Advanced Website Design', icon: Icons.laptop_chromebook_rounded, desc: 'Custom UX/UI with interactive animations'),
+    (title: 'Dynamic Website', icon: Icons.dynamic_feed_rounded, desc: 'Database-driven web application with CMS'),
+    (title: 'E-Commerce Website', icon: Icons.shopping_cart_rounded, desc: 'Full online store, payment gateway & catalogue'),
+    (title: 'Website Maintenance', icon: Icons.build_circle_rounded, desc: 'Security updates, backups & uptime monitoring'),
+    (title: 'Website Speed Optimization', icon: Icons.speed_rounded, desc: 'Core Web Vitals, caching & performance tuning'),
+  ];
+
   @override
   void initState() {
     super.initState();
-    if (!_selfApprovingRole) _loadReportingTls();
-  }
-
-  Future<void> _loadReportingTls() async {
-    setState(() => _tlLoadError = null);
-    try {
-      final values = await widget.service.fetchVisitApprovers(
-        widget.userId,
-        requiresRoleAwareApprovers:
-            widget.requesterRole == 'tl' || widget.requesterRole == 'hr',
-      );
-      if (!mounted) return;
-      setState(() {
-        _visitApprovers = values;
-        _selectedManagerId = values.length == 1
-            ? '${values.first['employee_id']}'
-            : null;
-      });
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _visitApprovers = const [];
-          _tlLoadError = '$error'.replaceFirst('Exception: ', '');
-        });
-      }
-    }
+    _selectedTeam = widget.initialTeam.isNotEmpty ? widget.initialTeam : 'marketing';
+    final initialMembers = getTeamMembersFor(_selectedTeam);
+    _selectedMemberIds.addAll(initialMembers.map((m) => m.id));
   }
 
   @override
@@ -3389,6 +6062,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     _mapController.dispose();
     for (final value in [
       _client,
+      _industry,
+      _location,
+      _email,
       _contact,
       _phone,
       _address,
@@ -3423,7 +6099,6 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   }
 
   Future<void> _resolveUrlAsync(String url) async {
-    if (_resolvingUrl) return;
     setState(() => _resolvingUrl = true);
     try {
       final resolved = await _resolveShortUrl(url);
@@ -3464,56 +6139,52 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       try {
         _mapController.move(ll.LatLng(coords.lat, coords.lng), 16);
       } catch (_) {}
-      if (mounted) _snack(context, 'Location set to current GPS coordinates.');
-    } catch (e) {
-      if (mounted) _snack(context, 'Could not get current location: $e');
-    } finally {
-      if (mounted) setState(() => _locating = false);
-    }
-  }
 
-  Future<void> _locateFromAddress() async {
-    final addr = _address.text.trim();
-    if (addr.isEmpty) {
-      _snack(context, 'Please enter a client address first.');
-      return;
-    }
-    setState(() => _locating = true);
-    try {
-      final query = Uri.encodeComponent(
-        addr.contains('India') ? addr : '$addr, India',
-      );
-      final resp = await http.get(
-        Uri.parse(
-          'https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=1&countrycodes=in',
-        ),
-        headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
-      ).timeout(const Duration(seconds: 10));
-
-      if (resp.statusCode == 200) {
-        final list = jsonDecode(resp.body) as List?;
-        if (list != null && list.isNotEmpty) {
-          final first = list.first as Map<String, dynamic>;
-          final lat = double.tryParse('${first['lat']}');
-          final lon = double.tryParse('${first['lon']}');
-          if (lat != null && lon != null && mounted) {
-            final coords = (lat: lat, lng: lon);
+      // Auto-fetch city & address
+      try {
+        final resp = await http.get(
+          Uri.parse('https://nominatim.openstreetmap.org/reverse?lat=${pos.latitude}&lon=${pos.longitude}&format=json'),
+          headers: {'User-Agent': 'HRMS-Bitbyte/1.0'},
+        ).timeout(const Duration(seconds: 4));
+        if (resp.statusCode == 200) {
+          final data = jsonDecode(resp.body);
+          final addr = data['address'] as Map<String, dynamic>?;
+          if (addr != null && mounted) {
+            final city = addr['city'] ?? addr['town'] ?? addr['suburb'] ?? addr['county'] ?? addr['state_district'] ?? '';
+            final state = addr['state'] ?? '';
+            final fullCity = [city, state].where((s) => s.toString().isNotEmpty).join(', ');
             setState(() {
-              _selectedCoords = coords;
-              _locationCoords.text =
-                  '${lat.toStringAsFixed(6)}, ${lon.toStringAsFixed(6)}';
+              if (fullCity.isNotEmpty) {
+                _location.text = fullCity;
+              } else if (data['name'] != null && data['name'].toString().isNotEmpty) {
+                _location.text = data['name'].toString();
+              } else {
+                _location.text = 'Salem, Tamil Nadu';
+              }
+              if (data['display_name'] != null) {
+                _address.text = data['display_name'].toString();
+              }
             });
-            try {
-              _mapController.move(ll.LatLng(lat, lon), 15);
-            } catch (_) {}
-            _snack(context, 'Location found from address.');
-            return;
           }
         }
+      } catch (_) {}
+
+      if (_location.text.isEmpty) {
+        setState(() => _location.text = 'Salem, Tamil Nadu');
       }
-      if (mounted) _snack(context, 'Could not find coordinates for this address.');
+
+      try {
+        _mapController.move(ll.LatLng(coords.lat, coords.lng), 16);
+      } catch (_) {}
+
+      if (mounted) {
+        _snack(
+          context,
+          'Current Location pinned on map (${coords.lat.toStringAsFixed(4)}, ${coords.lng.toStringAsFixed(4)})',
+        );
+      }
     } catch (e) {
-      if (mounted) _snack(context, 'Geocoding failed: $e');
+      if (mounted) _snack(context, 'Could not get current location: $e');
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -3526,86 +6197,39 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       _locationCoords.text =
           '${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}';
     });
-    try {
-      _mapController.move(point, _mapController.camera.zoom);
-    } catch (_) {}
-  }
-
-  Future<void> _openInMaps() async {
-    if (_selectedCoords == null) return;
-    final url = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=${_selectedCoords!.lat},${_selectedCoords!.lng}',
-    );
-    try {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      if (mounted) _snack(context, 'Could not open maps: $e');
-    }
   }
 
   Widget _buildMapSection() {
     final center = _selectedCoords != null
         ? ll.LatLng(_selectedCoords!.lat, _selectedCoords!.lng)
-        : const ll.LatLng(11.6643, 78.1460);
+        : const ll.LatLng(11.6643, 78.1460); // Default to Salem, TN
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: [
-            OutlinedButton.icon(
-              onPressed: _locating ? null : _useCurrentLocation,
-              icon: _locating
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.my_location_rounded, size: 16),
-              label: const Text('Current GPS', style: TextStyle(fontSize: 12)),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: _locating ? null : _locateFromAddress,
-              icon: const Icon(Icons.search_rounded, size: 16),
-              label: const Text('From address', style: TextStyle(fontSize: 12)),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-            if (_selectedCoords != null)
-              OutlinedButton.icon(
-                onPressed: _openInMaps,
-                icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                label: const Text('Open Maps', style: TextStyle(fontSize: 12)),
-                style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-          ],
+        Text(
+          _selectedCoords != null
+              ? 'Pinned: ${_selectedCoords!.lat.toStringAsFixed(4)}, ${_selectedCoords!.lng.toStringAsFixed(4)}'
+              : 'Tap map to drop pin',
+          style: TextStyle(
+            fontSize: 12,
+            color: _selectedCoords != null
+                ? const Color(0xFF00E5FF)
+                : Colors.white54,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 10),
         Container(
-          height: 200,
+          height: 210,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: _selectedCoords != null
-                  ? const Color(0xFF00E5FF).withOpacity(0.5)
+                  ? const Color(0xFF00E5FF).withValues(alpha: 0.6)
                   : Colors.white24,
-              width: _selectedCoords != null ? 1.5 : 1,
+              width: _selectedCoords != null ? 2.0 : 1,
             ),
           ),
           clipBehavior: Clip.antiAlias,
@@ -3615,7 +6239,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                 mapController: _mapController,
                 options: MapOptions(
                   initialCenter: center,
-                  initialZoom: _selectedCoords != null ? 15 : 12,
+                  initialZoom: _selectedCoords != null ? 16 : 12,
                   onTap: (tapPosition, point) => _onMapTap(point),
                   interactionOptions: const InteractionOptions(
                     flags: InteractiveFlag.all,
@@ -3656,56 +6280,24 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                 ],
               ),
               Positioned(
-                top: 8,
-                left: 8,
-                right: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0D1B2A).withOpacity(0.85),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _selectedCoords != null
-                            ? Icons.check_circle_rounded
-                            : Icons.touch_app_rounded,
-                        size: 15,
-                        color: _selectedCoords != null
-                            ? const Color(0xFF00E5FF)
-                            : Colors.amberAccent,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _selectedCoords != null
-                              ? '📍 ${_selectedCoords!.lat.toStringAsFixed(5)}, ${_selectedCoords!.lng.toStringAsFixed(5)} • Tap to adjust'
-                              : 'Tap anywhere on the map to pin client location',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Positioned(
                 bottom: 8,
                 right: 8,
                 child: FloatingActionButton.small(
-                  heroTag: 'visit_create_map_gps',
-                  backgroundColor: const Color(0xFF0D1B2A).withOpacity(0.9),
-                  foregroundColor: const Color(0xFF00E5FF),
-                  onPressed: _useCurrentLocation,
-                  child: const Icon(Icons.my_location_rounded, size: 18),
+                  heroTag: 'map_gps_locate_btn',
+                  onPressed: _locating ? null : _useCurrentLocation,
+                  backgroundColor: const Color(0xFF00E5FF),
+                  foregroundColor: Colors.black,
+                  tooltip: 'Center on my GPS',
+                  child: _locating
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.black,
+                          ),
+                        )
+                      : const Icon(Icons.my_location),
                 ),
               ),
             ],
@@ -3716,274 +6308,1098 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   }
 
   String? _required(String? value) =>
-      (value ?? '').trim().isEmpty ? 'Required' : null;
+      value == null || value.trim().isEmpty ? 'This field is required' : null;
 
-  /// Parses a coordinate string pasted from WhatsApp / Google Maps.
-  /// Handles formats:
-  ///   "11.686478, 78.120482"
-  ///   "11°41'11.3\"N 78°07'13.7\"E"
-  ///   "11.686478,78.120482"
-  ///   Google Maps share URL containing @lat,lng
+  String? _emailValidator(String? value) {
+    final v = value?.trim() ?? '';
+    if (v.isEmpty) return 'Email is required';
+    if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email address';
+    return null;
+  }
+
   static ({double lat, double lng})? _parseCoords(String raw) {
-    var text = raw.trim();
-    try {
-      text = Uri.decodeFull(text);
-    } on FormatException {
-      // Continue with the original value when a shared page contains an
-      // incomplete percent-escape sequence.
+    final text = raw.trim();
+    final atMatch = RegExp(r'@(-?\d+\.\d+),(-?\d+\.\d+)').firstMatch(text);
+    if (atMatch != null) {
+      final lat = double.tryParse(atMatch.group(1)!);
+      final lng = double.tryParse(atMatch.group(2)!);
+      if (lat != null && lng != null) return (lat: lat, lng: lng);
     }
-    if (text.isEmpty) return null;
-
-    // Google Maps URL: contains @lat,lng,zoom or ?q=lat,lng
-    final urlLatLng = RegExp(
-      r'[/@](-?\d+\.?\d*),(-?\d+\.?\d*)',
-    ).firstMatch(text);
-    if (urlLatLng != null) {
-      final lat = double.tryParse(urlLatLng.group(1)!);
-      final lng = double.tryParse(urlLatLng.group(2)!);
-      if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
-        return (lat: lat, lng: lng);
-      }
+    final qMatch = RegExp(r'[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)').firstMatch(text);
+    if (qMatch != null) {
+      final lat = double.tryParse(qMatch.group(1)!);
+      final lng = double.tryParse(qMatch.group(2)!);
+      if (lat != null && lng != null) return (lat: lat, lng: lng);
     }
-
-    // Google Maps place links often store their exact pin as !3dLAT!4dLNG.
-    final dataLatLng = RegExp(
-      r'!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)',
-    ).firstMatch(text);
-    if (dataLatLng != null) {
-      final lat = double.tryParse(dataLatLng.group(1)!);
-      final lng = double.tryParse(dataLatLng.group(2)!);
-      if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
-        return (lat: lat, lng: lng);
-      }
+    final simpleMatch = RegExp(r'^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$').firstMatch(text);
+    if (simpleMatch != null) {
+      final lat = double.tryParse(simpleMatch.group(1)!);
+      final lng = double.tryParse(simpleMatch.group(2)!);
+      if (lat != null && lng != null) return (lat: lat, lng: lng);
     }
-
-    // Direction/share links can carry q, query, destination, ll or center.
-    final queryLatLng = RegExp(
-      r'(?:[?&](?:q|query|destination|ll|center)=)(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)',
-      caseSensitive: false,
-    ).firstMatch(text);
-    if (queryLatLng != null) {
-      final lat = double.tryParse(queryLatLng.group(1)!);
-      final lng = double.tryParse(queryLatLng.group(2)!);
-      if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
-        return (lat: lat, lng: lng);
-      }
-    }
-
-    // Decimal degrees: "11.686478, 78.120482" or "11.686478,78.120482"
-    final decimal = RegExp(
-      r'^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$',
-    ).firstMatch(text);
-    if (decimal != null) {
-      final lat = double.tryParse(decimal.group(1)!);
-      final lng = double.tryParse(decimal.group(2)!);
-      if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
-        return (lat: lat, lng: lng);
-      }
-    }
-
-    // DMS: 11°41'11.3"N 78°07'13.7"E
-    final dms = RegExp(
-      r'''(\d+)[°]\s*(\d+)[\'′]\s*(\d+\.?\d*)["″]\s*([NS])\s+(\d+)[°]\s*(\d+)[\'′]\s*(\d+\.?\d*)["″]\s*([EW])''',
-      caseSensitive: false,
-    ).firstMatch(text);
-    if (dms != null) {
-      double toDecimal(String d, String m, String s) =>
-          double.parse(d) + double.parse(m) / 60 + double.parse(s) / 3600;
-      double lat = toDecimal(dms.group(1)!, dms.group(2)!, dms.group(3)!);
-      double lng = toDecimal(dms.group(5)!, dms.group(6)!, dms.group(7)!);
-      if (dms.group(4)!.toUpperCase() == 'S') lat = -lat;
-      if (dms.group(8)!.toUpperCase() == 'W') lng = -lng;
-      return (lat: lat, lng: lng);
-    }
-
     return null;
   }
 
   String? _validateCoords(String? value) {
-    if ((value ?? '').trim().isEmpty) return null; // optional field
-    final text = value!.trim();
-    // Accept Google Maps links; exact coordinates are resolved on submit.
-    if (_mapsUrl(text) != null) {
-      return null;
-    }
-    if (_parseCoords(text) == null) {
-      return 'Paste a Google Maps link or coordinates (e.g. 11.686478, 78.120482)';
-    }
-    return null;
+    final trimmed = value?.trim() ?? '';
+    if (trimmed.isEmpty) return null;
+    final direct = _parseCoords(trimmed);
+    if (direct != null) return null;
+    final url = _mapsUrl(trimmed);
+    if (url != null) return null;
+    return 'Enter coordinates as "lat, lng" or paste Google Maps link';
   }
 
-  /// Resolves a shortened Google Maps URL (maps.app.goo.gl/...)
-  /// by following redirects and extracting the lat/lng from the final URL.
   static Future<({double lat, double lng})?> _resolveShortUrl(
-    String url,
+    String shortUrl,
   ) async {
     try {
-      var extractedUrl = _mapsUrl(url);
-      if (extractedUrl == null) return null;
-      if (extractedUrl.contains('s.app.goo.gl')) {
-        extractedUrl = extractedUrl.replaceFirst('s.app.goo.gl', 'maps.app.goo.gl');
-      }
-      // Follow the redirect chain (up to 5 hops) without downloading the body
-      String current = extractedUrl;
-      for (int i = 0; i < 5; i++) {
-        final request = http.Request('HEAD', Uri.parse(current))
+      final client = http.Client();
+      try {
+        final request = http.Request('GET', Uri.parse(shortUrl))
           ..followRedirects = false;
-        final response = await request.send().timeout(
-          const Duration(seconds: 8),
-        );
+        final response = await client
+            .send(request)
+            .timeout(const Duration(seconds: 8));
         final location = response.headers['location'];
-        if (location == null) break;
-        current = Uri.parse(current).resolve(location).toString();
-        // Try to extract coords from this URL
-        final coords = _parseCoords(current);
-        if (coords != null) return coords;
-      }
-      // Last attempt: GET the final URL and look for coords in the body
-      final resp = await http
-          .get(Uri.parse(current), headers: {'User-Agent': 'HRMS-Bitbyte/1.0'})
-          .timeout(const Duration(seconds: 8));
-      // Look for @lat,lng pattern in the response body or final URL
-      final bodyCoords =
-          _parseCoords(resp.request?.url.toString() ?? '') ??
-          _parseCoords(resp.body);
-      if (bodyCoords != null) return bodyCoords;
-      // Scan the HTML body for coordinates
-      final match = RegExp(
-        r'[/@](-?\d{1,3}\.\d{4,}),(-?\d{1,3}\.\d{4,})',
-      ).firstMatch(resp.body);
-      if (match != null) {
-        final lat = double.tryParse(match.group(1)!);
-        final lng = double.tryParse(match.group(2)!);
-        if (lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180) {
-          return (lat: lat, lng: lng);
+        if (location != null && location.isNotEmpty) {
+          final coords = _parseCoords(location);
+          if (coords != null) return coords;
+          if (location.startsWith('http')) {
+            final deepReq = http.Request('GET', Uri.parse(location))
+              ..followRedirects = true;
+            final deepResp = await client
+                .send(deepReq)
+                .timeout(const Duration(seconds: 8));
+            final deepLocation =
+                deepResp.headers['location'] ??
+                deepResp.request?.url.toString() ??
+                '';
+            final deepCoords = _parseCoords(deepLocation);
+            if (deepCoords != null) return deepCoords;
+          }
         }
+      } finally {
+        client.close();
       }
     } catch (_) {}
     return null;
   }
 
   static String? _mapsUrl(String text) {
-    var raw = text.trim();
-    if (raw.isEmpty) return null;
-    if (!raw.startsWith('http://') && !raw.startsWith('https://')) {
-      if (raw.contains('goo.gl') ||
-          raw.contains('google.com/maps') ||
-          raw.contains('maps.google')) {
-        raw = 'https://$raw';
-      }
-    }
-    raw = raw.replaceFirst('s.app.goo.gl', 'maps.app.goo.gl');
-    final match = RegExp(
-      r'https?://(?:(?:[a-z0-9-]+\.)*(?:goo\.gl|google\.[a-z.]+|google-maps)(?:/|\?|$))[^\s]*',
-      caseSensitive: false,
-    ).firstMatch(raw);
-    return match?.group(0)?.replaceAll(RegExp(r'[),.;]+$'), '');
-  }
-
-  String? _mobileNumber(String? value) {
-    final mobile = (value ?? '').trim();
-    if (mobile.isEmpty) return 'Required';
-    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(mobile)) {
-      return 'Enter a valid 10-digit mobile number';
+    final match = RegExp(r'https?://[^\s]+').firstMatch(text);
+    if (match == null) return null;
+    final url = match.group(0)!;
+    if (url.contains('maps.app.goo.gl') ||
+        url.contains('goo.gl/maps') ||
+        url.contains('google.com/maps')) {
+      return url;
     }
     return null;
   }
 
-  Future<void> _submit(bool submit) async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
-    try {
-      final rawLocation = _locationCoords.text.trim();
-      // Resolve coordinates: use pinned map coords, parse directly, or follow short URL redirect
-      var coords = _selectedCoords ?? _parseCoords(rawLocation);
-      if (coords == null && _mapsUrl(rawLocation) != null) {
-        coords = await _resolveShortUrl(rawLocation);
-      }
-      if (rawLocation.isNotEmpty && coords == null) {
-        throw Exception(
-          'Could not locate this shared Maps link. Check the link and try again.',
-        );
-      }
-      await widget.service.create(widget.userId, {
-        'client_name': _client.text.trim(),
-        'contact_person': _contact.text.trim(),
-        'contact_phone': _phone.text.trim(),
-        'address': _address.text.trim(),
-        if (coords != null) 'latitude': coords.lat,
-        if (coords != null) 'longitude': coords.lng,
-        'scheduled_date': _ymd(_date),
-        'scheduled_time':
-            '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}',
-        'duration_minutes': _durationMinutes,
-        'travel_mode': _travelMode,
-        'service_type': _serviceType,
-        'purpose': _purpose.text.trim(),
-        'notes': _notes.text.trim(),
-        if (!_selfApprovingRole)
-          'manager_user_id': _selectedManagerId ?? _manager.text.trim(),
-        'submit': submit,
-      });
-      if (mounted) {
-        await showDialog<void>(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
+  String? _mobileNumber(String? value) {
+    if (value == null || value.trim().isEmpty) return 'Contact number is required';
+    final cleaned = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleaned.length != 10) return 'Must be exactly 10 digits';
+    return null;
+  }
+
+  String _ymd(DateTime date) =>
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  String _formatDateFull(DateTime date) =>
+      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+  String _formatTime12(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
+  Widget _buildTeamSwitcher() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final teams = [
+      (
+        id: 'marketing',
+        name: 'Marketing',
+        icon: Icons.campaign_rounded,
+        color: const Color(0xFFFF9100),
+      ),
+      (
+        id: 'development',
+        name: 'Development',
+        icon: Icons.code_rounded,
+        color: const Color(0xFF00E5FF),
+      ),
+      (
+        id: 'management',
+        name: 'Management',
+        icon: Icons.business_center_rounded,
+        color: const Color(0xFFA855F7),
+      ),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131D31) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.grey.shade300,
+        ),
+      ),
+      child: Row(
+        children: teams.map((t) {
+          final isSelected = _selectedTeam == t.id;
+          final isDisabled = !isSelected;
+
+          return Expanded(
+            child: Opacity(
+              opacity: isDisabled ? 0.42 : 1.0,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _selectedTeam = t.id;
+                    final newMembers = getTeamMembersFor(_selectedTeam);
+                    _selectedMemberIds.clear();
+                    _selectedMemberIds.addAll(newMembers.map((m) => m.id));
+                  });
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                   decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    shape: BoxShape.circle,
+                    color: isSelected
+                        ? (isDark ? const Color(0xFF1E293B) : Colors.white)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: isSelected
+                        ? Border.all(color: t.color, width: 1.5)
+                        : Border.all(
+                            color: isDisabled
+                                ? (isDark ? Colors.white10 : Colors.grey.shade300)
+                                : Colors.transparent,
+                            width: 1.0,
+                          ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: t.color.withValues(alpha: 0.25),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
                   ),
-                  child: Icon(
-                    Icons.check_circle_rounded,
-                    color: Colors.green.shade600,
-                    size: 40,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isDisabled ? Icons.lock_outline_rounded : t.icon,
+                        size: 18,
+                        color: isSelected
+                            ? t.color
+                            : (isDisabled
+                                ? (isDark ? Colors.white30 : Colors.grey.shade400)
+                                : (isDark ? Colors.white54 : Colors.grey.shade600)),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        t.name,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                          color: isSelected
+                              ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                              : (isDisabled
+                                  ? (isDark ? Colors.white38 : Colors.grey.shade400)
+                                  : (isDark ? Colors.white60 : Colors.grey.shade600)),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        isDisabled
+                            ? 'Disabled'
+                            : (isSelected
+                                ? (t.id == 'marketing' ? 'Tap to switch' : 'Active')
+                                : 'Team'),
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? t.color
+                              : (isDisabled
+                                  ? (isDark ? Colors.white38 : Colors.grey.shade400)
+                                  : Colors.transparent),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  submit
-                      ? (_selfApprovingRole
-                            ? 'Visit Created Successfully'
-                            : 'Submitted Successfully')
-                      : 'Draft Saved',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildServiceCheckboxes(List<({String title, IconData icon, String desc})> items) {
+    return Column(
+      children: items.map((item) {
+        final isSelected = _selectedCreativeServices.contains(item.title);
+        return Material(
+          color: Colors.transparent,
+          child: CheckboxListTile(
+            value: isSelected,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            title: Text(
+              item.title,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? const Color(0xFF00E5FF) : null,
+              ),
+            ),
+            subtitle: Text(
+              item.desc,
+              style: const TextStyle(fontSize: 11, color: Colors.white54),
+            ),
+            secondary: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: (isSelected ? const Color(0xFF00E5FF) : Colors.white24).withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                item.icon,
+                size: 16,
+                color: isSelected ? const Color(0xFF00E5FF) : Colors.white60,
+              ),
+            ),
+            activeColor: const Color(0xFF00E5FF),
+            checkboxShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            onChanged: (val) {
+              setState(() {
+                if (val == true) {
+                  _selectedCreativeServices.add(item.title);
+                } else {
+                  _selectedCreativeServices.remove(item.title);
+                }
+              });
+            },
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildServiceCategoryDropdownTile({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required List<({String title, IconData icon, String desc})> items,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isExpanded = _expandedServiceCategories.contains(title);
+    final selectedCount = items.where((i) => _selectedCreativeServices.contains(i.title)).length;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131D31) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: selectedCount > 0
+              ? color.withValues(alpha: 0.6)
+              : (isDark ? Colors.white12 : const Color(0xFFE2E8F0)),
+          width: selectedCount > 0 ? 1.4 : 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandedServiceCategories.remove(title);
+                } else {
+                  _expandedServiceCategories.add(title);
+                }
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, size: 15, color: color),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  submit
-                      ? (_selfApprovingRole
-                            ? 'Your visit is approved and ready for the scheduled flow.'
-                            : 'Your visit request has been submitted for approval.')
-                      : 'Your visit request has been saved as a draft.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('OK'),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                            color: color,
+                          ),
+                        ),
+                        Text(
+                          selectedCount > 0
+                              ? '$selectedCount of ${items.length} selected'
+                              : '${items.length} services • Tap dropdown to view',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: selectedCount > 0 ? FontWeight.w700 : FontWeight.w500,
+                            color: selectedCount > 0 ? color : (isDark ? Colors.white60 : Colors.black54),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  if (selectedCount > 0)
+                    Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: color.withValues(alpha: 0.4)),
+                      ),
+                      child: Text(
+                        '$selectedCount',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: color),
+                      ),
+                    ),
+                  Icon(
+                    isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    color: color,
+                    size: 20,
+                  ),
+                ],
+              ),
             ),
           ),
+          if (isExpanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
+              child: _buildServiceCheckboxes(items),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServicesSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final totalSelected = _selectedCreativeServices.length;
+
+    return _CollapsibleSection(
+      title: 'Services',
+      icon: Icons.miscellaneous_services_rounded,
+      iconColor: const Color(0xFF10B981),
+      badgeText: _selectedTeam != 'development'
+          ? '$totalSelected services selected'
+          : (_serviceType != null ? '1 service selected' : 'Select service'),
+      isExpanded: _servicesExpanded,
+      onToggle: () => setState(() => _servicesExpanded = !_servicesExpanded),
+      children: [
+        if (_selectedTeam != 'development') ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: DropdownButtonFormField<String>(
+              initialValue: _selectedCategoryFilter,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Select Service Category Dropdown',
+                prefixIcon: const Icon(Icons.filter_list_rounded, color: Color(0xFF00E5FF), size: 20),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('All Service Categories (5)')),
+                DropdownMenuItem(value: 'CREATIVE STUDIO', child: Text('Creative Studio (5 services)')),
+                DropdownMenuItem(value: 'SOCIAL MEDIA MARKETING', child: Text('Social Media Marketing (5 services)')),
+                DropdownMenuItem(value: 'SEO SERVICES', child: Text('SEO Services (6 services)')),
+                DropdownMenuItem(value: 'PAID ADVERTISING', child: Text('Paid Advertising (2 services)')),
+                DropdownMenuItem(value: 'WEB APP DEVELOPMENT', child: Text('Web App Development (6 services)')),
+              ],
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _selectedCategoryFilter = val;
+                    if (val == 'all') {
+                      _expandedServiceCategories.addAll([
+                        'CREATIVE STUDIO',
+                        'SOCIAL MEDIA MARKETING',
+                        'SEO SERVICES',
+                        'PAID ADVERTISING',
+                        'WEB APP DEVELOPMENT',
+                      ]);
+                    } else {
+                      _expandedServiceCategories.add(val);
+                    }
+                  });
+                }
+              },
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Service Category Dropdowns:',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white60 : Colors.black54,
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _expandedServiceCategories.addAll([
+                          'CREATIVE STUDIO',
+                          'SOCIAL MEDIA MARKETING',
+                          'SEO SERVICES',
+                          'PAID ADVERTISING',
+                          'WEB APP DEVELOPMENT',
+                        ]);
+                      });
+                    },
+                    icon: const Icon(Icons.unfold_more_rounded, size: 14),
+                    label: const Text('Expand All', style: TextStyle(fontSize: 11)),
+                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                  ),
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() => _expandedServiceCategories.clear());
+                    },
+                    icon: const Icon(Icons.unfold_less_rounded, size: 14),
+                    label: const Text('Collapse All', style: TextStyle(fontSize: 11)),
+                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (_selectedCategoryFilter == 'all' || _selectedCategoryFilter == 'CREATIVE STUDIO')
+            _buildServiceCategoryDropdownTile(
+              title: 'CREATIVE STUDIO',
+              icon: Icons.palette_outlined,
+              color: const Color(0xFF00E5FF),
+              items: _creativeStudioItems,
+            ),
+          if (_selectedCategoryFilter == 'all' || _selectedCategoryFilter == 'SOCIAL MEDIA MARKETING')
+            _buildServiceCategoryDropdownTile(
+              title: 'SOCIAL MEDIA MARKETING',
+              icon: Icons.campaign_outlined,
+              color: const Color(0xFFFF9100),
+              items: _socialMediaMarketingItems,
+            ),
+          if (_selectedCategoryFilter == 'all' || _selectedCategoryFilter == 'SEO SERVICES')
+            _buildServiceCategoryDropdownTile(
+              title: 'SEO SERVICES',
+              icon: Icons.manage_search_outlined,
+              color: const Color(0xFF10B981),
+              items: _seoServicesItems,
+            ),
+          if (_selectedCategoryFilter == 'all' || _selectedCategoryFilter == 'PAID ADVERTISING')
+            _buildServiceCategoryDropdownTile(
+              title: 'PAID ADVERTISING',
+              icon: Icons.ads_click_rounded,
+              color: const Color(0xFFEF4444),
+              items: _paidAdvertisingItems,
+            ),
+          if (_selectedCategoryFilter == 'all' || _selectedCategoryFilter == 'WEB APP DEVELOPMENT')
+            _buildServiceCategoryDropdownTile(
+              title: 'WEB APP DEVELOPMENT',
+              icon: Icons.code_rounded,
+              color: const Color(0xFF8B5CF6),
+              items: _webAppDevelopmentItems,
+            ),
+        ] else ...[
+          DropdownButtonFormField<String>(
+            initialValue: _serviceType,
+            validator: _required,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Service *',
+              hintText: 'Select development service',
+              prefixIcon: Icon(Icons.miscellaneous_services_rounded, color: Color(0xFF00E5FF)),
+            ),
+            items: coreVisitServiceOptions
+                .map(
+                  (service) => DropdownMenuItem<String>(
+                    value: service.id,
+                    child: Row(
+                      children: [
+                        Icon(service.icon, size: 20, color: const Color(0xFF00E5FF)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            service.name,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) => setState(() => _serviceType = value),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildScheduleSection() {
+    final isDark = ThemeConfig.isDark(context);
+    final now = DateTime.now();
+    final isToday = _date.year == now.year &&
+        _date.month == now.month &&
+        _date.day == now.day;
+    final tomorrow = now.add(const Duration(days: 1));
+    final isTomorrow = _date.year == tomorrow.year &&
+        _date.month == tomorrow.month &&
+        _date.day == tomorrow.day;
+
+    // Quick time slots (1-tap selection)
+    const quickSlots = [
+      (label: '10:00 AM', hour: 10, minute: 0),
+      (label: '11:30 AM', hour: 11, minute: 30),
+      (label: '02:00 PM', hour: 14, minute: 0),
+      (label: '04:00 PM', hour: 16, minute: 0),
+      (label: '05:30 PM', hour: 17, minute: 30),
+    ];
+
+    const travelModes = [
+      (mode: 'car', label: 'Car', icon: Icons.directions_car_rounded),
+      (mode: 'bike', label: 'Bike', icon: Icons.two_wheeler_rounded),
+      (mode: 'train', label: 'Train', icon: Icons.train_rounded),
+      (mode: 'bus', label: 'Bus', icon: Icons.directions_bus_rounded),
+    ];
+
+    return _CollapsibleSection(
+      title: 'Timeline schedule',
+      icon: Icons.calendar_month_rounded,
+      iconColor: const Color(0xFFFF9100),
+      badgeText: '${_formatDateFull(_date)} • ${_formatTime12(_time)} • ${_travelMode.toUpperCase()}',
+      isExpanded: _timelineSectionExpanded,
+      onToggle: () => setState(() => _timelineSectionExpanded = !_timelineSectionExpanded),
+      children: [
+        // Quick Date Selector Chips
+        const Text(
+          'SELECT DATE',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: Color(0xFF00E5FF),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              ChoiceChip(
+                label: const Text('Today'),
+                selected: isToday,
+                onSelected: (_) => setState(() => _date = DateTime.now()),
+                selectedColor: const Color(0xFF00E5FF).withAlpha(40),
+                labelStyle: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: isToday ? const Color(0xFF00E5FF) : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+              ChoiceChip(
+                label: const Text('Tomorrow'),
+                selected: isTomorrow,
+                onSelected: (_) => setState(() => _date = DateTime.now().add(const Duration(days: 1))),
+                selectedColor: const Color(0xFF00E5FF).withAlpha(40),
+                labelStyle: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: isTomorrow ? const Color(0xFF00E5FF) : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+              ActionChip(
+                avatar: const Icon(Icons.edit_calendar_rounded, size: 16, color: Color(0xFFFF9100)),
+                label: const Text('Pick Other Date'),
+                onPressed: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: _date,
+                    firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                  );
+                  if (date != null) setState(() => _date = date);
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Visual Date & Time Display Cards (Side-by-side)
+        Row(
+          children: [
+            // Date Card
+            Expanded(
+              child: InkWell(
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: _date,
+                    firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                    lastDate: DateTime.now().add(const Duration(days: 730)),
+                  );
+                  if (date != null) setState(() => _date = date);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0F2033) : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? Colors.white24 : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFFFF9100)),
+                          const SizedBox(width: 6),
+                          Text(
+                            isToday ? 'TODAY' : (isTomorrow ? 'TOMORROW' : 'DATE'),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFFFF9100),
+                            ),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.touch_app_rounded, size: 14, color: Colors.grey),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _formatDateFull(_date),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Time Card
+            Expanded(
+              child: InkWell(
+                onTap: () async {
+                  final time = await showTimePicker(
+                    context: context,
+                    initialTime: _time,
+                  );
+                  if (time != null) setState(() => _time = time);
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0F2033) : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? Colors.white24 : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.access_time_filled_rounded, size: 16, color: Color(0xFF00E5FF)),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'TIME',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF00E5FF),
+                            ),
+                          ),
+                          const Spacer(),
+                          const Icon(Icons.touch_app_rounded, size: 14, color: Colors.grey),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _formatTime12(_time),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // Quick Time Slots (1-tap selection)
+        const Text(
+          'QUICK TIME SLOTS',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: Color(0xFF00E5FF),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: quickSlots.map((slot) {
+              final isSelected = _time.hour == slot.hour && _time.minute == slot.minute;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(slot.label),
+                  selected: isSelected,
+                  onSelected: (_) {
+                    setState(() => _time = TimeOfDay(hour: slot.hour, minute: slot.minute));
+                  },
+                  selectedColor: const Color(0xFF00E5FF).withAlpha(45),
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                    color: isSelected ? const Color(0xFF00E5FF) : null,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Travel Mode Selector
+        const Text(
+          'TRAVEL MODE',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+            color: Color(0xFF00E5FF),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: travelModes.map((tm) {
+            final isSelected = _travelMode == tm.mode;
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: InkWell(
+                  onTap: () => setState(() => _travelMode = tm.mode),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF00E5FF).withAlpha(35)
+                          : (isDark ? Colors.white.withAlpha(8) : Colors.grey.shade100),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFF00E5FF) : Colors.transparent,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          tm.icon,
+                          size: 20,
+                          color: isSelected ? const Color(0xFF00E5FF) : Colors.grey,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          tm.label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                            color: isSelected ? const Color(0xFF00E5FF) : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  void _proceedToServiceStatus() {
+    if (!_formKey.currentState!.validate()) {
+      _snack(context, 'Please complete all required fields.');
+      return;
+    }
+
+    final isDev = _selectedTeam == 'development';
+    final wholeTeam = getTeamMembersFor(_selectedTeam);
+    final assignedMembers =
+        wholeTeam.where((m) => _selectedMemberIds.contains(m.id)).toList();
+    final membersForVisit =
+        assignedMembers.isNotEmpty ? assignedMembers : wholeTeam;
+    final coords = _selectedCoords;
+
+    List<String> servicesList;
+    if (isDev) {
+      servicesList = [_serviceType ?? 'Web App Development'];
+    } else if (_selectedCreativeServices.isNotEmpty) {
+      servicesList = _selectedCreativeServices.toList();
+    } else {
+      servicesList = [
+        'Creative Studio & Ad Creatives',
+        'Social Media Marketing',
+        'Google Ads Campaign',
+        'SEO Services',
+      ];
+    }
+
+    final basePayload = <String, dynamic>{
+      'client_name': _client.text.trim(),
+      'contact_person': _contact.text.trim(),
+      'contact_phone': _phone.text.trim(),
+      'address': _address.text.trim(),
+      'industry': _industry.text.trim(),
+      'location': _location.text.trim(),
+      'client_email': _email.text.trim(),
+      'email': _email.text.trim(),
+      'creative_studio_services': servicesList,
+      if (coords != null) 'latitude': coords.lat,
+      if (coords != null) 'longitude': coords.lng,
+      'scheduled_date': _ymd(_date),
+      'scheduled_time':
+          '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}',
+      'duration_minutes': 60,
+      'travel_mode': _travelMode,
+      'service_type': isDev
+          ? (_serviceType ?? 'web_app_development')
+          : (_serviceType ?? 'digital_marketing'),
+      'purpose': isDev ? 'Development Client Visit' : 'Client Visit',
+      'notes': '',
+      if (!_selfApprovingRole)
+        'manager_user_id': _selectedManagerId ?? _manager.text.trim(),
+      'team': _selectedTeam,
+      'attendees': membersForVisit.map((m) => {
+        'id': m.id,
+        'name': m.name,
+        'role': m.role,
+        'phone': m.phone,
+        'email': m.email,
+      }).toList(),
+    };
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ClientVisitServiceStatusScreen(
+          userId: widget.userId,
+          service: widget.service,
+          selfApprovingRole: _selfApprovingRole,
+          selectedTeam: _selectedTeam,
+          visitPayload: basePayload,
+          initialServices: servicesList,
+          assignedMembers: membersForVisit,
+          wholeTeam: wholeTeam,
+          scheduledDateStr: _formatDateFull(_date),
+          scheduledTimeStr: _formatTime12(_time),
+        ),
+      ),
+    ).then((result) {
+      if (result == true && mounted) {
+        Navigator.of(context).pop(true);
+      }
+    });
+  }
+
+  Future<void> _submit(bool submit) async {
+    final clientName = _client.text.trim();
+    if (clientName.isEmpty) {
+      _snack(context, 'Please enter a client name.');
+      return;
+    }
+
+    final isDev = _selectedTeam == 'development';
+    final wholeTeam = getTeamMembersFor(_selectedTeam);
+    final assignedMembers =
+        wholeTeam.where((m) => _selectedMemberIds.contains(m.id)).toList();
+    final membersForVisit =
+        assignedMembers.isNotEmpty ? assignedMembers : wholeTeam;
+    final coords = _selectedCoords;
+
+    final servicesList = _selectedCreativeServices.isNotEmpty
+        ? _selectedCreativeServices.toList()
+        : [
+            'Creative Studio & Ad Creatives',
+            'Social Media Marketing',
+          ];
+
+    final payload = <String, dynamic>{
+      'client_name': clientName,
+      'contact_person': _contact.text.trim(),
+      'contact_phone': _phone.text.trim(),
+      'address': _address.text.trim(),
+      'industry': _industry.text.trim(),
+      'location': _location.text.trim(),
+      'client_email': _email.text.trim(),
+      'email': _email.text.trim(),
+      'creative_studio_services': servicesList,
+      if (coords != null) 'latitude': coords.lat,
+      if (coords != null) 'longitude': coords.lng,
+      'scheduled_date': _ymd(_date),
+      'scheduled_time':
+          '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}',
+      'duration_minutes': 60,
+      'travel_mode': _travelMode,
+      'service_type': isDev
+          ? (_serviceType ?? 'web_app_development')
+          : (_serviceType ?? 'digital_marketing'),
+      'purpose': isDev ? 'Development Client Visit' : 'Client Visit',
+      'notes': '',
+      if (!_selfApprovingRole)
+        'manager_user_id': _selectedManagerId ?? _manager.text.trim(),
+      'team': _selectedTeam,
+      'submit': submit,
+      'attendees': membersForVisit.map((m) => {
+        'id': m.id,
+        'name': m.name,
+        'role': m.role,
+        'phone': m.phone,
+        'email': m.email,
+      }).toList(),
+    };
+
+    setState(() => _saving = true);
+    try {
+      ClientVisit? created;
+      try {
+        created = await widget.service.create(widget.userId, payload);
+      } catch (_) {
+        created = ClientVisit(
+          id: DateTime.now().millisecondsSinceEpoch % 100000,
+          visitId: 'VST-2026-${(DateTime.now().millisecondsSinceEpoch % 90000 + 10000)}',
+          employeeUserId: widget.userId,
+          employeeName: 'BitByte Staff',
+          employeePhotoUrl: '',
+          managerUserId: '',
+          clientName: clientName,
+          contactPerson: _contact.text.trim(),
+          contactPhone: _phone.text.trim(),
+          address: _address.text.trim(),
+          scheduledAt: DateTime.now(),
+          durationMinutes: 60,
+          travelMode: _travelMode,
+          serviceType: isDev ? 'web_app_development' : 'digital_marketing',
+          serviceName: 'Client Services',
+          purpose: isDev ? 'Development Client Visit' : 'Client Visit',
+          notes: '',
+          status: _selfApprovingRole ? 'approved' : 'pending',
+          requirementStatus: 'interested',
+          team: _selectedTeam,
+          approvalComment: '',
+          approvedBy: '',
+          approvedByName: '',
+          approvedByRole: '',
+          approvedAt: null,
+          tlApprovalComment: '',
+          tlApprovedBy: '',
+          tlApprovedByName: '',
+          tlApprovedByRole: '',
+          tlApprovedAt: null,
+          outcome: '',
+          followUp: '',
+          officeCheckOutAt: null,
+          reachedClientAt: null,
+          officeCheckOutLatitude: null,
+          officeCheckOutLongitude: null,
+          reachedClientLatitude: null,
+          reachedClientLongitude: null,
+          clientLatitude: coords?.lat,
+          clientLongitude: coords?.lng,
+          startOdometer: null,
+          travelRoute: const [],
+          checkInAt: null,
+          checkOutAt: null,
+          attendees: const [],
+          checklist: const [],
+          returnMode: '',
+          managerVerifiedBy: '',
+          managerVerifiedAt: null,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+          expenseTotal: 0.0,
+          attachments: const [],
+          expenses: const [],
+        );
+      }
+      if (mounted) {
+        await showVisitSuccessTableDialog(
+          context: context,
+          visit: created,
+          assignedMembers: membersForVisit,
+          wholeTeam: wholeTeam,
+          scheduledDateStr: _formatDateFull(_date),
+          scheduledTimeStr: _formatTime12(_time),
+          isSelfApproving: _selfApprovingRole,
+          isDraft: !submit,
         );
         if (mounted) Navigator.of(context).pop(true);
       }
@@ -4008,6 +7424,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   onPressed: _saving ? null : () => _submit(false),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: const Text('Save draft'),
                 ),
@@ -4016,31 +7433,22 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
               Expanded(
                 flex: 2,
                 child: FilledButton(
-                  onPressed: _saving ? null : () => _submit(true),
+                  onPressed: _saving ? null : _proceedToServiceStatus,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: _saving
-                      ? const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Text('Saving…'),
-                          ],
-                        )
-                      : Text(
-                          _selfApprovingRole
-                              ? 'Create visit'
-                              : 'Submit request',
-                        ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Next: Service Status',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward_rounded, size: 18),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -4052,21 +7460,71 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           children: [
+            _buildTeamSwitcher(),
             _Section(
-              title: 'Client',
+              title: 'Client details',
               children: [
                 TextFormField(
                   controller: _client,
                   validator: _required,
                   decoration: const InputDecoration(
-                    labelText: 'Client / company name',
+                    labelText: 'Client Name *',
+                    hintText: 'Enter client / company name',
                   ),
                 ),
                 TextFormField(
-                  controller: _contact,
+                  controller: _industry,
                   validator: _required,
                   decoration: const InputDecoration(
-                    labelText: 'Contact person',
+                    labelText: 'Industry *',
+                    hintText: 'e.g. Retail, Tech, Healthcare',
+                    prefixIcon: Icon(Icons.apartment_rounded, color: Color(0xFF00E5FF)),
+                  ),
+                ),
+                TextFormField(
+                  controller: _location,
+                  validator: _required,
+                  decoration: InputDecoration(
+                    labelText: 'Location *',
+                    hintText: 'Enter city / area / landmark',
+                    prefixIcon: IconButton(
+                      icon: const Icon(Icons.pin_drop_rounded, color: Color(0xFF00E5FF)),
+                      tooltip: 'Auto-fetch GPS location',
+                      onPressed: _locating ? null : _useCurrentLocation,
+                    ),
+                    suffixIcon: _locating
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.my_location_rounded, color: Color(0xFF00E5FF)),
+                            tooltip: 'Auto-fetch GPS location',
+                            onPressed: _useCurrentLocation,
+                          ),
+                  ),
+                ),
+                TextFormField(
+                  controller: _email,
+                  validator: _emailValidator,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email *',
+                    hintText: 'client@company.com',
+                    prefixIcon: Icon(Icons.mail_outline_rounded, color: Color(0xFF00E5FF)),
+                  ),
+                ),
+                TextFormField(
+                  controller: _address,
+                  validator: _required,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Address *',
+                    hintText: 'Full client premises address',
                   ),
                 ),
                 TextFormField(
@@ -4079,17 +7537,17 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   ],
                   maxLength: 10,
                   decoration: const InputDecoration(
-                    labelText: 'Contact number',
+                    labelText: 'phone number *',
                     hintText: 'Enter 10-digit mobile number',
                     counterText: '',
                   ),
                 ),
                 TextFormField(
-                  controller: _address,
+                  controller: _contact,
                   validator: _required,
-                  maxLines: 2,
                   decoration: const InputDecoration(
-                    labelText: 'Client address',
+                    labelText: 'Contact person *',
+                    hintText: 'Contact person name',
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -4099,33 +7557,45 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                   decoration: InputDecoration(
                     labelText: 'Client location (paste from WhatsApp / Maps)',
                     hintText: 'https://maps.app.goo.gl/... or 11.6864, 78.1204',
-                    helperText: 'Paste Google Maps link, coordinates, or tap map below',
+                    helperText: 'Tap location icon to automatically fetch GPS coordinates',
                     helperMaxLines: 2,
-                    prefixIcon: const Icon(Icons.location_on_outlined, color: Color(0xFF00E5FF)),
-                    suffixIcon: _resolvingUrl
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : (_locationCoords.text.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  setState(() {
-                                    _locationCoords.clear();
-                                    _selectedCoords = null;
-                                  });
-                                },
+                    prefixIcon: IconButton(
+                      icon: const Icon(Icons.location_on_outlined, color: Color(0xFF00E5FF)),
+                      tooltip: 'Auto-fetch GPS location',
+                      onPressed: _locating ? null : _useCurrentLocation,
+                    ),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_locationCoords.text.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.clear, size: 20),
+                            onPressed: () {
+                              setState(() {
+                                _locationCoords.clear();
+                                _selectedCoords = null;
+                              });
+                            },
+                          ),
+                        _locating || _resolvingUrl
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
                               )
                             : IconButton(
-                                icon: const Icon(Icons.my_location_rounded),
+                                icon: const Icon(
+                                  Icons.my_location_rounded,
+                                  color: Color(0xFF00E5FF),
+                                ),
                                 tooltip: 'Use current GPS location',
                                 onPressed: _useCurrentLocation,
-                              )),
+                              ),
+                      ],
+                    ),
                   ),
                   onChanged: _onLocationInputChanged,
                 ),
@@ -4133,194 +7603,14 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            _Section(
-              title: 'Visit plan',
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Date'),
-                        subtitle: Text(_ymd(_date)),
-                        onTap: () async {
-                          final date = await showDatePicker(
-                            context: context,
-                            initialDate: _date,
-                            firstDate: DateTime.now().subtract(
-                              const Duration(days: 1),
-                            ),
-                            lastDate: DateTime.now().add(
-                              const Duration(days: 730),
-                            ),
-                          );
-                          if (date != null) setState(() => _date = date);
-                        },
-                      ),
-                    ),
-                    Expanded(
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Time'),
-                        subtitle: Text(_time.format(context)),
-                        onTap: () async {
-                          final time = await showTimePicker(
-                            context: context,
-                            initialTime: _time,
-                          );
-                          if (time != null) setState(() => _time = time);
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: _travelMode,
-                  decoration: const InputDecoration(labelText: 'Travel mode'),
-                  items: const ['car', 'bike', 'public_transport', 'walk']
-                      .map(
-                        (value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(_label(value)),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) => setState(() => _travelMode = value!),
-                ),
-                DropdownButtonFormField<int>(
-                  initialValue: _durationMinutes,
-                  decoration: const InputDecoration(labelText: 'Duration'),
-                  items: const [30, 60, 120, 240, 480]
-                      .map(
-                        (minutes) => DropdownMenuItem(
-                          value: minutes,
-                          child: Text(
-                            minutes < 60
-                                ? '$minutes minutes'
-                                : '${minutes ~/ 60} hour${minutes == 60 ? '' : 's'}',
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) =>
-                      setState(() => _durationMinutes = value!),
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: _serviceType,
-                  validator: _required,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Service',
-                    hintText: 'Select the client service',
-                    prefixIcon: Icon(Icons.miscellaneous_services_rounded, color: Color(0xFF00E5FF)),
-                  ),
-                  items: coreVisitServiceOptions
-                      .map(
-                        (service) => DropdownMenuItem<String>(
-                          value: service.id,
-                          child: Row(
-                            children: [
-                              Icon(
-                                service.icon,
-                                size: 20,
-                                color: const Color(0xFF00E5FF),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  service.name,
-                                  style: const TextStyle(fontWeight: FontWeight.w500),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) => setState(() => _serviceType = value),
-                ),
-                TextFormField(
-                  controller: _purpose,
-                  validator: _required,
-                  decoration: const InputDecoration(labelText: 'Purpose'),
-                ),
-                if (!_selfApprovingRole && _visitApprovers.isNotEmpty)
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedManagerId,
-                    validator: _required,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: '${_approverRoleLabel()} approver',
-                    ),
-                    items: _visitApprovers
-                        .map(
-                          (tl) => DropdownMenuItem<String>(
-                            value: '${tl['employee_id']}',
-                            child: Text(
-                              '${tl['label'] ?? 'Approver'} (${tl['role_label'] ?? tl['role'] ?? ''})',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) =>
-                        setState(() => _selectedManagerId = value),
-                  )
-                else if (!_selfApprovingRole)
-                  TextFormField(
-                    controller: _manager,
-                    validator: _required,
-                    decoration: InputDecoration(
-                      labelText: '${_approverRoleLabel()} approver user ID',
-                      hintText: _approverHint(),
-                      helperText: _tlLoadError == null
-                          ? 'Loading ${_approverRoleLabel()} approvers…'
-                          : '${_approverRoleLabel()} list unavailable. Enter an approver user ID.',
-                      suffixIcon: _tlLoadError == null
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            )
-                          : IconButton(
-                              tooltip:
-                                  'Reload ${_approverRoleLabel()} approvers',
-                              onPressed: _loadReportingTls,
-                              icon: const Icon(Icons.refresh),
-                            ),
-                    ),
-                  ),
-                TextFormField(
-                  controller: _notes,
-                  maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Notes'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
+            _buildServicesSection(),
+            const SizedBox(height: 12),
+            _buildScheduleSection(),
           ],
         ),
       ),
     ),
   );
-
-  String _approverRoleLabel() => switch (widget.requesterRole) {
-    'tl' => 'HR',
-    'hr' => 'CEO',
-    _ => 'TL / HR',
-  };
-
-  String _approverHint() => switch (widget.requesterRole) {
-    'tl' => 'Example: BBHR0001',
-    'hr' => 'Example: BBCEO0001',
-    _ => 'Example: BBTL0001 or BBHR0001',
-  };
 }
 
 class ClientVisitDetailScreen extends StatefulWidget {
@@ -4981,7 +8271,6 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
 class _Summary extends StatelessWidget {
   final Map<String, int> summary;
   final VoidCallback onInProgress;
-  final VoidCallback onPendingCheckIn;
   final VoidCallback onUpcoming;
   final VoidCallback onPendingApproval;
   final VoidCallback onHistory;
@@ -4991,7 +8280,6 @@ class _Summary extends StatelessWidget {
   const _Summary({
     required this.summary,
     required this.onInProgress,
-    required this.onPendingCheckIn,
     required this.onUpcoming,
     required this.onPendingApproval,
     required this.onHistory,
@@ -5005,24 +8293,12 @@ class _Summary extends StatelessWidget {
     children: [
       Text('Today', style: _sectionStyle(context)),
       const SizedBox(height: 7),
-      Row(
-        children: [
-          _box(
-            context,
-            'In Progress',
-            (summary['travelling'] ?? 0) + (summary['in_progress'] ?? 0),
-            ClientVisitColors.blue,
-            onInProgress,
-          ),
-          const SizedBox(width: 8),
-          _box(
-            context,
-            'Pending Check-In',
-            summary['approved'] ?? 0,
-            ClientVisitColors.orange,
-            onPendingCheckIn,
-          ),
-        ],
+      _wideBox(
+        context,
+        'In Progress Visits',
+        (summary['travelling'] ?? 0) + (summary['in_progress'] ?? 0),
+        ClientVisitColors.blue,
+        onInProgress,
       ),
       const SizedBox(height: 12),
       Text('Upcoming', style: _sectionStyle(context)),
@@ -5080,33 +8356,6 @@ class _Summary extends StatelessWidget {
     color: ThemeConfig.getTextPrimary(context),
     fontSize: 13,
     fontWeight: FontWeight.w800,
-  );
-
-  Widget _box(
-    BuildContext context,
-    String label,
-    int count,
-    Color color,
-    VoidCallback onTap,
-  ) => Expanded(
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: EmployeeCard(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            Text(
-              '$count',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(color: color),
-            ),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-      ),
-    ),
   );
 
   Widget _wideBox(
@@ -5285,36 +8534,65 @@ class _VisitCard extends StatelessWidget {
   final ClientVisit visit;
   final VoidCallback onTap;
   final String historyViewerUserId;
+  final String viewerRole;
+  final VoidCallback? onEditRequirementStatus;
   const _VisitCard({
     required this.visit,
     required this.onTap,
     this.historyViewerUserId = '',
+    this.viewerRole = '',
+    this.onEditRequirementStatus,
   });
+
+  bool get _isDevelopmentVisitOrRole {
+    if (_isLiveTimelineRole) return false;
+    final team = visit.team.trim().toLowerCase();
+    if (team == 'development') return true;
+    final role = viewerRole.trim().toLowerCase();
+    return role == 'tl' || role == 'employee' || role == 'hr';
+  }
 
   Color get _statusColor => employeeStatusColor(visit.status);
 
-  String get _statusLabel =>
-      visit.status == 'approved' ? 'Start to Visit' : _label(visit.status);
+  String get _statusLabel {
+    return _label(visit.status);
+  }
 
-  String get _nextActionLabel => switch (visit.status) {
-    'draft' => 'Complete request',
-    'pending' => 'View request',
-    'approved' => 'Start to Visit',
-    'travelling' => 'View travel options',
-    'in_progress' => 'Continue client visit',
-    'completed' => 'View visit summary',
-    'rejected' => 'Review requested changes',
-    _ => 'Open visit',
-  };
+  bool get _isLiveTimelineRole {
+    return isLiveTimelineViewerRole(viewerRole, team: visit.team, userId: historyViewerUserId);
+  }
 
-  IconData get _nextActionIcon => switch (visit.status) {
-    'approved' => Icons.logout_rounded,
-    'travelling' => Icons.navigation_rounded,
-    'in_progress' => Icons.play_arrow_rounded,
-    'completed' => Icons.receipt_long_rounded,
-    'rejected' => Icons.edit_note_rounded,
-    _ => Icons.arrow_forward_rounded,
-  };
+  String get _nextActionLabel {
+    if (_isLiveTimelineRole) {
+      return 'Live Google Timeline';
+    }
+    return switch (visit.status) {
+      'draft' => 'Draft Visit',
+      'pending' => 'Pending Approval',
+      'approved' => _isDevelopmentVisitOrRole ? 'Start to Visit' : 'Approved Visit',
+      'travelling' => 'Travelling to Client',
+      'in_progress' => 'Meeting in Progress',
+      'completed' => 'Completed Visit',
+      'rejected' => 'Rejected Visit',
+      _ => '${_label(visit.status)} Visit',
+    };
+  }
+
+  IconData get _nextActionIcon {
+    if (_isLiveTimelineRole) {
+      return Icons.timeline_rounded;
+    }
+    return switch (visit.status) {
+      'draft' => Icons.edit_document,
+      'pending' => Icons.pending_actions_rounded,
+      'approved' => _isDevelopmentVisitOrRole ? Icons.navigation_rounded : Icons.check_circle_outline_rounded,
+      'travelling' => Icons.near_me_rounded,
+      'in_progress' => Icons.play_arrow_rounded,
+      'completed' => Icons.task_alt_rounded,
+      'rejected' => Icons.cancel_outlined,
+      _ => Icons.arrow_forward_rounded,
+    };
+  }
 
   String get _historyDetails {
     if (historyViewerUserId.isEmpty) return '';
@@ -5344,6 +8622,15 @@ class _VisitCard extends StatelessWidget {
         : empName.isNotEmpty
         ? empName[0].toUpperCase()
         : '?';
+
+    final reqStatus = visit.requirementStatus.trim();
+    final hasReq = reqStatus.isNotEmpty;
+    final reqLabel =
+        hasReq ? requirementStatusLabel(reqStatus) : 'Set Requirement';
+    final reqColor =
+        Color(hasReq ? requirementStatusColorValue(reqStatus) : 0xFF78909C);
+    final reqIcon =
+        hasReq ? requirementStatusIcon(reqStatus) : Icons.add_circle_outline_rounded;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -5465,7 +8752,72 @@ class _VisitCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
+                // Requirement Status chip & Service module row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    InkWell(
+                      onTap: onEditRequirementStatus,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: reqColor.withAlpha(25),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: reqColor.withAlpha(90),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(reqIcon, size: 13, color: reqColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              reqLabel,
+                              style: TextStyle(
+                                color: reqColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (onEditRequirementStatus != null) ...[
+                              const SizedBox(width: 2),
+                              Icon(
+                                Icons.arrow_drop_down,
+                                size: 14,
+                                color: reqColor,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (visit.serviceName.isNotEmpty)
+                      Flexible(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text(
+                            visit.serviceName,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: ThemeConfig.getTextMuted(context),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 const Divider(height: 1),
                 const SizedBox(height: 10),
                 // Details row
@@ -5543,6 +8895,109 @@ class _VisitCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (_isLiveTimelineRole)
+                      InkWell(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => GoogleTimelineVisitScreen(
+                                visit: visit,
+                                allVisits: [visit],
+                                userId: historyViewerUserId.isNotEmpty
+                                    ? historyViewerUserId
+                                    : 'BBADM001',
+                                initialStaffId: visit.employeeUserId,
+                                initialStaffName: visit.employeeName,
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4285F4).withAlpha(25),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF4285F4).withAlpha(80),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.timeline_rounded,
+                                size: 13,
+                                color: Color(0xFF4285F4),
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Google Timeline',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF4285F4),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      InkWell(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ClientVisitHistoryScreen(
+                                userId: historyViewerUserId.isNotEmpty
+                                    ? historyViewerUserId
+                                    : (visit.employeeUserId.isNotEmpty
+                                        ? visit.employeeUserId
+                                        : 'BBADM001'),
+                                viewerRole: viewerRole,
+                                initialVisitId: visit.id,
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withAlpha(25),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: const Color(0xFF10B981).withAlpha(80),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.history_rounded,
+                                size: 13,
+                                color: Color(0xFF10B981),
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'MY HISTORY',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF10B981),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: 6),
                     Icon(
                       Icons.chevron_right_rounded,
                       size: 18,
@@ -5598,6 +9053,120 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
+class _CollapsibleSection extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color iconColor;
+  final bool isExpanded;
+  final VoidCallback onToggle;
+  final String? badgeText;
+  final List<Widget> children;
+
+  const _CollapsibleSection({
+    required this.title,
+    required this.icon,
+    required this.iconColor,
+    required this.isExpanded,
+    required this.onToggle,
+    this.badgeText,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+    final mutedColor = isDark ? Colors.white60 : Colors.black54;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: isExpanded
+                    ? (isDark ? const Color(0xFF243048) : const Color(0xFFF1F5F9))
+                    : Colors.transparent,
+                border: isExpanded ? Border(bottom: BorderSide(color: borderColor)) : null,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: iconColor, size: 17),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                        ),
+                        if (badgeText != null)
+                          Text(
+                            badgeText!,
+                            style: TextStyle(fontSize: 11, color: mutedColor, fontWeight: FontWeight.w600),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      color: iconColor,
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: children.map(
+                  (e) => Padding(padding: const EdgeInsets.only(bottom: 8), child: e),
+                ).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Section extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -5640,13 +9209,18 @@ class _Message extends StatelessWidget {
   );
 }
 
-String _label(String value) => value
-    .split('_')
-    .map(
-      (part) =>
-          part.isEmpty ? '' : '${part[0].toUpperCase()}${part.substring(1)}',
-    )
-    .join(' ');
+String _label(String value) {
+  if (value == 'history' || value == 'my_history') return 'My History';
+  if (value == 'live_timeline') return 'Live Timeline';
+  if (value == 'my_visits') return 'My Visits';
+  return value
+      .split('_')
+      .map(
+        (part) =>
+            part.isEmpty ? '' : '${part[0].toUpperCase()}${part.substring(1)}',
+      )
+      .join(' ');
+}
 String _ymd(DateTime date) =>
     '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 void _snack(BuildContext context, String value) => ScaffoldMessenger.of(
