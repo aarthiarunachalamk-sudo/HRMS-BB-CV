@@ -4,7 +4,7 @@ from django.utils import timezone
 from .models import EmployeeAccount, EmployeeRegistration
 
 
-EMPLOYEE_ENABLED_ROLES = {'ceo', 'hr', 'admin', 'tl', 'director', 'md'}
+EMPLOYEE_ENABLED_ROLES = {'ceo', 'hr', 'admin', 'tl', 'director', 'md', 'manager', 'pm'}
 
 
 def _account_email(user):

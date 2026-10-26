@@ -280,6 +280,15 @@ def employee_approval_action_view(request, pk):
             module='approval',
             reference_id=str(item.id),
         )
+        for pm_role in ('pm', 'manager'):
+            _create_notification(
+                role=pm_role,
+                title=f'{request_label} Passed Team Lead Review',
+                message=f'{item.title} passed Team Lead review and needs CEO approval.',
+                notification_type='info',
+                module='approval',
+                reference_id=str(item.id),
+            )
     elif role == 'ceo':
         item.status = 'approved'
         item.current_stage = 2
@@ -538,7 +547,8 @@ ATTENDANCE_MONITOR_ROLES = ('superadmin', 'admin', 'ceo', 'md', 'director', 'hr'
 
 
 def _notify_employee_presence(record, event):
-    employee_name = _employee_name(record.employee_id)
+    import threading
+    employee_id = record.employee_id
     event_label = 'checked in' if event == 'check_in' else 'checked out'
     event_time = record.check_in if event == 'check_in' else record.check_out
     offset = (
@@ -546,41 +556,51 @@ def _notify_employee_presence(record, event):
         if event == 'check_in'
         else record.check_out_timezone_offset_minutes
     )
-    message = (
-        f'{employee_name} ({record.employee_id}) {event_label} at '
-        f'{_format_time(event_time, offset)}. Status: {record.status}.'
-    )
-    event_key = 'in' if event == 'check_in' else 'out'
-    reference_id = f'{record.employee_id}:{record.attendance_date:%Y%m%d}:{event_key}'
-    for role in ATTENDANCE_MONITOR_ROLES:
-        exists = AppNotification.objects.filter(
-            recipient_role=role,
-            module='attendance_presence',
-            reference_id=reference_id,
-        ).exists()
-        if not exists:
-            _create_notification(
-                role=role,
-                title='Employee Attendance',
-                message=message,
-                notification_type='success' if event == 'check_in' else 'info',
+    status = record.status
+    attendance_date = record.attendance_date
+
+    def _worker():
+        try:
+            employee_name = _employee_name(employee_id)
+            message = (
+                f'{employee_name} ({employee_id}) {event_label} at '
+                f'{_format_time(event_time, offset)}. Status: {status}.'
+            )
+            event_key = 'in' if event == 'check_in' else 'out'
+            reference_id = f'{employee_id}:{attendance_date:%Y%m%d}:{event_key}'
+            for role in ATTENDANCE_MONITOR_ROLES:
+                exists = AppNotification.objects.filter(
+                    recipient_role=role,
+                    module='attendance_presence',
+                    reference_id=reference_id,
+                ).exists()
+                if not exists:
+                    _create_notification(
+                        role=role,
+                        title='Employee Attendance',
+                        message=message,
+                        notification_type='success' if event == 'check_in' else 'info',
+                        module='attendance_presence',
+                        reference_id=reference_id,
+                    )
+            tl_recipient = _tl_recipient_for_employee(employee_id)
+            if tl_recipient and not AppNotification.objects.filter(
+                recipient_user_id=tl_recipient,
                 module='attendance_presence',
                 reference_id=reference_id,
-            )
-    tl_recipient = _tl_recipient_for_employee(record.employee_id)
-    if tl_recipient and not AppNotification.objects.filter(
-        recipient_user_id=tl_recipient,
-        module='attendance_presence',
-        reference_id=reference_id,
-    ).exists():
-        _create_notification(
-            user_id=tl_recipient,
-            title='Team Attendance',
-            message=message,
-            notification_type='success' if event == 'check_in' else 'info',
-            module='attendance_presence',
-            reference_id=reference_id,
-        )
+            ).exists():
+                _create_notification(
+                    user_id=tl_recipient,
+                    title='Team Attendance',
+                    message=message,
+                    notification_type='success' if event == 'check_in' else 'info',
+                    module='attendance_presence',
+                    reference_id=reference_id,
+                )
+        except Exception:
+            pass
+
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 def _identity_filter(value):

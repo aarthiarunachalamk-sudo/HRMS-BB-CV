@@ -457,64 +457,67 @@ class _RoleDashboardState extends State<RoleDashboard> {
       _BottomNavItem(Icons.more_horiz_rounded, 'More'),
     ];
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.navBackground,
-        border: Border(top: BorderSide(color: colors.softBorder)),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-      child: Row(
-        children: List.generate(items.length, (index) {
-          final item = items[index];
-          final isSelected = index == _selectedTabIndex;
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.navBackground,
+          border: Border(top: BorderSide(color: colors.softBorder)),
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+        child: Row(
+          children: List.generate(items.length, (index) {
+            final item = items[index];
+            final isSelected = index == _selectedTabIndex;
 
-          return Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                setState(() {
-                  _selectedTabIndex = index;
-                });
-              },
-              child: SizedBox(
-                height: 48,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      item.icon,
-                      color: isSelected ? colors.primary : colors.navMuted,
-                      size: 18,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+            return Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  setState(() {
+                    _selectedTabIndex = index;
+                  });
+                },
+                child: SizedBox(
+                  height: 48,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        item.icon,
                         color: isSelected ? colors.primary : colors.navMuted,
-                        fontSize: 11,
-                        fontWeight: isSelected
-                            ? FontWeight.w700
-                            : FontWeight.w500,
+                        size: 18,
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: isSelected ? 6 : 0,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: colors.primary,
+                      const SizedBox(height: 4),
+                      Text(
+                        item.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSelected ? colors.primary : colors.navMuted,
+                          fontSize: 11,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: isSelected ? 6 : 0,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: colors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }

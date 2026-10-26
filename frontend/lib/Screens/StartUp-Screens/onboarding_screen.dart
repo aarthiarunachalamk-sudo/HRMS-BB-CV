@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'theme_config.dart';
 import 'constellation_background.dart';
 import 'logo_widget.dart';
@@ -70,8 +71,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  void _navigateToSignUp() {
-    Navigator.of(context).push(
+  Future<void> _navigateToSignUp() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('seen_onboarding', true);
+    } catch (_) {}
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -82,7 +88,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: child,
           );
         },
-        transitionDuration: const Duration(milliseconds: 600),
+        transitionDuration: const Duration(milliseconds: 300),
       ),
     );
   }

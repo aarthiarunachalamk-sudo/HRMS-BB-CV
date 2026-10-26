@@ -298,9 +298,15 @@ class _RegisterEmployeesPageState extends State<RegisterEmployeesPage> {
 
   Widget _statusBadge(String status) {
     Color color;
+    String label = status.toUpperCase();
     switch (status) {
       case 'approved':
         color = _green;
+        label = 'ALLOCATED';
+        break;
+      case 'hr_approved':
+        color = const Color(0xFF4FACFE);
+        label = 'HR APPROVED';
         break;
       case 'rejected':
         color = Colors.redAccent;
@@ -316,7 +322,7 @@ class _RegisterEmployeesPageState extends State<RegisterEmployeesPage> {
         border: Border.all(color: color),
       ),
       child: Text(
-        status.toUpperCase(),
+        label,
         style: TextStyle(
           color: color,
           fontSize: 9,
@@ -339,7 +345,9 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
   static const Color _green = Color(0xFF43E97B);
   bool _savingEdit = false;
 
-  bool get _canEdit => '${widget.employee['status'] ?? 'pending'}' != 'approved';
+  bool get _canEdit =>
+      '${widget.employee['status'] ?? 'pending'}' != 'approved' &&
+      '${widget.employee['status'] ?? 'pending'}' != 'hr_approved';
 
   Future<void> _verifyEmployee() async {
     final changed = await Navigator.push<bool>(
@@ -349,7 +357,7 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
       ),
     );
     if (changed == true && mounted) {
-      setState(() => widget.employee['status'] = 'approved');
+      setState(() => widget.employee['status'] = 'hr_approved');
       Navigator.pop(context, true);
     }
   }
@@ -1323,6 +1331,40 @@ class _EmployeeDetailPageState extends State<_EmployeeDetailPage> {
                         optional: true,
                       ),
                       const SizedBox(height: 20),
+
+                      if ('${emp['status'] ?? ''}' == 'hr_approved')
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4FACFE).withAlpha(18),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFF4FACFE).withAlpha(80),
+                            ),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.hourglass_top_rounded,
+                                color: Color(0xFF4FACFE),
+                                size: 22,
+                              ),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Candidate approved by HR for joining. Awaiting Team Member & TL allocation by PM or CEO.',
+                                  style: TextStyle(
+                                    color: Color(0xFF4FACFE),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
 
                       if (_canEdit)
                         Row(

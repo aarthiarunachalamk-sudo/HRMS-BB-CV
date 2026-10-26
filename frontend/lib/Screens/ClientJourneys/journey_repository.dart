@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../../backend/api_client.dart';
 import '../../backend/api_config.dart';
 import '../../backend/auth_session.dart';
 import 'journey_location_queue.dart';
@@ -11,7 +12,7 @@ import 'journey_models.dart';
 
 class JourneyRepository {
   JourneyRepository({http.Client? client, JourneyPointQueue? queue})
-    : _client = client ?? http.Client(),
+    : _client = client ?? ApiClient.rawClient,
       queue = queue ?? SqliteJourneyPointQueue.instance;
 
   final http.Client _client;

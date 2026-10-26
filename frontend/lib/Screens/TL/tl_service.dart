@@ -1,42 +1,56 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_client.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class TlService {
   static const String baseUrl = '${ApiConfig.baseUrl}/tl';
 
-  Future<Map<String, dynamic>> fetchDashboard(String userId) async {
-    final response = await http.get(
-      Uri.parse(
-        '$baseUrl/dashboard/',
-      ).replace(queryParameters: {'user_id': userId}),
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+  Future<Map<String, dynamic>> fetchDashboard(String userId, {bool forceRefresh = false}) async {
+    final uri = Uri.parse(
+      '$baseUrl/dashboard/',
+    ).replace(queryParameters: {'user_id': userId});
+    try {
+      return await ApiClient.getJsonCached(
+        uri,
+        ttl: const Duration(seconds: 30),
+        forceRefresh: forceRefresh,
+      );
+    } catch (_) {
+      final response = await ApiClient.get(uri);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      }
+      throw Exception(_errorMessage(response, 'TL API failed'));
     }
-    throw Exception(_errorMessage(response, 'TL API failed'));
   }
 
-  Future<Map<String, dynamic>> fetchApprovals(String userId) async {
-    final response = await http.get(
-      Uri.parse(
-        '$baseUrl/approvals/',
-      ).replace(queryParameters: {'user_id': userId}),
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+  Future<Map<String, dynamic>> fetchApprovals(String userId, {bool forceRefresh = false}) async {
+    final uri = Uri.parse(
+      '$baseUrl/approvals/',
+    ).replace(queryParameters: {'user_id': userId});
+    try {
+      return await ApiClient.getJsonCached(
+        uri,
+        ttl: const Duration(seconds: 20),
+        forceRefresh: forceRefresh,
+      );
+    } catch (_) {
+      final response = await ApiClient.get(uri);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      }
+      throw Exception(_errorMessage(response, 'TL approvals API failed'));
     }
-    throw Exception(_errorMessage(response, 'TL approvals API failed'));
   }
 
   Future<void> markNotificationRead(String userId, int notificationId) async {
-    final response = await http.post(
+    final response = await ApiClient.post(
       ApiConfig.uri('/notifications/$notificationId/read/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'user_id': userId}),
+      body: {'user_id': userId},
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
@@ -46,7 +60,7 @@ class TlService {
   }
 
   Future<Map<String, dynamic>> fetchLeaveRequest(int leaveId) async {
-    final response = await http.get(
+    final response = await ApiClient.get(
       Uri.parse('$baseUrl/leave-requests/$leaveId/'),
     );
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -57,10 +71,9 @@ class TlService {
   }
 
   Future<void> scheduleMeeting(Map<String, dynamic> payload) async {
-    final response = await http.post(
+    final response = await ApiClient.post(
       Uri.parse('$baseUrl/meetings/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(payload),
+      body: payload,
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(_errorMessage(response, 'Schedule meeting failed'));
@@ -68,10 +81,9 @@ class TlService {
   }
 
   Future<void> createTask(Map<String, dynamic> payload) async {
-    final response = await http.post(
+    final response = await ApiClient.post(
       Uri.parse('$baseUrl/tasks/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(payload),
+      body: payload,
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(_errorMessage(response, 'Create task failed'));
@@ -84,15 +96,14 @@ class TlService {
     String userId, {
     String rejectionReason = '',
   }) async {
-    final response = await http.post(
+    final response = await ApiClient.post(
       Uri.parse('$baseUrl/leave-requests/$leaveId/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
+      body: {
         'status': status,
         'user_id': userId,
         'reviewed_by': userId,
         'rejection_reason': rejectionReason,
-      }),
+      },
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(_errorMessage(response, 'Leave approval failed'));
@@ -105,14 +116,13 @@ class TlService {
     String userId, {
     String rejectionReason = '',
   }) async {
-    final response = await http.post(
+    final response = await ApiClient.post(
       Uri.parse('$baseUrl/checkout-permissions/$permissionId/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
+      body: {
         'status': status,
         'user_id': userId,
         'review_note': rejectionReason,
-      }),
+      },
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(

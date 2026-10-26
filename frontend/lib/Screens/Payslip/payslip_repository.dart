@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_client.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 import 'payslip_models.dart';
@@ -137,7 +138,7 @@ class PayslipRepository {
       ),
     );
 
-    final streamed = await request.send();
+    final streamed = await ApiClient.sendMultipart(request);
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);

@@ -52,7 +52,7 @@ void main() {
       expect(calls, ['write', 'write']);
       blocked.complete();
       await Future.wait([saved, cleared]);
-      expect(calls, ['write', 'write', 'delete', 'delete']);
+      expect(calls, ['write', 'write', 'delete', 'delete', 'delete']);
     },
   );
 }

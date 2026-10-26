@@ -1739,7 +1739,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               ['Status', _label(reportVisit.status)],
               ['Scheduled', dateTime(reportVisit.scheduledAt)],
               ['Planned duration', '${reportVisit.durationMinutes} minutes'],
-              ['Travel mode', _label(reportVisit.travelMode)],
+              if (reportVisit.team.trim().toLowerCase() != 'marketing' &&
+                  reportVisit.travelMode.trim().isNotEmpty)
+                ['Travel mode', _label(reportVisit.travelMode)],
               ['Service', value(reportVisit.serviceName)],
               ['Purpose', value(reportVisit.purpose)],
               ['Notes', value(reportVisit.notes)],
@@ -4471,7 +4473,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               'Purpose',
               visit.purpose.isEmpty ? '—' : visit.purpose,
             ),
-            EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
+            if (visit.team.trim().toLowerCase() != 'marketing' &&
+                visit.travelMode.trim().isNotEmpty)
+              EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
           ],
         ),
       ),
@@ -5058,7 +5062,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
               : '${visit.durationMinutes ~/ 60} hour${visit.durationMinutes == 60 ? '' : 's'}',
         ),
         EmployeeInfoRow('Purpose', visit.purpose),
-        EmployeeInfoRow('Travel mode', _label(visit.travelMode)),
+        if (visit.team.trim().toLowerCase() != 'marketing' &&
+            visit.travelMode.trim().isNotEmpty)
+          EmployeeInfoRow('Travel mode', _label(visit.travelMode)),
         if (visit.notes.isNotEmpty) EmployeeInfoRow('Notes', visit.notes),
       ],
     ),
@@ -5232,7 +5238,9 @@ class _VisitFlowPageState extends State<_VisitFlowPage> {
                   : '${visit.durationMinutes ~/ 60}h'
                         '${visit.durationMinutes % 60 > 0 ? ' ${visit.durationMinutes % 60}m' : ''}',
             ),
-            EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
+            if (visit.team.trim().toLowerCase() != 'marketing' &&
+                visit.travelMode.trim().isNotEmpty)
+              EmployeeInfoRow('Travel Mode', _label(visit.travelMode)),
             if (visit.notes.isNotEmpty) EmployeeInfoRow('Notes', visit.notes),
           ],
         ),

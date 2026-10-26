@@ -275,8 +275,8 @@ class _TLDashboardState extends State<TLDashboard> with WidgetsBindingObserver {
               ClientVisitDashboardScreen(
                 userId: widget.userId,
                 reviewerMode: true,
-                readOnlyMode: true,
-                allowCreate: false,
+                readOnlyMode: false,
+                allowCreate: true,
                 assignedApprovalsOnly: false,
                 requesterRole: _effectiveRequesterRole,
                 roleLabel: _isTlDm
@@ -353,7 +353,12 @@ class _TLDashboardState extends State<TLDashboard> with WidgetsBindingObserver {
                             ),
                           ),
                         ),
-                      Expanded(child: pages[_index]),
+                      Expanded(
+                        child: IndexedStack(
+                          index: _index,
+                          children: pages,
+                        ),
+                      ),
                       _BottomNav(c: c, index: _index, select: _setIndex),
                     ],
                   ),
@@ -8811,48 +8816,51 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [0, 1, 2, 20, 3, 11];
-    return Container(
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border(top: BorderSide(color: c.border)),
-      ),
-      padding: const EdgeInsets.fromLTRB(4, 5, 4, 8),
-      child: Row(
-        children: items.map((itemIndex) {
-          final selected =
-              index == itemIndex ||
-              (itemIndex == 2 && (index == 14 || index == 15));
-          return Expanded(
-            child: InkWell(
-              onTap: () => select(itemIndex),
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: 48,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _icons[itemIndex],
-                      color: selected ? c.primary : c.muted,
-                      size: 18,
-                    ),
-                    const SizedBox(height: 3),
-                    FittedBox(
-                      child: Text(
-                        _titles[itemIndex],
-                        style: TextStyle(
-                          color: selected ? c.primary : c.muted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          border: Border(top: BorderSide(color: c.border)),
+        ),
+        padding: const EdgeInsets.fromLTRB(4, 5, 4, 8),
+        child: Row(
+          children: items.map((itemIndex) {
+            final selected =
+                index == itemIndex ||
+                (itemIndex == 2 && (index == 14 || index == 15));
+            return Expanded(
+              child: InkWell(
+                onTap: () => select(itemIndex),
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  height: 48,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _icons[itemIndex],
+                        color: selected ? c.primary : c.muted,
+                        size: 18,
+                      ),
+                      const SizedBox(height: 3),
+                      FittedBox(
+                        child: Text(
+                          _titles[itemIndex],
+                          style: TextStyle(
+                            color: selected ? c.primary : c.muted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }

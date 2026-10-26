@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:hrms_mobileapp_bitbyte/backend/api_client.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'client_visit_models.dart';
@@ -20,7 +21,7 @@ class ClientVisitService {
   // single retry handles a transient gateway response without compounding it.
   static const _requestTimeout = Duration(seconds: 30);
   static const _retryDelay = Duration(seconds: 2);
-  static final http.Client _client = http.Client();
+  static final http.Client _client = ApiClient.rawClient;
 
   static final Uri _base = ApiConfig.uri('/client-visits/');
 
@@ -51,7 +52,7 @@ class ClientVisitService {
     String userId, {
     bool requiresRoleAwareApprovers = false,
   }) async {
-    var response = await http
+    var response = await _client
         .get(
           ApiConfig.uri(
             '/client-visits/approvers/',
@@ -67,7 +68,7 @@ class ClientVisitService {
           'The server update for role-based approvers is not deployed yet. Please deploy the latest backend and retry.',
         );
       }
-      response = await http
+      response = await _client
           .get(ApiConfig.uri('/hr/reporting-tls/'))
           .timeout(const Duration(seconds: 20));
       responseKey = 'tls';

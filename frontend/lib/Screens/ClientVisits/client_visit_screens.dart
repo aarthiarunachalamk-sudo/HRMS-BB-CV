@@ -1368,6 +1368,12 @@ class _ClientVisitDashboardScreenState
           title: Text(widget.title),
           centerTitle: true,
           actions: [
+            if (!widget.readOnlyMode && widget.allowCreate)
+              IconButton(
+                icon: const Icon(Icons.add_location_alt_rounded, color: Color(0xFF00E5FF)),
+                tooltip: 'New Visit',
+                onPressed: _create,
+              ),
             if (widget.roleLabel.trim().isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(right: 4),
@@ -1405,6 +1411,9 @@ class _ClientVisitDashboardScreenState
               if (result != null)
                 _Summary(
                   summary: result.summary,
+                  onNewVisit: (!widget.readOnlyMode && widget.allowCreate)
+                      ? _create
+                      : null,
                   onInProgress: () => _openStatusList(
                     'In Progress Visits',
                     const {'travelling', 'in_progress'},
@@ -1422,7 +1431,33 @@ class _ClientVisitDashboardScreenState
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: _availableStatuses.map((status) {
+                  children: [
+                    if (!widget.readOnlyMode && widget.allowCreate)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ActionChip(
+                          avatar: const Icon(
+                            Icons.add_location_alt_rounded,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                          label: const Text(
+                            'New Visit',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          backgroundColor: ThemeConfig.isDark(context)
+                              ? const Color(0xFF0072FF)
+                              : Theme.of(context).colorScheme.primary,
+                          elevation: 2,
+                          pressElevation: 4,
+                          onPressed: _create,
+                        ),
+                      ),
+                    ..._availableStatuses.map((status) {
                     final selected = status == _filter;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -1436,6 +1471,7 @@ class _ClientVisitDashboardScreenState
                       ),
                     );
                   }).toList(),
+                  ],
                 ),
               ),
               const SizedBox(height: 14),
@@ -5749,7 +5785,9 @@ class _ClientVisitTableDetailScreenState
                       'Planned Duration',
                       '${_visit.durationMinutes} mins',
                     ),
-                    MapEntry('Travel Mode', _label(_visit.travelMode)),
+                    if (_visit.team.trim().toLowerCase() != 'marketing' &&
+                        _visit.travelMode.trim().isNotEmpty)
+                      MapEntry('Travel Mode', _label(_visit.travelMode)),
                     MapEntry(
                       'Client Notes',
                       _visit.notes.isNotEmpty ? _visit.notes : '—',
@@ -5970,6 +6008,9 @@ class ClientVisitCreateScreen extends StatefulWidget {
 
 class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
+  AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
+  int _currentStep = 0;
   final _client = TextEditingController();
   final _industry = TextEditingController();
   final _location = TextEditingController();
@@ -6059,6 +6100,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _mapController.dispose();
     for (final value in [
       _client,
@@ -6907,11 +6949,15 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       (mode: 'bus', label: 'Bus', icon: Icons.directions_bus_rounded),
     ];
 
+    final isMarketing = _selectedTeam == 'marketing';
+
     return _CollapsibleSection(
       title: 'Timeline schedule',
       icon: Icons.calendar_month_rounded,
       iconColor: const Color(0xFFFF9100),
-      badgeText: '${_formatDateFull(_date)} • ${_formatTime12(_time)} • ${_travelMode.toUpperCase()}',
+      badgeText: isMarketing
+          ? '${_formatDateFull(_date)} • ${_formatTime12(_time)}'
+          : '${_formatDateFull(_date)} • ${_formatTime12(_time)} • ${_travelMode.toUpperCase()}',
       isExpanded: _timelineSectionExpanded,
       onToggle: () => setState(() => _timelineSectionExpanded = !_timelineSectionExpanded),
       children: [
@@ -7123,72 +7169,310 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
             }).toList(),
           ),
         ),
-        const SizedBox(height: 14),
+        if (!isMarketing) ...[
+          const SizedBox(height: 14),
 
-        // Travel Mode Selector
-        const Text(
-          'TRAVEL MODE',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.8,
-            color: Color(0xFF00E5FF),
+          // Travel Mode Selector
+          const Text(
+            'TRAVEL MODE',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: Color(0xFF00E5FF),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: travelModes.map((tm) {
-            final isSelected = _travelMode == tm.mode;
-            return Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                child: InkWell(
-                  onTap: () => setState(() => _travelMode = tm.mode),
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFF00E5FF).withAlpha(35)
-                          : (isDark ? Colors.white.withAlpha(8) : Colors.grey.shade100),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isSelected ? const Color(0xFF00E5FF) : Colors.transparent,
-                        width: 1.5,
+          const SizedBox(height: 8),
+          Row(
+            children: travelModes.map((tm) {
+              final isSelected = _travelMode == tm.mode;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: InkWell(
+                    onTap: () => setState(() => _travelMode = tm.mode),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF00E5FF).withAlpha(35)
+                            : (isDark ? Colors.white.withAlpha(8) : Colors.grey.shade100),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF00E5FF) : Colors.transparent,
+                          width: 1.5,
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          tm.icon,
-                          size: 20,
-                          color: isSelected ? const Color(0xFF00E5FF) : Colors.grey,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          tm.label,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                            color: isSelected ? const Color(0xFF00E5FF) : null,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            tm.icon,
+                            size: 20,
+                            color: isSelected ? const Color(0xFF00E5FF) : Colors.grey,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            tm.label,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                              color: isSelected ? const Color(0xFF00E5FF) : null,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }).toList(),
-        ),
+              );
+            }).toList(),
+          ),
+        ],
       ],
     );
   }
 
+  Future<void> _showValidationPopup({
+    required String title,
+    required String message,
+    String pageName = '',
+    VoidCallback? onDismiss,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: isDark ? const Color(0xFF131D31) : Colors.white,
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withAlpha(25),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFEF4444),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  if (pageName.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      pageName,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF00E5FF),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 8),
+          child: Text(
+            message,
+            style: TextStyle(
+              fontSize: 13.5,
+              height: 1.4,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                if (onDismiss != null) onDismiss();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF006CE5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text(
+                'Enter Details',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _validateStep0() {
+    final clientName = _client.text.trim();
+    final industry = _industry.text.trim();
+    final location = _location.text.trim();
+    final email = _email.text.trim();
+    final address = _address.text.trim();
+    final phone = _phone.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+    final contact = _contact.text.trim();
+
+    if (clientName.isEmpty) {
+      _showValidationPopup(
+        title: 'Missing Client Name',
+        pageName: 'Page 1: Client Details',
+        message: 'Please enter the Client / Company Name on this page before moving to the next page.',
+      );
+      return false;
+    }
+    if (industry.isEmpty) {
+      _showValidationPopup(
+        title: 'Missing Industry',
+        pageName: 'Page 1: Client Details',
+        message: 'Please enter the Industry (e.g. Retail, Tech, Healthcare) on this page before moving to the next page.',
+      );
+      return false;
+    }
+    if (location.isEmpty) {
+      _showValidationPopup(
+        title: 'Missing Location',
+        pageName: 'Page 1: Client Details',
+        message: 'Please enter the Location / City on this page before moving to the next page.',
+      );
+      return false;
+    }
+    if (email.isEmpty) {
+      _showValidationPopup(
+        title: 'Missing Email',
+        pageName: 'Page 1: Client Details',
+        message: 'Please enter the Client Email address on this page before moving to the next page.',
+      );
+      return false;
+    }
+    if (!email.contains('@') || !email.contains('.')) {
+      _showValidationPopup(
+        title: 'Invalid Email Format',
+        pageName: 'Page 1: Client Details',
+        message: 'Please enter a valid Client Email address (e.g. name@company.com) on this page before moving to the next page.',
+      );
+      return false;
+    }
+    if (address.isEmpty) {
+      _showValidationPopup(
+        title: 'Missing Address',
+        pageName: 'Page 1: Client Details',
+        message: 'Please enter the full Client Premises Address on this page before moving to the next page.',
+      );
+      return false;
+    }
+    if (phone.isEmpty) {
+      _showValidationPopup(
+        title: 'Missing Mobile Number',
+        pageName: 'Page 1: Client Details',
+        message: 'Please enter the 10-digit Client Contact Mobile Number on this page before moving to the next page.',
+      );
+      return false;
+    }
+    if (phone.length != 10) {
+      _showValidationPopup(
+        title: 'Invalid Mobile Number',
+        pageName: 'Page 1: Client Details',
+        message: 'Please enter exactly 10 digits for the Client Mobile Number on this page before moving to the next page.',
+      );
+      return false;
+    }
+    if (contact.isEmpty) {
+      _showValidationPopup(
+        title: 'Missing Contact Person',
+        pageName: 'Page 1: Client Details',
+        message: 'Please enter the Contact Person Name on this page before moving to the next page.',
+      );
+      return false;
+    }
+
+    if (!(_formKey.currentState?.validate() ?? true)) {
+      setState(() => _autovalidateMode = AutovalidateMode.always);
+      _showValidationPopup(
+        title: 'Incomplete Details',
+        pageName: 'Page 1: Client Details',
+        message: 'Please review and complete the highlighted required fields on this page before moving to the next page.',
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+  bool _validateStep1() {
+    final isDev = _selectedTeam == 'development';
+    if (!isDev && _selectedCreativeServices.isEmpty) {
+      _showValidationPopup(
+        title: 'Service Selection Required',
+        pageName: 'Page 2: Service Selection',
+        message: 'Please select at least one service category or service on this page before moving to the next page.',
+      );
+      return false;
+    }
+    if (isDev && (_serviceType == null || _serviceType!.trim().isEmpty)) {
+      _showValidationPopup(
+        title: 'Service Selection Required',
+        pageName: 'Page 2: Service Selection',
+        message: 'Please select a Development Service from the dropdown on this page before moving to the next page.',
+      );
+      return false;
+    }
+    return true;
+  }
+
+  bool _validateStep2() {
+    final isMarketing = _selectedTeam == 'marketing';
+    if (!isMarketing && _travelMode.trim().isEmpty) {
+      _showValidationPopup(
+        title: 'Travel Mode Required',
+        pageName: 'Page 3: Timeline Schedule',
+        message: 'Please select a Travel Mode on this page before moving to the next page.',
+      );
+      return false;
+    }
+    return true;
+  }
+
   void _proceedToServiceStatus() {
-    if (!_formKey.currentState!.validate()) {
-      _snack(context, 'Please complete all required fields.');
+    if (!_validateStep0()) {
+      setState(() => _currentStep = 0);
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+      return;
+    }
+    if (!_validateStep1()) {
+      setState(() => _currentStep = 1);
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+      return;
+    }
+    if (!_validateStep2()) {
+      setState(() => _currentStep = 2);
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
       return;
     }
 
@@ -7200,19 +7484,9 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
         assignedMembers.isNotEmpty ? assignedMembers : wholeTeam;
     final coords = _selectedCoords;
 
-    List<String> servicesList;
-    if (isDev) {
-      servicesList = [_serviceType ?? 'Web App Development'];
-    } else if (_selectedCreativeServices.isNotEmpty) {
-      servicesList = _selectedCreativeServices.toList();
-    } else {
-      servicesList = [
-        'Creative Studio & Ad Creatives',
-        'Social Media Marketing',
-        'Google Ads Campaign',
-        'SEO Services',
-      ];
-    }
+    final List<String> servicesList = isDev
+        ? [_serviceType ?? 'Web App Development']
+        : _selectedCreativeServices.toList();
 
     final basePayload = <String, dynamic>{
       'client_name': _client.text.trim(),
@@ -7230,7 +7504,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       'scheduled_time':
           '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}',
       'duration_minutes': 60,
-      'travel_mode': _travelMode,
+      'travel_mode': _selectedTeam == 'marketing' ? '' : _travelMode,
       'service_type': isDev
           ? (_serviceType ?? 'web_app_development')
           : (_serviceType ?? 'digital_marketing'),
@@ -7273,8 +7547,28 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
   Future<void> _submit(bool submit) async {
     final clientName = _client.text.trim();
     if (clientName.isEmpty) {
-      _snack(context, 'Please enter a client name.');
+      _showValidationPopup(
+        title: 'Client Name Required',
+        pageName: 'Page 1: Client Details',
+        message: 'Please enter a Client Name on Page 1 before saving a draft.',
+      );
+      setState(() => _currentStep = 0);
       return;
+    }
+
+    if (submit) {
+      if (!_validateStep0()) {
+        setState(() => _currentStep = 0);
+        return;
+      }
+      if (!_validateStep1()) {
+        setState(() => _currentStep = 1);
+        return;
+      }
+      if (!_validateStep2()) {
+        setState(() => _currentStep = 2);
+        return;
+      }
     }
 
     final isDev = _selectedTeam == 'development';
@@ -7308,7 +7602,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
       'scheduled_time':
           '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}',
       'duration_minutes': 60,
-      'travel_mode': _travelMode,
+      'travel_mode': _selectedTeam == 'marketing' ? '' : _travelMode,
       'service_type': isDev
           ? (_serviceType ?? 'web_app_development')
           : (_serviceType ?? 'digital_marketing'),
@@ -7346,7 +7640,7 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
           address: _address.text.trim(),
           scheduledAt: DateTime.now(),
           durationMinutes: 60,
-          travelMode: _travelMode,
+          travelMode: _selectedTeam == 'marketing' ? '' : _travelMode,
           serviceType: isDev ? 'web_app_development' : 'digital_marketing',
           serviceName: 'Client Services',
           purpose: isDev ? 'Development Client Visit' : 'Client Visit',
@@ -7410,21 +7704,419 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => ClientVisitTheme(
-    child: Scaffold(
-      appBar: AppBar(title: const Text('Create Visit Request')),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Row(
+  Widget _buildStepIndicator() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final steps = [
+      (index: 0, title: 'Details', icon: Icons.business_rounded),
+      (index: 1, title: 'Services', icon: Icons.miscellaneous_services_rounded),
+      (index: 2, title: 'Schedule', icon: Icons.calendar_month_rounded),
+      (index: 3, title: 'Status', icon: Icons.assignment_turned_in_rounded),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131D31) : const Color(0xFFF8FAFC),
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+          ),
+        ),
+      ),
+      child: Row(
+        children: steps.map((s) {
+          final isCurrent = _currentStep == s.index;
+          final isPassed = _currentStep > s.index;
+          final activeColor = isCurrent
+              ? const Color(0xFF00E5FF)
+              : (isPassed ? const Color(0xFF10B981) : (isDark ? Colors.white38 : Colors.grey.shade400));
+
+          return Expanded(
+            child: InkWell(
+              onTap: () {
+                if (s.index < _currentStep) {
+                  setState(() => _currentStep = s.index);
+                  if (_scrollController.hasClients) _scrollController.jumpTo(0);
+                } else if (s.index > _currentStep) {
+                  if (_currentStep == 0) {
+                    if (!_validateStep0()) return;
+                    if (s.index == 1) {
+                      setState(() => _currentStep = 1);
+                      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+                    } else if (s.index == 2) {
+                      if (!_validateStep1()) {
+                        setState(() => _currentStep = 1);
+                        if (_scrollController.hasClients) _scrollController.jumpTo(0);
+                        return;
+                      }
+                      setState(() => _currentStep = 2);
+                      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+                    } else if (s.index == 3) {
+                      _proceedToServiceStatus();
+                    }
+                  } else if (_currentStep == 1) {
+                    if (!_validateStep1()) return;
+                    if (s.index == 2) {
+                      setState(() => _currentStep = 2);
+                      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+                    } else if (s.index == 3) {
+                      _proceedToServiceStatus();
+                    }
+                  } else if (_currentStep == 2) {
+                    if (s.index == 3) {
+                      _proceedToServiceStatus();
+                    }
+                  }
+                }
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: isPassed
+                            ? const Color(0xFF10B981)
+                            : (isCurrent
+                                ? const Color(0xFF00E5FF)
+                                : (isDark ? Colors.white12 : Colors.grey.shade200)),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: isPassed
+                            ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                            : Text(
+                                '${s.index + 1}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isCurrent
+                                      ? Colors.black87
+                                      : (isDark ? Colors.white70 : Colors.black54),
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        s.title,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
+                          color: activeColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (s.index < steps.length - 1) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: isDark ? Colors.white24 : Colors.grey.shade400,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildVisitSummaryPreviewCard() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDev = _selectedTeam == 'development';
+    final services = isDev
+        ? [_serviceType ?? 'Web App Development']
+        : _selectedCreativeServices.toList();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131D31) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
+              const Icon(Icons.fact_check_rounded, color: Color(0xFF00E5FF), size: 18),
+              const SizedBox(width: 8),
+              const Text(
+                'Visit Information Preview',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () {
+                  setState(() => _currentStep = 0);
+                  if (_scrollController.hasClients) _scrollController.jumpTo(0);
+                },
+                style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                child: const Text('Edit Details', style: TextStyle(fontSize: 11)),
+              ),
+            ],
+          ),
+          const Divider(height: 14),
+          _summaryRow('Client', _client.text.trim()),
+          _summaryRow('Contact', '${_contact.text.trim()} (${_phone.text.trim()})'),
+          _summaryRow('Address', _address.text.trim()),
+          _summaryRow('Team', _selectedTeam.toUpperCase()),
+          _summaryRow('Services', services.isNotEmpty ? services.join(', ') : 'None selected'),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 70,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white54 : Colors.black54,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isNotEmpty ? value : '—',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep0Content() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildTeamSwitcher(),
+        _Section(
+          title: 'Client details',
+          children: [
+            TextFormField(
+              controller: _client,
+              validator: _required,
+              decoration: const InputDecoration(
+                labelText: 'Client Name *',
+                hintText: 'Enter client / company name',
+              ),
+            ),
+            TextFormField(
+              controller: _industry,
+              validator: _required,
+              decoration: const InputDecoration(
+                labelText: 'Industry *',
+                hintText: 'e.g. Retail, Tech, Healthcare',
+                prefixIcon: Icon(Icons.apartment_rounded, color: Color(0xFF00E5FF)),
+              ),
+            ),
+            TextFormField(
+              controller: _location,
+              validator: _required,
+              decoration: InputDecoration(
+                labelText: 'Location *',
+                hintText: 'Enter city / area / landmark',
+                prefixIcon: IconButton(
+                  icon: const Icon(Icons.pin_drop_rounded, color: Color(0xFF00E5FF)),
+                  tooltip: 'Auto-fetch GPS location',
+                  onPressed: _locating ? null : _useCurrentLocation,
+                ),
+                suffixIcon: _locating
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton(
+                        icon: const Icon(Icons.my_location_rounded, color: Color(0xFF00E5FF)),
+                        tooltip: 'Auto-fetch GPS location',
+                        onPressed: _useCurrentLocation,
+                      ),
+              ),
+            ),
+            TextFormField(
+              controller: _email,
+              validator: _emailValidator,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(
+                labelText: 'Email *',
+                hintText: 'client@company.com',
+                prefixIcon: Icon(Icons.mail_outline_rounded, color: Color(0xFF00E5FF)),
+              ),
+            ),
+            TextFormField(
+              controller: _address,
+              validator: _required,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Address *',
+                hintText: 'Full client premises address',
+              ),
+            ),
+            TextFormField(
+              controller: _phone,
+              validator: _mobileNumber,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
+              maxLength: 10,
+              decoration: const InputDecoration(
+                labelText: 'phone number *',
+                hintText: 'Enter 10-digit mobile number',
+                counterText: '',
+              ),
+            ),
+            TextFormField(
+              controller: _contact,
+              validator: _required,
+              decoration: const InputDecoration(
+                labelText: 'Contact person *',
+                hintText: 'Contact person name',
+              ),
+            ),
+            const SizedBox(height: 4),
+            TextFormField(
+              controller: _locationCoords,
+              validator: _validateCoords,
+              decoration: InputDecoration(
+                labelText: 'Client location (paste from WhatsApp / Maps)',
+                hintText: 'https://maps.app.goo.gl/... or 11.6864, 78.1204',
+                helperText: 'Tap location icon to automatically fetch GPS coordinates',
+                helperMaxLines: 2,
+                prefixIcon: IconButton(
+                  icon: const Icon(Icons.location_on_outlined, color: Color(0xFF00E5FF)),
+                  tooltip: 'Auto-fetch GPS location',
+                  onPressed: _locating ? null : _useCurrentLocation,
+                ),
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_locationCoords.text.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear, size: 20),
+                        onPressed: () {
+                          setState(() {
+                            _locationCoords.clear();
+                            _selectedCoords = null;
+                          });
+                        },
+                      ),
+                    _locating || _resolvingUrl
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(
+                              Icons.my_location_rounded,
+                              color: Color(0xFF00E5FF),
+                            ),
+                            tooltip: 'Use current GPS location',
+                            onPressed: _useCurrentLocation,
+                          ),
+                  ],
+                ),
+              ),
+              onChanged: _onLocationInputChanged,
+            ),
+            _buildMapSection(),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep1Content() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildServicesSection(),
+      ],
+    );
+  }
+
+  Widget _buildStep2Content() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildScheduleSection(),
+        const SizedBox(height: 14),
+        _buildVisitSummaryPreviewCard(),
+      ],
+    );
+  }
+
+  Widget _buildCurrentStepContent() {
+    switch (_currentStep) {
+      case 1:
+        return _buildStep1Content();
+      case 2:
+        return _buildStep2Content();
+      default:
+        return _buildStep0Content();
+    }
+  }
+
+  Widget _buildBottomNav() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0F172A) : Colors.white,
+          border: Border(
+            top: BorderSide(
+              color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            if (_currentStep == 0) ...[
               Expanded(
                 child: OutlinedButton(
                   onPressed: _saving ? null : () => _submit(false),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   child: const Text('Save draft'),
                 ),
@@ -7433,17 +8125,146 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
               Expanded(
                 flex: 2,
                 child: FilledButton(
-                  onPressed: _saving ? null : _proceedToServiceStatus,
+                  onPressed: () {
+                    if (_validateStep0()) {
+                      setState(() {
+                        _currentStep = 1;
+                        _autovalidateMode = AutovalidateMode.disabled;
+                      });
+                      if (_scrollController.hasClients) {
+                        _scrollController.jumpTo(0);
+                      }
+                    }
+                  },
                   style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF006CE5),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Next: Service Status',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        'Next: Services',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward_rounded, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+            ] else if (_currentStep == 1) ...[
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() => _currentStep = 0);
+                    if (_scrollController.hasClients) {
+                      _scrollController.jumpTo(0);
+                    }
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.arrow_back_rounded, size: 16),
+                      SizedBox(width: 6),
+                      Text('Back'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: () {
+                    if (_validateStep1()) {
+                      setState(() => _currentStep = 2);
+                      if (_scrollController.hasClients) {
+                        _scrollController.jumpTo(0);
+                      }
+                    }
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF006CE5),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Next: Schedule',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward_rounded, size: 18),
+                    ],
+                  ),
+                ),
+              ),
+            ] else ...[
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() => _currentStep = 1);
+                    if (_scrollController.hasClients) {
+                      _scrollController.jumpTo(0);
+                    }
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.arrow_back_rounded, size: 16),
+                      SizedBox(width: 6),
+                      Text('Back'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: _saving ? null : _proceedToServiceStatus,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF006CE5),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Next: Requirement Status',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                       SizedBox(width: 8),
                       Icon(Icons.arrow_forward_rounded, size: 18),
@@ -7452,165 +8273,69 @@ class _ClientVisitCreateScreenState extends State<ClientVisitCreateScreen> {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          children: [
-            _buildTeamSwitcher(),
-            _Section(
-              title: 'Client details',
-              children: [
-                TextFormField(
-                  controller: _client,
-                  validator: _required,
-                  decoration: const InputDecoration(
-                    labelText: 'Client Name *',
-                    hintText: 'Enter client / company name',
-                  ),
-                ),
-                TextFormField(
-                  controller: _industry,
-                  validator: _required,
-                  decoration: const InputDecoration(
-                    labelText: 'Industry *',
-                    hintText: 'e.g. Retail, Tech, Healthcare',
-                    prefixIcon: Icon(Icons.apartment_rounded, color: Color(0xFF00E5FF)),
-                  ),
-                ),
-                TextFormField(
-                  controller: _location,
-                  validator: _required,
-                  decoration: InputDecoration(
-                    labelText: 'Location *',
-                    hintText: 'Enter city / area / landmark',
-                    prefixIcon: IconButton(
-                      icon: const Icon(Icons.pin_drop_rounded, color: Color(0xFF00E5FF)),
-                      tooltip: 'Auto-fetch GPS location',
-                      onPressed: _locating ? null : _useCurrentLocation,
-                    ),
-                    suffixIcon: _locating
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                        : IconButton(
-                            icon: const Icon(Icons.my_location_rounded, color: Color(0xFF00E5FF)),
-                            tooltip: 'Auto-fetch GPS location',
-                            onPressed: _useCurrentLocation,
-                          ),
-                  ),
-                ),
-                TextFormField(
-                  controller: _email,
-                  validator: _emailValidator,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email *',
-                    hintText: 'client@company.com',
-                    prefixIcon: Icon(Icons.mail_outline_rounded, color: Color(0xFF00E5FF)),
-                  ),
-                ),
-                TextFormField(
-                  controller: _address,
-                  validator: _required,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Address *',
-                    hintText: 'Full client premises address',
-                  ),
-                ),
-                TextFormField(
-                  controller: _phone,
-                  validator: _mobileNumber,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(10),
-                  ],
-                  maxLength: 10,
-                  decoration: const InputDecoration(
-                    labelText: 'phone number *',
-                    hintText: 'Enter 10-digit mobile number',
-                    counterText: '',
-                  ),
-                ),
-                TextFormField(
-                  controller: _contact,
-                  validator: _required,
-                  decoration: const InputDecoration(
-                    labelText: 'Contact person *',
-                    hintText: 'Contact person name',
-                  ),
-                ),
-                const SizedBox(height: 4),
-                TextFormField(
-                  controller: _locationCoords,
-                  validator: _validateCoords,
-                  decoration: InputDecoration(
-                    labelText: 'Client location (paste from WhatsApp / Maps)',
-                    hintText: 'https://maps.app.goo.gl/... or 11.6864, 78.1204',
-                    helperText: 'Tap location icon to automatically fetch GPS coordinates',
-                    helperMaxLines: 2,
-                    prefixIcon: IconButton(
-                      icon: const Icon(Icons.location_on_outlined, color: Color(0xFF00E5FF)),
-                      tooltip: 'Auto-fetch GPS location',
-                      onPressed: _locating ? null : _useCurrentLocation,
-                    ),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_locationCoords.text.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(Icons.clear, size: 20),
-                            onPressed: () {
-                              setState(() {
-                                _locationCoords.clear();
-                                _selectedCoords = null;
-                              });
-                            },
-                          ),
-                        _locating || _resolvingUrl
-                            ? const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                              )
-                            : IconButton(
-                                icon: const Icon(
-                                  Icons.my_location_rounded,
-                                  color: Color(0xFF00E5FF),
-                                ),
-                                tooltip: 'Use current GPS location',
-                                onPressed: _useCurrentLocation,
-                              ),
-                      ],
-                    ),
-                  ),
-                  onChanged: _onLocationInputChanged,
-                ),
-                _buildMapSection(),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildServicesSection(),
-            const SizedBox(height: 12),
-            _buildScheduleSection(),
           ],
         ),
       ),
-    ),
-  );
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: _currentStep == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_currentStep > 0) {
+          setState(() => _currentStep--);
+          if (_scrollController.hasClients) {
+            _scrollController.jumpTo(0);
+          }
+        }
+      },
+      child: ClientVisitTheme(
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(_currentStep == 0
+                ? 'Step 1/4: Client Details'
+                : (_currentStep == 1
+                    ? 'Step 2/4: Services'
+                    : 'Step 3/4: Timeline Schedule')),
+            centerTitle: true,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () {
+                if (_currentStep > 0) {
+                  setState(() => _currentStep--);
+                  if (_scrollController.hasClients) {
+                    _scrollController.jumpTo(0);
+                  }
+                } else {
+                  Navigator.of(context).pop();
+                }
+              },
+            ),
+          ),
+          bottomNavigationBar: _buildBottomNav(),
+          body: Column(
+            children: [
+              _buildStepIndicator(),
+              Expanded(
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: _autovalidateMode,
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    child: _buildCurrentStepContent(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class ClientVisitDetailScreen extends StatefulWidget {
@@ -8121,7 +8846,9 @@ class _ClientVisitDetailScreenState extends State<ClientVisitDetailScreen> {
                       visit.serviceName.isEmpty ? '—' : visit.serviceName,
                     ),
                     EmployeeInfoRow('Purpose', visit.purpose),
-                    EmployeeInfoRow('Travel', _label(visit.travelMode)),
+                    if (visit.team.trim().toLowerCase() != 'marketing' &&
+                        visit.travelMode.trim().isNotEmpty)
+                      EmployeeInfoRow('Travel', _label(visit.travelMode)),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -8277,6 +9004,7 @@ class _Summary extends StatelessWidget {
   final int downloadCount;
   final VoidCallback onDownloads;
   final VoidCallback onServices;
+  final VoidCallback? onNewVisit;
   const _Summary({
     required this.summary,
     required this.onInProgress,
@@ -8286,11 +9014,86 @@ class _Summary extends StatelessWidget {
     required this.downloadCount,
     required this.onDownloads,
     required this.onServices,
+    this.onNewVisit,
   });
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      if (onNewVisit != null) ...[
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onNewVisit,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF0072FF), Color(0xFF00E5FF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0072FF).withOpacity(0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: Colors.white24,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.add_location_alt_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'New Client Visit',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Schedule a new client visit & timeline',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+      ],
       Text('Today', style: _sectionStyle(context)),
       const SizedBox(height: 7),
       _wideBox(
@@ -8838,11 +9641,13 @@ class _VisitCard extends StatelessWidget {
                       '${visit.scheduledAt.year}  '
                       '${TimeOfDay.fromDateTime(visit.scheduledAt).format(context)}',
                     ),
-                    _detailChip(
-                      context,
-                      Icons.directions_car_outlined,
-                      _label(visit.travelMode),
-                    ),
+                    if (visit.team.trim().toLowerCase() != 'marketing' &&
+                        visit.travelMode.trim().isNotEmpty)
+                      _detailChip(
+                        context,
+                        Icons.directions_car_outlined,
+                        _label(visit.travelMode),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 8),

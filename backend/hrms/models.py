@@ -17,6 +17,7 @@ ROLE_ID_PREFIXES = {
     'it': 'BBIT',
     'admin': 'BBADM',
     'manager': 'BBMGR',
+    'pm': 'BBPM',
     'tl': 'BBTL',
     'employee': 'BBEMP',
 }
@@ -80,6 +81,7 @@ class User(AbstractBaseUser):
         ('it', 'IT Team'),
         ('admin', 'Admin'),
         ('manager', 'Manager'),
+        ('pm', 'Project Manager'),
         ('tl', 'TL'),
         ('employee', 'Employee'),
     ]
@@ -165,6 +167,7 @@ class EmployeeRegistration(models.Model):
     ]
     STATUS_CHOICES = [
         ('pending', 'Pending'),
+        ('hr_approved', 'Approved by HR'),
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
         ('flagged', 'Flagged'),
@@ -298,6 +301,7 @@ class EmployeeAccount(models.Model):
         ('md', 'MD'),
         ('director', 'Executive Director'),
         ('manager', 'Manager'),
+        ('pm', 'Project Manager'),
     ]
     EMPLOYMENT_TYPE_CHOICES = [
         ('full_time', 'Full Time'),

@@ -21,6 +21,7 @@ import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_audit_flow_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_local_documents.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/ceo_service.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/CEO/create_admins.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Management/team_member_allocation_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_dashboard.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/ClientVisits/client_visit_screens.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Employee/employee_approvals_screen.dart';
@@ -343,6 +344,22 @@ class _CeoDashboardState extends State<CeoDashboard>
                         Navigator.pop(context);
                         _openPage(
                           CeoCreateAdminsPage(createdBy: widget.userId),
+                        );
+                      },
+                    ),
+                    _drawerItem(
+                      context,
+                      Icons.assignment_ind_rounded,
+                      'Team & TL Allocation',
+                      false,
+                      () {
+                        Navigator.pop(context);
+                        _openPage(
+                          TeamMemberAllocationScreen(
+                            userRole: 'ceo',
+                            userName: widget.firstName,
+                            userEmail: widget.email,
+                          ),
                         );
                       },
                     ),
@@ -723,8 +740,8 @@ class _CeoDashboardState extends State<CeoDashboard>
         userId: widget.userId,
         reviewerMode: true,
         requesterRole: 'ceo',
-        readOnlyMode: true,
-        allowCreate: false,
+        readOnlyMode: false,
+        allowCreate: true,
         assignedApprovalsOnly: false,
         allowVerification: false,
       ),
@@ -736,7 +753,7 @@ class _CeoDashboardState extends State<CeoDashboard>
             requesterRole: 'ceo',
             reviewerMode: true,
             readOnlyMode: true,
-            allowCreate: false,
+            allowCreate: true,
             assignedApprovalsOnly: false,
             allowVerification: false,
           ),

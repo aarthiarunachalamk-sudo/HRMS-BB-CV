@@ -23,7 +23,10 @@ from .payroll import (
     generate_payroll_for_month,
     payslip_payload,
 )
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 from .mailer import email_is_configured, send_email as send_transactional_email
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Attachment, Disposition, FileContent, FileName, FileType, Mail
@@ -65,91 +68,101 @@ def _provision_login_employee_account(user):
 @api_view(['POST'])
 @measure_login
 def login_view(request):
-    serializer = LoginSerializer(data=request.data)
-    if serializer.is_valid():
-        login_id = serializer.validated_data['email'].strip()
-        password = serializer.validated_data['password']
-        candidates = list(
-            User.objects.filter(
-                Q(email__iexact=login_id) | Q(user_id__iexact=login_id),
-                is_active=True,
-            ).annotate(
-                login_employee_id=Subquery(
-                    EmployeeAccount.objects.filter(user_id=OuterRef('pk'))
-                    .order_by('pk').values('employee_id')[:1]
-                ),
-                login_otc=Subquery(
-                    EmployeeAccount.objects.filter(employee_email=OuterRef('email'))
-                    .order_by('pk').values('otc')[:1]
-                ),
+    try:
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            login_id = serializer.validated_data['email'].strip()
+            password = serializer.validated_data['password']
+            candidates = list(
+                User.objects.filter(
+                    Q(email__iexact=login_id) | Q(user_id__iexact=login_id),
+                    is_active=True,
+                ).annotate(
+                    login_employee_id=Subquery(
+                        EmployeeAccount.objects.filter(user_id=OuterRef('pk'))
+                        .order_by('pk').values('employee_id')[:1]
+                    ),
+                    login_otc=Subquery(
+                        EmployeeAccount.objects.filter(employee_email=OuterRef('email'))
+                        .order_by('pk').values('otc')[:1]
+                    ),
+                )
             )
-        )
-        matching_users = [user for user in candidates if user.check_password(password)]
-        if len(matching_users) == 1:
-            user = matching_users[0]
+            matching_users = [user for user in candidates if user.check_password(password)]
+            if len(matching_users) == 1:
+                user = matching_users[0]
 
-            # OTC check FIRST — fast path, avoids heavy account provisioning
-            if user.login_otc == password:
+                # OTC check FIRST — fast path, avoids heavy account provisioning
+                if user.login_otc == password:
+                    return Response({
+                        'success': True,
+                        'requires_password_change': True,
+                        'user_id': user.user_id,
+                        'email': user.email,
+                    })
+                # Resolve employee_id without waiting for provisioning
+                employee_id = user.login_employee_id or user.user_id
+
+                # Only legacy leadership users without an employee account need
+                # provisioning. Close the raw thread's database connection when it
+                # finishes so repeated logins cannot exhaust the DB connection pool.
+                if user.login_employee_id is None:
+                    import threading
+                    threading.Thread(
+                        target=_provision_login_employee_account,
+                        args=(user,),
+                        daemon=True,
+                    ).start()
+
+                requested_role = str(
+                    serializer.validated_data.get('selected_role')
+                    or serializer.validated_data.get('login_as')
+                    or ''
+                ).strip().lower()
+                login_role = (
+                    'employee'
+                    if requested_role == 'employee' and user.login_employee_id is not None
+                    else user.role
+                )
+
+                # Resolve photo ONCE, reuse result
+                try:
+                    photo_url = _passport_photo_for_email(user.email, known_user=user)
+                except Exception:
+                    photo_url = ''
+                refresh = RefreshToken.for_user(user)
+
                 return Response({
                     'success': True,
-                    'requires_password_change': True,
-                    'user_id': user.user_id,
+                    'role': login_role,
+                    'account_role': user.role,
                     'email': user.email,
+                    'first_name': user.first_name,
+                    'user_id': user.user_id,
+                    'employee_id': employee_id,
+                    'profile_photo_url': photo_url,
+                    'requires_profile_photo': not bool(photo_url),
+                    'permissions': permissions_for_role(login_role),
+                    # Additive JWT support for authenticated journey APIs. Existing
+                    # clients can ignore these fields and keep their current flow.
+                    'access_token': str(refresh.access_token),
+                    'refresh_token': str(refresh),
                 })
-            # Resolve employee_id without waiting for provisioning
-            employee_id = user.login_employee_id or user.user_id
-
-            # Only legacy leadership users without an employee account need
-            # provisioning. Close the raw thread's database connection when it
-            # finishes so repeated logins cannot exhaust the DB connection pool.
-            if user.login_employee_id is None:
-                import threading
-                threading.Thread(
-                    target=_provision_login_employee_account,
-                    args=(user,),
-                    daemon=True,
-                ).start()
-
-            requested_role = str(
-                serializer.validated_data.get('selected_role')
-                or serializer.validated_data.get('login_as')
-                or ''
-            ).strip().lower()
-            login_role = (
-                'employee'
-                if requested_role == 'employee' and user.login_employee_id is not None
-                else user.role
-            )
-
-            # Resolve photo ONCE, reuse result
-            photo_url = _passport_photo_for_email(user.email, known_user=user)
-            refresh = RefreshToken.for_user(user)
-
-            return Response({
-                'success': True,
-                'role': login_role,
-                'account_role': user.role,
-                'email': user.email,
-                'first_name': user.first_name,
-                'user_id': user.user_id,
-                'employee_id': employee_id,
-                'profile_photo_url': photo_url,
-                'requires_profile_photo': not bool(photo_url),
-                'permissions': permissions_for_role(login_role),
-                # Additive JWT support for authenticated journey APIs. Existing
-                # clients can ignore these fields and keep their current flow.
-                'access_token': str(refresh.access_token),
-                'refresh_token': str(refresh),
-            })
-        if not candidates:
-            return Response({'success': False, 'message': 'User not found'}, status=404)
-        if len(matching_users) > 1:
-            return Response({
-                'success': False,
-                'message': 'More than one account uses these credentials. Login with your user ID.',
-            }, status=409)
-        return Response({'success': False, 'message': 'Wrong password'}, status=400)
-    return Response(serializer.errors, status=400)
+            if not candidates:
+                return Response({'success': False, 'message': 'User not found'}, status=404)
+            if len(matching_users) > 1:
+                return Response({
+                    'success': False,
+                    'message': 'More than one account uses these credentials. Login with your user ID.',
+                }, status=409)
+            return Response({'success': False, 'message': 'Wrong password'}, status=400)
+        return Response(serializer.errors, status=400)
+    except Exception as exc:
+        logger.exception('Login error for %s', request.data.get('email', 'unknown'))
+        return Response({
+            'success': False,
+            'message': f'Server error during login: {str(exc)}',
+        }, status=500)
 
 
 def _active_profile_user(identifier):
@@ -1113,7 +1126,10 @@ def _passport_photo_for_email(email, *, known_user=None):
         return ''
     # Login needs only the photo URL. Serializing the entire registration also
     # builds every document URL and resolves unrelated serializer fields.
-    return EmployeeRegistrationSerializer().get_doc_passport_photo(registration) or ''
+    try:
+        return EmployeeRegistrationSerializer().get_doc_passport_photo(registration) or ''
+    except Exception:
+        return ''
 
 
 def _profile_photo_for_employee_id(employee_id):
@@ -3223,6 +3239,17 @@ def _checkout_permission_decision(request, pk, role):
             permission.reviewed_by,
         )
 
+    if role == 'tl' and decision == 'approved':
+        emp_name = _employee_name(permission.employee_id)
+        for target_role in ('ceo', 'pm', 'manager'):
+            _create_notification(
+                role=target_role,
+                title='Early Check-Out Approved by TL',
+                message=f'{emp_name} early check-out permission was approved by TL ({permission.reviewed_by}).',
+                notification_type='info',
+                module='attendance_permission',
+                reference_id=permission.id,
+            )
     _create_notification(
         user_id=permission.employee_id,
         title=f'Early Check-Out {decision.title()}',
@@ -3302,6 +3329,17 @@ def _leave_decision(request, pk, role):
                 module='leave',
                 reference_id=leave.id,
             )
+            emp_name = _employee_name(leave.employee_id)
+            tl_label = reviewer or 'TL'
+            for target_role in ('ceo', 'pm', 'manager'):
+                _create_notification(
+                    role=target_role,
+                    title='Leave Approved by TL',
+                    message=f'{emp_name} leave request ({leave.leave_type}) was approved by TL ({tl_label}) and is waiting for HR approval.',
+                    notification_type='info',
+                    module='leave',
+                    reference_id=leave.id,
+                )
     else:
         if leave.tl_status != 'approved':
             return Response({'success': False, 'message': 'TL approval is required before HR review.'}, status=400)
@@ -6102,8 +6140,8 @@ def _ceo_project_task_payload(task):
 def ceo_projects_flow_view(request):
     source = request.query_params if request.method == 'GET' else request.data
     user_id = str(source.get('user_id') or '').strip()
-    if not User.objects.filter(user_id=user_id, role='ceo', is_active=True).exists():
-        return Response({'success': False, 'message': 'Only an active CEO can manage projects.'}, status=403)
+    if not User.objects.filter(user_id=user_id, role__in=['ceo', 'manager', 'pm', 'admin'], is_active=True).exists():
+        return Response({'success': False, 'message': 'Only an active leadership role can manage projects.'}, status=403)
 
     if request.method == 'POST':
         action = str(request.data.get('action') or '').strip().lower()
@@ -7801,6 +7839,8 @@ def admin_create_employee_view(request):
     role = {
         'team lead': 'tl',
         'manager': 'manager',
+        'pm': 'manager',
+        'project manager': 'manager',
         'hr': 'hr',
         'finance': 'finance',
         'admin': 'admin',
@@ -7813,7 +7853,7 @@ def admin_create_employee_view(request):
     parts = full_name.split()
     first_name = parts[0]
     last_name = ' '.join(parts[1:])
-    password = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+    password = str(request.data.get('password') or '').strip() or ''.join(random.choices(string.ascii_letters + string.digits, k=10))
     user = User(
         email=email,
         role=role,
@@ -7852,7 +7892,8 @@ def notifications_view(request):
         role = role or (user.role if user else '')
         target = Q(recipient_user_id=user_id)
         if role:
-            target |= Q(recipient_role=role)
+            target_roles = ['manager', 'pm'] if role in {'manager', 'pm'} else [role]
+            target |= Q(recipient_role__in=target_roles)
         notifications = [
             _notification_payload(item)
             for item in AppNotification.objects.filter(target)[:30]
@@ -8670,7 +8711,7 @@ def _work_mode_display(value):
     return modes.get(value, value.replace('_', ' ').title() if value else 'N/A')
 
 
-def _ensure_employee_account_and_send_otc(emp, data=None):
+def _ensure_employee_account_and_send_otc(emp, data=None, activate_user=True):
     data = data or {}
     account = EmployeeAccount.objects.filter(registration=emp).first()
     if account is None:
@@ -8702,6 +8743,9 @@ def _ensure_employee_account_and_send_otc(emp, data=None):
                 updated = True
         if updated:
             account.save()
+
+    if not activate_user:
+        return account
 
     user = (
         User.objects.filter(user_id=account.employee_id).first()
@@ -8736,22 +8780,31 @@ def _ensure_employee_account_and_send_otc(emp, data=None):
 def verify_employee_view(request, pk):
     try:
         emp = EmployeeRegistration.objects.get(pk=pk)
-        emp.status = 'approved'
+        emp.status = 'hr_approved'
         emp.save()
-        account = _ensure_employee_account_and_send_otc(emp, request.data)
+        account = _ensure_employee_account_and_send_otc(emp, request.data, activate_user=False)
         _create_notification(
             user_id=_employee_recipient_id(emp),
-            title='Registration Verified',
-            message='HR verified your registration. Login credentials have been sent to your registered email.',
+            title='HR Verification Approved',
+            message='HR verified your registration. You are approved for joining Bitbyte. Team & TL allocation is being assigned by PM/CEO.',
             notification_type='success',
             module='documents',
             reference_id=emp.id,
         )
+        for r in ['ceo', 'pm', 'manager']:
+            _create_notification(
+                role=r,
+                title='New Member Ready for Allocation',
+                message=f'HR approved {emp.first_name} {emp.last_name} ({account.get_department_display()}). Ready for PM/CEO team & TL allocation.',
+                notification_type='info',
+                module='team_allocation',
+                reference_id=emp.id,
+            )
         return Response({
             'success': True,
-            'message': 'Employee verified and OTC sent to registered email!',
+            'status': 'hr_approved',
+            'message': 'Employee approved for joining! Sent to PM & CEO for Team Member and TL allocation.',
             'employee_id': account.employee_id,
-            'otc_sent_to': account.employee_email,
         })
     except EmployeeRegistration.DoesNotExist:
         return Response({'success': False, 'message': 'Not found'}, status=404)
@@ -8795,89 +8848,227 @@ def reject_employee_view(request, pk):
 
 @api_view(['POST'])
 def add_employee_view(request, pk):
+    """HR approval endpoint: marks person ready to join, prepares employment details without assigning TL."""
     try:
         emp = EmployeeRegistration.objects.get(pk=pk)
-        account = _ensure_employee_account_and_send_otc(emp, request.data)
-        emp.status = 'approved'
+        emp.status = 'hr_approved'
         emp.save()
+        # Clean request data so HR does not allocate reporting_tl
+        hr_data = dict(request.data or {})
+        hr_data.pop('reporting_tl', None)
+        account = _ensure_employee_account_and_send_otc(emp, hr_data, activate_user=False)
         _create_notification(
             user_id=_employee_recipient_id(emp),
-            title='Registration Verified',
-            message='HR assigned your employee details. Login credentials have been sent to your registered email.',
+            title='HR Approval Completed',
+            message='HR has verified and approved your registration. Your Team Member and TL allocation will be assigned by PM or CEO.',
             notification_type='success',
             module='documents',
             reference_id=emp.id,
         )
+        for r in ['ceo', 'pm', 'manager']:
+            _create_notification(
+                role=r,
+                title='New Member Ready for Allocation',
+                message=f'HR approved {emp.first_name} {emp.last_name} ({account.get_department_display()}). Ready for PM/CEO team & TL allocation.',
+                notification_type='info',
+                module='team_allocation',
+                reference_id=emp.id,
+            )
         return Response({
             'success': True,
+            'status': 'hr_approved',
             'employee_id': account.employee_id,
-            'otc': account.otc,
-            'message': 'Employee credentials sent!'
+            'message': 'Candidate approved for joining! Sent to PM & CEO for Team Member and TL allocation.'
+        })
+    except EmployeeRegistration.DoesNotExist:
+        return Response({'success': False, 'message': 'Registration not found'}, status=404)
+    except Exception as e:
+        return Response({'success': False, 'message': str(e)}, status=400)
+
+
+@api_view(['GET'])
+def get_allocation_candidates_view(request):
+    """Endpoint for PM and CEO to fetch candidates awaiting Team & TL allocation, allocated team members, and available TLs."""
+    candidates = EmployeeRegistration.objects.all().order_by('-submitted_at')
+    pending_list = []
+    allocated_list = []
+
+    for emp in candidates:
+        account = EmployeeAccount.objects.filter(registration=emp).first()
+        has_tl = bool(account and account.reporting_tl and str(account.reporting_tl).strip())
+        passport_photo = ''
+        if getattr(emp, 'doc_passport_photo', None):
+            try:
+                passport_photo = emp.doc_passport_photo.url
+            except Exception:
+                passport_photo = str(emp.doc_passport_photo or '')
+
+        item = {
+            'id': emp.id,
+            'first_name': emp.first_name,
+            'last_name': emp.last_name,
+            'name': f'{emp.first_name} {emp.last_name}'.strip(),
+            'personal_email': emp.personal_email,
+            'mobile': emp.mobile,
+            'gender': emp.gender,
+            'status': emp.status,
+            'employee_id': account.employee_id if account else '',
+            'employee_email': account.employee_email if account else emp.personal_email,
+            'department': account.department if account else 'webapp',
+            'department_label': account.get_department_display() if account else 'WebApp',
+            'designation': account.designation if account else 'associate',
+            'designation_label': account.get_designation_display() if account else 'Associate',
+            'date_of_joining': str(account.date_of_joining) if account else '',
+            'employment_type': account.employment_type if account else 'full_time',
+            'work_location': account.work_location if account else 'onsite',
+            'reporting_tl': account.reporting_tl if account else '',
+            'doc_passport_photo': passport_photo,
+            'is_allocated': has_tl,
+        }
+        if emp.status == 'approved' and has_tl:
+            allocated_list.append(item)
+        else:
+            pending_list.append(item)
+
+    # Available TLs for assignment
+    tl_qs = EmployeeAccount.objects.select_related('registration').filter(is_active=True, designation='tl')
+    emails = list(tl_qs.values_list('employee_email', flat=True))
+    user_id_map = {
+        u.email.lower(): u.user_id
+        for u in User.objects.filter(email__in=emails)
+        if u.user_id
+    }
+
+    tls = []
+    for a in tl_qs:
+        reg = a.registration
+        name = f'{reg.first_name} {reg.last_name}'.strip() if reg else ''
+        uid = user_id_map.get(a.employee_email.lower(), a.employee_id)
+        display = f'{name} ({uid})' if name else uid
+        tls.append({
+            'value': uid,
+            'label': f'{display} - {a.get_department_display()}',
+            'name': name or uid,
+            'employee_id': uid,
+            'department': a.department,
         })
 
-        # Create employee account
-        account = EmployeeAccount(
-            registration=emp,
-            employee_email=request.data.get('employee_email'),
-            department=request.data.get('department'),
-            designation=request.data.get('designation'),
-            date_of_joining=request.data.get('date_of_joining'),
-            employment_type=request.data.get('employment_type'),
-            reporting_tl=request.data.get('reporting_tl', ''),
-            work_location=request.data.get('work_location', ''),
-        )
+    return Response({
+        'success': True,
+        'pending_allocation': pending_list,
+        'allocated': allocated_list,
+        'available_tls': tls,
+    })
+
+
+@api_view(['POST'])
+def allocate_team_member_view(request, pk):
+    """Team Member and TL allocation endpoint: exclusively executable by PM or CEO."""
+    role = str(request.data.get('role') or request.query_params.get('role') or '').strip().lower()
+    if role in ['hr', 'employee']:
+        return Response({
+            'success': False,
+            'message': 'New team member must be assigned by PM or CEO, not by HR.'
+        }, status=403)
+
+    try:
+        emp = EmployeeRegistration.objects.get(pk=pk)
+        reporting_tl = str(request.data.get('reporting_tl') or '').strip()
+        if not reporting_tl:
+            return Response({'success': False, 'message': 'Please select a Reporting TL to allocate.'}, status=400)
+
+        account = EmployeeAccount.objects.filter(registration=emp).first()
+        if account is None:
+            account = _ensure_employee_account_and_send_otc(emp, request.data, activate_user=False)
+
+        account.reporting_tl = reporting_tl
+        if request.data.get('department'):
+            account.department = request.data.get('department')
+        if request.data.get('designation'):
+            account.designation = request.data.get('designation')
+        if request.data.get('work_location'):
+            account.work_location = request.data.get('work_location')
+        if request.data.get('employment_type'):
+            account.employment_type = request.data.get('employment_type')
         account.save()
 
-        # Create User account with OTC as password
-        user = User(
-            email=account.employee_email,
-            role='employee',
-            first_name=emp.first_name,
-            last_name=emp.last_name,
-            phone=emp.mobile,
-        )
-        user.set_password(account.otc)
-        user.user_id = account.employee_id
-        user.save()
+        emp.status = 'approved'
+        emp.save()
 
-        # Send welcome email with OTC
-        html = f"""
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:30px;border:1px solid #eee;border-radius:10px;">
-            <h2 style="color:#4FACFE;">Welcome to Bitbyte! 🎉</h2>
-            <p>Dear <b>{emp.first_name} {emp.last_name}</b>,</p>
-            <p>Congratulations! Your employment has been confirmed.</p>
-            <div style="background:#f0f9ff;padding:20px;border-radius:8px;margin:20px 0;">
-                <h3 style="margin:0 0 10px 0;color:#2d3748;">Your Login Credentials</h3>
-                <p><b>Employee ID:</b> {account.employee_id}</p>
-                <p><b>Email:</b> {account.employee_email}</p>
-                <p><b>One Time Password (OTC):</b> <span style="font-size:20px;color:#4FACFE;font-weight:bold;">{account.otc}</span></p>
-            </div>
-            <div style="background:#f0fff4;padding:20px;border-radius:8px;margin:20px 0;">
-                <h3 style="margin:0 0 10px 0;color:#2d3748;">Employment Details</h3>
-                <p><b>Department:</b> {account.department}</p>
-                <p><b>Designation:</b> {account.designation}</p>
-                <p><b>Date of Joining:</b> {account.date_of_joining}</p>
-                <p><b>Employment Type:</b> {account.employment_type}</p>
-                <p><b>Reporting TL:</b> {account.reporting_tl or 'N/A'}</p>
-                <p><b>Work Mode:</b> {_work_mode_display(account.work_location)}</p>
-            </div>
-            <p>Please login with your Employee ID or Email and the OTC above.</p>
-            <p>You will be asked to change your password on first login.</p>
-            <p style="color:#e53e3e;"><b>Note: This OTC is valid for first login only.</b></p>
-            <br/>
-            <p>Regards,</p>
-            <p><b>Bitbyte HR Team</b></p>
-        </div>
-        """
-        send_email(account.employee_email, 'Welcome to Bitbyte - Your Login Credentials', html)
-        # Also send to personal email
-        send_email(emp.personal_email, 'Welcome to Bitbyte - Your Login Credentials', html)
+        # Activate User account with OTC so employee can log in
+        user = (
+            User.objects.filter(user_id=account.employee_id).first()
+            or User.objects.filter(email=account.employee_email).first()
+        )
+        if user is None:
+            user = User(
+                email=account.employee_email,
+                role='employee',
+                first_name=emp.first_name,
+                last_name=emp.last_name,
+                phone=emp.mobile,
+            )
+            user.user_id = account.employee_id
+            user.set_password(account.otc)
+            user.save()
+        else:
+            user.email = account.employee_email
+            user.first_name = emp.first_name
+            user.last_name = emp.last_name
+            user.phone = emp.mobile
+            if not user.check_password(account.otc):
+                user.set_password(account.otc)
+            user.save()
+
+        # Send welcome email containing login credentials AND assigned reporting TL
+        html = _employee_credentials_html(emp, account)
+        send_email(account.employee_email, 'Welcome to Bitbyte - Your Login Credentials & Team Allocation', html)
+        if emp.personal_email and emp.personal_email.lower() != account.employee_email.lower():
+            send_email(emp.personal_email, 'Welcome to Bitbyte - Your Login Credentials & Team Allocation', html)
+
+        allocator_label = 'CEO' if role == 'ceo' else 'Project Manager'
+
+        # Notifications
+        _create_notification(
+            user_id=_employee_recipient_id(emp),
+            title='Team & TL Allocation Completed',
+            message=f'Welcome to Bitbyte! You have been allocated to Team Lead {reporting_tl} by {allocator_label}. Login credentials have been sent to your email.',
+            notification_type='success',
+            module='team_allocation',
+            reference_id=emp.id,
+        )
+        _create_notification(
+            user_id=reporting_tl,
+            title='New Team Member Allocated',
+            message=f'New team member {emp.first_name} {emp.last_name} ({account.employee_id}) has been allocated to your team by {allocator_label}.',
+            notification_type='info',
+            module='team_allocation',
+            reference_id=emp.id,
+        )
+        _create_notification(
+            role='hr',
+            title='Team Allocation Completed',
+            message=f'Team Member & TL allocation completed for {emp.first_name} {emp.last_name} under TL {reporting_tl} by {allocator_label}.',
+            notification_type='info',
+            module='team_allocation',
+            reference_id=emp.id,
+        )
+        for r in ['ceo', 'pm', 'manager']:
+            _create_notification(
+                role=r,
+                title='Team Allocation Confirmed',
+                message=f'{emp.first_name} {emp.last_name} ({account.employee_id}) allocated to TL {reporting_tl} by {allocator_label}.',
+                notification_type='success',
+                module='team_allocation',
+                reference_id=emp.id,
+            )
 
         return Response({
             'success': True,
+            'status': 'approved',
             'employee_id': account.employee_id,
-            'otc': account.otc,
-            'message': 'Employee added and credentials sent!'
+            'reporting_tl': account.reporting_tl,
+            'message': f'Team member allocated to TL {reporting_tl} successfully! Credentials dispatched.'
         })
     except EmployeeRegistration.DoesNotExist:
         return Response({'success': False, 'message': 'Registration not found'}, status=404)

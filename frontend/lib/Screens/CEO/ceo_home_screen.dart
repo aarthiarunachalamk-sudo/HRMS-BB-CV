@@ -142,7 +142,7 @@ class CeoHomeScreen extends StatelessWidget {
         title('Quick Actions', 15),
         Card(
           child: ListTile(
-            leading: const Icon(Icons.route_rounded, color: CeoColors.cyan),
+            leading: const Icon(Icons.add_location_alt_rounded, color: CeoColors.cyan),
             title: const Text('Client Visits'),
             subtitle: const Text('Live tracking, history and visit details'),
             trailing: const Icon(Icons.chevron_right_rounded),
@@ -152,8 +152,8 @@ class CeoHomeScreen extends StatelessWidget {
                   userId: userId,
                   roleLabel: 'CEO',
                   requesterRole: 'ceo',
-                  readOnlyMode: true,
-                  allowCreate: false,
+                  readOnlyMode: false,
+                  allowCreate: true,
                 ),
               ),
             ),

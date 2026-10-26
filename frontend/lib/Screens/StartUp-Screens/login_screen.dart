@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hrms_mobileapp_bitbyte/main.dart';
+import 'package:hrms_mobileapp_bitbyte/backend/api_client.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/auth_session.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/login_warmup.dart';
@@ -12,11 +13,8 @@ import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/CEO_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/MD_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/ED/ed_dashboard.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/HR_dadhborad.dart';
-import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Finance_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Admin_dashborad.dart';
-import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/ITTeam_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/Manager-dashborad.dart';
-import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/MarketingTeam_dashborad.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Dashboard/TL_dashborad.dart';
 import 'boom_in_widget.dart';
 import 'register_screen.dart';
@@ -116,7 +114,7 @@ class LoginScreen extends StatefulWidget {
         firstName: data['first_name'] ?? '',
         userId: employeeId,
       );
-    } else if (role == 'manager') {
+    } else if (role == 'manager' || role == 'pm' || role == 'project_manager' || role == 'projectmanager') {
       dashboard = ManagerDashboard(
         email: data['email'],
         firstName: data['first_name'] ?? '',
@@ -202,7 +200,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _rememberMe = false;
   bool _isLoggingIn = false;
-  final http.Client _loginClient = http.Client();
+  final http.Client _loginClient = ApiClient.rawClient;
 
   @override
   void initState() {
@@ -347,7 +345,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _loginClient.close();
     _employeeCodeController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -368,6 +365,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final loginId = _employeeCodeController.text.trim();
     final password = _passwordController.text;
     final rememberMe = _rememberMe;
+
     setState(() => _isLoggingIn = true);
     final loginTimer = Stopwatch()..start();
 
@@ -476,7 +474,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
     Object? lastNetworkError;
     for (final url in urls) {
-      for (var attempt = 0; attempt < 2; attempt++) {
+      final isPrivate = ApiConfig.usesPrivateNetworkAddress && url == urls.first;
+      final maxAttempts = isPrivate ? 2 : 4;
+      final timeoutDuration = Duration(seconds: isPrivate ? 2 : 75);
+
+      for (var attempt = 0; attempt < maxAttempts; attempt++) {
         try {
           final response = await _loginClient
               .post(
@@ -484,23 +486,41 @@ class _LoginScreenState extends State<LoginScreen> {
                 headers: {'Content-Type': 'application/json'},
                 body: jsonEncode(payload),
               )
-              .timeout(
-                Duration(
-                  seconds:
-                      ApiConfig.usesPrivateNetworkAddress && url == urls.first
-                      ? 1
-                      : 65,
-                ),
-              ); // Public backend may still need a cold start.
-          debugPrint('Login server timing: ${response.headers['server-timing'] ?? 'unavailable'}');
+              .timeout(timeoutDuration);
+
+          debugPrint(
+            'Login response (${response.statusCode}) timing: ${response.headers['server-timing'] ?? 'unavailable'}',
+          );
+
           if (response.statusCode >= 500) {
+            // Check if server returned a JSON error payload with a message
+            try {
+              final decoded = jsonDecode(response.body);
+              if (decoded is Map) {
+                final message = decoded['message'] ?? decoded['detail'] ?? decoded['error'];
+                if (message != null && '$message'.trim().isNotEmpty) {
+                  throw _LoginResponseException('$message');
+                }
+              }
+            } catch (e) {
+              if (e is _LoginResponseException) rethrow;
+            }
+
+            // Status 502/503/504 means the container / gateway is starting up on Render
+            final isGatewayColdStart = response.statusCode == 502 ||
+                response.statusCode == 503 ||
+                response.statusCode == 504;
+
             lastNetworkError = 'HTTP ${response.statusCode} from $url';
-            if (attempt == 0) {
-              await Future<void>.delayed(const Duration(milliseconds: 700));
+
+            if (attempt < maxAttempts - 1) {
+              final delaySeconds = isGatewayColdStart ? (3 + attempt * 2) : 2;
+              await Future<void>.delayed(Duration(seconds: delaySeconds));
               continue;
             }
             break;
           }
+
           dynamic decoded;
           try {
             decoded = jsonDecode(response.body);
@@ -513,13 +533,26 @@ class _LoginScreenState extends State<LoginScreen> {
           throw const _LoginResponseException(
             'The server returned an invalid response. Please try again.',
           );
+        } on _LoginResponseException {
+          rethrow;
         } on TimeoutException catch (error) {
           lastNetworkError = error;
+          if (attempt < maxAttempts - 1) {
+            await Future<void>.delayed(const Duration(seconds: 2));
+            continue;
+          }
           break;
         } on http.ClientException catch (error) {
           lastNetworkError = error;
-          if (attempt == 0) {
-            await Future<void>.delayed(const Duration(milliseconds: 700));
+          if (attempt < maxAttempts - 1) {
+            await Future<void>.delayed(Duration(seconds: 2 + attempt * 2));
+            continue;
+          }
+          break;
+        } catch (error) {
+          lastNetworkError = error;
+          if (attempt < maxAttempts - 1) {
+            await Future<void>.delayed(const Duration(seconds: 2));
             continue;
           }
           break;
@@ -545,8 +578,7 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text(
-          'Could not connect to the server. '
-          'Check your internet or try again in a moment.',
+          'Could not reach server. The cloud server may be waking up. Tap Retry to reconnect.',
         ),
         behavior: SnackBarBehavior.floating,
         backgroundColor: const Color(0xFFB42318),
@@ -557,13 +589,6 @@ class _LoginScreenState extends State<LoginScreen> {
           onPressed: _submitLogin,
         ),
       ),
-    );
-  }
-
-  String _normalizeRole(Object? value) {
-    return '${value ?? ''}'.trim().toLowerCase().replaceAll(
-      RegExp(r'[\s-]+'),
-      '_',
     );
   }
 
@@ -753,12 +778,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                     child: Center(
                                       child: _isLoggingIn
-                                          ? const Text(
-                                              'Logging in...',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
+                                          ? const SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.2,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
                                               ),
                                             )
                                           : const Text(

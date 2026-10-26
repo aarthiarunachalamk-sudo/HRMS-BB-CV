@@ -539,8 +539,8 @@ class _MdDashboardState extends State<MdDashboard> {
         return ClientVisitDashboardScreen(
           userId: widget.userId,
           reviewerMode: true,
-          readOnlyMode: true,
-          allowCreate: false,
+          readOnlyMode: false,
+          allowCreate: true,
           assignedApprovalsOnly: false,
           allowVerification: false,
           requesterRole: _isDirector ? 'ed' : 'md',
@@ -2901,48 +2901,51 @@ class _BottomNav extends StatelessWidget {
       _BottomNavEntry(Icons.add_location_alt_outlined, 'Client Visits'),
       _BottomNavEntry(Icons.more_horiz_rounded, 'More'),
     ];
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border(top: BorderSide(color: colors.border)),
-      ),
-      padding: const EdgeInsets.fromLTRB(6, 7, 6, 10),
-      child: Row(
-        children: List.generate(items.length, (index) {
-          final selected = selectedIndex == index;
-          return Expanded(
-            child: InkWell(
-              onTap: () => onTap(index),
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: 46,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      items[index].icon,
-                      color: selected
-                          ? Theme.of(context).colorScheme.secondary
-                          : colors.muted,
-                      size: 18,
-                    ),
-                    const SizedBox(height: 3),
-                    FittedBox(
-                      child: Text(
-                        items[index].label,
-                        style: TextStyle(
-                          color: selected ? colors.primary : colors.muted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border(top: BorderSide(color: colors.border)),
+        ),
+        padding: const EdgeInsets.fromLTRB(6, 7, 6, 10),
+        child: Row(
+          children: List.generate(items.length, (index) {
+            final selected = selectedIndex == index;
+            return Expanded(
+              child: InkWell(
+                onTap: () => onTap(index),
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  height: 46,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        items[index].icon,
+                        color: selected
+                            ? Theme.of(context).colorScheme.secondary
+                            : colors.muted,
+                        size: 18,
+                      ),
+                      const SizedBox(height: 3),
+                      FittedBox(
+                        child: Text(
+                          items[index].label,
+                          style: TextStyle(
+                            color: selected ? colors.primary : colors.muted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }

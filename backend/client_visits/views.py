@@ -214,7 +214,7 @@ def _notify_visit_submitted(visit):
 
     # Leadership dashboards monitor every raised request. The assigned CEO is
     # excluded from the CEO broadcast to avoid showing the same request twice.
-    for dashboard_role in ('ceo', 'md', 'director', 'admin', 'superadmin'):
+    for dashboard_role in ('ceo', 'md', 'director', 'admin', 'superadmin', 'pm', 'manager'):
         if dashboard_role == assigned_role:
             continue
         _notify(
@@ -255,6 +255,14 @@ def _notify_hr_approval_required(visit, tl_user):
         notification_type='info',
         visit=visit,
     )
+    for target_role in ('ceo', 'pm', 'manager'):
+        _notify(
+            role=target_role,
+            title='TL Approved Client Visit',
+            message=f'{tl_name} approved {visit.visit_id} for {visit.client_name}. Waiting for HR approval.',
+            notification_type='info',
+            visit=visit,
+        )
 
 
 def _safe_notify_hr_approval_required(visit, tl_user):
@@ -369,7 +377,7 @@ def _notify_visit_progress(visit, *, title, message, notification_type='info', i
             notification_type=notification_type,
             visit=visit,
         )
-    for dashboard_role in ('ceo', 'md', 'director', 'admin', 'superadmin'):
+    for dashboard_role in ('ceo', 'md', 'director', 'admin', 'superadmin', 'pm', 'manager'):
         if dashboard_role == assigned_role:
             continue
         _notify(
@@ -525,7 +533,8 @@ def _visit_payload(item, detailed=True, approver_lookup=None, viewer=None, user_
         'longitude': float(item.longitude) if item.longitude is not None else None,
         'scheduled_date': item.scheduled_date.isoformat() if hasattr(item.scheduled_date, 'isoformat') else str(item.scheduled_date),
         'scheduled_time': item.scheduled_time.strftime('%H:%M') if hasattr(item.scheduled_time, 'strftime') else str(item.scheduled_time)[:5],
-        'duration_minutes': item.duration_minutes, 'travel_mode': item.travel_mode,
+        'duration_minutes': item.duration_minutes,
+        'travel_mode': '' if (item.team or '').strip().lower() == 'marketing' else item.travel_mode,
         'service_type': item.service_type,
         'service_name': (
             item.get_service_type_display()
@@ -586,6 +595,8 @@ def _assign_fields(visit, data):
                 except (TypeError, ValueError):
                     continue
             setattr(visit, field, value)
+    if (visit.team or '').strip().lower() == 'marketing':
+        visit.travel_mode = ''
 
 
 def _service_type_error(data):
@@ -708,6 +719,8 @@ def visit_list_create(request):
     team_val = str(request.data.get('team') or '').strip().lower()
     if team_val:
         visit.team = team_val
+    if (visit.team or '').strip().lower() == 'marketing':
+        visit.travel_mode = ''
     if not visit.client_email and request.data.get('email'):
         visit.client_email = str(request.data.get('email')).strip()
     css = request.data.get('creative_studio_services')

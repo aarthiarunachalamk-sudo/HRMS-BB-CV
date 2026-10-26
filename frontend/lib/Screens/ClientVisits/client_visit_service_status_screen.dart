@@ -177,31 +177,166 @@ class _ClientVisitServiceStatusScreenState
     _newServiceController.clear();
   }
 
+  Future<void> _showValidationPopup({
+    required String title,
+    required String message,
+    String pageName = '',
+    VoidCallback? onDismiss,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: isDark ? const Color(0xFF131D31) : Colors.white,
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withAlpha(25),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFEF4444),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                    ),
+                  ),
+                  if (pageName.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      pageName,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF00E5FF),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 8),
+          child: Text(
+            message,
+            style: TextStyle(
+              fontSize: 13.5,
+              height: 1.4,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                if (onDismiss != null) onDismiss();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF006CE5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text(
+                'Enter Details',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitFinal() async {
     final opt = _currentOption;
     final hasStatus = _commonStatus != null &&
         _commonStatus!.trim().isNotEmpty &&
         _commonStatus != kOptionalServiceStatusOption.label;
 
+    final clientName = '${widget.visitPayload['client_name'] ?? ''}'.trim();
+    if (clientName.isEmpty) {
+      await _showValidationPopup(
+        title: 'Missing Client Name',
+        pageName: 'Page 1: Client Details',
+        message: 'Client Name is missing. Please go back to Page 1 and fill client details.',
+        onDismiss: () => Navigator.of(context).pop(),
+      );
+      return;
+    }
+
+    final address = '${widget.visitPayload['address'] ?? ''}'.trim();
+    if (address.isEmpty) {
+      await _showValidationPopup(
+        title: 'Missing Client Address',
+        pageName: 'Page 1: Client Details',
+        message: 'Client Address is missing. Please go back to Page 1 and fill client details.',
+        onDismiss: () => Navigator.of(context).pop(),
+      );
+      return;
+    }
+
+    final contactPhone = '${widget.visitPayload['contact_phone'] ?? ''}'.replaceAll(RegExp(r'[^0-9]'), '');
+    if (contactPhone.length != 10) {
+      await _showValidationPopup(
+        title: 'Invalid Contact Mobile',
+        pageName: 'Page 1: Client Details',
+        message: 'Valid 10-digit contact phone number is required. Please go back to Page 1 and fill client details.',
+        onDismiss: () => Navigator.of(context).pop(),
+      );
+      return;
+    }
+
+    final contactPerson = '${widget.visitPayload['contact_person'] ?? ''}'.trim();
+    if (contactPerson.isEmpty) {
+      await _showValidationPopup(
+        title: 'Missing Contact Person',
+        pageName: 'Page 1: Client Details',
+        message: 'Contact person name is missing. Please go back to Page 1 and fill client details.',
+        onDismiss: () => Navigator.of(context).pop(),
+      );
+      return;
+    }
+
+    if (_services.isEmpty) {
+      await _showValidationPopup(
+        title: 'Services Required',
+        pageName: 'Page 4: Requirement Status',
+        message: 'Please add or select at least one service on this page before submitting.',
+      );
+      return;
+    }
+
     if (!hasStatus || _commonStatus == null || _commonStatus!.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.error_outline_rounded, color: Colors.white),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Customer Requirement Status is mandatory. Please select a status.',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: Color(0xFFEF4444),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 3),
-        ),
+      await _showValidationPopup(
+        title: 'Requirement Status Required',
+        pageName: 'Page 4: Requirement Status',
+        message: 'Customer Requirement Status is mandatory. Please select a status on this page before submitting.',
       );
       return;
     }
@@ -285,7 +420,9 @@ class _ClientVisitServiceStatusScreenState
           address: '${finalPayload['address'] ?? ''}',
           scheduledAt: DateTime.now(),
           durationMinutes: 60,
-          travelMode: '${finalPayload['travel_mode'] ?? 'car'}',
+          travelMode: widget.selectedTeam.trim().toLowerCase() == 'marketing'
+              ? ''
+              : '${finalPayload['travel_mode'] ?? 'car'}',
           serviceType: '${finalPayload['service_type'] ?? 'digital_marketing'}',
           serviceName: 'Client Services',
           purpose: '${finalPayload['purpose'] ?? 'Client Visit'}',
@@ -341,11 +478,10 @@ class _ClientVisitServiceStatusScreenState
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit visit: $error'),
-            backgroundColor: Colors.red.shade700,
-          ),
+        await _showValidationPopup(
+          title: 'Submission Error',
+          pageName: 'Page 4: Requirement Status',
+          message: 'Failed to submit visit: $error',
         );
       }
     } finally {
@@ -465,6 +601,103 @@ class _ClientVisitServiceStatusScreenState
     });
   }
 
+  Widget _buildStepIndicator() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final steps = [
+      (index: 0, title: 'Details', icon: Icons.business_rounded),
+      (index: 1, title: 'Services', icon: Icons.miscellaneous_services_rounded),
+      (index: 2, title: 'Schedule', icon: Icons.calendar_month_rounded),
+      (index: 3, title: 'Status', icon: Icons.assignment_turned_in_rounded),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131D31) : const Color(0xFFF8FAFC),
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+          ),
+        ),
+      ),
+      child: Row(
+        children: steps.map((s) {
+          final isCurrent = s.index == 3;
+          final isPassed = s.index < 3;
+          final activeColor = isCurrent
+              ? const Color(0xFF00E5FF)
+              : (isPassed ? const Color(0xFF10B981) : (isDark ? Colors.white38 : Colors.grey.shade400));
+
+          return Expanded(
+            child: InkWell(
+              onTap: () {
+                if (s.index < 3) {
+                  Navigator.of(context).pop();
+                }
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: isPassed
+                            ? const Color(0xFF10B981)
+                            : (isCurrent
+                                ? const Color(0xFF00E5FF)
+                                : (isDark ? Colors.white12 : Colors.grey.shade200)),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: isPassed
+                            ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                            : Text(
+                                '${s.index + 1}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isCurrent
+                                      ? Colors.black87
+                                      : (isDark ? Colors.white70 : Colors.black54),
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        s.title,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w600,
+                          color: activeColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (s.index < steps.length - 1) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: isDark ? Colors.white24 : Colors.grey.shade400,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -482,14 +715,14 @@ class _ClientVisitServiceStatusScreenState
     return ClientVisitTheme(
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Client Requirement Status'),
+          title: const Text('Step 4/4: Requirement Status'),
           centerTitle: true,
           bottom: const PreferredSize(
             preferredSize: Size.fromHeight(22),
             child: Padding(
               padding: EdgeInsets.only(bottom: 6),
               child: Text(
-                'Step 2 of 2 • Assess customer requirement for services',
+                'Step 4 of 4 • Assess customer requirement for services',
                 style: TextStyle(
                   fontSize: 12,
                   color: Color(0xFF00E5FF),
@@ -558,8 +791,12 @@ class _ClientVisitServiceStatusScreenState
             ),
           ),
         ),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+        body: Column(
+          children: [
+            _buildStepIndicator(),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
           children: [
             // ── Client Summary Card ──
             Container(
@@ -978,9 +1215,12 @@ class _ClientVisitServiceStatusScreenState
                 ],
               ),
             ),
-          ],
-        ),
+              ],
+            ),
+          ),
+        ],
       ),
-    );
+    ),
+  );
   }
 }

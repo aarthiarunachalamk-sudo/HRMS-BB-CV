@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_client.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 import 'employee_models.dart';
@@ -10,16 +11,26 @@ class EmployeeService {
 
   Future<EmployeeDashboardData> fetchDashboard(
     String userId,
-    String email,
-  ) async {
+    String email, {
+    bool forceRefresh = false,
+  }) async {
     final uri = Uri.parse('$_baseUrl/dashboard/?user_id=$userId&email=$email');
-    final response = await http.get(uri);
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return EmployeeDashboardData.fromJson(
-        _decodeMap(response, 'Employee dashboard API returned invalid data'),
+    try {
+      final json = await ApiClient.getJsonCached(
+        uri,
+        ttl: const Duration(seconds: 30),
+        forceRefresh: forceRefresh,
       );
+      return EmployeeDashboardData.fromJson(json);
+    } catch (_) {
+      final response = await ApiClient.get(uri);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return EmployeeDashboardData.fromJson(
+          _decodeMap(response, 'Employee dashboard API returned invalid data'),
+        );
+      }
+      throw Exception(_responseError(response, 'Employee dashboard API failed'));
     }
-    throw Exception(_responseError(response, 'Employee dashboard API failed'));
   }
 
   Future<Map<String, dynamic>> checkIn(
@@ -94,7 +105,7 @@ class EmployeeService {
       await http.MultipartFile.fromPath('medical_certificate', certificatePath),
     );
 
-    final streamed = await request.send();
+    final streamed = await ApiClient.sendMultipart(request);
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return _decodeMap(response, 'Employee API returned invalid data');
@@ -103,7 +114,7 @@ class EmployeeService {
   }
 
   Future<Map<String, dynamic>> fetchPayslip(String userId) async {
-    final response = await http.get(
+    final response = await ApiClient.get(
       Uri.parse(
         '$_baseUrl/payslip/',
       ).replace(queryParameters: {'user_id': userId}),
@@ -134,7 +145,7 @@ class EmployeeService {
     request.fields['document_key'] = documentKey;
     request.fields['file_type'] = fileType;
     request.files.add(await http.MultipartFile.fromPath('document', filePath));
-    final streamed = await request.send();
+    final streamed = await ApiClient.sendMultipart(request);
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return _decodeMap(
@@ -150,7 +161,7 @@ class EmployeeService {
   }
 
   Future<Map<String, dynamic>> fetchApprovals(String userId) async {
-    final response = await http.get(
+    final response = await ApiClient.get(
       Uri.parse(
         '$_baseUrl/approvals/',
       ).replace(queryParameters: {'user_id': userId}),
@@ -168,13 +179,12 @@ class EmployeeService {
     String userId,
     Object notificationId,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .post(
           ApiConfig.uri('/notifications/$notificationId/read/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'user_id': userId, 'role': 'employee'}),
-        )
-        .timeout(const Duration(seconds: 20));
+          body: {'user_id': userId, 'role': 'employee'},
+          timeout: const Duration(seconds: 20),
+        );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
         _responseError(response, 'Unable to mark notification as read'),
@@ -215,7 +225,8 @@ class EmployeeService {
     request.files.add(
       await http.MultipartFile.fromPath('attachment', attachmentPath),
     );
-    final response = await http.Response.fromStream(await request.send());
+    final streamed = await ApiClient.sendMultipart(request);
+    final response = await http.Response.fromStream(streamed);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return _decodeMap(
         response,
@@ -240,7 +251,7 @@ class EmployeeService {
     String userId,
     Object approvalId,
   ) async {
-    final response = await http.get(
+    final response = await ApiClient.get(
       Uri.parse(
         '$_baseUrl/approvals/$approvalId/action/',
       ).replace(queryParameters: {'user_id': userId}),
@@ -257,10 +268,9 @@ class EmployeeService {
     String path,
     Map<String, dynamic> payload,
   ) async {
-    final response = await http.post(
+    final response = await ApiClient.post(
       Uri.parse('$_baseUrl$path'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(payload),
+      body: payload,
     );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return _decodeMap(response, 'Employee API returned invalid data');
@@ -292,7 +302,7 @@ class EmployeeService {
         'to_date': _dateParam(toDate),
       },
     );
-    final response = await http.get(uri);
+    final response = await ApiClient.get(uri);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return _decodeMap(response, 'Employee API returned invalid data');
     }
@@ -331,7 +341,7 @@ class EmployeeService {
       );
     }
 
-    final streamed = await request.send();
+    final streamed = await ApiClient.sendMultipart(request);
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return _decodeMap(

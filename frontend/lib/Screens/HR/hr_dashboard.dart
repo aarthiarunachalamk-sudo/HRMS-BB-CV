@@ -255,7 +255,12 @@ class _HrDashboardState extends State<HrDashboard> {
                             ),
                           ),
                         ),
-                      Expanded(child: pages[_index]),
+                      Expanded(
+                        child: IndexedStack(
+                          index: _index,
+                          children: pages,
+                        ),
+                      ),
                       _BottomNav(colors: c, index: _index, onTap: _setIndex),
                     ],
                   ),
@@ -1151,41 +1156,46 @@ class _BottomNav extends StatelessWidget {
         color: colors.surface,
         border: Border(top: BorderSide(color: colors.border)),
       ),
-      padding: const EdgeInsets.fromLTRB(4, 5, 4, 8),
-      child: Row(
-        children: items.map((itemIndex) {
-          final selected = index == itemIndex;
-          return Expanded(
-            child: InkWell(
-              onTap: () => onTap(itemIndex),
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: 48,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _icons[itemIndex],
-                      color: selected ? colors.primary : colors.muted,
-                      size: 18,
-                    ),
-                    const SizedBox(height: 3),
-                    FittedBox(
-                      child: Text(
-                        _titles[itemIndex],
-                        style: TextStyle(
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(4, 5, 4, 8),
+          child: Row(
+            children: items.map((itemIndex) {
+              final selected = index == itemIndex;
+              return Expanded(
+                child: InkWell(
+                  onTap: () => onTap(itemIndex),
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    height: 48,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _icons[itemIndex],
                           color: selected ? colors.primary : colors.muted,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
+                          size: 18,
                         ),
-                      ),
+                        const SizedBox(height: 3),
+                        FittedBox(
+                          child: Text(
+                            _titles[itemIndex],
+                            style: TextStyle(
+                              color: selected ? colors.primary : colors.muted,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          );
-        }).toList(),
+              );
+            }).toList(),
+          ),
+        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_client.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class CeoService {
@@ -426,9 +427,10 @@ class CeoService {
   // ── HTTP helpers ──────────────────────────────────────────
   Future<Map<String, dynamic>> _get(String path) async {
     try {
-      final res = await http
-          .get(Uri.parse('$_base$path'))
-          .timeout(_timeout);
+      final res = await ApiClient.get(
+        Uri.parse('$_base$path'),
+        timeout: _timeout,
+      );
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final decoded = jsonDecode(res.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -438,9 +440,10 @@ class CeoService {
   }
 
   Future<Map<String, dynamic>> _getStrict(String path) async {
-    final res = await http
-        .get(Uri.parse('$_base$path'))
-        .timeout(_timeout);
+    final res = await ApiClient.get(
+      Uri.parse('$_base$path'),
+      timeout: _timeout,
+    );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception('Backend returned ${res.statusCode}: ${res.body}');
     }
@@ -454,7 +457,10 @@ class CeoService {
     String path,
     Duration timeout,
   ) async {
-    final res = await http.get(Uri.parse('$_base$path')).timeout(timeout);
+    final res = await ApiClient.get(
+      Uri.parse('$_base$path'),
+      timeout: timeout,
+    );
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw Exception('Backend returned ${res.statusCode}: ${res.body}');
     }
@@ -508,13 +514,11 @@ class CeoService {
     Map<String, dynamic> body,
   ) async {
     try {
-      final res = await http
-          .post(
-            Uri.parse('$_base$path'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(body),
-          )
-          .timeout(_timeout);
+      final res = await ApiClient.post(
+        Uri.parse('$_base$path'),
+        body: body,
+        timeout: _timeout,
+      );
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final decoded = jsonDecode(res.body);
         if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -528,13 +532,11 @@ class CeoService {
     Map<String, dynamic> body,
   ) async {
     try {
-      final res = await http
-          .post(
-            Uri.parse('$_base$path'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(body),
-          )
-          .timeout(_timeout);
+      final res = await ApiClient.post(
+        Uri.parse('$_base$path'),
+        body: body,
+        timeout: _timeout,
+      );
       final decoded = jsonDecode(res.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
     } catch (error) {

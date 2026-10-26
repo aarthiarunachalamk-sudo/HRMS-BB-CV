@@ -1,13 +1,16 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_client.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class HrService {
+  static const String baseUrl = '${ApiConfig.baseUrl}/hr';
+  static const Duration _timeout = Duration(seconds: 40);
+
   Future<Map<String, dynamic>> fetchUserProfile(String userId) async {
-    final response = await http
-        .get(ApiConfig.uri('/profile/?user_id=$userId'))
-        .timeout(_timeout);
+    final response = await ApiClient
+        .get(ApiConfig.uri('/profile/?user_id=$userId'), timeout: _timeout);
     return _decodeEmployeeResponse(response, 'Unable to load profile');
   }
 
@@ -15,34 +18,36 @@ class HrService {
     String userId,
     Map<String, dynamic> fields,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .patch(
           ApiConfig.uri('/profile/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'user_id': userId, ...fields}),
-        )
-        .timeout(_timeout);
+          body: {'user_id': userId, ...fields},
+          timeout: _timeout,
+        );
     return _decodeEmployeeResponse(response, 'Unable to update profile');
   }
 
-  static const String baseUrl = '${ApiConfig.baseUrl}/hr';
-  static const Duration _timeout = Duration(seconds: 60);
-
-  Future<Map<String, dynamic>> fetchDashboard(String userId) async {
-    final response = await http
-        .get(Uri.parse('$baseUrl/dashboard/?user_id=$userId'))
-        .timeout(_timeout);
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+  Future<Map<String, dynamic>> fetchDashboard(String userId, {bool forceRefresh = false}) async {
+    final uri = Uri.parse('$baseUrl/dashboard/?user_id=$userId');
+    try {
+      return await ApiClient.getJsonCached(
+        uri,
+        ttl: const Duration(seconds: 30),
+        forceRefresh: forceRefresh,
+      );
+    } catch (_) {
+      final response = await ApiClient.get(uri, timeout: _timeout);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      }
+      throw Exception(_payrollError(response, 'HR dashboard API failed'));
     }
-    throw Exception(_payrollError(response, 'HR dashboard API failed'));
   }
 
   Future<Map<String, dynamic>> fetchEmployeeIdentity(String employeeId) async {
-    final response = await http
-        .get(ApiConfig.uri('/hr/employees/$employeeId/identity/'))
-        .timeout(_timeout);
+    final response = await ApiClient
+        .get(ApiConfig.uri('/hr/employees/$employeeId/identity/'), timeout: _timeout);
     return _decodeEmployeeResponse(
       response,
       'Unable to load employee identity',
@@ -50,16 +55,14 @@ class HrService {
   }
 
   Future<Map<String, dynamic>> fetchEmployeeDetails(String employeeId) async {
-    final response = await http
-        .get(ApiConfig.uri('/hr/employees/$employeeId/details/'))
-        .timeout(_timeout);
+    final response = await ApiClient
+        .get(ApiConfig.uri('/hr/employees/$employeeId/details/'), timeout: _timeout);
     return _decodeEmployeeResponse(response, 'Unable to load employee details');
   }
 
   Future<Map<String, dynamic>> fetchAttendanceDetails(int attendanceId) async {
-    final response = await http
-        .get(ApiConfig.uri('/hr/attendance/$attendanceId/'))
-        .timeout(_timeout);
+    final response = await ApiClient
+        .get(ApiConfig.uri('/hr/attendance/$attendanceId/'), timeout: _timeout);
     return _decodeEmployeeResponse(
       response,
       'Unable to load attendance details',
@@ -74,22 +77,22 @@ class HrService {
     final parameters = <String, String>{'user_id': userId};
     if (query.trim().isNotEmpty) parameters['query'] = query.trim();
     if (status.trim().isNotEmpty) parameters['status'] = status.trim();
-    final response = await http
+    final response = await ApiClient
         .get(
           ApiConfig.uri('/hr/documents/').replace(queryParameters: parameters),
-        )
-        .timeout(_timeout);
+          timeout: _timeout,
+        );
     return _decodeEmployeeResponse(response, 'Unable to load documents');
   }
 
   Future<Map<String, dynamic>> fetchMeetingCenter(String userId) async {
-    final response = await http
+    final response = await ApiClient
         .get(
           ApiConfig.uri(
             '/hr/meetings/',
           ).replace(queryParameters: {'user_id': userId}),
-        )
-        .timeout(_timeout);
+          timeout: _timeout,
+        );
     return _decodeEmployeeResponse(response, 'Unable to load meetings');
   }
 
@@ -97,13 +100,12 @@ class HrService {
     String userId,
     Map<String, dynamic> meeting,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .post(
           ApiConfig.uri('/hr/meetings/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'user_id': userId, ...meeting}),
-        )
-        .timeout(_timeout);
+          body: {'user_id': userId, ...meeting},
+          timeout: _timeout,
+        );
     return _decodeEmployeeResponse(response, 'Unable to schedule meeting');
   }
 
@@ -111,13 +113,12 @@ class HrService {
     String userId,
     int meetingId,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .patch(
           ApiConfig.uri('/hr/meetings/$meetingId/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'user_id': userId, 'action': 'cancel'}),
-        )
-        .timeout(_timeout);
+          body: {'user_id': userId, 'action': 'cancel'},
+          timeout: _timeout,
+        );
     return _decodeEmployeeResponse(response, 'Unable to cancel meeting');
   }
 
@@ -126,17 +127,16 @@ class HrService {
     int meetingId,
     String meetingLink,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .patch(
           ApiConfig.uri('/hr/meetings/$meetingId/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
+          body: {
             'user_id': userId,
             'action': 'update_link',
             'meeting_link': meetingLink,
-          }),
-        )
-        .timeout(_timeout);
+          },
+          timeout: _timeout,
+        );
     return _decodeEmployeeResponse(response, 'Unable to update meeting link');
   }
 
@@ -162,7 +162,7 @@ class HrService {
             'remarks': remarks,
           })
           ..files.add(await http.MultipartFile.fromPath('file', filePath));
-    final streamed = await request.send().timeout(_timeout);
+    final streamed = await ApiClient.sendMultipart(request, timeout: _timeout);
     final response = await http.Response.fromStream(streamed);
     return _decodeEmployeeResponse(response, 'Unable to upload document');
   }
@@ -173,17 +173,16 @@ class HrService {
     String status, {
     String remarks = '',
   }) async {
-    final response = await http
+    final response = await ApiClient
         .patch(
           ApiConfig.uri('/hr/documents/$documentId/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
+          body: {
             'user_id': userId,
             'status': status,
             'remarks': remarks,
-          }),
-        )
-        .timeout(_timeout);
+          },
+          timeout: _timeout,
+        );
     return _decodeEmployeeResponse(response, 'Unable to update document');
   }
 
@@ -191,13 +190,13 @@ class HrService {
     String userId,
     int documentId,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .delete(
           ApiConfig.uri(
             '/hr/documents/$documentId/',
           ).replace(queryParameters: {'user_id': userId}),
-        )
-        .timeout(_timeout);
+          timeout: _timeout,
+        );
     return _decodeEmployeeResponse(response, 'Unable to delete document');
   }
 
@@ -205,13 +204,12 @@ class HrService {
     String currentEmployeeId,
     Map<String, dynamic> changes,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .patch(
           ApiConfig.uri('/hr/employees/$currentEmployeeId/identity/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(changes),
-        )
-        .timeout(_timeout);
+          body: changes,
+          timeout: _timeout,
+        );
     return _decodeEmployeeResponse(
       response,
       'Unable to update employee identity',
@@ -245,18 +243,17 @@ class HrService {
     String userId,
     String approverComments,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .post(
           Uri.parse('$baseUrl/leave-requests/$leaveId/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
+          body: {
             'status': status,
             'user_id': userId,
             'reviewed_by': userId,
             'approver_comments': approverComments,
-          }),
-        )
-        .timeout(_timeout);
+          },
+          timeout: _timeout,
+        );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
         'Leave approval failed with status ${response.statusCode}',
@@ -270,17 +267,16 @@ class HrService {
     String userId,
     String approverComments,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .post(
           Uri.parse('$baseUrl/checkout-permissions/$permissionId/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
+          body: {
             'status': status,
             'user_id': userId,
             'review_note': approverComments,
-          }),
-        )
-        .timeout(_timeout);
+          },
+          timeout: _timeout,
+        );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
         'Check-out permission approval failed (${response.statusCode})',
@@ -292,15 +288,14 @@ class HrService {
     int candidateId,
     Map<String, dynamic> data,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .post(
           Uri.parse(
             '$baseUrl/recruitment/candidates/$candidateId/schedule-interview/',
           ),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(data),
-        )
-        .timeout(_timeout);
+          body: data,
+          timeout: _timeout,
+        );
     final decoded = jsonDecode(response.body);
     if (decoded is Map &&
         response.statusCode >= 200 &&
@@ -318,17 +313,16 @@ class HrService {
     String userId,
     DateTime month,
   ) async {
-    final response = await http
+    final response = await ApiClient
         .post(
           Uri.parse('$baseUrl/payroll/generate/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
+          body: {
             'user_id': userId,
             'year': month.year,
             'month': month.month,
-          }),
-        )
-        .timeout(_timeout);
+          },
+          timeout: _timeout,
+        );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -346,7 +340,7 @@ class HrService {
   }
 
   Future<Map<String, dynamic>> fetchPayrollProcess(DateTime month) async {
-    final response = await http
+    final response = await ApiClient
         .get(
           Uri.parse('$baseUrl/payroll/process/').replace(
             queryParameters: {
@@ -354,8 +348,8 @@ class HrService {
               'month': '${month.month}',
             },
           ),
-        )
-        .timeout(_timeout);
+          timeout: _timeout,
+        );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
@@ -370,20 +364,19 @@ class HrService {
     String? issueId,
     Map<String, dynamic>? options,
   }) async {
-    final response = await http
+    final response = await ApiClient
         .post(
           Uri.parse('$baseUrl/payroll/process/'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
+          body: {
             'user_id': userId,
             'year': month.year,
             'month': month.month,
             'action': action,
             'issue_id': ?issueId,
             'options': ?options,
-          }),
-        )
-        .timeout(_timeout);
+          },
+          timeout: _timeout,
+        );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);

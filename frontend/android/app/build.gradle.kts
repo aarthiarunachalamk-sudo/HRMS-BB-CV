@@ -38,7 +38,8 @@ android {
         applicationId = "com.example.hrms_mobileapp_bitbyte"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Android 12.0 (API 31) onwards
+        minSdk = 31
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

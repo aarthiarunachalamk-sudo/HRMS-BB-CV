@@ -178,7 +178,26 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   _RoleDropdown(c: c, role: _role, onChanged: _switchRole),
 
                   // ── Page content ─────────────────────────────
-                  Expanded(child: _buildPage(c)),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _tab.index,
+                      children: [
+                        AdminHomeScreen(
+                          firstName: widget.firstName,
+                          email: widget.email,
+                          userId: widget.userId,
+                          onOpenEmployees: () => _setTab(_AdminTab.employees),
+                          onOpenAttendance: () => _setTab(_AdminTab.attendance),
+                          onOpenLeaves: () => _setTab(_AdminTab.leave),
+                          onOpenMeetings: () => _setTab(_AdminTab.meetings),
+                        ),
+                        AdminEmployeesScreen(userId: widget.userId),
+                        AdminAttendanceScreen(userId: widget.userId),
+                        AdminLeaveScreen(userId: widget.userId),
+                        AdminMeetingsScreen(userId: widget.userId),
+                      ],
+                    ),
+                  ),
 
                   // ── Bottom nav ───────────────────────────────
                   _BottomNav(c: c, tab: _tab, onTap: _setTab),
@@ -189,29 +208,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
       ),
     );
-  }
-
-  Widget _buildPage(AdminPalette c) {
-    switch (_tab) {
-      case _AdminTab.dashboard:
-        return AdminHomeScreen(
-          firstName: widget.firstName,
-          email: widget.email,
-          userId: widget.userId,
-          onOpenEmployees: () => _setTab(_AdminTab.employees),
-          onOpenAttendance: () => _setTab(_AdminTab.attendance),
-          onOpenLeaves: () => _setTab(_AdminTab.leave),
-          onOpenMeetings: () => _setTab(_AdminTab.meetings),
-        );
-      case _AdminTab.employees:
-        return AdminEmployeesScreen(userId: widget.userId);
-      case _AdminTab.attendance:
-        return AdminAttendanceScreen(userId: widget.userId);
-      case _AdminTab.leave:
-        return AdminLeaveScreen(userId: widget.userId);
-      case _AdminTab.meetings:
-        return AdminMeetingsScreen(userId: widget.userId);
-    }
   }
 
   // ── Drawer ───────────────────────────────────────────────────
@@ -616,8 +612,11 @@ class _BottomNav extends StatelessWidget {
         color: c.surface,
         border: Border(top: BorderSide(color: c.border)),
       ),
-      padding: const EdgeInsets.fromLTRB(4, 5, 4, 8),
-      child: Row(
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(4, 5, 4, 8),
+          child: Row(
         children: _AdminTab.values.map((t) {
           final selected = t == tab;
           return Expanded(
@@ -651,6 +650,8 @@ class _BottomNav extends StatelessWidget {
             ),
           );
         }).toList(),
+          ),
+        ),
       ),
     );
   }

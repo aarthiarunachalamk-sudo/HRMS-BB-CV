@@ -49,7 +49,7 @@ class ClientVisit(models.Model):
     scheduled_date = models.DateField()
     scheduled_time = models.TimeField()
     duration_minutes = models.PositiveIntegerField(default=60)
-    travel_mode = models.CharField(max_length=30, default='car')
+    travel_mode = models.CharField(max_length=30, default='car', blank=True)
     service_type = models.CharField(
         max_length=50,
         choices=SERVICE_CHOICES,

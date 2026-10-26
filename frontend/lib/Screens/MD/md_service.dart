@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_client.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 import 'md_models.dart';
 
@@ -12,25 +12,32 @@ class MdService {
   String get _baseUrl =>
       '${ApiConfig.baseUrl}/${role == 'director' ? 'director' : 'md'}';
 
-  Future<MdDashboardData> fetchDashboard(String userId) async {
-    final response = await http.get(
-      Uri.parse('$_baseUrl/dashboard/?user_id=$userId'),
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      return MdDashboardData.fromJson(
-        Map<String, dynamic>.from(jsonDecode(response.body) as Map),
+  Future<MdDashboardData> fetchDashboard(String userId, {bool forceRefresh = false}) async {
+    final uri = Uri.parse('$_baseUrl/dashboard/?user_id=$userId');
+    try {
+      final json = await ApiClient.getJsonCached(
+        uri,
+        ttl: const Duration(seconds: 30),
+        forceRefresh: forceRefresh,
+      );
+      return MdDashboardData.fromJson(json);
+    } catch (_) {
+      final response = await ApiClient.get(uri);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return MdDashboardData.fromJson(
+          Map<String, dynamic>.from(jsonDecode(response.body) as Map),
+        );
+      }
+      throw Exception(
+        'MD dashboard API failed with status ${response.statusCode}',
       );
     }
-    throw Exception(
-      'MD dashboard API failed with status ${response.statusCode}',
-    );
   }
 
   Future<MdMeeting> scheduleMeeting(MdMeeting meeting, String userId) async {
-    final response = await http.post(
+    final response = await ApiClient.post(
       Uri.parse('$_baseUrl/meetings/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({...meeting.toJson(), 'created_by': userId}),
+      body: {...meeting.toJson(), 'created_by': userId},
     );
     if (response.statusCode >= 200 && response.statusCode < 300) {
       final data = Map<String, dynamic>.from(jsonDecode(response.body) as Map);

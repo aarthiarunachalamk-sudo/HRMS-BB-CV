@@ -604,7 +604,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard>
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: _load,
-                    child: pages[_selectedIndex],
+                    child: IndexedStack(
+                      index: _selectedIndex,
+                      children: pages,
+                    ),
                   ),
                 ),
                 Container(

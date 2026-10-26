@@ -18,19 +18,15 @@ class AddEmployeePage extends StatefulWidget {
 
 class _AddEmployeePageState extends State<AddEmployeePage> {
   bool _isLoading = false;
-  bool _isLoadingTls = false;
   static const Color _green = Color(0xFF43E97B);
 
   final _emailCtrl = TextEditingController();
-  final _reportingTLCtrl = TextEditingController();
   final _dobCtrl = TextEditingController();
 
   String _department = 'hr';
   String _designation = 'associate';
   String _employmentType = 'full_time';
   String _workMode = 'onsite';
-  String? _selectedReportingTL;
-  List<Map<String, String>> _reportingTls = [];
 
   final List<Map<String, String>> _departments = [
     {'value': 'hr', 'label': 'HR'},
@@ -64,13 +60,11 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
   void initState() {
     super.initState();
     _emailCtrl.text = _officialEmailSuggestion(widget.employee);
-    _fetchReportingTls();
   }
 
   @override
   void dispose() {
     _emailCtrl.dispose();
-    _reportingTLCtrl.dispose();
     _dobCtrl.dispose();
     super.dispose();
   }
@@ -93,60 +87,11 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
     return '${local.isEmpty ? 'employee' : local}@bitbyte.com';
   }
 
-  Future<void> _fetchReportingTls() async {
-    setState(() => _isLoadingTls = true);
-    try {
-      final response = await http.get(
-        ApiConfig.uri(
-          '/hr/reporting-tls/',
-        ).replace(queryParameters: {'department': _department}),
-      );
-      final data = jsonDecode(response.body);
-      if (!mounted) return;
-      final tls = data['success'] == true && data['tls'] is List
-          ? (data['tls'] as List)
-                .map(
-                  (item) => {
-                    'value': '${item['value'] ?? ''}',
-                    'label': '${item['value'] ?? ''}',
-                    'employee_id': '${item['employee_id'] ?? ''}',
-                    'role': '${item['role'] ?? ''}',
-                  },
-                )
-                .where(
-                  (item) =>
-                      item['value']!.isNotEmpty &&
-                      item['role']!.toLowerCase() == 'tl',
-                )
-                .toList()
-          : <Map<String, String>>[];
-      setState(() {
-        _reportingTls = tls;
-        if (!_reportingTls.any((tl) => tl['value'] == _selectedReportingTL)) {
-          _selectedReportingTL = null;
-          _reportingTLCtrl.clear();
-        }
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _reportingTls = [];
-        _selectedReportingTL = null;
-        _reportingTLCtrl.clear();
-      });
-    } finally {
-      if (mounted) setState(() => _isLoadingTls = false);
-    }
-  }
-
   void _changeDepartment(String? value) {
     if (value == null || value == _department) return;
     setState(() {
       _department = value;
-      _selectedReportingTL = null;
-      _reportingTLCtrl.clear();
     });
-    _fetchReportingTls();
   }
 
   Future<void> _pickDate() async {
@@ -194,7 +139,6 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
           'designation': _designation,
           'date_of_joining': _dobCtrl.text.trim(),
           'employment_type': _employmentType,
-          'reporting_tl': _selectedReportingTL ?? '',
           'work_location': _workMode,
         }),
       );
@@ -216,7 +160,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  'Employee Added!',
+                  'Candidate Approved!',
                   style: TextStyle(
                     color: ThemeConfig.getTextPrimary(context),
                     fontWeight: FontWeight.bold,
@@ -229,9 +173,18 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Employee credentials sent to email!',
+                  'Candidate is approved and ready to join!',
+                  style: TextStyle(
+                    color: ThemeConfig.getTextPrimary(context),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Notification sent to PM & CEO. Team Member and TL allocation will be completed by PM or CEO.',
                   style: TextStyle(
                     color: ThemeConfig.getTextSecondary(context),
+                    fontSize: 13,
                   ),
                 ),
               ],
@@ -315,7 +268,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Add Employee',
+                            'Approve for Joining',
                             style: TextStyle(
                               color: textPrimary,
                               fontSize: 18,
@@ -480,15 +433,6 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                           cardBorder,
                         ),
                         const SizedBox(height: 14),
-                        _label('Reporting TL', textSecondary),
-                        _tlDropdown(
-                          isDark,
-                          textPrimary,
-                          textSecondary,
-                          cardBg,
-                          cardBorder,
-                        ),
-                        const SizedBox(height: 14),
                         _label('Work Mode', textSecondary),
                         _dropdown(
                           _workMode,
@@ -502,7 +446,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                       ]),
                       const SizedBox(height: 20),
 
-                      // OTC Info
+                      // HR Joining Approval Info
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
@@ -515,17 +459,18 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                         child: Row(
                           children: [
                             const Icon(
-                              Icons.info_outline_rounded,
+                              Icons.verified_user_rounded,
                               color: Color(0xFF4FACFE),
-                              size: 20,
+                              size: 22,
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'An OTC (One Time Credential) will be auto-generated and sent to the employee email for first login.',
+                                'Approving this candidate marks them ready to join. PM & CEO will allocate the Team Member and Reporting TL.',
                                 style: TextStyle(
                                   color: textSecondary,
                                   fontSize: 12,
+                                  height: 1.4,
                                 ),
                               ),
                             ),
@@ -550,7 +495,7 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
                                     color: Colors.white,
                                   )
                                 : const Text(
-                                    'Add Employee & Send Credentials',
+                                    'Approve Candidate for Joining',
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 15,
@@ -667,70 +612,6 @@ class _AddEmployeePageState extends State<AddEmployeePage> {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: Color(0xFF00C6FF), width: 1.5),
-        ),
-      ),
-    );
-  }
-
-  Widget _tlDropdown(bool isDark, Color tp, Color ts, Color cardBg, Color cb) {
-    final isDisabled = _isLoadingTls || _reportingTls.isEmpty;
-    final hint = _isLoadingTls
-        ? 'Loading TLs...'
-        : _reportingTls.isEmpty
-        ? 'No TL found for selected department'
-        : 'Select Reporting TL';
-
-    // Build display string: "Name  •  ID"
-    String itemLabel(Map<String, String> tl) {
-      final id = tl['employee_id'] ?? '';
-      return id.isNotEmpty ? '${tl['label']!}  •  $id' : tl['label']!;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0A121E) : const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cb),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: AppDropdownButton<String>(
-          value: isDisabled ? null : _selectedReportingTL,
-          hint: Text(hint, style: TextStyle(color: ts, fontSize: 13)),
-          isExpanded: true,
-          dropdownColor: cardBg,
-          style: TextStyle(color: tp, fontSize: 13),
-          icon: _isLoadingTls
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFF4FACFE),
-                  ),
-                )
-              : null,
-          items: _reportingTls
-              .map(
-                (tl) => DropdownMenuItem<String>(
-                  value: tl['value'],
-                  child: Text(
-                    itemLabel(tl),
-                    style: TextStyle(color: tp, fontSize: 13),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              )
-              .toList(),
-          onChanged: isDisabled
-              ? null
-              : (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _selectedReportingTL = value;
-                    _reportingTLCtrl.text = value;
-                  });
-                },
         ),
       ),
     );

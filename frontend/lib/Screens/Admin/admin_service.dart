@@ -1,15 +1,15 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:hrms_mobileapp_bitbyte/backend/api_client.dart';
 import 'package:hrms_mobileapp_bitbyte/backend/api_config.dart';
 
 class AdminService {
   static const String baseUrl = '${ApiConfig.baseUrl}/admin';
 
-  Future<Map<String, dynamic>> fetchDashboard(String userId) =>
-      _get('/dashboard/?user_id=$userId');
+  Future<Map<String, dynamic>> fetchDashboard(String userId, {bool forceRefresh = false}) =>
+      _getCached('/dashboard/?user_id=$userId', forceRefresh: forceRefresh);
 
-  Future<Map<String, dynamic>> fetchEmployees(String userId) =>
-      _get('/employees/?user_id=$userId');
+  Future<Map<String, dynamic>> fetchEmployees(String userId, {bool forceRefresh = false}) =>
+      _getCached('/employees/?user_id=$userId', forceRefresh: forceRefresh);
 
   Future<Map<String, dynamic>> fetchEmployee(String employeeId) =>
       _get('/employees/$employeeId/');
@@ -47,9 +47,20 @@ class AdminService {
   Future<Map<String, dynamic>> createTask(Map<String, dynamic> data) =>
       _post('/tasks/', data);
 
+  Future<Map<String, dynamic>> _getCached(String path, {bool forceRefresh = false}) async {
+    try {
+      return await ApiClient.getJsonCached(
+        Uri.parse('$baseUrl$path'),
+        ttl: const Duration(seconds: 45),
+        forceRefresh: forceRefresh,
+      );
+    } catch (_) {}
+    return {};
+  }
+
   Future<Map<String, dynamic>> _get(String path) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl$path'));
+      final response = await ApiClient.get(Uri.parse('$baseUrl$path'));
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);
     } catch (_) {}
@@ -58,10 +69,9 @@ class AdminService {
 
   Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
     try {
-      final response = await http.post(
+      final response = await ApiClient.post(
         Uri.parse('$baseUrl$path'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
+        body: body,
       );
       final decoded = jsonDecode(response.body);
       if (decoded is Map) return Map<String, dynamic>.from(decoded);

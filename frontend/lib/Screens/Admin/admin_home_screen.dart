@@ -184,7 +184,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           const AdminSectionTitle('Quick Actions'),
           AdminCard(
             child: ListTile(
-              leading: Icon(Icons.route_rounded, color: c.primary),
+              leading: Icon(Icons.add_location_alt_rounded, color: c.primary),
               title: const Text('Client Visits'),
               subtitle: const Text('Live tracking, history and visit details'),
               trailing: const Icon(Icons.chevron_right_rounded),
