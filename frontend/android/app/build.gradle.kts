@@ -12,6 +12,13 @@ val localProperties = Properties().apply {
         propertiesFile.inputStream().use { input -> load(input) }
     }
 }
+val keystoreProperties = Properties().apply {
+    val keystorePropertiesFile = rootProject.file("key.properties")
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { input -> load(input) }
+    }
+}
+
 val mapsApiKey = localProperties.getProperty("MAPS_API_KEY")
     ?: System.getenv("MAPS_API_KEY")
     ?: ""
@@ -46,11 +53,25 @@ android {
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
+    signingConfigs {
+        create("release") {
+            val keyAliasProp = keystoreProperties.getProperty("keyAlias")
+            val keyPasswordProp = keystoreProperties.getProperty("keyPassword")
+            val storeFileProp = keystoreProperties.getProperty("storeFile")
+            val storePasswordProp = keystoreProperties.getProperty("storePassword")
+            if (keyAliasProp != null && storeFileProp != null) {
+                keyAlias = keyAliasProp
+                keyPassword = keyPasswordProp
+                val resolvedStoreFile = file(storeFileProp).let { if (it.exists()) it else rootProject.file(storeFileProp) }
+                storeFile = resolvedStoreFile
+                storePassword = storePasswordProp
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
