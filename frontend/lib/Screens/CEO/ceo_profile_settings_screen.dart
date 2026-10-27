@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Account/account_settings_screen.dart';
 
 import 'ceo_widgets.dart';
 
@@ -35,6 +36,20 @@ class CeoProfileSettingsScreen extends StatelessWidget {
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => UserPersonalInformationScreen(userId: userId),
+            ),
+          ),
+        ),
+        CeoListTile(
+          icon: Icons.manage_accounts_outlined,
+          titleText: 'Account Settings',
+          subtitle: 'Security & account deletion',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AccountSettingsScreen(
+                userId: userId,
+                email: email,
+                role: 'CEO',
+              ),
             ),
           ),
         ),

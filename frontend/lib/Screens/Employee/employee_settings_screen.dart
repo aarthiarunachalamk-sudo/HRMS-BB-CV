@@ -3,6 +3,8 @@ import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/Change_Password.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
 
+import 'package:hrms_mobileapp_bitbyte/Screens/Account/account_settings_screen.dart';
+
 import 'employee_shared.dart';
 
 class EmployeeSettingsScreen extends StatelessWidget {
@@ -16,6 +18,18 @@ class EmployeeSettingsScreen extends StatelessWidget {
     return EmployeePage(
       title: 'Settings',
       children: [
+        EmployeeListTile(
+          icon: Icons.manage_accounts_outlined,
+          title: 'Account',
+          subtitle: 'Account details, security & deletion',
+          trailing: '',
+          color: EmployeeColors.blue,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AccountSettingsScreen(userId: userId),
+            ),
+          ),
+        ),
         EmployeeListTile(icon: Icons.lock_outline_rounded, title: 'Change Password', subtitle: 'Update account credentials', trailing: '', color: EmployeeColors.blue, onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChangePasswordScreen(employeeId: userId, otc: '')))),
         EmployeeListTile(icon: Icons.notifications_none_rounded, title: 'Notification Settings', subtitle: 'Manage alerts', trailing: '', color: EmployeeColors.gold, onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => UserNotificationSettingsScreen(userId: userId)))),
         ValueListenableBuilder<ThemeMode>(

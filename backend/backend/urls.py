@@ -7,6 +7,7 @@ from django.views.static import serve
 from client_visits import views as client_visit_views
 from client_visits import journey_views
 from rest_framework_simplejwt.views import TokenRefreshView
+from hrms import views as hrms_views
 import time
 
 
@@ -43,6 +44,8 @@ urlpatterns = [
         client_visit_views.public_tracking_page,
         name="client_visit_public_tracking_page",
     ),
+    path("account-deletion/", hrms_views.account_deletion, name="account_deletion"),
+    path("delete-account/", hrms_views.account_deletion, name="delete_account"),
 ]
 
 

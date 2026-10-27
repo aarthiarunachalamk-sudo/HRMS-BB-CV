@@ -9,6 +9,8 @@ import 'admin_palette.dart';
 import 'admin_service.dart';
 import 'admin_success_screen.dart';
 import 'admin_widgets.dart';
+import 'admin_deletion_requests_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Account/account_settings_screen.dart';
 
 class AdminTasksScreen extends StatefulWidget {
   final String userId;
@@ -710,6 +712,28 @@ class AdminSettingsScreen extends StatelessWidget {
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => AdminProfileScreen(userId: userId),
+            ),
+          ),
+        ),
+        AdminListTile(
+          icon: Icons.manage_accounts_rounded,
+          titleText: 'Account',
+          subtitle: 'Account details & account deletion',
+          color: c.primary,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AccountSettingsScreen(userId: userId),
+            ),
+          ),
+        ),
+        AdminListTile(
+          icon: Icons.person_remove_rounded,
+          titleText: 'Account Deletion Requests',
+          subtitle: 'Review & manage employee account deletion requests',
+          color: c.red,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AdminDeletionRequestsScreen(userId: userId),
             ),
           ),
         ),

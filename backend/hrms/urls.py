@@ -105,4 +105,10 @@ urlpatterns = [
     path('employee/task-complete/', employee_views.employee_task_complete_view, name='employee_task_complete'),
     path('employee/approvals/', employee_views.employee_approvals_view, name='employee_approvals'),
     path('employee/approvals/<int:pk>/action/', employee_views.employee_approval_action_view, name='employee_approval_action'),
+    path('account/delete-request/', views.account_delete_request_view, name='account_delete_request'),
+    path('account/delete-request/cancel/', views.account_delete_request_cancel_view, name='account_delete_request_cancel'),
+    path('account/delete-requests/', views.admin_account_deletion_requests_view, name='admin_account_deletion_requests'),
+    path('account/delete-requests/<int:pk>/action/', views.admin_account_deletion_action_view, name='admin_account_deletion_action'),
+    path('account-deletion/', views.account_deletion, name='account_deletion_web'),
+    path('delete-account/', views.account_deletion, name='delete_account_web'),
 ]

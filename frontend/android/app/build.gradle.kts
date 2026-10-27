@@ -24,7 +24,7 @@ val mapsApiKey = localProperties.getProperty("MAPS_API_KEY")
     ?: ""
 
 android {
-    namespace = "com.example.hrms_mobileapp_bitbyte"
+    namespace = "com.hrms_mobileapp_bitbyte"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -42,7 +42,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.hrms_mobileapp_bitbyte"
+        applicationId = "com.hrms_mobileapp_bitbyte"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // Android 12.0 (API 31) onwards

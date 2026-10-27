@@ -8,6 +8,7 @@ import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Account/account_settings_screen.dart';
 
 class UserPersonalInformationScreen extends StatefulWidget {
   final String userId;
@@ -175,7 +176,20 @@ class _UserPersonalInformationScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile & Settings')),
+      appBar: AppBar(
+        title: const Text('Profile & Settings'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.manage_accounts_outlined),
+            tooltip: 'Account Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AccountSettingsScreen(userId: widget.userId),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _profileFuture,
         builder: (context, snapshot) {
@@ -342,6 +356,37 @@ class _UserPersonalInformationScreenState
               _ProfileSection(title: 'EMPLOYMENT DETAILS', entries: employment),
               const SizedBox(height: 14),
               _ProfileSection(title: 'PERSONAL DETAILS', entries: personal),
+              const SizedBox(height: 14),
+              Card(
+                child: ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withAlpha(25),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.manage_accounts_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 22,
+                    ),
+                  ),
+                  title: const Text(
+                    'Account Settings',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Security, password & delete account',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AccountSettingsScreen(userId: widget.userId),
+                    ),
+                  ),
+                ),
+              ),
             ],
           );
         },

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/StartUp-Screens/Change_Password.dart';
 import 'package:hrms_mobileapp_bitbyte/utils/app_layout.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/user_notification_settings_screen.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Account/account_settings_screen.dart';
 import 'hr_service.dart';
 import 'hr_shared.dart';
 
@@ -92,6 +93,21 @@ class _HrProfileScreenState extends State<HrProfileScreen> {
             MaterialPageRoute(
               builder: (_) =>
                   UserPersonalInformationScreen(userId: widget.userId),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        HrListTile(
+          icon: Icons.manage_accounts_outlined,
+          title: 'Account Settings',
+          subtitle: 'Security & account deletion',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AccountSettingsScreen(
+                userId: widget.userId,
+                email: widget.email,
+                role: 'HR',
+              ),
             ),
           ),
         ),

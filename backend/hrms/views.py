@@ -1,5 +1,6 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -14,7 +15,7 @@ from django.utils.html import escape
 from django.utils.text import slugify
 from .serializers import LoginSerializer, CreateUserSerializer, EmployeeRegistrationSerializer, HR_DEPARTMENT_CHOICES, TEAM_MEMBER_DEPARTMENT_CHOICES, mask_phone_number
 from .models import User, EmployeeRegistration, EmployeeLeaveRequest, EmployeeAttendanceRecord, MdMeeting, MeetingParticipantStatus, AppNotification, MobileDeviceToken, TeamTask, Project, EmployeePerformance, ReportSchedule, Payslip, SalaryStructure, PayrollProcess, OrganizationProfile, OrganizationBranch, OrganizationRole, OrganizationDepartment, RecruitmentJobOpening
-from .models import AuditLog, BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, DocumentRecord, ReportExportHistory, WorkflowApprovalRequest, Announcement, CompanyLeave, AttendanceRegularizationRequest, EmployeeApprovalRequest
+from .models import AuditLog, BudgetPlan, BranchPerformanceSnapshot, DepartmentPerformanceSnapshot, DocumentRecord, ReportExportHistory, WorkflowApprovalRequest, Announcement, CompanyLeave, AttendanceRegularizationRequest, EmployeeApprovalRequest, AccountDeletionRequest
 from .performance_service import calculate_employee_performance
 from .employee_views import _attendance_calculation, _file_url, _format_time, _leave_balance_payload, _notify_employee_presence, _approval_payload
 from .payroll import (
@@ -9099,3 +9100,735 @@ def change_password_view(request):
         return Response({'success': True, 'message': 'Password changed!'})
     except User.DoesNotExist:
         return Response({'success': False, 'message': 'Employee not found'}, status=404)
+
+
+def _resolve_account_deletion_user(request):
+    """Resolve requesting user strictly from session or JWT Bearer token."""
+    if getattr(request, 'user', None) and request.user.is_authenticated:
+        return request.user
+
+    auth_header = request.headers.get('Authorization') or request.META.get('HTTP_AUTHORIZATION') or ''
+    if auth_header.startswith('Bearer '):
+        token_str = auth_header.split(' ', 1)[1].strip()
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            token = AccessToken(token_str)
+            user_id = token.get('user_id')
+            user = User.objects.filter(pk=user_id, is_active=True).first()
+            if user:
+                return user
+        except Exception:
+            pass
+
+    if request.method == 'GET':
+        user_identifier = (
+            request.query_params.get('user_id')
+            or request.query_params.get('login_id')
+            or request.query_params.get('email')
+            or ''
+        ).strip()
+        if user_identifier:
+            return _active_profile_user(user_identifier)
+
+    return None
+
+
+@api_view(['GET', 'POST'])
+def account_delete_request_view(request):
+    """
+    Handle employee account deletion requests.
+    GET: Check existing request status.
+    POST: Submit new account deletion request. Uses authenticated user from token/session.
+    """
+    user = _resolve_account_deletion_user(request)
+    if not user:
+        return Response({'success': False, 'message': 'Authentication required.'}, status=401)
+
+    if request.method == 'GET':
+        active_req = AccountDeletionRequest.objects.filter(
+            user=user,
+            status__in=['PENDING', 'UNDER_REVIEW'],
+        ).first()
+        latest_req = AccountDeletionRequest.objects.filter(user=user).first()
+        current = active_req or latest_req
+        return Response({
+            'success': True,
+            'has_active_request': active_req is not None,
+            'request': current.to_dict() if current else None,
+        })
+
+    # POST: create deletion request
+    password = str(request.data.get('password') or '').strip()
+    if password and not user.check_password(password):
+        return Response(
+            {'success': False, 'message': 'Incorrect password. Identity verification failed.'},
+            status=400,
+        )
+
+    active_req = AccountDeletionRequest.objects.filter(
+        user=user,
+        status__in=['PENDING', 'UNDER_REVIEW'],
+    ).first()
+    if active_req:
+        return Response({
+            'success': False,
+            'message': 'You already have an active account deletion request pending review.',
+            'request': active_req.to_dict(),
+        }, status=409)
+
+    reason = str(request.data.get('reason') or '').strip()
+    details = str(request.data.get('details') or '').strip()
+
+    employee_account = EmployeeAccount.objects.filter(user=user).first()
+    employee_id = (employee_account.employee_id if employee_account else None) or user.user_id
+    full_name = f"{user.first_name} {user.last_name}".strip() or user.email
+    phone = user.phone or ''
+    if phone and user.country_code and not phone.startswith('+'):
+        phone = f"{user.country_code} {phone}".strip()
+
+    deletion_req = AccountDeletionRequest.objects.create(
+        user=user,
+        user_id_code=user.user_id,
+        employee_id=employee_id,
+        employee_name=full_name,
+        email=user.email,
+        mobile_number=phone,
+        reason=reason,
+        details=details,
+        status='PENDING',
+    )
+
+    try:
+        AuditLog.objects.create(
+            action='account_deletion_requested',
+            performed_by=user.user_id,
+            details=f"Account deletion requested by {full_name} ({user.user_id}). Reason: {reason or 'Not specified'}",
+        )
+    except Exception:
+        pass
+
+    try:
+        admin_users = User.objects.filter(role__in=['admin', 'hr', 'superadmin', 'ceo'], is_active=True)
+        for adm in admin_users[:20]:
+            AppNotification.objects.create(
+                recipient=adm,
+                title='Account Deletion Request',
+                message=f"{full_name} ({user.user_id}) submitted an account deletion request ({deletion_req.request_id}).",
+                notification_type='account_deletion',
+            )
+    except Exception:
+        pass
+
+    return Response({
+        'success': True,
+        'message': 'Your account deletion request has been submitted successfully. The HR/Admin team will review your request.',
+        'request': deletion_req.to_dict(),
+    }, status=201)
+
+
+@api_view(['POST'])
+def account_delete_request_cancel_view(request):
+    """Allow an employee to cancel their pending account deletion request."""
+    user = _resolve_account_deletion_user(request)
+    if not user:
+        return Response({'success': False, 'message': 'Authentication required.'}, status=401)
+
+    pending_req = AccountDeletionRequest.objects.filter(
+        user=user,
+        status__in=['PENDING', 'UNDER_REVIEW'],
+    ).first()
+    if not pending_req:
+        return Response(
+            {'success': False, 'message': 'No active account deletion request found to cancel.'},
+            status=404,
+        )
+
+    pending_req.status = 'CANCELLED'
+    pending_req.save(update_fields=['status', 'updated_at'])
+
+    try:
+        AuditLog.objects.create(
+            action='account_deletion_cancelled',
+            performed_by=user.user_id,
+            details=f"Account deletion request {pending_req.request_id} cancelled by user.",
+        )
+    except Exception:
+        pass
+
+    return Response({
+        'success': True,
+        'message': 'Account deletion request has been cancelled.',
+        'request': pending_req.to_dict(),
+    })
+
+
+@api_view(['GET'])
+def admin_account_deletion_requests_view(request):
+    """List account deletion requests for HR, Admin, Superadmin, and CEO."""
+    user = _resolve_account_deletion_user(request)
+    if not user or user.role not in ['admin', 'hr', 'superadmin', 'ceo', 'manager', 'pm']:
+        return Response(
+            {'success': False, 'message': 'Permission denied. Admin role required.'},
+            status=403,
+        )
+
+    queryset = AccountDeletionRequest.objects.select_related('user', 'reviewed_by').all()
+
+    status_filter = str(request.query_params.get('status') or '').strip().upper()
+    if status_filter and status_filter != 'ALL':
+        queryset = queryset.filter(status=status_filter)
+
+    search = str(request.query_params.get('search') or '').strip()
+    if search:
+        queryset = queryset.filter(
+            Q(request_id__icontains=search)
+            | Q(user_id_code__icontains=search)
+            | Q(employee_id__icontains=search)
+            | Q(employee_name__icontains=search)
+            | Q(email__icontains=search)
+        )
+
+    counts = {
+        'all': AccountDeletionRequest.objects.count(),
+        'pending': AccountDeletionRequest.objects.filter(status='PENDING').count(),
+        'under_review': AccountDeletionRequest.objects.filter(status='UNDER_REVIEW').count(),
+        'approved': AccountDeletionRequest.objects.filter(status='APPROVED').count(),
+        'completed': AccountDeletionRequest.objects.filter(status='COMPLETED').count(),
+        'rejected': AccountDeletionRequest.objects.filter(status='REJECTED').count(),
+    }
+
+    return Response({
+        'success': True,
+        'requests': [r.to_dict() for r in queryset[:200]],
+        'counts': counts,
+    })
+
+
+@api_view(['POST'])
+def admin_account_deletion_action_view(request, pk):
+    """Process an account deletion request (under_review, approve, reject, complete)."""
+    user = _resolve_account_deletion_user(request)
+    if not user or user.role not in ['admin', 'hr', 'superadmin', 'ceo', 'manager', 'pm']:
+        return Response(
+            {'success': False, 'message': 'Permission denied. Admin role required.'},
+            status=403,
+        )
+
+    try:
+        deletion_req = AccountDeletionRequest.objects.select_related('user').get(pk=pk)
+    except AccountDeletionRequest.DoesNotExist:
+        return Response(
+            {'success': False, 'message': 'Account deletion request not found.'},
+            status=404,
+        )
+
+    action = str(request.data.get('action') or '').strip().lower()
+    remarks = str(request.data.get('remarks') or '').strip()
+
+    valid_actions = {
+        'under_review': 'UNDER_REVIEW',
+        'approve': 'APPROVED',
+        'reject': 'REJECTED',
+        'complete': 'COMPLETED',
+    }
+
+    if action not in valid_actions:
+        return Response(
+            {'success': False, 'message': f'Invalid action. Supported actions: {list(valid_actions.keys())}'},
+            status=400,
+        )
+
+    new_status = valid_actions[action]
+    deletion_req.status = new_status
+    deletion_req.reviewed_by = user
+    deletion_req.reviewed_at = timezone.now()
+    if remarks:
+        deletion_req.admin_remarks = remarks
+
+    # When marked COMPLETED, deactivate user access and revoke sessions while preserving legal records
+    if new_status == 'COMPLETED':
+        target_user = deletion_req.user
+        target_user.is_active = False
+        target_user.save(update_fields=['is_active'])
+
+        EmployeeAccount.objects.filter(
+            Q(user=target_user) | Q(employee_id=deletion_req.employee_id) | Q(employee_email=deletion_req.email)
+        ).update(is_active=False)
+        MobileDeviceToken.objects.filter(user_id=target_user.user_id).delete()
+
+    deletion_req.save()
+
+    try:
+        AuditLog.objects.create(
+            action=f'account_deletion_{action}',
+            performed_by=user.user_id,
+            details=f"Deletion request {deletion_req.request_id} for {deletion_req.user_id_code} was marked as {new_status} by {user.user_id}. Remarks: {remarks}",
+        )
+    except Exception:
+        pass
+
+    return Response({
+        'success': True,
+        'message': f'Account deletion request status updated to {deletion_req.get_status_display()}.',
+        'request': deletion_req.to_dict(),
+    })
+
+
+@csrf_exempt
+def account_deletion(request):
+    """
+    Public web page required for Google Play Console Account Deletion compliance.
+    URL: /account-deletion/
+    Available at: https://hrms-bitbyte-mobileapp-1.onrender.com/account-deletion/
+    Does NOT require login, does not redirect to login, does not return 404 or blank page.
+    """
+    from django.http import HttpResponse
+    import html
+
+    success_msg = None
+    error_msg = None
+    req_details = None
+
+    if request.method == 'POST':
+        employee_id = str(request.POST.get('employee_id') or request.POST.get('identifier') or '').strip()
+        email = str(request.POST.get('email') or (request.POST.get('identifier') if '@' in str(request.POST.get('identifier', '')) else '') or '').strip()
+        mobile_number = str(request.POST.get('mobile_number') or '').strip()
+        reason = str(request.POST.get('reason') or '').strip()
+        details = str(request.POST.get('details') or '').strip()
+        password = str(request.POST.get('password') or '').strip()
+        confirm = request.POST.get('confirm')
+
+        if not confirm:
+            error_msg = 'Please select the confirmation checkbox to submit your request.'
+        elif not employee_id and not email:
+            error_msg = 'Please provide your Employee ID or Registered Email.'
+        else:
+            # Find matching user safely without exposing internal database details
+            target_user = None
+            if email:
+                target_user = User.objects.filter(email__iexact=email).first()
+            if not target_user and employee_id:
+                target_user = User.objects.filter(user_id__iexact=employee_id).first()
+            if not target_user and employee_id:
+                emp_acc = EmployeeAccount.objects.filter(employee_id__iexact=employee_id).first()
+                if emp_acc and emp_acc.user:
+                    target_user = emp_acc.user
+
+            # If password was supplied, verify it if user exists
+            if password and target_user and not target_user.check_password(password):
+                error_msg = 'Invalid Employee ID/Email or Password. Please verify your credentials.'
+            elif password and not target_user:
+                error_msg = 'Invalid Employee ID/Email or Password. Please verify your credentials.'
+            else:
+                if target_user:
+                    active_req = AccountDeletionRequest.objects.filter(
+                        user=target_user,
+                        status__in=['PENDING', 'UNDER_REVIEW', 'APPROVED'],
+                    ).first()
+
+                    if active_req:
+                        req_details = active_req.to_dict()
+                    else:
+                        emp_account = EmployeeAccount.objects.filter(
+                            Q(user=target_user) | Q(employee_email__iexact=target_user.email)
+                        ).first()
+                        resolved_emp_id = (emp_account.employee_id if emp_account else None) or employee_id or target_user.user_id
+                        resolved_emp_name = f"{target_user.first_name} {target_user.last_name}".strip() or target_user.user_id
+                        phone = mobile_number or target_user.phone or (emp_account.registration.mobile if emp_account and emp_account.registration else '')
+
+                        deletion_req = AccountDeletionRequest.objects.create(
+                            user=target_user,
+                            user_id_code=target_user.user_id,
+                            employee_id=resolved_emp_id,
+                            employee_name=resolved_emp_name,
+                            email=target_user.email or email,
+                            mobile_number=phone,
+                            reason=reason or 'Web account deletion request',
+                            details=details,
+                            status='PENDING',
+                        )
+                        req_details = deletion_req.to_dict()
+
+                        try:
+                            AuditLog.objects.create(
+                                action='account_deletion_web_requested',
+                                performed_by=target_user.user_id,
+                                details=f"Public web account deletion request {deletion_req.request_id} submitted for {target_user.user_id}.",
+                            )
+                        except Exception:
+                            pass
+
+                # Generic privacy-safe response to prevent user enumeration
+                success_msg = 'Your account deletion request has been submitted successfully. The HR/Admin team will review your request.'
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bit Byte – HRMS Account Deletion</title>
+  <style>
+    :root {{
+      --primary: #0072FF;
+      --primary-dark: #0056cc;
+      --danger: #E53935;
+      --danger-dark: #c62828;
+      --bg: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --text: #0F172A;
+      --text-muted: #64748B;
+      --border: #E2E8F0;
+      --warning-bg: #FFFBEB;
+      --warning-border: #FDE68A;
+      --warning-text: #92400E;
+      --success-bg: #ECFDF5;
+      --success-border: #A7F3D0;
+      --success-text: #065F46;
+      --danger-bg: #FEF2F2;
+      --danger-border: #FECACA;
+      --danger-text: #991B1B;
+    }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 32px 16px;
+    }}
+    .container {{
+      max-width: 720px;
+      margin: 0 auto;
+    }}
+    .header {{
+      text-align: center;
+      margin-bottom: 28px;
+    }}
+    .brand {{
+      display: inline-flex;
+      align-items: center;
+      background: #FFFFFF;
+      padding: 6px 16px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      margin-bottom: 14px;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }}
+    h1 {{
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }}
+    .subtitle {{
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.5;
+    }}
+    .card {{
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03), 0 2px 4px -2px rgba(0,0,0,0.02);
+    }}
+    .alert {{
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.5;
+    }}
+    .alert-warning {{
+      background: var(--warning-bg);
+      border: 1px solid var(--warning-border);
+      color: var(--warning-text);
+    }}
+    .alert-success {{
+      background: var(--success-bg);
+      border: 1px solid var(--success-border);
+      color: var(--success-text);
+    }}
+    .alert-danger {{
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      color: var(--danger-text);
+    }}
+    h2 {{
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text);
+    }}
+    .list {{
+      list-style: none;
+      padding-left: 0;
+      margin-bottom: 14px;
+    }}
+    .list li {{
+      position: relative;
+      padding-left: 22px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: var(--text);
+    }}
+    .list li::before {{
+      content: "";
+      position: absolute;
+      left: 6px;
+      top: 8px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }}
+    .list-deleted li::before {{ background: var(--danger); }}
+    .list-retained li::before {{ background: var(--primary); }}
+    .notice-statement {{
+      background: #F1F5F9;
+      border-left: 4px solid var(--primary);
+      padding: 14px 16px;
+      border-radius: 0 8px 8px 0;
+      font-size: 13.5px;
+      color: var(--text);
+      font-style: italic;
+      line-height: 1.55;
+      margin-top: 14px;
+    }}
+    .steps {{
+      background: #F8FAFC;
+      border-radius: 12px;
+      border: 1px dashed var(--border);
+      padding: 16px;
+      margin-top: 10px;
+    }}
+    .steps-path {{
+      display: inline-block;
+      background: #FFFFFF;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-weight: 700;
+      color: var(--primary);
+      margin-top: 8px;
+      font-size: 14px;
+    }}
+    .form-group {{
+      margin-bottom: 16px;
+    }}
+    label {{
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text);
+    }}
+    input[type="text"], input[type="email"], input[type="tel"], input[type="password"], select, textarea {{
+      width: 100%;
+      padding: 11px 14px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #FFFFFF;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }}
+    input:focus, select:focus, textarea:focus {{
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0,114,255,0.15);
+    }}
+    .checkbox-group {{
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 18px 0;
+      background: #FFF5F5;
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid #FED7D7;
+    }}
+    .checkbox-group input {{
+      margin-top: 4px;
+      cursor: pointer;
+    }}
+    .checkbox-group label {{
+      margin: 0;
+      font-size: 13px;
+      font-weight: 500;
+      color: #742A2A;
+      cursor: pointer;
+    }}
+    button.btn-submit {{
+      width: 100%;
+      background: var(--danger);
+      color: #FFFFFF;
+      border: none;
+      padding: 13px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }}
+    button.btn-submit:hover {{
+      background: var(--danger-dark);
+    }}
+    .request-summary {{
+      background: #F8FAFC;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 14px;
+      font-size: 13px;
+    }}
+    .request-summary div {{
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #E2E8F0;
+    }}
+    .request-summary div:last-child {{
+      border-bottom: none;
+    }}
+    .footer {{
+      text-align: center;
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="brand">Bit Byte – HRMS</div>
+      <h1>Bit Byte – HRMS Account Deletion</h1>
+      <p class="subtitle">Users of the Bit Byte – HRMS application can request deletion of their account and associated personal data.</p>
+    </div>
+
+    <!-- Alert Messages -->
+    {'<div class="alert alert-success">' + html.escape(success_msg) + '</div>' if success_msg else ''}
+    {'<div class="alert alert-danger">' + html.escape(error_msg) + '</div>' if error_msg else ''}
+
+    {f'''<div class="card">
+      <h2>Deletion Request Details</h2>
+      <div class="request-summary">
+        <div><span>Request ID:</span><strong>{html.escape(req_details.get("request_id", ""))}</strong></div>
+        <div><span>Status:</span><strong>{html.escape(req_details.get("status", ""))}</strong></div>
+        <div><span>Requested At:</span><strong>{html.escape(str(req_details.get("requested_at", ""))[:19])}</strong></div>
+      </div>
+    </div>''' if req_details else ''}
+
+    <!-- How to request deletion Section -->
+    <div class="card">
+      <h2>How to request deletion</h2>
+      <p style="font-size: 14px; color: var(--text); margin-bottom: 6px;">
+        Users can request account deletion inside the HRMS mobile application:
+      </p>
+      <div class="steps">
+        <div class="steps-path">Profile &rarr; Settings &rarr; Account &rarr; Delete Account</div>
+        <ol style="margin-left: 20px; margin-top: 12px; font-size: 13.5px; color: var(--text-muted);">
+          <li style="margin-bottom: 4px;">Open the <strong>Bit Byte – HRMS</strong> app.</li>
+          <li style="margin-bottom: 4px;">Go to <strong>Profile</strong> &rarr; <strong>Settings</strong> &rarr; <strong>Account</strong>.</li>
+          <li style="margin-bottom: 4px;">Tap <strong>Delete Account</strong>.</li>
+          <li style="margin-bottom: 4px;">Select the confirmation checkbox and tap <strong>Request Account Deletion</strong>.</li>
+          <li>Confirm the dialog to submit your request for HR/Admin review.</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Public Request Form Section -->
+    <div class="card">
+      <h2>Request Account Deletion Form</h2>
+      <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 16px;">
+        Users can also submit an account deletion request using this public web form:
+      </p>
+
+      <form method="POST" action="">
+        <div class="form-group">
+          <label for="employee_id">Employee ID *</label>
+          <input type="text" id="employee_id" name="employee_id" required placeholder="e.g. BBEMP00001">
+        </div>
+
+        <div class="form-group">
+          <label for="email">Registered Email *</label>
+          <input type="email" id="email" name="email" required placeholder="e.g. employee@bitbytetech.org">
+        </div>
+
+        <div class="form-group">
+          <label for="mobile_number">Registered Mobile Number *</label>
+          <input type="tel" id="mobile_number" name="mobile_number" required placeholder="e.g. +91 9876543210">
+        </div>
+
+        <div class="form-group">
+          <label for="reason">Reason (Optional)</label>
+          <select id="reason" name="reason">
+            <option value="">Select a reason (optional)...</option>
+            <option value="I no longer use this account">I no longer use this account</option>
+            <option value="I left the organization">I left the organization</option>
+            <option value="Privacy concerns">Privacy concerns</option>
+            <option value="Duplicate account">Duplicate account</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="checkbox-group">
+          <input type="checkbox" id="confirm" name="confirm" value="yes" required>
+          <label for="confirm">
+            I understand that requesting account deletion may permanently remove my account and eligible associated data.
+          </label>
+        </div>
+
+        <button type="submit" class="btn-submit">Request Account Deletion</button>
+      </form>
+    </div>
+
+    <!-- Data that may be deleted Section -->
+    <div class="card">
+      <h2>Data that may be deleted</h2>
+      <ul class="list list-deleted">
+        <li>User profile information</li>
+        <li>Contact information</li>
+        <li>Profile photo</li>
+        <li>App preferences</li>
+        <li>Other personal information not required to be retained</li>
+      </ul>
+
+      <!-- Data that may be retained Section -->
+      <h2 style="margin-top: 24px;">Data that may be retained</h2>
+      <ul class="list list-retained">
+        <li>Attendance records</li>
+        <li>Payroll records</li>
+        <li>Salary records</li>
+        <li>Tax records</li>
+        <li>Employment records</li>
+        <li>Statutory records</li>
+        <li>Audit records</li>
+      </ul>
+
+      <div class="notice-statement">
+        “Certain records may be retained where required for legal, payroll, taxation, statutory, audit, employment, or regulatory purposes. Retained records will only be kept for the period required by applicable law or legitimate organizational obligations.”
+      </div>
+    </div>
+
+    <div class="footer">
+      &copy; 2026 Bit Byte – HRMS. All rights reserved. Complies with Google Play User Data Policy.
+    </div>
+  </div>
+</body>
+</html>
+"""
+    return HttpResponse(html_content, content_type='text/html')
+
+
+public_account_deletion_web_view = account_deletion
+
+
+

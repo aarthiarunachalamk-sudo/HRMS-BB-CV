@@ -8,6 +8,7 @@ import 'package:hrms_mobileapp_bitbyte/main.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_attendance_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_employees_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_flow_screens.dart';
+import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_deletion_requests_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_home_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_leave_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/Screens/Admin/admin_meetings_screen.dart';
@@ -355,6 +356,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     selected: false,
                     onTap: () => _openAdminPage(
                       AdminNotificationsScreen(userId: widget.userId),
+                    ),
+                  ),
+                  _DrawerTile(
+                    c: c,
+                    icon: Icons.person_remove_rounded,
+                    label: 'Deletion Requests',
+                    selected: false,
+                    onTap: () => _openAdminPage(
+                      AdminDeletionRequestsScreen(userId: widget.userId),
                     ),
                   ),
                   _DrawerTile(

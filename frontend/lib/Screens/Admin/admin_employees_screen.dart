@@ -4,6 +4,7 @@ import 'admin_employee_detail_screen.dart';
 import 'admin_palette.dart';
 import 'admin_service.dart';
 import 'admin_widgets.dart';
+import 'admin_deletion_requests_screen.dart';
 import 'package:hrms_mobileapp_bitbyte/widgets/employee_avatar.dart';
 
 class AdminEmployeesScreen extends StatelessWidget {
@@ -34,6 +35,47 @@ class AdminEmployeesScreen extends StatelessWidget {
           final employees = _employeeRecords(snapshot.data);
           return adminPageList([
             const AdminSearchBox(hint: 'Search employees...'),
+            const SizedBox(height: 6),
+            AdminCard(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AdminDeletionRequestsScreen(userId: userId),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: c.red.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.person_remove_rounded, color: c.red, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Account Deletion Requests',
+                          style: TextStyle(
+                            color: c.text,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        Text(
+                          'Review and process employee deletion requests',
+                          style: TextStyle(color: c.muted, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: c.muted, size: 20),
+                ],
+              ),
+            ),
             const SizedBox(height: 4),
             AdminCard(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

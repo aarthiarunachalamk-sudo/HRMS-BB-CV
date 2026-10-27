@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+from django.utils import timezone
 from cloudinary.models import CloudinaryField
 import random
 import re
@@ -1612,3 +1613,82 @@ class EmployeeApprovalRequest(models.Model):
 
     def __str__(self):
         return f'{self.employee_id} - {self.title}'
+
+
+class AccountDeletionRequest(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('UNDER_REVIEW', 'Under Review'),
+        ('APPROVED', 'Approved'),
+        ('REJECTED', 'Rejected'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    request_id = models.CharField(max_length=40, unique=True, editable=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='account_deletion_requests',
+    )
+    user_id_code = models.CharField(max_length=40, db_index=True)
+    employee_id = models.CharField(max_length=40, blank=True, db_index=True)
+    employee_name = models.CharField(max_length=120, blank=True)
+    email = models.EmailField(db_index=True)
+    mobile_number = models.CharField(max_length=20, blank=True)
+    reason = models.CharField(max_length=120, blank=True)
+    details = models.TextField(blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='PENDING',
+        db_index=True,
+    )
+
+    requested_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_account_deletion_requests',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    admin_remarks = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-requested_at']
+
+    def save(self, *args, **kwargs):
+        if not self.request_id:
+            today_str = timezone.now().strftime('%Y%m%d')
+            prefix = f'DEL-{today_str}-'
+            count = AccountDeletionRequest.objects.filter(request_id__startswith=prefix).count() + 1
+            self.request_id = f'{prefix}{count:04d}'
+        super().save(*args, **kwargs)
+
+    def to_dict(self):
+        return {
+            'id': self.pk,
+            'request_id': self.request_id,
+            'user_id': self.user_id_code,
+            'employee_id': self.employee_id,
+            'employee_name': self.employee_name,
+            'email': self.email,
+            'mobile_number': self.mobile_number,
+            'reason': self.reason,
+            'details': self.details,
+            'status': self.status,
+            'status_label': dict(self.STATUS_CHOICES).get(self.status, self.status),
+            'requested_at': self.requested_at.isoformat() if self.requested_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'reviewed_by': self.reviewed_by.user_id if self.reviewed_by else None,
+            'reviewed_by_name': f'{self.reviewed_by.first_name} {self.reviewed_by.last_name}'.strip() if self.reviewed_by else None,
+            'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
+            'admin_remarks': self.admin_remarks,
+        }
+
+    def __str__(self):
+        return f'{self.request_id} ({self.user_id_code}) - {self.status}'
