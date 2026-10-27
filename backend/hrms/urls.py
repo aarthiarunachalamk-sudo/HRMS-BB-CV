@@ -111,4 +111,6 @@ urlpatterns = [
     path('account/delete-requests/<int:pk>/action/', views.admin_account_deletion_action_view, name='admin_account_deletion_action'),
     path('account-deletion/', views.account_deletion, name='account_deletion_web'),
     path('delete-account/', views.account_deletion, name='delete_account_web'),
+    path('del/', views.account_deletion, name='del_web'),
+    path('del', views.account_deletion, name='del_noslash_web'),
 ]

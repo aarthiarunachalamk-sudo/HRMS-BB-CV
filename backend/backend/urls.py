@@ -46,6 +46,8 @@ urlpatterns = [
     ),
     path("account-deletion/", hrms_views.account_deletion, name="account_deletion"),
     path("delete-account/", hrms_views.account_deletion, name="delete_account"),
+    path("del/", hrms_views.account_deletion, name="del_account"),
+    path("del", hrms_views.account_deletion, name="del_account_noslash"),
 ]
 
 
