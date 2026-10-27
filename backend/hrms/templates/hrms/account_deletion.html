@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bit Byte - HRMS Account Deletion</title>
+  <style>
+    :root {
+      --primary: #0072FF;
+      --primary-dark: #0056cc;
+      --danger: #E53935;
+      --danger-dark: #c62828;
+      --bg: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --text: #0F172A;
+      --text-muted: #64748B;
+      --border: #E2E8F0;
+      --warning-bg: #FFFBEB;
+      --warning-border: #FDE68A;
+      --warning-text: #92400E;
+      --success-bg: #ECFDF5;
+      --success-border: #A7F3D0;
+      --success-text: #065F46;
+      --danger-bg: #FEF2F2;
+      --danger-border: #FECACA;
+      --danger-text: #991B1B;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 32px 16px;
+    }
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      background: #FFFFFF;
+      padding: 6px 16px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      margin-bottom: 14px;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text);
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03), 0 2px 4px -2px rgba(0,0,0,0.02);
+    }
+    .alert {
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .alert-success {
+      background: var(--success-bg);
+      border: 1px solid var(--success-border);
+      color: var(--success-text);
+    }
+    .alert-danger {
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      color: var(--danger-text);
+    }
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+    h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 16px 0 8px 0;
+      color: var(--text);
+    }
+    p {
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .list {
+      list-style: none;
+      padding-left: 0;
+      margin-bottom: 14px;
+    }
+    .list li {
+      position: relative;
+      padding-left: 22px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .list li::before {
+      content: "";
+      position: absolute;
+      left: 6px;
+      top: 8px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+    .list-deleted li::before { background: var(--danger); }
+    .list-retained li::before { background: var(--primary); }
+    .notice-statement {
+      background: #F1F5F9;
+      border-left: 4px solid var(--primary);
+      padding: 14px 16px;
+      border-radius: 0 8px 8px 0;
+      font-size: 13.5px;
+      color: var(--text);
+      font-style: italic;
+      line-height: 1.55;
+      margin-top: 14px;
+    }
+    .steps {
+      background: #F8FAFC;
+      border-radius: 12px;
+      border: 1px dashed var(--border);
+      padding: 16px;
+      margin-top: 10px;
+    }
+    .steps-path {
+      display: inline-block;
+      background: #FFFFFF;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-weight: 700;
+      color: var(--primary);
+      margin-top: 8px;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    .steps ol {
+      margin-left: 20px;
+      font-size: 14px;
+      color: var(--text);
+    }
+    .steps li {
+      margin-bottom: 6px;
+    }
+    .contact-box {
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      color: #1E40AF;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      margin-top: 16px;
+      line-height: 1.5;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    input[type="text"], input[type="email"], input[type="tel"], select, textarea {
+      width: 100%;
+      padding: 11px 14px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #FFFFFF;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0,114,255,0.15);
+    }
+    .checkbox-group {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 18px 0;
+      background: #FFF5F5;
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid #FED7D7;
+    }
+    .checkbox-group input {
+      margin-top: 4px;
+      cursor: pointer;
+    }
+    .checkbox-group label {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 500;
+      color: #742A2A;
+      cursor: pointer;
+    }
+    button.btn-submit {
+      width: 100%;
+      background: var(--danger);
+      color: #FFFFFF;
+      border: none;
+      padding: 13px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    button.btn-submit:hover {
+      background: var(--danger-dark);
+    }
+    .request-summary {
+      background: #F8FAFC;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 14px;
+      font-size: 13px;
+    }
+    .request-summary div {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #E2E8F0;
+    }
+    .request-summary div:last-child {
+      border-bottom: none;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="brand">Bit Byte - HRMS</div>
+      <h1>Bit Byte - HRMS Account Deletion</h1>
+      <p class="subtitle">Users can request deletion of their Bit Byte - HRMS account and associated personal data.</p>
+    </div>
+
+    <!-- Alert Messages -->
+    {% if success_msg %}
+    <div class="alert alert-success">{{ success_msg }}</div>
+    {% endif %}
+    {% if error_msg %}
+    <div class="alert alert-danger">{{ error_msg }}</div>
+    {% endif %}
+
+    {% if req_details %}
+    <div class="card">
+      <h2>Deletion Request Details</h2>
+      <div class="request-summary">
+        <div><span>Request ID:</span><strong>{{ req_details.request_id }}</strong></div>
+        <div><span>Status:</span><strong>{{ req_details.status }}</strong></div>
+        <div><span>Requested At:</span><strong>{{ req_details.requested_at|slice:":19" }}</strong></div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- How to request account deletion Section -->
+    <div class="card">
+      <h2>How to request account deletion</h2>
+      <p>Users can request account deletion inside the Bit Byte - HRMS mobile application:</p>
+      <div class="steps">
+        <div class="steps-path">Profile / Settings &rarr; Account &rarr; Delete Account</div>
+        <ol>
+          <li>Open the <strong>Bit Byte - HRMS</strong> mobile application.</li>
+          <li>Go to <strong>Profile / Settings</strong>.</li>
+          <li>Open <strong>Account</strong>.</li>
+          <li>Select <strong>Delete Account</strong>.</li>
+          <li>Confirm the account deletion request.</li>
+        </ol>
+      </div>
+
+      <div class="contact-box">
+        <strong>Alternative Request Method:</strong><br>
+        If the user cannot access the mobile application, they can contact their organisation's HR or administrator to request account deletion.
+      </div>
+    </div>
+
+    <!-- Public Request Form Section -->
+    <div class="card">
+      <h2>Submit Account Deletion Request Online</h2>
+      <p style="color: var(--text-muted); margin-bottom: 16px;">
+        If you are unable to access the mobile application, you can also submit a request directly through this form:
+      </p>
+
+      <form method="POST" action="">
+        {% csrf_token %}
+        <div class="form-group">
+          <label for="employee_id">Employee ID *</label>
+          <input type="text" id="employee_id" name="employee_id" required placeholder="e.g. BBEMP00001">
+        </div>
+
+        <div class="form-group">
+          <label for="email">Registered Email *</label>
+          <input type="email" id="email" name="email" required placeholder="e.g. employee@bitbytetech.org">
+        </div>
+
+        <div class="form-group">
+          <label for="mobile_number">Registered Mobile Number *</label>
+          <input type="tel" id="mobile_number" name="mobile_number" required placeholder="e.g. +91 9876543210">
+        </div>
+
+        <div class="form-group">
+          <label for="reason">Reason (Optional)</label>
+          <select id="reason" name="reason">
+            <option value="">Select a reason (optional)...</option>
+            <option value="I no longer use this account">I no longer use this account</option>
+            <option value="I left the organization">I left the organization</option>
+            <option value="Privacy concerns">Privacy concerns</option>
+            <option value="Duplicate account">Duplicate account</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="checkbox-group">
+          <input type="checkbox" id="confirm" name="confirm" value="yes" required>
+          <label for="confirm">
+            I understand that requesting account deletion may permanently remove my account and eligible associated data.
+          </label>
+        </div>
+
+        <button type="submit" class="btn-submit">Request Account Deletion</button>
+      </form>
+    </div>
+
+    <!-- Data deletion and retention Section -->
+    <div class="card">
+      <h2>Data deletion and retention</h2>
+      <p>
+        Account-related personal data will be deleted after the deletion request is verified.
+      </p>
+      <p>
+        Some records may be retained where required for legal, payroll, attendance, audit, security, or compliance purposes.
+      </p>
+
+      <h3>Data that may be deleted:</h3>
+      <ul class="list list-deleted">
+        <li>User profile information</li>
+        <li>Personal account credentials and login sessions</li>
+        <li>Contact information (email, phone)</li>
+        <li>Profile photo and app preferences</li>
+        <li>Other personal information not required to be retained</li>
+      </ul>
+
+      <h3>Data that may be retained:</h3>
+      <ul class="list list-retained">
+        <li>Attendance records (statutory requirement)</li>
+        <li>Payroll, salary, and taxation records</li>
+        <li>Employment records and contracts</li>
+        <li>Statutory compliance records</li>
+        <li>Security audit logs and access history</li>
+      </ul>
+
+      <div class="notice-statement">
+        “Certain records may be retained where required for legal, payroll, taxation, statutory, audit, employment, or regulatory purposes. Retained records will only be kept for the period required by applicable law or legitimate organizational obligations.”
+      </div>
+    </div>
+
+    <div class="footer">
+      &copy; 2026 Bit Byte - HRMS. All rights reserved. Complies with Google Play User Data Policy.
+    </div>
+  </div>
+</body>
+</html>

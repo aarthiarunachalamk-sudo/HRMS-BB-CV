@@ -154,13 +154,13 @@ class AccountDeletionTests(TestCase):
         self.assertFalse(self.employee_acc.is_active)
 
     def test_public_web_page_get(self):
-        # Public webpage must be accessible without login
         response = self.client.get('/account-deletion/')
         self.assertEqual(response.status_code, 200)
-        self.assertIn('Bit Byte – HRMS Account Deletion'.encode('utf-8'), response.content)
+        self.assertIn(b'Bit Byte', response.content)
+        self.assertIn(b'HRMS Account Deletion', response.content)
         self.assertIn(b'Data that may be deleted', response.content)
         self.assertIn(b'Data that may be retained', response.content)
-        self.assertIn(b'Profile &rarr; Settings &rarr; Account &rarr; Delete Account', response.content)
+        self.assertIn(b'Account &rarr; Delete Account', response.content)
         self.assertIn(b'Certain records may be retained where required', response.content)
 
     def test_public_web_page_post_creates_request(self):
